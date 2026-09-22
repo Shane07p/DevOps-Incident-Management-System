@@ -1,0 +1,39 @@
+# Local development stack. `docker compose up -d db` is enough for day-to-day work;
+# the `app` profile is for checking the packaged backend against the same database.
+services:
+  db:
+    image: postgres:16
+    container_name: incident-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-incident}
+      POSTGRES_USER: ${DB_USERNAME:-incident}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-incident}
+      TZ: UTC
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - incident-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-incident} -d ${DB_NAME:-incident}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    profiles: ["app"]
+    build:
+      context: ./backend
+    container_name: incident-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-incident}
+      DB_USERNAME: ${DB_USERNAME:-incident}
+      DB_PASSWORD: ${DB_PASSWORD:-incident}
+      TZ: UTC
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+volumes:
+  incident-db-data:

@@ -1,0 +1,39 @@
+name: CD
+
+# Builds the deployable images once CI is green on main. Publishing is deliberately
+# not enabled yet: the team has not chosen a registry or a deployment target.
+# To publish, add a login step and push:true, then record the decision in docs/PROJECT.md.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  images:
+    name: Build container images
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: incident-management-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: incident-management-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,12 @@
+# Normalise line endings so a ten-person team does not trade CRLF-only diffs.
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+mvnw text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.zip binary

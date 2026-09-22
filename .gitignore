@@ -1,0 +1,28 @@
+# Secrets and local settings
+.env
+.env.local
+*.pem
+
+# Java / Maven
+backend/target/
+!backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+
+# Node
+node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/cypress/videos/
+frontend/cypress/screenshots/
+*.log
+npm-debug.log*
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Source archive for docs/ - the extracted files are tracked instead
+group-2-project-design-docs*.zip

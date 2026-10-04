@@ -123,3 +123,13 @@ These are the first backlog items, not an exhaustive list for every feature. Add
 - Results link to the incident, fix, and postmortem where available.
 - Action items have a named owner and completion state.
 - Closing an incident does not hide unfinished action items.
+
+### US-06 — Retrieve Incident History and Postmortem (FR-08, FR-11)
+
+**Front:** As an Engineer or Viewer, I want to fetch the complete timeline and postmortem data from the backend so that I can display it on the history screen.
+
+**Back / acceptance criteria:**
+
+- The Spring Boot REST API provides a dedicated endpoint to retrieve incident history and root cause notes.
+- PostgreSQL queries properly join the incident details with their timeline events.
+- If no postmortem exists yet, the backend returns an empty state rather than a 500 error.

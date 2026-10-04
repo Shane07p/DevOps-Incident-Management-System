@@ -97,4 +97,13 @@ Use this format in each sprint note:
 - **Remaining work and blockers:**
 - **Review feedback and next improvement:**
 
+### Sprint 1 Record - Team 3
+
+**Goal and dates:** Establish initial CI coordination and plan incident history backend API.
+**Selected stories and owners:** US-06 Incident History API (Utsav Bechara), CI coordination tasks (Manan, Manush, Het).
+**Completed work:** Drafted US-06 requirements and planned PostgreSQL queries for timeline events.
+**Verification:** CI checks verified for the base project structure.
+**Remaining work and blockers:** Waiting for the frontend board screen layout to finalize the REST API response format.
+**Review feedback and next improvement:** Keep PRs small and strictly attributable to individual authors.
+
 Before marking a story done, check its acceptance criteria, review its code, verify the important failure case, and update affected documentation. Keep the evidence short and real.

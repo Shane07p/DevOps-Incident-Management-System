@@ -6,14 +6,17 @@ A web application that helps a team report an incident, assign a responder, trac
 
 This is a simplified implementation proposal. No stakeholder elicitation has been completed. The earlier requirements document remains separate; the reductions listed below need to be reflected there when the team agrees on scope. This ZIP contains design documents, not implemented software.
 
-## Read these four documents and the test tracker
+## Read these documents and the test tracker
 
 | File | Purpose |
 | --- | --- |
 | [PROJECT.md](PROJECT.md) | Scope, team, and working rules |
 | [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) | Repository layout, high-level design, and low-level design |
-| [REQUIREMENTS_AND_STORIES.md](REQUIREMENTS_AND_STORIES.md) | Short requirements summary and starter user stories |
-| [SPRINT_AND_TEST_PLAN.md](SPRINT_AND_TEST_PLAN.md) | Build order, essential tests, and course evidence |
+| [REQUIREMENTS.md](REQUIREMENTS.md) | Functional scope, non-functional requirements, and domain rules |
+| [user-stories.md](user-stories.md) | User stories US-01 to US-20 with acceptance criteria |
+| [epics-and-conflicts.md](epics-and-conflicts.md) | Epics, survey findings, and stakeholder conflict resolutions |
+| [sprint-plan.md](sprint-plan.md) | Sprint roadmap and the current sprint's scope |
+| [TESTING_AND_WORKFLOW.md](TESTING_AND_WORKFLOW.md) | Essential tests, traceability rules, workflow, and course evidence |
 | [TRACEABILITY.csv](TRACEABILITY.csv) | Existing FR sub-IDs mapped to specific planned checks and current status |
 
 ## First version

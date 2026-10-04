@@ -1,8 +1,10 @@
-# Requirements and Starter Stories
+# Requirements Summary
 
 ## How to use this file
 
 This is a shorter planning summary, not a replacement for the existing detailed requirements submission. FR references below reuse its feature IDs. Update the detailed requirements after the team accepts any scope changes; do not renumber existing test references silently.
+
+User stories live in [user-stories.md](user-stories.md). Epics, survey findings, and conflict resolutions live in [epics-and-conflicts.md](epics-and-conflicts.md).
 
 No stakeholder elicitation has been completed. These priorities and rules are proposals. Do not add invented findings, source labels, or claims of stakeholder agreement.
 
@@ -64,62 +66,3 @@ These short labels belong to this planning summary; they do not renumber the NFR
 6. SLA targets are fixed when the incident is created. New alerts and reassignment do not reset elapsed time.
 7. RESOLVED means recovery is recorded; CLOSED means the basic postmortem has also been reviewed. Outstanding action items remain visible.
 8. AI proposes explanations or steps. Deterministic code handles status, timing, and escalation.
-
-## Starter user stories
-
-These are the first backlog items, not an exhaustive list for every feature. Add more before selecting the relevant sprint work.
-
-### US-01 — Report an incident (FR-02, FR-05, FR-07)
-
-**Front:** As an Engineer, I want to report a service problem so a responder can take responsibility.
-
-**Back / acceptance criteria:**
-
-- A valid report creates one OPEN incident with a unique ID and creation time.
-- The current on-call responder is assigned, or the fallback is used if no slot applies.
-- The assignee receives an in-app notification and an initial timeline entry is visible.
-- Missing required fields are rejected without creating partial records.
-
-### US-02 — Receive alerts without duplicates (FR-03)
-
-**Front:** As a responder, I want repeated deliveries handled correctly so the board does not contain duplicate incidents.
-
-**Back / acceptance criteria:**
-
-- An invalid signature is rejected.
-- Retrying the same event with the same content returns the original result.
-- A distinct event with the same explicit key attaches to the matching active incident.
-- Unrelated events remain separate, and linked alerts do not reset SLA time.
-
-### US-03 — Acknowledge or escalate (FR-05, FR-07, FR-16)
-
-**Front:** As a responder, I want to accept responsibility so the team knows who is handling the incident.
-
-**Back / acceptance criteria:**
-
-- The first accepted acknowledgement records the user and time, makes that user the assignee, and stops pending acknowledgement escalation.
-- A competing acknowledgement does not overwrite the accepted one.
-- If nobody acknowledges, the next configured responder is notified after the stored deadline; this notification does not change ownership.
-- The resolution clock continues after acknowledgement.
-
-### US-04 — Investigate and resolve (FR-06, FR-08, FR-09, FR-10)
-
-**Front:** As a responder, I want to record progress and recovery so others can understand the incident.
-
-**Back / acceptance criteria:**
-
-- Approved transitions succeed; invalid transitions are rejected.
-- Accepted changes and comments appear with their actor and time. Two concurrent comments are both kept without changing the Incident version.
-- Resolution requires a recovery note and stops the resolution clock.
-- An unknown root cause can remain unknown.
-
-### US-05 — Learn from previous incidents (FR-11, FR-17)
-
-**Front:** As an Engineer, I want to find previous incidents and fixes so I can use relevant experience.
-
-**Back / acceptance criteria:**
-
-- Search supports text and service filters.
-- Results link to the incident, fix, and postmortem where available.
-- Action items have a named owner and completion state.
-- Closing an incident does not hide unfinished action items.

@@ -1,28 +1,6 @@
-# Sprint and Test Plan
+# Testing and Workflow
 
-## Build in small working steps
-
-Choose sprint dates and capacity with the team. The table gives a build order, not a promise that each row fits in one sprint.
-
-| Order / EPIC | Working outcome |
-| --- | --- |
-| 1. Foundation | Repository, database, basic CI, login, service setup, and seed data |
-| 2. Incident response | Manual creation → assignment → notification → acknowledgement → timeline |
-| 3. Alert intake and escalation | Authenticated alerts, deduplication, explicit grouping, persisted escalation |
-| 4. Resolution and learning | Remaining lifecycle, SLA indicators, postmortems, action items, search, and dashboard |
-| 5. Selected extension | One small optional feature after the core is stable |
-
-Sprint 1 should aim for a small demonstrable path. Reduce selected stories if setup takes longer than expected. Avoid building all database tables and screens before one complete path works.
-
-## Suggested team ownership
-
-| Team | Starting area |
-| --- | --- |
-| Team 1: Shane, Shlok, Himanshu | Incident lifecycle, SLA, and escalation |
-| Team 2: Dhruva, Bhakti, Utsav Darji | Login, services, on-call configuration, and alert intake |
-| Team 3: Utsav Bechara, Manan, Manush, Het | Board and incident screens, history/postmortems, and CI coordination |
-
-These are starting areas, not strict silos. Agree on request/response examples early so frontend and backend work can proceed together. Every member should contribute code, verification, documentation where relevant, and their own Git commits.
+The build order, epics, sprint scope, and team assignments live in [sprint-plan.md](sprint-plan.md) and [epics-and-conflicts.md](epics-and-conflicts.md). This file covers how the work is tested, tracked, and reviewed.
 
 ## Essential tests
 
@@ -60,16 +38,6 @@ Use **Planned - not run**, **Optional - not selected**, **Deferred**, or **Scope
 5. Merge when required checks pass and demonstrate the result during sprint review.
 
 CI should build the backend and frontend and run the tests already configured. Add database integration tests when persistence behavior is introduced. Run targeted mutation tests at a planned checkpoint or on demand. Do not require a real local model in CI.
-
-## EPIC 1: first implementation tasks
-
-1. Generate the Java 21 / Boot 4.1 Maven application with Web, JPA, Security, Validation, PostgreSQL, and Flyway.
-2. Create the React/TypeScript app and a minimal login screen.
-3. Add the first migrations and local seed users, one service, and its required settings.
-4. Implement login and an authorized service read; verify that a Viewer cannot edit configuration.
-5. Add CI that builds both applications and runs the tests that exist. Then begin the manual-incident story.
-
-These are tasks to start, not completed work or executable scaffold files included in this ZIP.
 
 ## Course work still required
 

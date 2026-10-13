@@ -17,6 +17,15 @@ frontend/cypress/screenshots/
 *.log
 npm-debug.log*
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+env/
+venv/
+
 # Editors and OS
 .idea/
 .vscode/

@@ -1,0 +1,9 @@
+# Sprint 1: only what we actually use
+# No ML libraries yet – those come in Sprint 2 and later
+
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+
+# Testing
+pytest==8.3.5
+httpx==0.28.1       # lets pytest call our FastAPI app without a real server

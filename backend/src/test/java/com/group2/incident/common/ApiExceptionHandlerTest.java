@@ -40,6 +40,15 @@ class ApiExceptionHandlerTest {
 	}
 
 	@Test
+	void unreadableBodyReturns400InTheSameShape() throws Exception {
+		mvc.perform(post("/probe/validated").contentType(MediaType.APPLICATION_JSON).content("{not json"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.message").value("Malformed request body"))
+				.andExpect(jsonPath("$.errors").isEmpty());
+	}
+
+	@Test
 	void fieldValidationExceptionReturns400NamingTheField() throws Exception {
 		mvc.perform(get("/probe/field"))
 				.andExpect(status().isBadRequest())

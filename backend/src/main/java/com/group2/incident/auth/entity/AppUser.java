@@ -47,6 +47,11 @@ public class AppUser {
 	private Instant createdAt;
 
 	public AppUser(String username, String displayName, String passwordHash, Role role, Instant createdAt) {
+		this(null, username, displayName, passwordHash, role, createdAt);
+	}
+
+	public AppUser(Long id, String username, String displayName, String passwordHash, Role role, Instant createdAt) {
+		this.id = id;
 		this.username = username;
 		this.displayName = displayName;
 		this.passwordHash = passwordHash;

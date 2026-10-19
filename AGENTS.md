@@ -163,6 +163,39 @@ merge when CI passes. Before your first commit, check that `git config user.emai
 verified on your GitHub account, or your commits won't be credited to you. Keep commits attributable to their actual author. Do not add
 `Co-Authored-By` lines for AI tools.
 
+**Work in this repository, never in a fork.** Every team member is a collaborator with write
+access, so forks are not needed, and they fall behind `main` fast. Before any work, run
+`git remote get-url origin`. It must be `https://github.com/Shane07p/DevOps-Incident-Management-System`
+(with or without `.git`). If it points to a fork:
+
+1. Re-point it: `git remote set-url origin https://github.com/Shane07p/DevOps-Incident-Management-System.git`.
+2. Push any unmerged branch from the fork to this repository, and open its pull request here.
+3. Tell the user to delete the fork on GitHub (fork → Settings → Danger Zone). Agents must not
+   delete it themselves.
+
+Never open a pull request from a fork.
+
+**Start from the latest `main`, every time.** Before starting or resuming any work:
+
+```
+git fetch origin
+git checkout main
+git pull --ff-only
+git checkout -b feature/<issue-number>-short-name   # new work
+git checkout <branch> && git rebase origin/main      # or: continue an existing branch
+```
+
+After rebasing a branch that is already pushed, update it with `git push --force-with-lease`. That
+is the only force-push allowed: on your own feature branch, never on `main` or someone else's
+branch. If `git pull --ff-only` fails because local `main` has its own commits, or a rebase
+conflicts, stop and ask the user. Never reset, or resolve a conflict by discarding someone's work.
+
+**Label every pull request** with the labels of its issue, including at least one area:
+`backend`, `frontend`, `ai-ml`, `devops`, or `documentation`. Add `bug` for a fix, `test` for work
+that is mostly tests, and `dependencies` for version bumps. Put `Closes #<issue>` in the
+description so the issue closes on merge. With the GitHub CLI, add labels when opening the pull
+request (`gh pr create --label backend …`) or afterwards (`gh pr edit <number> --add-label backend`).
+
 ## Before you finish a change
 
 1. The acceptance criteria of the story are met.

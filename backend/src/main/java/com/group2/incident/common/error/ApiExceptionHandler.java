@@ -26,6 +26,16 @@ public class ApiExceptionHandler {
 		return respond(HttpStatus.BAD_REQUEST, "Validation failed", errors);
 	}
 
+	@ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+	ResponseEntity<ApiError> notReadable(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+		Map<String, String> errors = new LinkedHashMap<>();
+		if (ex.getCause() instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException ife && !ife.getPath().isEmpty()) {
+			String field = ife.getPath().get(0).getFieldName();
+			errors.put(field, "Invalid value");
+		}
+		return respond(HttpStatus.BAD_REQUEST, "Validation failed", errors);
+	}
+
 	@ExceptionHandler(FieldValidationException.class)
 	ResponseEntity<ApiError> invalidField(FieldValidationException ex) {
 		return respond(HttpStatus.BAD_REQUEST, "Validation failed", Map.of(ex.getField(), ex.getMessage()));

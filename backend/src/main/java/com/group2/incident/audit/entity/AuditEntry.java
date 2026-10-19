@@ -3,6 +3,8 @@ package com.group2.incident.audit.entity;
 import com.group2.incident.auth.entity.AppUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -29,11 +31,13 @@ public class AuditEntry {
     @JoinColumn(name = "actor_id")
     private AppUser actor;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String action;
+    private AuditAction action;
 
-    @Column(nullable = false, length = 50)
-    private String itemType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_type", nullable = false, length = 50)
+    private AuditItemType itemType;
 
     @Column(nullable = false)
     private long itemId;
@@ -44,7 +48,7 @@ public class AuditEntry {
     @Column(nullable = false, updatable = false)
     private Instant recordedAt;
 
-    public AuditEntry(AppUser actor, String action, String itemType, long itemId,
+    public AuditEntry(AppUser actor, AuditAction action, AuditItemType itemType, long itemId,
                       String details, Instant recordedAt) {
         this.actor = actor;
         this.action = action;

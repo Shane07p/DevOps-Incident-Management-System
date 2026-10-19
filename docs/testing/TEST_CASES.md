@@ -119,7 +119,7 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 | TC-FR-08.3a | Negative | Update or delete a timeline entry directly in the database | Rejected | `DatabaseSchemaTest.timelineEntryCannotBeUpdated`, `timelineEntryCannotBeDeleted` | Automated |
 | TC-FR-08.3b | Negative | Truncate the timeline or the audit log | Rejected | `DatabaseSchemaTest.timelineCannotBeTruncated`, `auditLogCannotBeTruncated` | Automated |
 | TC-FR-13a | Negative | Update or delete an audit entry | Rejected | `DatabaseSchemaTest.auditEntryCannotBeUpdated`, `auditEntryCannotBeDeleted` | Automated |
-| TC-FR-13b | Integration | `AuditService.record` inside a transaction that rolls back | The audit entry is rolled back too; outside a transaction it throws | `AuditServiceTest` | Planned (Utsav B, #47) |
+| TC-FR-13b | Integration | `AuditService.record` inside a transaction that rolls back | The audit entry is rolled back too; outside a transaction it throws | `AuditServiceTest` | In review (#47) |
 
 ---
 

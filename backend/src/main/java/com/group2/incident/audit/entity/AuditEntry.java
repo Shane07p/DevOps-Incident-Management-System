@@ -18,8 +18,10 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "audit_entry")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AuditEntry {
+
+    protected AuditEntry() {
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

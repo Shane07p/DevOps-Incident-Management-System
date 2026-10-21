@@ -1,5 +1,9 @@
 package com.group2.incident.incident;
 
+
+import org.springframework.test.context.transaction.TestTransaction;
+
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -81,6 +85,9 @@ class IncidentCreationRollbackTest {
 		assertThatThrownBy(() -> incidentService.createIncident(request, user.getId()))
 				.isInstanceOf(RuntimeException.class)
 				.hasMessage("Audit database error");
+
+		TestTransaction.flagForRollback();
+        TestTransaction.end();
 
 		assertThat(incidentRepository.findAll())
 				.noneMatch(inc -> "Login failing".equals(inc.getTitle()));

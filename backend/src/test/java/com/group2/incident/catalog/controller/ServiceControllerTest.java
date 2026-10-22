@@ -18,7 +18,6 @@ import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
-import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,9 +50,6 @@ public class ServiceControllerTest {
 
     @Autowired
     private Clock clock;
-
-    @Autowired
-    private EntityManager entityManager;
 
     private AppUser admin;
     private AppUser engineer;

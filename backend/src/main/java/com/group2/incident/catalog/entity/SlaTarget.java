@@ -18,4 +18,12 @@ public class SlaTarget {
 
     @Column(name = "resolution_minutes", nullable = false)
     private int resolutionMinutes;
+
+    public int responseMinutes() {
+        return responseMinutes;
+    }
+
+    public int resolutionMinutes() {
+        return resolutionMinutes;
+    }
 }

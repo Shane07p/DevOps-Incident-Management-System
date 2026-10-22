@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
-import com.group2.incident.catalog.entity.AppService;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -23,7 +23,7 @@ class IncidentTest {
 	void dueTimesAreCreationTimePlusTarget() {
 		Instant now = Instant.parse("2026-10-19T10:00:00Z");
 		AppUser user = new AppUser("engineer", "Dev Engineer", "hash", Role.ENGINEER, now);
-		AppService service = new AppService("Payments", "Payments service", user, Criticality.HIGH,
+		ServiceEntity service = new ServiceEntity(null, "Payments", "Payments service", user, Criticality.HIGH,
 				Map.of(Severity.SEV2, new SlaTarget(60, 480)), now);
 
 		Incident incident = new Incident(
@@ -47,7 +47,7 @@ class IncidentTest {
 	void incidentKeepsCopiedTargetsEvenIfServiceChanges() {
 		Instant createdTime = Instant.parse("2026-10-19T10:00:00Z");
 		AppUser user = new AppUser("engineer", "Dev Engineer", "hash", Role.ENGINEER, createdTime);
-		AppService service = new AppService("Payments", "Payments service", user, Criticality.HIGH,
+		ServiceEntity service = new ServiceEntity(null, "Payments", "Payments service", user, Criticality.HIGH,
 				Map.of(Severity.SEV1, new SlaTarget(15, 240)), createdTime);
 
 		SlaTarget copiedTarget = service.targetFor(Severity.SEV1);
@@ -65,7 +65,7 @@ class IncidentTest {
 
 		// Service changes its targets later
 		Instant later = createdTime.plus(2, ChronoUnit.HOURS);
-		AppService updatedService = new AppService("Payments", "Payments service", user, Criticality.HIGH,
+		ServiceEntity updatedService = new ServiceEntity(null, "Payments", "Payments service", user, Criticality.HIGH,
 				Map.of(Severity.SEV1, new SlaTarget(30, 480)), later);
 
 		assertThat(incident.getResponseTargetMinutes()).isEqualTo(15);

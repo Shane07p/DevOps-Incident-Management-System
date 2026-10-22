@@ -15,10 +15,10 @@ import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.entity.AppService;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.catalog.repository.AppServiceRepository;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.entity.Severity;
 import com.group2.incident.incident.repository.IncidentRepository;
@@ -49,7 +49,7 @@ class IncidentCreationRollbackTest {
 	private AppUserRepository userRepository;
 
 	@Autowired
-	private AppServiceRepository serviceRepository;
+	private ServiceRepository serviceRepository;
 
 	@Autowired
 	private Clock clock;
@@ -62,7 +62,8 @@ class IncidentCreationRollbackTest {
 	void auditFailureRollsBackIncidentAndTimeline() {
 		Instant now = clock.instant();
 		AppUser user = userRepository.saveAndFlush(new AppUser("engineer2", "Dev Engineer 2", "hash", Role.ENGINEER, now));
-		AppService service = serviceRepository.saveAndFlush(new AppService(
+		ServiceEntity service = serviceRepository.saveAndFlush(new ServiceEntity(
+				null,
 				"AuthService",
 				"Auth and login",
 				user,
@@ -73,7 +74,7 @@ class IncidentCreationRollbackTest {
 
 		doThrow(new RuntimeException("Audit database error"))
 				.when(auditService)
-				.record(any(), anyString(), anyString(), anyLong(), anyString());
+				.record(any(), any(), any(), anyLong(), anyString());
 
 		CreateIncidentRequest request = new CreateIncidentRequest(
 				"Login failing",

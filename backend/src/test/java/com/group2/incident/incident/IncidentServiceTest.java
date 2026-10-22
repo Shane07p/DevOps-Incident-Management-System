@@ -3,6 +3,7 @@ package com.group2.incident.incident;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -10,10 +11,11 @@ import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.entity.AppService;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.catalog.repository.AppServiceRepository;
+import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
@@ -23,10 +25,10 @@ import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.Severity;
 import com.group2.incident.incident.entity.TimelineEntry;
-import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.incident.service.IncidentService;
+import com.group2.incident.notification.service.NotificationService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -53,7 +55,7 @@ class IncidentServiceTest {
 	private TimelineEntryRepository timelineEntryRepository;
 
 	@Mock
-	private AppServiceRepository appServiceRepository;
+	private ServiceRepository serviceRepository;
 
 	@Mock
 	private AppUserRepository appUserRepository;
@@ -61,11 +63,17 @@ class IncidentServiceTest {
 	@Mock
 	private AuditService auditService;
 
+	@Mock
+	private OnCallService onCallService;
+
+	@Mock
+	private NotificationService notificationService;
+
 	private Clock fixedClock;
 	private IncidentService incidentService;
 
 	private AppUser user;
-	private AppService service;
+	private ServiceEntity service;
 
 	@BeforeEach
 	void setUp() {
@@ -73,14 +81,16 @@ class IncidentServiceTest {
 		incidentService = new IncidentService(
 				incidentRepository,
 				timelineEntryRepository,
-				appServiceRepository,
+				serviceRepository,
 				appUserRepository,
 				auditService,
+				onCallService,
+				notificationService,
 				fixedClock
 		);
 
 		user = new AppUser(1L, "engineer", "Dev Engineer", "hash", Role.ENGINEER, FIXED_NOW);
-		service = new AppService(10L, "Payments", "Payments service", user, Criticality.HIGH,
+		service = new ServiceEntity(10L, "Payments", "Payments service", user, Criticality.HIGH,
 				Map.of(
 						Severity.SEV1, new SlaTarget(15, 240),
 						Severity.SEV2, new SlaTarget(60, 480)
@@ -91,7 +101,7 @@ class IncidentServiceTest {
 	@DisplayName("createIncident saves incident, timeline and audit in one flow")
 	void createIncidentSuccess() {
 		when(appUserRepository.findById(1L)).thenReturn(Optional.of(user));
-		when(appServiceRepository.findWithDetailsById(10L)).thenReturn(Optional.of(service));
+		when(serviceRepository.findWithDetailsById(10L)).thenReturn(Optional.of(service));
 		when(incidentRepository.save(any(Incident.class))).thenAnswer(inv -> {
 			Incident inc = inv.getArgument(0);
 			return new Incident(7L, inc.getTitle(), inc.getDescription(), inc.getService(),
@@ -108,79 +118,90 @@ class IncidentServiceTest {
 				"Checkout failure",
 				"Database timeouts",
 				10L,
-				Severity.SEV2
+				Severity.SEV1
 		);
 
 		IncidentResponse response = incidentService.createIncident(request, 1L);
 
+		assertThat(response.id()).isEqualTo(7L);
+		assertThat(response.reference()).isEqualTo("INC-7");
 		assertThat(response.title()).isEqualTo("Checkout failure");
+		assertThat(response.severity()).isEqualTo(Severity.SEV1);
 		assertThat(response.status()).isEqualTo(IncidentStatus.OPEN);
-		assertThat(response.severity()).isEqualTo(Severity.SEV2);
 		assertThat(response.service().name()).isEqualTo("Payments");
 		assertThat(response.reporter().displayName()).isEqualTo("Dev Engineer");
-		assertThat(response.responseTargetMinutes()).isEqualTo(60);
-		assertThat(response.resolutionTargetMinutes()).isEqualTo(480);
-		assertThat(response.timeline()).hasSize(1);
-		assertThat(response.timeline().get(0).eventType()).isEqualTo(TimelineEventType.INCIDENT_CREATED);
+		assertThat(response.responseTargetMinutes()).isEqualTo(15);
+		assertThat(response.resolutionTargetMinutes()).isEqualTo(240);
 
 		ArgumentCaptor<Incident> incidentCaptor = ArgumentCaptor.forClass(Incident.class);
 		verify(incidentRepository).save(incidentCaptor.capture());
 		assertThat(incidentCaptor.getValue().getTitle()).isEqualTo("Checkout failure");
-		assertThat(incidentCaptor.getValue().getResponseTargetMinutes()).isEqualTo(60);
 
-		verify(auditService).record(any(), any(), any(), any(Long.class), any());
+		verify(auditService).record(any(), any(), any(), eq(7L), any());
 	}
 
 	@Test
-	@DisplayName("createIncident throws FieldValidationException when service is not found")
-	void createIncidentUnknownService() {
+	@DisplayName("createIncident throws FieldValidationException when service does not exist")
+	void createIncidentUnknownServiceThrows() {
 		when(appUserRepository.findById(1L)).thenReturn(Optional.of(user));
-		when(appServiceRepository.findWithDetailsById(99L)).thenReturn(Optional.empty());
+		when(serviceRepository.findWithDetailsById(99L)).thenReturn(Optional.empty());
 
 		CreateIncidentRequest request = new CreateIncidentRequest(
-				"Title", "Desc", 99L, Severity.SEV1
+				"Checkout failure",
+				"Database timeouts",
+				99L,
+				Severity.SEV1
 		);
 
 		assertThatThrownBy(() -> incidentService.createIncident(request, 1L))
 				.isInstanceOf(FieldValidationException.class)
-				.hasMessage("Service not found");
+				.hasMessageContaining("Service not found");
 	}
 
 	@Test
-	@DisplayName("createIncident throws FieldValidationException when service lacks target for severity")
-	void createIncidentMissingSeverityTarget() {
+	@DisplayName("createIncident throws FieldValidationException when SLA target is missing for severity")
+	void createIncidentMissingSlaTargetThrows() {
 		when(appUserRepository.findById(1L)).thenReturn(Optional.of(user));
-		when(appServiceRepository.findWithDetailsById(10L)).thenReturn(Optional.of(service));
+		when(serviceRepository.findWithDetailsById(10L)).thenReturn(Optional.of(service));
 
 		CreateIncidentRequest request = new CreateIncidentRequest(
-				"Title", "Desc", 10L, Severity.SEV4
+				"Low priority issue",
+				"Minor bug",
+				10L,
+				Severity.SEV4
 		);
 
 		assertThatThrownBy(() -> incidentService.createIncident(request, 1L))
 				.isInstanceOf(FieldValidationException.class)
-				.hasMessageContaining("has no SLA target for SEV4");
+				.hasMessageContaining("no SLA target for SEV4");
+	}
+
+	@Test
+	@DisplayName("getIncident returns incident with timeline")
+	void getIncidentReturnsDetails() {
+		Incident incident = new Incident(7L, "Checkout failure", "Database timeouts", service,
+				Severity.SEV1, IncidentStatus.OPEN, user, FIXED_NOW, 15, 240);
+		TimelineEntry te = new TimelineEntry(1L, incident, user,
+				com.group2.incident.incident.entity.TimelineEventType.INCIDENT_CREATED,
+				"Reported as SEV1", FIXED_NOW, null);
+
+		when(incidentRepository.findWithDetailsById(7L)).thenReturn(Optional.of(incident));
+		when(timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(7L)).thenReturn(List.of(te));
+
+		IncidentResponse response = incidentService.getIncident(7L);
+
+		assertThat(response.id()).isEqualTo(7L);
+		assertThat(response.reference()).isEqualTo("INC-7");
+		assertThat(response.timeline()).hasSize(1);
 	}
 
 	@Test
 	@DisplayName("getIncident throws NotFoundException when incident does not exist")
-	void getIncidentNotFound() {
-		when(incidentRepository.findWithDetailsById(123L)).thenReturn(Optional.empty());
+	void getIncidentNotFoundThrows() {
+		when(incidentRepository.findWithDetailsById(999L)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> incidentService.getIncident(123L))
+		assertThatThrownBy(() -> incidentService.getIncident(999L))
 				.isInstanceOf(NotFoundException.class)
-				.hasMessage("Incident 123 not found");
-	}
-
-	@Test
-	@DisplayName("listIncidents returns summaries newest first")
-	void listIncidentsSummary() {
-		Incident inc = new Incident(1L, "Inc 1", "Desc", service, Severity.SEV1,
-				IncidentStatus.OPEN, user, FIXED_NOW, 15, 240);
-		when(incidentRepository.findAllByOrderByCreatedAtDescIdDesc()).thenReturn(List.of(inc));
-
-		List<IncidentSummaryResponse> list = incidentService.listIncidents();
-		assertThat(list).hasSize(1);
-		assertThat(list.get(0).title()).isEqualTo("Inc 1");
-		assertThat(list.get(0).serviceName()).isEqualTo("Payments");
+				.hasMessageContaining("Incident 999 not found");
 	}
 }

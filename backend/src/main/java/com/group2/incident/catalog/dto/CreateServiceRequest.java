@@ -1,7 +1,7 @@
 package com.group2.incident.catalog.dto;
 
 import com.group2.incident.catalog.entity.Criticality;
-import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.incident.entity.Severity;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

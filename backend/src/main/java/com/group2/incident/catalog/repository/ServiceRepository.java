@@ -17,6 +17,6 @@ public interface ServiceRepository extends JpaRepository<ServiceEntity, Long> {
 
     boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
 
-    @Query("select distinct s from ServiceEntity s left join fetch s.targets left join fetch s.owner where s.id = :id")
+    @Query("select distinct s from ServiceEntity s left join fetch s.targets left join fetch s.owner left join fetch s.fallbackContact where s.id = :id")
     Optional<ServiceEntity> findWithDetailsById(@Param("id") Long id);
 }

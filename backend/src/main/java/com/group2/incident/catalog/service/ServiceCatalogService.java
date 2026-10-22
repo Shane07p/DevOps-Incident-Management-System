@@ -10,7 +10,7 @@ import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.SlaTargetDto;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.incident.entity.Severity;
 import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;

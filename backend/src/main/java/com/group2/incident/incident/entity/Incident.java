@@ -1,7 +1,7 @@
 package com.group2.incident.incident.entity;
 
 import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.catalog.entity.AppService;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,7 +38,7 @@ public class Incident {
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "service_id", nullable = false)
-	private AppService service;
+	private ServiceEntity service;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 10)
@@ -69,15 +69,22 @@ public class Incident {
 	@Column(nullable = false)
 	private Long version;
 
-	public Incident(String title, String description, AppService service, Severity severity,
+	public Incident(String title, String description, ServiceEntity service, Severity severity,
 			IncidentStatus status, AppUser reporter, Instant createdAt,
 			int responseTargetMinutes, int resolutionTargetMinutes) {
-		this(null, title, description, service, severity, status, reporter, createdAt,
+		this(null, title, description, service, severity, status, reporter, null, createdAt,
 				responseTargetMinutes, resolutionTargetMinutes);
 	}
 
-	public Incident(Long id, String title, String description, AppService service, Severity severity,
+	public Incident(Long id, String title, String description, ServiceEntity service, Severity severity,
 			IncidentStatus status, AppUser reporter, Instant createdAt,
+			int responseTargetMinutes, int resolutionTargetMinutes) {
+		this(id, title, description, service, severity, status, reporter, null, createdAt,
+				responseTargetMinutes, resolutionTargetMinutes);
+	}
+
+	public Incident(Long id, String title, String description, ServiceEntity service, Severity severity,
+			IncidentStatus status, AppUser reporter, AppUser assignee, Instant createdAt,
 			int responseTargetMinutes, int resolutionTargetMinutes) {
 		this.id = id;
 		this.title = title;
@@ -86,9 +93,14 @@ public class Incident {
 		this.severity = severity;
 		this.status = status;
 		this.reporter = reporter;
+		this.assignee = assignee;
 		this.createdAt = createdAt;
 		this.responseTargetMinutes = responseTargetMinutes;
 		this.resolutionTargetMinutes = resolutionTargetMinutes;
+	}
+
+	public void setAssignee(AppUser assignee) {
+		this.assignee = assignee;
 	}
 
 	public String getReference() {

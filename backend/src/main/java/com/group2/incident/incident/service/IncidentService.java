@@ -1,11 +1,14 @@
 package com.group2.incident.incident.service;
 
+import com.group2.incident.audit.entity.AuditAction;
+import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.entity.AppService;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.catalog.repository.AppServiceRepository;
+import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
@@ -20,8 +23,10 @@ import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.service.NotificationService;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,9 +38,11 @@ public class IncidentService {
 
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
-	private final AppServiceRepository appServiceRepository;
+	private final ServiceRepository serviceRepository;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
+	private final OnCallService onCallService;
+	private final NotificationService notificationService;
 	private final Clock clock;
 
 	@Transactional
@@ -46,7 +53,7 @@ public class IncidentService {
 					.orElseThrow(() -> new NotFoundException("User " + reporterUserId + " not found"));
 		}
 
-		AppService service = appServiceRepository.findWithDetailsById(request.serviceId())
+		ServiceEntity service = serviceRepository.findWithDetailsById(request.serviceId())
 				.orElseThrow(() -> new FieldValidationException("serviceId", "Service not found"));
 
 		SlaTarget target = service.targetFor(request.severity());
@@ -68,27 +75,53 @@ public class IncidentService {
 				target.responseMinutes(),
 				target.resolutionMinutes()
 		);
+
+		AppUser assignee = onCallService.resolveAssignee(service, now);
+		if (assignee != null) {
+			incident.setAssignee(assignee);
+		}
+
 		incident = incidentRepository.save(incident);
 
+		List<TimelineEntry> timelineEntries = new ArrayList<>();
+
 		String details = "Reported as " + request.severity() + " on " + service.getName();
-		TimelineEntry timelineEntry = new TimelineEntry(
+		TimelineEntry createdEntry = new TimelineEntry(
 				incident,
 				reporter,
 				TimelineEventType.INCIDENT_CREATED,
 				details,
 				now
 		);
-		timelineEntry = timelineEntryRepository.save(timelineEntry);
+		createdEntry = timelineEntryRepository.save(createdEntry);
+		timelineEntries.add(createdEntry);
+
+		if (assignee != null) {
+			TimelineEntry assignedEntry = new TimelineEntry(
+					incident,
+					null,
+					TimelineEventType.ASSIGNED,
+					"Assigned to " + assignee.getUsername(),
+					now
+			);
+			assignedEntry = timelineEntryRepository.save(assignedEntry);
+			timelineEntries.add(assignedEntry);
+
+			notificationService.notifyUser(
+					assignee,
+					"Assigned to incident " + incident.getReference() + ": " + incident.getTitle()
+			);
+		}
 
 		auditService.record(
 				reporter,
-				"INCIDENT_CREATED",
-				"INCIDENT",
+				AuditAction.INCIDENT_CREATED,
+				AuditItemType.INCIDENT,
 				incident.getId(),
 				"Created incident " + incident.getReference() + " on service " + service.getName()
 		);
 
-		return toResponse(incident, List.of(timelineEntry));
+		return toResponse(incident, timelineEntries);
 	}
 
 	@Transactional(readOnly = true)

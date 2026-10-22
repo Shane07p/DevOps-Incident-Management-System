@@ -9,8 +9,11 @@ import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.incident.entity.Incident;
+import com.group2.incident.incident.entity.IncidentStatus;
+import com.group2.incident.incident.entity.Severity;
+import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -49,6 +52,9 @@ public class SecurityMatrixTest {
 	private ServiceRepository services;
 
 	@Autowired
+	private IncidentRepository incidents;
+
+	@Autowired
 	private PasswordEncoder passwordEncoder;
 
 	@Autowired
@@ -69,6 +75,8 @@ public class SecurityMatrixTest {
 	private Long adminUserId;
 
 	private Long targetServiceId;
+
+	private Long targetIncidentId;
 
 	public record MatrixRow(
 			String name,
@@ -157,6 +165,41 @@ public class SecurityMatrixTest {
 						"/api/services/{id}",
 						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
 						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}/on-call",
+						HttpMethod.GET,
+						"/api/services/{id}/on-call",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}/on-call",
+						HttpMethod.PUT,
+						"/api/services/{id}/on-call",
+						"{\"fallbackContactId\":${OWNER_ID},\"shifts\":[]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents",
+						HttpMethod.POST,
+						"/api/incidents",
+						"{\"title\":\"Sec Incident ${RANDOM}\",\"description\":\"Sec test\",\"serviceId\":${SERVICE_ID},\"severity\":\"SEV1\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents",
+						HttpMethod.GET,
+						"/api/incidents",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/{id}",
+						HttpMethod.GET,
+						"/api/incidents/{id}",
+						null,
+						200, 200, 200, 401
 				)
 		);
 	}
@@ -175,12 +218,27 @@ public class SecurityMatrixTest {
 		viewerToken = tokenFor("viewer");
 
 		ServiceEntity service = new ServiceEntity("SecurityMatrixBaseService", "Initial", admin, Criticality.HIGH, clock.instant());
+		service.setFallbackContact(admin);
 		service.putTarget(Severity.SEV1, 15, 240);
 		service.putTarget(Severity.SEV2, 60, 480);
 		service.putTarget(Severity.SEV3, 240, 2880);
 		service.putTarget(Severity.SEV4, 1440, 10080);
 		ServiceEntity savedService = services.saveAndFlush(service);
 		targetServiceId = savedService.getId();
+
+		Incident incident = new Incident(
+				"Security Incident Base",
+				"Description",
+				savedService,
+				Severity.SEV1,
+				IncidentStatus.OPEN,
+				admin,
+				clock.instant(),
+				15,
+				240
+		);
+		Incident savedIncident = incidents.saveAndFlush(incident);
+		targetIncidentId = savedIncident.getId();
 	}
 
 	@Test
@@ -216,6 +274,8 @@ public class SecurityMatrixTest {
 		String path = row.pathTemplate();
 		if (path.contains("/api/services/{id}")) {
 			path = path.replace("{id}", targetServiceId.toString());
+		} else if (path.contains("/api/incidents/{id}")) {
+			path = path.replace("{id}", targetIncidentId.toString());
 		} else {
 			path = path.replace("{id}", targetUserId.toString());
 		}
@@ -240,7 +300,8 @@ public class SecurityMatrixTest {
 		}
 		if (bodyTemplate != null) {
 			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
-					.replace("${OWNER_ID}", adminUserId.toString());
+					.replace("${OWNER_ID}", adminUserId.toString())
+					.replace("${SERVICE_ID}", targetServiceId.toString());
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

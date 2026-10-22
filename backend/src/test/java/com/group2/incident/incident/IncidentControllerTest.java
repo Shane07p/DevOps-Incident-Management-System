@@ -10,10 +10,10 @@ import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.entity.AppService;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.catalog.repository.AppServiceRepository;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.Severity;
@@ -45,7 +45,7 @@ class IncidentControllerTest {
 	private AppUserRepository users;
 
 	@Autowired
-	private AppServiceRepository services;
+	private ServiceRepository services;
 
 	@Autowired
 	private IncidentRepository incidents;
@@ -61,7 +61,7 @@ class IncidentControllerTest {
 
 	private AppUser engineer;
 	private AppUser viewer;
-	private AppService paymentsService;
+	private ServiceEntity paymentsService;
 
 	@BeforeEach
 	void setUp() {
@@ -71,7 +71,8 @@ class IncidentControllerTest {
 		viewer = users.saveAndFlush(new AppUser("viewer", "Dev Viewer", passwordEncoder.encode(PASSWORD),
 				Role.VIEWER, now));
 
-		paymentsService = services.saveAndFlush(new AppService(
+		paymentsService = services.saveAndFlush(new ServiceEntity(
+				null,
 				"Payments",
 				"Card payments",
 				engineer,

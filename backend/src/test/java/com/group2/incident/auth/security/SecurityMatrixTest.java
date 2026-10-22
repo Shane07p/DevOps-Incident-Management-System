@@ -7,6 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -42,6 +46,9 @@ public class SecurityMatrixTest {
 	private AppUserRepository users;
 
 	@Autowired
+	private ServiceRepository services;
+
+	@Autowired
 	private PasswordEncoder passwordEncoder;
 
 	@Autowired
@@ -58,6 +65,10 @@ public class SecurityMatrixTest {
 	private String viewerToken;
 
 	private Long targetUserId;
+
+	private Long adminUserId;
+
+	private Long targetServiceId;
 
 	public record MatrixRow(
 			String name,
@@ -118,21 +129,58 @@ public class SecurityMatrixTest {
 						"/api/users/{id}/role",
 						"{\"role\":\"ENGINEER\"}",
 						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services",
+						HttpMethod.GET,
+						"/api/services",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}",
+						HttpMethod.GET,
+						"/api/services/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/services",
+						HttpMethod.POST,
+						"/api/services",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}",
+						HttpMethod.PUT,
+						"/api/services/{id}",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						200, 403, 403, 401
 				)
 		);
 	}
 
 	@BeforeEach
 	void setUp() throws Exception {
-		createUser("admin", Role.ADMIN);
+		AppUser admin = createUser("admin", Role.ADMIN);
 		createUser("engineer", Role.ENGINEER);
 		createUser("viewer", Role.VIEWER);
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
+		adminUserId = admin.getId();
 
 		adminToken = tokenFor("admin");
 		engineerToken = tokenFor("engineer");
 		viewerToken = tokenFor("viewer");
+
+		ServiceEntity service = new ServiceEntity("SecurityMatrixBaseService", "Initial", admin, Criticality.HIGH, clock.instant());
+		service.putTarget(Severity.SEV1, 15, 240);
+		service.putTarget(Severity.SEV2, 60, 480);
+		service.putTarget(Severity.SEV3, 240, 2880);
+		service.putTarget(Severity.SEV4, 1440, 10080);
+		ServiceEntity savedService = services.saveAndFlush(service);
+		targetServiceId = savedService.getId();
 	}
 
 	@Test
@@ -165,7 +213,12 @@ public class SecurityMatrixTest {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
-		String path = row.pathTemplate().replace("{id}", targetUserId.toString());
+		String path = row.pathTemplate();
+		if (path.contains("/api/services/{id}")) {
+			path = path.replace("{id}", targetServiceId.toString());
+		} else {
+			path = path.replace("{id}", targetUserId.toString());
+		}
 
 		// Admin
 		execute(row.method(), path, row.bodyTemplate(), adminToken, row.adminStatus());
@@ -186,7 +239,8 @@ public class SecurityMatrixTest {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}
 		if (bodyTemplate != null) {
-			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8));
+			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
+					.replace("${OWNER_ID}", adminUserId.toString());
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

@@ -20,9 +20,9 @@ public record ServiceResponse(
     public static ServiceResponse from(ServiceEntity service) {
         Map<Severity, SlaTargetDto> targetMap = new EnumMap<>(Severity.class);
         if (service.getTargets() != null) {
-            for (var target : service.getTargets()) {
-                targetMap.put(target.getSeverity(), new SlaTargetDto(target.getResponseMinutes(), target.getResolutionMinutes()));
-            }
+            service.getTargets().forEach((severity, target) ->
+                    targetMap.put(severity, new SlaTargetDto(target.getResponseMinutes(), target.getResolutionMinutes()))
+            );
         }
         OwnerDto ownerDto = service.getOwner() != null
                 ? new OwnerDto(service.getOwner().getId(), service.getOwner().getDisplayName())

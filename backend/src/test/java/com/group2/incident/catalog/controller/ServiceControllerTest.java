@@ -1,7 +1,6 @@
 package com.group2.incident.catalog.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -9,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.audit.entity.AuditAction;
 import com.group2.incident.audit.entity.AuditEntry;
+import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
@@ -27,7 +28,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
 
 @IntegrationTest
 public class ServiceControllerTest {
@@ -121,9 +121,11 @@ public class ServiceControllerTest {
                 .andReturn().getResponse().getHeader("Location");
 
         long id = Long.parseLong(location.substring(location.lastIndexOf('/') + 1));
-        List<AuditEntry> auditList = auditEntries.findByItemTypeAndItemIdOrderByRecordedAtAsc("SERVICE", id);
+        List<AuditEntry> auditList = auditEntries.findAll().stream()
+                .filter(e -> e.getItemType() == AuditItemType.SERVICE && e.getItemId() == id)
+                .toList();
         assertThat(auditList).hasSize(1);
-        assertThat(auditList.get(0).getAction()).isEqualTo("SERVICE_CREATED");
+        assertThat(auditList.get(0).getAction()).isEqualTo(AuditAction.SERVICE_CREATED);
         assertThat(auditList.get(0).getActor().getId()).isEqualTo(admin.getId());
     }
 
@@ -198,9 +200,11 @@ public class ServiceControllerTest {
                 .andExpect(jsonPath("$.criticality").value("CRITICAL"))
                 .andExpect(jsonPath("$.owner.displayName").value("Test engineer"));
 
-        List<AuditEntry> auditList = auditEntries.findByItemTypeAndItemIdOrderByRecordedAtAsc("SERVICE", id);
+        List<AuditEntry> auditList = auditEntries.findAll().stream()
+                .filter(e -> e.getItemType() == AuditItemType.SERVICE && e.getItemId() == id)
+                .toList();
         assertThat(auditList).hasSize(2);
-        assertThat(auditList.get(1).getAction()).isEqualTo("SERVICE_UPDATED");
+        assertThat(auditList.get(1).getAction()).isEqualTo(AuditAction.SERVICE_UPDATED);
         assertThat(auditList.get(1).getActor().getId()).isEqualTo(admin.getId());
     }
 

@@ -59,4 +59,10 @@ public class AppUser {
 		tokenVersion++;
 	}
 
+	/** Updates the user's role and immediately invalidates all active tokens. */
+	public void changeRole(Role newRole) {
+		this.role = newRole;
+		revokeTokens();
+	}
+
 }

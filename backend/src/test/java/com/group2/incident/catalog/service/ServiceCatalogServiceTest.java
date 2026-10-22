@@ -9,6 +9,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.group2.incident.audit.entity.AuditAction;
+import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
@@ -20,7 +22,6 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
-import com.group2.incident.catalog.repository.ServiceSlaTargetRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import java.time.Clock;
@@ -47,9 +48,6 @@ public class ServiceCatalogServiceTest {
     private ServiceRepository serviceRepository;
 
     @Mock
-    private ServiceSlaTargetRepository serviceSlaTargetRepository;
-
-    @Mock
     private AppUserRepository appUserRepository;
 
     @Mock
@@ -62,7 +60,7 @@ public class ServiceCatalogServiceTest {
     @BeforeEach
     void setUp() {
         fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        service = new ServiceCatalogService(serviceRepository, serviceSlaTargetRepository, appUserRepository, auditService, fixedClock);
+        service = new ServiceCatalogService(serviceRepository, appUserRepository, auditService, fixedClock);
 
         owner = new AppUser("alice", "Alice", "{noop}x", Role.ENGINEER, FIXED_NOW);
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
@@ -90,7 +88,7 @@ public class ServiceCatalogServiceTest {
         assertThat(response.criticality()).isEqualTo(Criticality.HIGH);
         assertThat(response.targets()).hasSize(4);
 
-        verify(auditService).record(eq(owner), eq("SERVICE_CREATED"), eq("SERVICE"), anyLong(), anyString());
+        verify(auditService).record(eq(owner), eq(AuditAction.SERVICE_CREATED), eq(AuditItemType.SERVICE), anyLong(), anyString());
     }
 
     @Test

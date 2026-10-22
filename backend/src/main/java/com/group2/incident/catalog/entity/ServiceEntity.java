@@ -1,8 +1,9 @@
 package com.group2.incident.catalog.entity;
 
 import com.group2.incident.auth.entity.AppUser;
-import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,16 +13,20 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.MapKeyEnumerated;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "service")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ServiceEntity {
 
     @Id
@@ -42,17 +47,20 @@ public class ServiceEntity {
     @Column(nullable = false, length = 20)
     private Criticality criticality;
 
-    @OneToMany(mappedBy = "service", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ServiceSlaTarget> targets = new ArrayList<>();
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "service_sla_target",
+            joinColumns = @JoinColumn(name = "service_id")
+    )
+    @MapKeyEnumerated(EnumType.STRING)
+    @MapKeyColumn(name = "severity", length = 10)
+    private Map<Severity, SlaTarget> targets = new EnumMap<>(Severity.class);
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    protected ServiceEntity() {
-    }
 
     public ServiceEntity(String name, String description, AppUser owner, Criticality criticality, Instant createdAt) {
         this.name = name;
@@ -71,7 +79,7 @@ public class ServiceEntity {
         this.updatedAt = updatedAt;
     }
 
-    public void addTarget(ServiceSlaTarget target) {
-        this.targets.add(target);
+    public void putTarget(Severity severity, int responseMinutes, int resolutionMinutes) {
+        this.targets.put(severity, new SlaTarget(responseMinutes, resolutionMinutes));
     }
 }

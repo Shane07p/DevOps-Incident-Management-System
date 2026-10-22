@@ -1,5 +1,7 @@
 package com.group2.incident.catalog.service;
 
+import com.group2.incident.audit.entity.AuditAction;
+import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
@@ -8,10 +10,9 @@ import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.SlaTargetDto;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.entity.ServiceSlaTarget;
 import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.repository.ServiceRepository;
-import com.group2.incident.catalog.repository.ServiceSlaTargetRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import java.time.Clock;
@@ -20,14 +21,13 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
 public class ServiceCatalogService {
-
-    private static final String ITEM_TYPE = "SERVICE";
 
     private static final Map<Severity, Integer> DEFAULT_RESPONSE_MINUTES = Map.of(
             Severity.SEV1, 15,
@@ -37,19 +37,16 @@ public class ServiceCatalogService {
     );
 
     private final ServiceRepository serviceRepository;
-    private final ServiceSlaTargetRepository serviceSlaTargetRepository;
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
     private final Clock clock;
 
     public ServiceCatalogService(
             ServiceRepository serviceRepository,
-            ServiceSlaTargetRepository serviceSlaTargetRepository,
             AppUserRepository appUserRepository,
             AuditService auditService,
             Clock clock) {
         this.serviceRepository = serviceRepository;
-        this.serviceSlaTargetRepository = serviceSlaTargetRepository;
         this.appUserRepository = appUserRepository;
         this.auditService = auditService;
         this.clock = clock;
@@ -93,14 +90,12 @@ public class ServiceCatalogService {
 
         ServiceEntity service = new ServiceEntity(name, clean(request.description()), owner, request.criticality(), clock.instant());
         for (Map.Entry<Severity, SlaTargetDto> entry : resolvedTargets.entrySet()) {
-            ServiceSlaTarget target = new ServiceSlaTarget(service, entry.getKey(),
-                    entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
-            service.addTarget(target);
+            service.putTarget(entry.getKey(), entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
         }
 
-        ServiceEntity saved = serviceRepository.saveAndFlush(service);
+        ServiceEntity saved = saveService(service, name);
         AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
-        auditService.record(actor, "SERVICE_CREATED", ITEM_TYPE, saved.getId(), describe(saved));
+        auditService.record(actor, AuditAction.SERVICE_CREATED, AuditItemType.SERVICE, saved.getId(), describe(saved));
 
         return ServiceResponse.from(saved);
     }
@@ -126,28 +121,30 @@ public class ServiceCatalogService {
         }
 
         service.update(name, description, owner, request.criticality(), clock.instant());
-
-        Map<Severity, ServiceSlaTarget> currentTargets = new EnumMap<>(Severity.class);
-        for (ServiceSlaTarget target : service.getTargets()) {
-            currentTargets.put(target.getSeverity(), target);
-        }
-
         for (Map.Entry<Severity, SlaTargetDto> entry : resolvedTargets.entrySet()) {
-            ServiceSlaTarget existing = currentTargets.get(entry.getKey());
-            if (existing != null) {
-                existing.update(entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
-            } else {
-                ServiceSlaTarget newTarget = new ServiceSlaTarget(service, entry.getKey(),
-                        entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
-                service.addTarget(newTarget);
-            }
+            service.putTarget(entry.getKey(), entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
         }
 
-        ServiceEntity saved = serviceRepository.saveAndFlush(service);
+        ServiceEntity saved = saveService(service, name);
         AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
-        auditService.record(actor, "SERVICE_UPDATED", ITEM_TYPE, id, String.join("; ", changes));
+        auditService.record(actor, AuditAction.SERVICE_UPDATED, AuditItemType.SERVICE, id, String.join("; ", changes));
 
         return ServiceResponse.from(saved);
+    }
+
+    private ServiceEntity saveService(ServiceEntity service, String name) {
+        try {
+            return serviceRepository.saveAndFlush(service);
+        } catch (DataIntegrityViolationException ex) {
+            String msg = ex.getMessage();
+            Throwable cause = ex.getRootCause();
+            String causeMsg = cause != null ? cause.getMessage() : "";
+            String combined = ((msg != null ? msg : "") + " " + causeMsg).toLowerCase();
+            if (combined.contains("service_name") || combined.contains("service_name_key") || combined.contains("service_name_lower_key")) {
+                throw new ConflictException("A service named " + name + " already exists");
+            }
+            throw ex;
+        }
     }
 
     private ServiceEntity load(Long id) {
@@ -204,9 +201,9 @@ public class ServiceCatalogService {
         StringBuilder details = new StringBuilder()
                 .append(service.getName()).append(" (").append(service.getCriticality())
                 .append("), owner ").append(service.getOwner().getDisplayName()).append("; targets");
-        for (ServiceSlaTarget target : service.getTargets()) {
-            details.append(' ').append(target.getSeverity()).append(' ')
-                    .append(target.getResponseMinutes()).append('/').append(target.getResolutionMinutes()).append(" min");
+        for (Map.Entry<Severity, SlaTarget> entry : service.getTargets().entrySet()) {
+            details.append(' ').append(entry.getKey()).append(' ')
+                    .append(entry.getValue().getResponseMinutes()).append('/').append(entry.getValue().getResolutionMinutes()).append(" min");
         }
         return details.toString();
     }
@@ -228,13 +225,9 @@ public class ServiceCatalogService {
             changes.add("criticality: " + before.getCriticality() + " → " + criticality);
         }
 
-        Map<Severity, ServiceSlaTarget> currentMap = new EnumMap<>(Severity.class);
-        for (ServiceSlaTarget target : before.getTargets()) {
-            currentMap.put(target.getSeverity(), target);
-        }
-
+        Map<Severity, SlaTarget> currentMap = before.getTargets();
         for (Severity severity : Severity.values()) {
-            ServiceSlaTarget old = currentMap.get(severity);
+            SlaTarget old = currentMap.get(severity);
             SlaTargetDto now = targets.get(severity);
             if (old != null && now != null) {
                 if (old.getResponseMinutes() != now.responseMinutes()) {

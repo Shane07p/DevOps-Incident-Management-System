@@ -102,11 +102,14 @@ DB_URL=jdbc:postgresql://localhost:5434/incident \
 docker stop incident-scratch    # removes the container and its data
 ```
 
-To run the packaged backend against the same database instead:
+To run the packaged backend and the built UI against the same database instead:
 
 ```bash
 docker compose --profile app up --build
 ```
+
+Open http://localhost:8081. nginx serves the UI there and proxies `/api` and `/webhooks` to the
+backend, the way the stack runs in Docker (D41).
 
 ## Tests
 

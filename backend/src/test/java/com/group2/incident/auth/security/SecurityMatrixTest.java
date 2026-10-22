@@ -1,161 +1,264 @@
 package com.group2.incident.auth.security;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.dto.CreateServiceRequest;
-import com.group2.incident.catalog.dto.SlaTargetDto;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
-import com.group2.incident.catalog.service.ServiceCatalogService;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 @IntegrationTest
 public class SecurityMatrixTest {
 
-    private static final String PASSWORD = "DevPassw0rd!";
+	private static final String DEFAULT_PASSWORD = "DevPassw0rd!";
 
-    @Autowired
-    private MockMvc mvc;
+	@Autowired
+	private MockMvc mvc;
 
-    @Autowired
-    private AppUserRepository users;
+	@Autowired
+	private AppUserRepository users;
 
-    @Autowired
-    private ServiceCatalogService serviceCatalogService;
+	@Autowired
+	private ServiceRepository services;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+	@Autowired
+	private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private Clock clock;
+	@Autowired
+	private Clock clock;
 
-    private String adminToken;
-    private String engineerToken;
-    private String viewerToken;
-    private Long testServiceId;
+	@Autowired
+	@Qualifier("requestMappingHandlerMapping")
+	private RequestMappingHandlerMapping handlerMapping;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        AppUser admin = createUser("admin", Role.ADMIN);
-        createUser("engineer", Role.ENGINEER);
-        createUser("viewer", Role.VIEWER);
+	private String adminToken;
 
-        adminToken = tokenFor("admin");
-        engineerToken = tokenFor("engineer");
-        viewerToken = tokenFor("viewer");
+	private String engineerToken;
 
-        SlaTargetDto target = new SlaTargetDto(15, 240);
-        Map<Severity, SlaTargetDto> targets = Map.of(
-                Severity.SEV1, target,
-                Severity.SEV2, target,
-                Severity.SEV3, target,
-                Severity.SEV4, target
-        );
-        CreateServiceRequest request = new CreateServiceRequest("BaseService", "Initial", admin.getId(), Criticality.HIGH, targets);
-        testServiceId = serviceCatalogService.create(request, admin.getId()).id();
-    }
+	private String viewerToken;
 
-    @Test
-    void servicesGetListPermissions() throws Exception {
-        mvc.perform(get("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/services"))
-                .andExpect(status().isUnauthorized());
-    }
+	private Long targetUserId;
 
-    @Test
-    void servicesGetOnePermissions() throws Exception {
-        mvc.perform(get("/api/services/" + testServiceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/services/" + testServiceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/services/" + testServiceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/services/" + testServiceId))
-                .andExpect(status().isUnauthorized());
-    }
+	private Long adminUserId;
 
-    @Test
-    void servicesPostPermissions() throws Exception {
-        String body = sampleServiceBody("NewService");
+	private Long targetServiceId;
 
-        mvc.perform(post("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isCreated());
+	public record MatrixRow(
+			String name,
+			HttpMethod method,
+			String pathTemplate,
+			String bodyTemplate,
+			int adminStatus,
+			int engineerStatus,
+			int viewerStatus,
+			int unauthenticatedStatus
+	) {
+		@Override
+		public String toString() {
+			return name;
+		}
+	}
 
-        mvc.perform(post("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isForbidden());
+	public static Stream<MatrixRow> matrixRows() {
+		return Stream.of(
+				new MatrixRow(
+						"POST /api/auth/login",
+						HttpMethod.POST,
+						"/api/auth/login",
+						"{\"username\":\"admin\",\"password\":\"" + DEFAULT_PASSWORD + "\"}",
+						200, 200, 200, 200
+				),
+				new MatrixRow(
+						"GET /api/auth/me",
+						HttpMethod.GET,
+						"/api/auth/me",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/auth/logout",
+						HttpMethod.POST,
+						"/api/auth/logout",
+						null,
+						204, 204, 204, 401
+				),
+				new MatrixRow(
+						"GET /api/users",
+						HttpMethod.GET,
+						"/api/users",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/users",
+						HttpMethod.POST,
+						"/api/users",
+						"{\"username\":\"sec_${RANDOM}\",\"displayName\":\"Sec User\",\"password\":\"ValidPass123!\",\"role\":\"ENGINEER\"}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/users/{id}/role",
+						HttpMethod.PUT,
+						"/api/users/{id}/role",
+						"{\"role\":\"ENGINEER\"}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services",
+						HttpMethod.GET,
+						"/api/services",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}",
+						HttpMethod.GET,
+						"/api/services/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/services",
+						HttpMethod.POST,
+						"/api/services",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}",
+						HttpMethod.PUT,
+						"/api/services/{id}",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						200, 403, 403, 401
+				)
+		);
+	}
 
-        mvc.perform(post("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isForbidden());
+	@BeforeEach
+	void setUp() throws Exception {
+		AppUser admin = createUser("admin", Role.ADMIN);
+		createUser("engineer", Role.ENGINEER);
+		createUser("viewer", Role.VIEWER);
+		AppUser target = createUser("target", Role.VIEWER);
+		targetUserId = target.getId();
+		adminUserId = admin.getId();
 
-        mvc.perform(post("/api/services")
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isUnauthorized());
-    }
+		adminToken = tokenFor("admin");
+		engineerToken = tokenFor("engineer");
+		viewerToken = tokenFor("viewer");
 
-    @Test
-    void servicesPutPermissions() throws Exception {
-        String body = sampleServiceBody("BaseService");
+		ServiceEntity service = new ServiceEntity("SecurityMatrixBaseService", "Initial", admin, Criticality.HIGH, clock.instant());
+		service.putTarget(Severity.SEV1, 15, 240);
+		service.putTarget(Severity.SEV2, 60, 480);
+		service.putTarget(Severity.SEV3, 240, 2880);
+		service.putTarget(Severity.SEV4, 1440, 10080);
+		ServiceEntity savedService = services.saveAndFlush(service);
+		targetServiceId = savedService.getId();
+	}
 
-        mvc.perform(put("/api/services/" + testServiceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isOk());
+	@Test
+	void failsIfNewEndpointIsAddedWithoutItsRule() {
+		Set<String> declaredEndpoints = new HashSet<>();
+		matrixRows().forEach(r -> declaredEndpoints.add(r.method().name() + " " + r.pathTemplate()));
 
-        mvc.perform(put("/api/services/" + testServiceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isForbidden());
+		Set<String> registeredApiEndpoints = new HashSet<>();
+		for (RequestMappingInfo info : handlerMapping.getHandlerMethods().keySet()) {
+			Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
+			Set<String> patterns = info.getPathPatternsCondition() != null
+					? info.getPathPatternsCondition().getPatternValues()
+					: info.getDirectPaths();
 
-        mvc.perform(put("/api/services/" + testServiceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isForbidden());
+			for (String pattern : patterns) {
+				if (pattern.startsWith("/api/")) {
+					for (RequestMethod method : methods) {
+						registeredApiEndpoints.add(method.name() + " " + pattern);
+					}
+				}
+			}
+		}
 
-        mvc.perform(put("/api/services/" + testServiceId)
-                        .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isUnauthorized());
-    }
+		assertThat(declaredEndpoints)
+				.as("Every registered /api endpoint must be covered in SecurityMatrixTest. Missing rules: %s",
+						registeredApiEndpoints.stream().filter(e -> !declaredEndpoints.contains(e)).toList())
+				.containsAll(registeredApiEndpoints);
+	}
 
-    private AppUser createUser(String username, Role role) {
-        return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(PASSWORD), role,
-                clock.instant()));
-    }
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("matrixRows")
+	void endpointSecurityMatrix(MatrixRow row) throws Exception {
+		String path = row.pathTemplate();
+		if (path.contains("/api/services/{id}")) {
+			path = path.replace("{id}", targetServiceId.toString());
+		} else {
+			path = path.replace("{id}", targetUserId.toString());
+		}
 
-    private String tokenFor(String username) throws Exception {
-        String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
-        String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(response, "$.token");
-    }
+		// Admin
+		execute(row.method(), path, row.bodyTemplate(), adminToken, row.adminStatus());
 
-    private String sampleServiceBody(String name) {
-        AppUser admin = users.findByUsername("admin").orElseThrow();
-        String one = "{\"responseMinutes\": 15, \"resolutionMinutes\": 240}";
-        String targets = "{\"SEV1\": %s, \"SEV2\": %s, \"SEV3\": %s, \"SEV4\": %s}".formatted(one, one, one, one);
-        return """
-                {"name": "%s", "description": "Desc", "ownerId": %d, "criticality": "HIGH", "targets": %s}
-                """.formatted(name, admin.getId(), targets);
-    }
+		// Engineer
+		execute(row.method(), path, row.bodyTemplate(), engineerToken, row.engineerStatus());
+
+		// Viewer
+		execute(row.method(), path, row.bodyTemplate(), viewerToken, row.viewerStatus());
+
+		// Unauthenticated
+		execute(row.method(), path, row.bodyTemplate(), null, row.unauthenticatedStatus());
+	}
+
+	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {
+		MockHttpServletRequestBuilder req = request(method, path);
+		if (token != null) {
+			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+		}
+		if (bodyTemplate != null) {
+			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
+					.replace("${OWNER_ID}", adminUserId.toString());
+			req.contentType(MediaType.APPLICATION_JSON).content(body);
+		}
+		mvc.perform(req).andExpect(status().is(expectedStatus));
+	}
+
+	private AppUser createUser(String username, Role role) {
+		return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), role,
+				clock.instant()));
+	}
+
+	private String tokenFor(String username) throws Exception {
+		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, DEFAULT_PASSWORD);
+		String response = mvc.perform(
+						request(HttpMethod.POST, "/api/auth/login")
+								.contentType(MediaType.APPLICATION_JSON)
+								.content(body))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(response, "$.token");
+	}
 }

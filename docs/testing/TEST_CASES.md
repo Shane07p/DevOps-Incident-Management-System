@@ -173,12 +173,12 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-15.2a | Boundary value | An incident created at 09:00:00 | Assigned to A | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.2b | Boundary value | Created at 16:59:59 | Assigned to A | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.2c | Boundary value | Created at 17:00:00 | Not A: the fallback contact, since it falls in the gap | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Planned (Utsav B) |
+| TC-FR-15.2a | Boundary value | An incident created at 09:00:00 | Assigned to A | `OnCallServiceTest` | Automated (Utsav B) |
+| TC-FR-15.2b | Boundary value | Created at 16:59:59 | Assigned to A | `OnCallServiceTest` | Automated (Utsav B) |
+| TC-FR-15.2c | Boundary value | Created at 17:00:00 | Not A: the fallback contact, since it falls in the gap | `OnCallServiceTest` | Automated (Utsav B) |
+| TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Automated (Utsav B) |
+| TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Automated (Utsav B) |
+| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Automated (Utsav B) |
 
 ### Notifications (FR-07.1, D33)
 

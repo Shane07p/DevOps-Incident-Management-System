@@ -95,7 +95,8 @@ def test_slow_gateway_observable_delay_and_recovery(client):
         payment_service.slow_gateway_delay = orig_delay
 
 
-def test_error_spike_causes_500_and_recovers(client):
+def test_error_spike_causes_500_and_recovers(client, monkeypatch):
+    monkeypatch.setattr("demo_shop.services.checkout.random.random", lambda: 0.0)
     checkout_payload = {
         "customer_email": "shopper@example.com",
         "items": [{"product_id": "prod-101", "quantity": 1, "unit_price": 10.0}],
@@ -109,13 +110,12 @@ def test_error_spike_causes_500_and_recovers(client):
     # Enable error_spike
     client.post("/faults/error_spike", json={"enabled": True})
 
-    # Under error_spike, send 10 requests: majority must fail with 500
+    # Under error_spike, send 10 requests: all must fail deterministically with 500
     statuses = []
     for _ in range(10):
         r = client.post("/checkout", json=checkout_payload)
         statuses.append(r.status_code)
-    assert 500 in statuses
-    assert statuses.count(500) >= 5  # ~80% failure rate
+    assert statuses.count(500) == 10
 
     # Disable error_spike -> Recovery
     client.post("/faults/error_spike", json={"enabled": False})
@@ -234,3 +234,28 @@ def test_reset_all_faults(client):
     switches_after = client.get("/faults").json()["switches"]
     assert all(v is False for v in switches_after.values())
     assert client.get("/health").json()["version"] == "v1.0.0"
+
+
+def test_fault_switch_enable_disable_is_idempotent(client):
+    # Enabling when already enabled returns True and does not repeat side-effects
+    resp1 = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp1.status_code == 200
+    event1 = fault_manager.get_last_deploy_event()
+    assert event1 is not None
+
+    # Repeat enable: should be idempotent
+    resp2 = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp2.status_code == 200
+    event2 = fault_manager.get_last_deploy_event()
+    assert event1.timestamp == event2.timestamp
+
+    # Disable bad_deploy
+    resp3 = client.post("/faults/bad_deploy", json={"enabled": False})
+    assert resp3.status_code == 200
+    rollback1 = fault_manager.get_last_deploy_event()
+
+    # Repeat disable: should be idempotent
+    resp4 = client.post("/faults/bad_deploy", json={"enabled": False})
+    assert resp4.status_code == 200
+    rollback2 = fault_manager.get_last_deploy_event()
+    assert rollback1.timestamp == rollback2.timestamp

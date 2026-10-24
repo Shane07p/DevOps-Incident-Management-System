@@ -81,6 +81,8 @@ class FaultManager:
             raise ValueError(f"Unknown fault switch: '{name}'. Valid switches: {list(self._switches.keys())}")
 
         with self._lock:
+            if self._switches[name]:
+                return True
             self._switches[name] = True
             telemetry.set_fault_active(name, True)
 
@@ -155,6 +157,8 @@ class FaultManager:
             raise ValueError(f"Unknown fault switch: '{name}'. Valid switches: {list(self._switches.keys())}")
 
         with self._lock:
+            if not self._switches[name]:
+                return False
             self._switches[name] = False
             telemetry.set_fault_active(name, False)
 

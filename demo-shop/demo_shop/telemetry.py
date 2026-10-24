@@ -72,7 +72,9 @@ class TelemetryManager:
                 if Config.OTEL_EXPORTER_OTLP_HEADERS:
                     # Parse "k1=v1,k2=v2" or raw Authorization header
                     raw_h = Config.OTEL_EXPORTER_OTLP_HEADERS
-                    if "=" in raw_h:
+                    if raw_h.lower().startswith(("basic ", "bearer ")):
+                        headers["Authorization"] = raw_h
+                    elif "=" in raw_h:
                         for part in raw_h.split(","):
                             if "=" in part:
                                 k, v = part.split("=", 1)

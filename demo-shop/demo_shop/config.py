@@ -25,6 +25,16 @@ class Config:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
+    ALLOWED_TRAFFIC_ORIGINS: tuple[str, ...] = tuple(
+        origin.strip().rstrip("/")
+        for origin in os.getenv(
+            "ALLOWED_TRAFFIC_ORIGINS",
+            f"http://localhost:{PORT},http://127.0.0.1:{PORT},http://testserver,http://demo-shop:{PORT}",
+        ).split(",")
+        if origin.strip()
+    )
+
+
     @classmethod
     def is_remote_telemetry_enabled(cls) -> bool:
         """Returns True if remote OTLP export endpoint is configured."""

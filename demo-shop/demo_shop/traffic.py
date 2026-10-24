@@ -178,9 +178,10 @@ class TrafficGenerator:
         )
         try:
             loop = asyncio.get_running_loop()
-            self._task = loop.create_task(self._loop(client=client))
         except RuntimeError:
-            self._task = None
+            self._running = False
+            raise
+        self._task = loop.create_task(self._loop(client=client))
 
     async def stop(self):
         """Cleanly stop the traffic generator."""

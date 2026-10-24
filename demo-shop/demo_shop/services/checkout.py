@@ -6,6 +6,7 @@ and handles fault injection (SCN-02 error_spike, SCN-03 bad_deploy).
 
 from __future__ import annotations
 
+import hashlib
 import random
 import uuid
 from typing import Optional
@@ -40,7 +41,7 @@ class CheckoutService:
                 request_id=request_id,
                 fault_id="SCN-03",
                 details={
-                    "customer": request.customer_email,
+                    "customer_hash": hashlib.sha256(request.customer_email.encode()).hexdigest()[:12],
                     "version": current_version,
                     "error": error_msg,
                 },
@@ -61,7 +62,7 @@ class CheckoutService:
                     request_id=request_id,
                     fault_id="SCN-02",
                     details={
-                        "customer": request.customer_email,
+                        "customer_hash": hashlib.sha256(request.customer_email.encode()).hexdigest()[:12],
                         "version": current_version,
                         "error": error_msg,
                     },
@@ -108,7 +109,7 @@ class CheckoutService:
             request_id=request_id,
             details={
                 "order_id": order_id,
-                "customer": request.customer_email,
+                "customer_hash": hashlib.sha256(request.customer_email.encode()).hexdigest()[:12],
                 "amount": round(total_amount, 2),
                 "items": len(request.items),
                 "version": current_version,

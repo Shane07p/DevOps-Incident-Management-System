@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import time
+import urllib.parse
 import uuid
 from typing import List, Optional
 
@@ -108,8 +109,9 @@ async def telemetry_middleware(request: Request, call_next):
     duration = time.perf_counter() - start_time
 
     # Record OpenTelemetry metrics
-    # Normalise high-cardinality paths (strip numeric/uuid query params)
-    endpoint_label = path.split("?")[0]
+    # Normalise high-cardinality paths (use matched route template with fallback)
+    route = request.scope.get("route")
+    endpoint_label = getattr(route, "path", "unmatched")
     telemetry.http_requests_total.add(
         1,
         {
@@ -258,7 +260,15 @@ def toggle_fault(fault_name: str, payload: FaultToggleRequest) -> dict:
 # ---------------------------------------------------------------------------
 
 @app.post("/traffic/start", summary="Start bounded traffic generation")
-def start_traffic(payload: TrafficStartRequest) -> dict:
+async def start_traffic(payload: TrafficStartRequest) -> dict:
+    parsed = urllib.parse.urlsplit(payload.target_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    if origin not in Config.ALLOWED_TRAFFIC_ORIGINS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Target URL origin '{origin}' is not permitted. Allowed origins: {list(Config.ALLOWED_TRAFFIC_ORIGINS)}",
+        )
+
     traffic_generator.start(
         rate=payload.rate,
         duration_seconds=payload.duration_seconds,

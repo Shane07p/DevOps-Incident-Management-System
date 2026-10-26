@@ -132,8 +132,8 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D28 | Where do AI models run? | Selected: self-hosted through Ollama, on a team machine or our own container. Incident data is not sent to external AI providers (NFR-12.1) | Himanshu | Recorded 2026-10-13 |
 | D29 | Is service health monitoring required? | Selected: Must (FR-22). The project brief lists "monitor service health"; recovery never resolves an incident automatically | Shane | Recorded 2026-10-13 |
 | D30 | Which requirements document is current? | Selected: `docs/REQUIREMENTS.md`. `Group-2.pdf` is the submitted version; IDs never change | Shane | Recorded 2026-10-13 |
-| D31 | How do alert senders authenticate? | Open: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Review in Sprint 2 planning |
-| D32 | Where do alerts arrive? | Open: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Review in Sprint 2 planning |
+| D31 | How do alert senders authenticate? | Selected: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Het | Recorded 2026-10-20 (#68) |
+| D32 | Where do alerts arrive? | Selected: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Het | Recorded 2026-10-20 (#68) |
 | D33 | How are notifications stored in Sprint 2? | Open: rows written in the same transaction as the incident change; the outbox and RabbitMQ arrive in Sprint 3 | Shane | Review in Sprint 2 planning |
 | D34 | Where do logs and metrics live? | Open: Grafana Cloud free tier (Prometheus and Loki, 14-day retention); the backend holds the read token and runs every query | Shane | Review in Sprint 2 planning |
 | D35 | Where do probes run? | Open: 2–3 free schedulers in different regions, chosen after a Sprint 2 spike | Shane | Review in Sprint 2 |

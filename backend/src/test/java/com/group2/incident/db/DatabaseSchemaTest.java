@@ -23,7 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class DatabaseSchemaTest {
 
 	private static final List<String> TABLES =
-			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry");
+			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry", "monitoring_tool");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -571,6 +571,53 @@ class DatabaseSchemaTest {
 				.hasMessageContaining("timeline_entry is append-only");
 	}
 
+	// monitoring_tool
+
+	@Test
+	void duplicateToolNameIsRejected() {
+		insertTool("Prometheus", "hash1");
+
+		assertThatThrownBy(() -> insertTool("Prometheus", "hash2"))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("monitoring_tool_name_key");
+	}
+
+	@Test
+	void toolNameDifferingOnlyInCaseIsRejected() {
+		insertTool("Prometheus", "hash1");
+
+		assertThatThrownBy(() -> insertTool("prometheus", "hash2"))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("monitoring_tool_name_key");
+	}
+
+	@Test
+	void duplicateTokenHashIsRejected() {
+		insertTool("Tool A", "shared_hash");
+
+		assertThatThrownBy(() -> insertTool("Tool B", "shared_hash"))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("monitoring_tool_token_hash_idx");
+	}
+
+	@Test
+	void toolRequiresName() {
+		assertThatThrownBy(() -> jdbc.update("""
+				insert into monitoring_tool (name, token_hash, created_at)
+				values (null, 'hash', now())"""))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("name");
+	}
+
+	@Test
+	void toolRequiresTokenHash() {
+		assertThatThrownBy(() -> jdbc.update("""
+				insert into monitoring_tool (name, token_hash, created_at)
+				values ('Tool', null, now())"""))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("token_hash");
+	}
+
 	// Fixtures
 
 	private record Fixture(long user, long service) {
@@ -619,6 +666,12 @@ class DatabaseSchemaTest {
 				insert into timeline_entry (incident_id, actor_id, event_type, details, recorded_at, corrects_entry_id)
 				values (?, ?, 'COMMENT', 'Looking at the gateway logs', now(), ?) returning id""",
 				Long.class, incidentId, actorId, correctsEntryId);
+	}
+
+	private long insertTool(String name, String tokenHash) {
+		return jdbc.queryForObject("""
+				insert into monitoring_tool (name, token_hash, created_at)
+				values (?, ?, now()) returning id""", Long.class, name, tokenHash);
 	}
 
 }

@@ -35,8 +35,8 @@ easy to find, put its name in the Test column, and change the status in the same
 | TC-FR-01.1h | State transition | Disable a user who holds a valid token | Their next request gets 401 | `AuthControllerTest.tokenStopsWorkingWhenTheUserIsDisabled` | Automated |
 | TC-FR-01.1i | Boundary value | Token used after its one-hour expiry | 401 | `AuthControllerTest.tokenExpiresAfterOneHour`, `expiredTokenReturns401` | Automated |
 | TC-FR-01.1j | Negative | `GET /api/auth/me` with no token | 401 | `AuthControllerTest.meWithoutTokenReturns401` | Automated |
-| TC-FR-01.1k | Equivalence | The login form submitted empty | Field errors shown; no request sent | `LoginPage.test.tsx` | In review (#61) |
-| TC-FR-01.1l | Equivalence | The server answers 401 to the login form | "Invalid username or password" shown | `LoginPage.test.tsx` | In review (#61) |
+| TC-FR-01.1k | Equivalence | The login form submitted empty | Field errors shown; no request sent | `LoginPage.test.tsx` (shows a message under each empty field and sends nothing) | Automated |
+| TC-FR-01.1l | Equivalence | The server answers 401 to the login form | "Invalid username or password" shown | `LoginPage.test.tsx` (says the username or password is wrong without saying which) | Automated |
 
 ### Permissions (FR-01.2): decision table
 
@@ -54,7 +54,7 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-01.2a | Decision table | Every cell above | The status in the cell | `SecurityMatrixTest.endpointSecurityMatrix` | In review (#48) |
+| TC-FR-01.2a | Decision table | Every cell above | The status in the cell | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
 | TC-FR-01.2b | Decision table | Admin-only paths as Engineer and Viewer | 403 | `AuthControllerTest.adminOnlyPathsRefuseOtherRoles` | Automated |
 | TC-FR-01.2c | Decision table | Viewer creates an incident | 403 | `AuthControllerTest.viewerCannotCreateIncidents` | Automated |
 | TC-FR-01.2d | Equivalence | Health check and API docs with no token | 200 | `AuthControllerTest.healthAndApiDocsNeedNoToken` | Automated |
@@ -63,14 +63,14 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-01a | Boundary value | Password of 7 characters | 400 naming `password` | `UserAdminControllerTest.passwordBelowEightCharactersReturns400` | In review (#48) |
-| TC-US-01b | Boundary value | Password of 8 characters | 201 | `UserAdminControllerTest.passwordAtEightCharactersReturns201` | In review (#48) |
-| TC-US-01c | Boundary value | Password of 72 characters | 201 | `UserAdminControllerTest.passwordAtSeventyTwoCharactersReturns201` | In review (#48) |
-| TC-US-01d | Boundary value | Password of 73 characters | 400 | `UserAdminControllerTest.passwordAboveSeventyTwoCharactersReturns400` | In review (#48) |
-| TC-US-01e | Equivalence (invalid) | Username that differs from an existing one only in case | 409 | `UserAdminControllerTest.duplicateUsernameReturns409RegardlessOfCase` | In review (#48) |
-| TC-US-01f | Equivalence | Role `ADMIN`, `ENGINEER`, `VIEWER`; then an unknown role | 201 for each valid role; 400 for the unknown one | `UserAdminControllerTest.validRolesReturn201UnknownRoleReturns400` | In review (#48) |
-| TC-US-01g | State transition | Change a user's role, then reuse their old token | 401; their new login carries the new role | `UserAdminControllerTest.roleChangeIncrementsTokenVersionAndInvalidatesOldToken` | In review (#48) |
-| TC-US-01h | Negative | Creating a user and changing a role | Each writes one audit entry; the password never appears in it or in logs | `UserAdminControllerTest.createUserAndRoleChangeWriteAuditEntries` | In review (#48) |
+| TC-US-01a | Boundary value | Password of 7 characters | 400 naming `password` | `UserAdminControllerTest.passwordBelowEightCharactersReturns400` | Automated |
+| TC-US-01b | Boundary value | Password of 8 characters | 201 | `UserAdminControllerTest.passwordAtEightCharactersReturns201` | Automated |
+| TC-US-01c | Boundary value | Password of 72 characters | 201 | `UserAdminControllerTest.passwordAtSeventyTwoCharactersReturns201` | Automated |
+| TC-US-01d | Boundary value | Password of 73 characters | 400 | `UserAdminControllerTest.passwordAboveSeventyTwoCharactersReturns400` | Automated |
+| TC-US-01e | Equivalence (invalid) | Username that differs from an existing one only in case | 409 | `UserAdminControllerTest.duplicateUsernameReturns409RegardlessOfCase` | Automated |
+| TC-US-01f | Equivalence | Role `ADMIN`, `ENGINEER`, `VIEWER`; then an unknown role | 201 for each valid role; 400 for the unknown one | `UserAdminControllerTest.validRolesReturn201UnknownRoleReturns400` | Automated |
+| TC-US-01g | State transition | Change a user's role, then reuse their old token | 401; their new login carries the new role | `UserAdminControllerTest.roleChangeIncrementsTokenVersionAndInvalidatesOldToken` | Automated |
+| TC-US-01h | Negative | Creating a user and changing a role | Each writes one audit entry; the password never appears in it or in logs | `UserAdminControllerTest.createUserAndRoleChangeWriteAuditEntries` | Automated |
 | TC-US-01i | Boundary value | The Users page form with a 7-character password | "Use at least 8 characters"; nothing sent | `UsersPage.test.tsx` | Automated |
 | TC-US-01j | Equivalence (invalid) | The server answers 409 to a new username | The message shows under the username field | `UsersPage.test.tsx` | Automated |
 | TC-US-01k | State transition | Pick a new role, cancel, then pick it again and confirm | Nothing is sent until confirmed; then one `PUT` with the new role | `UsersPage.test.tsx` | Automated |
@@ -79,14 +79,14 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-14.1a | Equivalence | Valid service with targets for SEV1 to SEV4 | 201; the service can be chosen for incidents | `ServiceControllerTest` | Planned (Utsav B, #49) |
-| TC-FR-14.1b | Equivalence (invalid) | Targets missing for one severity | 400 naming the severity | `ServiceControllerTest` | Planned (Utsav B, #49) |
-| TC-FR-14.1c | Boundary value | Resolution target equal to the response target | Accepted | `DatabaseSchemaTest.slaTargetResolutionMayEqualResponse`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1d | Boundary value | Resolution target one minute below the response target | 400 | `DatabaseSchemaTest.slaTargetResolutionBelowResponseIsRejected`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1e | Boundary value | Response target of 0, then 1 minute | 0 rejected; 1 accepted | `DatabaseSchemaTest.slaTargetRejectsZeroResponse`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1f | Equivalence | Criticality `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; then an unknown value | Valid values accepted; unknown gives 400 | `ServiceControllerTest` | Planned (Utsav B, #49) |
-| TC-FR-14.1g | Equivalence (invalid) | A second service with the same name | 409 | `DatabaseSchemaTest.duplicateServiceNameIsRejected`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1h | Negative | Update a service's targets | One audit entry showing before and after | `ServiceControllerTest` | Planned (Utsav B, #49) |
+| TC-FR-14.1a | Equivalence | Valid service with targets for SEV1 to SEV4 | 201; the service can be chosen for incidents | `ServiceControllerTest.adminCreatesServiceWithAudit` | Automated |
+| TC-FR-14.1b | Equivalence (invalid) | Targets missing for one severity | 400 naming the severity | `ServiceControllerTest.missingSeverityTargetIsRejected` | Automated |
+| TC-FR-14.1c | Boundary value | Resolution target equal to the response target | Accepted | `DatabaseSchemaTest.slaTargetResolutionMayEqualResponse`; `ServiceControllerTest` | Automated (database); no API test yet |
+| TC-FR-14.1d | Boundary value | Resolution target one minute below the response target | 400 | `DatabaseSchemaTest.slaTargetResolutionBelowResponseIsRejected`; `ServiceControllerTest.resolutionShorterThanResponseIsRejected` | Automated |
+| TC-FR-14.1e | Boundary value | Response target of 0, then 1 minute | 0 rejected; 1 accepted | `DatabaseSchemaTest.slaTargetRejectsZeroResponse`; `ServiceControllerTest` | Automated (database); no API test yet |
+| TC-FR-14.1f | Equivalence | Criticality `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; then an unknown value | Valid values accepted; unknown gives 400 | `ServiceControllerTest` | No test yet: only a missing criticality is checked |
+| TC-FR-14.1g | Equivalence (invalid) | A second service with the same name | 409 | `DatabaseSchemaTest.duplicateServiceNameIsRejected`; `ServiceControllerTest.duplicateServiceNameIsRejected` | Automated |
+| TC-FR-14.1h | Negative | Update a service's targets | One audit entry showing before and after | `ServiceControllerTest.adminUpdatesService` | Automated |
 | TC-FR-14.1i | Equivalence | The services form with a resolution target below its response target | A field error; nothing sent | `ServicesPage.test.tsx` | Automated |
 
 ### Incidents (FR-02, FR-04.1)

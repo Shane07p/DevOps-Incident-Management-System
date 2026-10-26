@@ -124,3 +124,26 @@ def test_checkout_validation_error_empty_items(client):
     }
     resp = client.post("/checkout", json=payload)
     assert resp.status_code == 422
+
+
+def test_checkout_unknown_product_returns_422(client):
+    payload = {
+        "customer_email": "shopper@example.com",
+        "items": [{"product_id": "nonexistent-id", "quantity": 1, "unit_price": 10.0}],
+        "payment_method": "credit_card",
+    }
+    resp = client.post("/checkout", json=payload)
+    assert resp.status_code == 422
+
+
+def test_checkout_ignores_client_unit_price(client):
+    # prod-101 catalog price is 199.99
+    payload = {
+        "customer_email": "shopper@example.com",
+        "items": [{"product_id": "prod-101", "quantity": 1, "unit_price": 1.0}],
+        "payment_method": "credit_card",
+    }
+    resp = client.post("/checkout", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_amount"] == 199.99

@@ -25,6 +25,26 @@ from opentelemetry.sdk.resources import Resource
 
 from demo_shop.config import Config
 
+def parse_otlp_headers(raw_h: str) -> dict:
+    """Parse OTLP headers from a raw string.
+
+    Supports three formats:
+    1. "Basic <base64>" or "Bearer <token>" – returned as Authorization header.
+    2. "k1=v1,k2=v2" – split into key/value pairs.
+    3. Any other string – treated as raw Authorization header.
+    """
+    headers: dict = {}
+    if raw_h.lower().startswith(("basic ", "bearer ")):
+        headers["Authorization"] = raw_h
+    elif "=" in raw_h:
+        for part in raw_h.split(","):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                headers[k.strip()] = v.strip()
+    else:
+        headers["Authorization"] = raw_h
+    return headers
+
 logger = logging.getLogger("demo_shop")
 
 
@@ -70,17 +90,7 @@ class TelemetryManager:
                 endpoint = Config.OTEL_EXPORTER_OTLP_ENDPOINT
                 headers = {}
                 if Config.OTEL_EXPORTER_OTLP_HEADERS:
-                    # Parse "k1=v1,k2=v2" or raw Authorization header
-                    raw_h = Config.OTEL_EXPORTER_OTLP_HEADERS
-                    if raw_h.lower().startswith(("basic ", "bearer ")):
-                        headers["Authorization"] = raw_h
-                    elif "=" in raw_h:
-                        for part in raw_h.split(","):
-                            if "=" in part:
-                                k, v = part.split("=", 1)
-                                headers[k.strip()] = v.strip()
-                    else:
-                        headers["Authorization"] = raw_h
+                    headers = parse_otlp_headers(Config.OTEL_EXPORTER_OTLP_HEADERS)
 
                 otlp_exporter = OTLPMetricExporter(
                     endpoint=f"{endpoint.rstrip('/')}/v1/metrics",

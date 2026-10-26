@@ -16,6 +16,7 @@ import pytest
 from demo_shop.faults import fault_manager
 from demo_shop.queue import order_queue
 from demo_shop.services.payments import payment_service
+from demo_shop.telemetry import telemetry
 
 
 def test_list_all_five_fault_switches(client):
@@ -211,9 +212,23 @@ def test_expiring_certificate_sets_days_and_recovers(client):
     resp = client.post("/payments/authorize", json=payload)
     assert resp.status_code == 200
 
+    # Verify SSL error metric incremented
+    data = telemetry.in_memory_reader.get_metrics_data()
+    ssl_metric = next(
+        m for rm in data.resource_metrics for sm in rm.scope_metrics for m in sm.metrics if m.name == "demo_ssl_errors_total"
+    )
+    assert any(dp.value >= 1 for dp in ssl_metric.data.data_points)
+
     # Disable expiring_certificate -> Recovery
     client.post("/faults/expiring_certificate", json={"enabled": False})
     assert fault_manager.is_enabled("expiring_certificate") is False
+
+    # Verify certificate days gauge restored to 90
+    data = telemetry.in_memory_reader.get_metrics_data()
+    cert_metric = next(
+        m for rm in data.resource_metrics for sm in rm.scope_metrics for m in sm.metrics if m.name == "demo_certificate_days_until_expiry"
+    )
+    assert any(dp.value == 90 for dp in cert_metric.data.data_points)
 
 
 def test_reset_all_faults(client):

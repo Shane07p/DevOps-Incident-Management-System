@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from demo_shop.config import Config
-from demo_shop.telemetry import StructuredLogger, telemetry
+from demo_shop.telemetry import StructuredLogger, telemetry, parse_otlp_headers
 
 
 def test_local_telemetry_mode_no_credentials():
@@ -71,17 +71,7 @@ def test_otlp_auth_header_parsing_with_base64_padding(monkeypatch):
     monkeypatch.setattr(Config, "OTEL_EXPORTER_OTLP_HEADERS", base64_auth)
 
     raw_h = Config.OTEL_EXPORTER_OTLP_HEADERS
-    headers = {}
-    if raw_h.lower().startswith(("basic ", "bearer ")):
-        headers["Authorization"] = raw_h
-    elif "=" in raw_h:
-        for part in raw_h.split(","):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                headers[k.strip()] = v.strip()
-    else:
-        headers["Authorization"] = raw_h
-
+    headers = parse_otlp_headers(raw_h)
     assert headers.get("Authorization") == "Basic dXNlcjpwYXNz=="
 
 

@@ -72,13 +72,17 @@ class CheckoutService:
                     detail=f"Internal Server Error: {error_msg}",
                 )
 
-        # Calculate total price and validate products
+        # Calculate total price and validate products against catalog
         total_amount = 0.0
         for item in request.items:
-            # Use price from catalog if product exists, or unit_price
             catalog_item = search_service.get_by_id(item.product_id)
-            price = catalog_item.price if catalog_item else item.unit_price
-            total_amount += price * item.quantity
+            if not catalog_item:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Unknown product '{item.product_id}'",
+                )
+            total_amount += catalog_item.price * item.quantity
+
 
         order_id = f"ord-{uuid.uuid4().hex[:10]}"
 

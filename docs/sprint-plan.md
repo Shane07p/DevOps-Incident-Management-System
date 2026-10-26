@@ -40,13 +40,13 @@ Write one record at the end of each sprint, using real PR links and test results
 | Remaining work and blockers | |
 | Review feedback and next improvement | |
 
-### Sprint 1 (in progress)
+### Sprint 1 (complete)
 
 | Field | Content |
 |---|---|
-| Goal and dates | A logged-in user can register a service and create an incident. Started 8 October 2026; ends Monday 19 October |
-| Stories | US-01 Users and roles, US-05 Register a service, US-03 Create incident |
-| Completed work | Backend foundations #13, own schema #14, migrations and dev seed #18, JWT login #22, AI service skeleton #21, shared UI components #19 and #39, API client #41, backend layout and Lombok #44 |
-| Verification | CI on `main`: backend 94 tests (JUnit and Testcontainers), frontend 19 Vitest tests, AI service 11 pytest tests, all passing |
-| Remaining work and blockers | User administration and audit writer; service catalog and incidents (#43 needs rework); frontend foundation and pages; `SecurityMatrixTest`; the Cypress demo |
-| Review feedback | Several PRs arrived off-plan or did not compile (#27, #43), and some commits were credited to the wrong author. Next: one issue per task with acceptance criteria, and test output in every PR |
+| Goal and dates | A logged-in user can register a service and create an incident. Started 8 October 2026; planned to end Monday 19 October; the last Sprint 1 PR merged Monday 26 October, 7 days late |
+| Stories and owners | US-01 Users and roles (Het, Utsav B, Shane), US-05 Register a service (Utsav B, Shlok), US-03 Create incident (Manan, Utsav D, Shlok) |
+| Completed work | Foundations: backend #13, own schema #14, migrations and dev seed #18, JWT login #22, AI service skeleton #21, shared UI components #19 and #39, API client #41, backend layout and Lombok #44. Sprint 1 issues: frontend foundation, login page, and API client fixes #51, #52, #42 (PR #61); audit writer #47 (PR #100); user administration API and `SecurityMatrixTest` #48, #56 (PR #109); users page #53 (PR #105); service catalog API #49 (PR #102); services page #54 (PR #107); incidents API #50 (PR #103); incident pages #55 (PR #108); Compose web service with nginx, and HikariCP settings #59 (PR #106) |
+| Verification | CI on `main` at `b3d7e64`: backend 231 tests, frontend 43, AI service 35, demo shop 35, all passing. Backend line coverage 94.97%, frontend statements 46.17%. The 10-step demo passed in Chrome 155 and Firefox 153. 51 of the 54 Sprint 1 test cases automated and passing. Details in the [test report](testing/TEST_REPORT.md#sprint-1-planned-to-end-monday-19-october-its-last-pr-merged-monday-26-october) |
+| Remaining work and blockers | No API test yet for TC-FR-14.1c, e, f. Frontend coverage fell from 62% to 46%. The Cypress demo test is #57, in Sprint 6 |
+| Review feedback and next improvement | Several PRs arrived off-plan or did not compile (#27, #43), and some commits were credited to the wrong author. Late in the sprint, PRs needed two or three review rounds: tests that could not fail (#103), duplicated catalog and audit classes (#103, #112), and Lombok and error-shape rules from AGENTS.md (#102). Next: one issue per task with acceptance criteria, test output in every PR, and a rebase on `main` before review |

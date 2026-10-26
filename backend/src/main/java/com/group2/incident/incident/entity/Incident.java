@@ -1,7 +1,8 @@
 package com.group2.incident.incident.entity;
 
 import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.catalog.entity.AppService;
+import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,7 +39,7 @@ public class Incident {
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "service_id", nullable = false)
-	private AppService service;
+	private ServiceEntity service;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 10)
@@ -69,17 +70,9 @@ public class Incident {
 	@Column(nullable = false)
 	private Long version;
 
-	public Incident(String title, String description, AppService service, Severity severity,
+	public Incident(String title, String description, ServiceEntity service, Severity severity,
 			IncidentStatus status, AppUser reporter, Instant createdAt,
 			int responseTargetMinutes, int resolutionTargetMinutes) {
-		this(null, title, description, service, severity, status, reporter, createdAt,
-				responseTargetMinutes, resolutionTargetMinutes);
-	}
-
-	public Incident(Long id, String title, String description, AppService service, Severity severity,
-			IncidentStatus status, AppUser reporter, Instant createdAt,
-			int responseTargetMinutes, int resolutionTargetMinutes) {
-		this.id = id;
 		this.title = title;
 		this.description = description;
 		this.service = service;

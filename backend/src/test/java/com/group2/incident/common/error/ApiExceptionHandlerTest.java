@@ -70,6 +70,15 @@ class ApiExceptionHandlerTest {
 				.andExpect(jsonPath("$.message").value("Invalid username or password"));
 	}
 
+	@Test
+	void unauthorizedExceptionReturns401() throws Exception {
+		mvc.perform(get("/probe/unauthorized"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.status").value(401))
+				.andExpect(jsonPath("$.message").value("Tool token has been revoked"))
+				.andExpect(jsonPath("$.errors").isEmpty());
+	}
+
 	@RestController
 	@RequestMapping("/probe")
 	static class ProbeController {
@@ -99,6 +108,11 @@ class ApiExceptionHandlerTest {
 		@GetMapping("/login")
 		void login() {
 			throw new BadCredentialsException("Bad credentials");
+		}
+
+		@GetMapping("/unauthorized")
+		void unauthorized() {
+			throw new UnauthorizedException("Tool token has been revoked");
 		}
 
 	}

@@ -1,11 +1,13 @@
 package com.group2.incident.incident.service;
 
+import com.group2.incident.audit.entity.AuditAction;
+import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.entity.AppService;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.catalog.repository.AppServiceRepository;
+import com.group2.incident.catalog.service.ServiceCatalogService;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
@@ -33,7 +35,7 @@ public class IncidentService {
 
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
-	private final AppServiceRepository appServiceRepository;
+	private final ServiceCatalogService serviceCatalogService;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
 	private final Clock clock;
@@ -46,10 +48,10 @@ public class IncidentService {
 					.orElseThrow(() -> new NotFoundException("User " + reporterUserId + " not found"));
 		}
 
-		AppService service = appServiceRepository.findWithDetailsById(request.serviceId())
-				.orElseThrow(() -> new FieldValidationException("serviceId", "Service not found"));
+		ServiceEntity service = serviceCatalogService.requireForIncident(request.serviceId());
 
-		SlaTarget target = service.targetFor(request.severity());
+		// Copied now and never changed afterwards, even if the service's targets change.
+		SlaTarget target = service.getTargets().get(request.severity());
 		if (target == null) {
 			throw new FieldValidationException("severity",
 					"Service " + service.getName() + " has no SLA target for " + request.severity());
@@ -65,8 +67,8 @@ public class IncidentService {
 				IncidentStatus.OPEN,
 				reporter,
 				now,
-				target.responseMinutes(),
-				target.resolutionMinutes()
+				target.getResponseMinutes(),
+				target.getResolutionMinutes()
 		);
 		incident = incidentRepository.save(incident);
 
@@ -82,8 +84,8 @@ public class IncidentService {
 
 		auditService.record(
 				reporter,
-				"INCIDENT_CREATED",
-				"INCIDENT",
+				AuditAction.INCIDENT_CREATED,
+				AuditItemType.INCIDENT,
 				incident.getId(),
 				"Created incident " + incident.getReference() + " on service " + service.getName()
 		);

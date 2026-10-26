@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { can } from '@/auth/roles'
 import { useIstTime } from '@/components/app/IstClock'
@@ -34,9 +35,11 @@ export function HomePage() {
           </h1>
         </div>
         {can(user?.role, 'respond') && (
-          <Button disabled title="Declaring incidents arrives with the incidents screen">
-            <Plus aria-hidden="true" />
-            Declare incident
+          <Button asChild>
+            <Link to="/incidents/new">
+              <Plus aria-hidden="true" />
+              Declare incident
+            </Link>
           </Button>
         )}
       </div>

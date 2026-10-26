@@ -51,17 +51,11 @@ public class TimelineEntry {
 
 	public TimelineEntry(Incident incident, AppUser actor, TimelineEventType eventType,
 			String details, Instant recordedAt) {
-		this(null, incident, actor, eventType, details, recordedAt, null);
+		this(incident, actor, eventType, details, recordedAt, null);
 	}
 
 	public TimelineEntry(Incident incident, AppUser actor, TimelineEventType eventType,
 			String details, Instant recordedAt, TimelineEntry correctsEntry) {
-		this(null, incident, actor, eventType, details, recordedAt, correctsEntry);
-	}
-
-	public TimelineEntry(Long id, Incident incident, AppUser actor, TimelineEventType eventType,
-			String details, Instant recordedAt, TimelineEntry correctsEntry) {
-		this.id = id;
 		this.incident = incident;
 		this.actor = actor;
 		this.eventType = eventType;

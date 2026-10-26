@@ -3,6 +3,14 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+// The backend owns every rule; the browser never talks to Postgres directly.
+const apiProxy = {
+  '/api': {
+    target: 'http://localhost:8080',
+    changeOrigin: true,
+  },
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -11,13 +19,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      // The backend owns every rule; the browser never talks to Postgres directly.
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-      },
-    },
+    proxy: apiProxy,
+  },
+  // `npm run preview` serves the production build with the same proxy.
+  preview: {
+    port: 4173,
+    proxy: apiProxy,
   },
   test: {
     environment: 'jsdom',

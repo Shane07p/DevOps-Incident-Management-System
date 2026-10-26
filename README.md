@@ -102,11 +102,14 @@ DB_URL=jdbc:postgresql://localhost:5434/incident \
 docker stop incident-scratch    # removes the container and its data
 ```
 
-To run the packaged backend against the same database instead:
+To run the packaged backend and the built UI against the same database instead:
 
 ```bash
 docker compose --profile app up --build
 ```
+
+Open http://localhost:8081. nginx serves the UI there and proxies `/api` and `/webhooks` to the
+backend, the way the stack runs in Docker (D41).
 
 ## Tests
 
@@ -130,9 +133,9 @@ cd frontend && npm run cypress:run    # end-to-end, needs both servers running
 | `.github/workflows/` | CI |
 | `compose.yaml` | Local database and packaged application |
 | `.env.example` | Example settings, no real credentials |
+| `demo-shop/` | Demo Shop v1: retail simulation with 5 fault switches and OpenTelemetry (Sprint 2) |
 
-`ai-service/` (Python, FastAPI, Ollama) runs locally only; see the
-[AI/ML roadmap](docs/plans/ai-ml-roadmap.md).
+`ai-service/` (Python, FastAPI, Ollama) and `demo-shop/` run locally or in optional Compose profiles; see the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md) and [demo-shop/README.md](demo-shop/README.md).
 
 ## Team and plans
 

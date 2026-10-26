@@ -1,6 +1,6 @@
 package com.group2.incident.incident.dto;
 
-import com.group2.incident.incident.entity.Severity;
+import com.group2.incident.catalog.entity.Severity;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;

@@ -124,7 +124,7 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D20 | Application roles | Selected: `ADMIN`, `ENGINEER`, `VIEWER` | Team 1 | Recorded 2026-10-11 |
 | D21 | How do users authenticate? | Selected: stateless JWT (HS256) sent as a Bearer header and kept in `sessionStorage`. A per-user `token_version` revokes old tokens on logout or role change. CSRF is disabled because the browser never sends the token on its own | Shane | Recorded 2026-10-11 |
 | D22 | What does creating an incident record in Sprint 1? | Selected: the incident, its copied SLA targets, a timeline entry, and an audit entry, in one transaction (E4a, epics Decision 3) | Utsav B | Recorded 2026-10-11 |
-| D23 | Service criticality and default targets | Open: criticality `LOW`/`MEDIUM`/`HIGH`/`CRITICAL`; default response targets SEV1 15, SEV2 60, SEV3 240, SEV4 1440 minutes (C7); resolution targets entered by the admin | Utsav B | Review 2026-10-14 |
+| D23 | Service criticality and default targets | Selected: criticality `LOW`/`MEDIUM`/`HIGH`/`CRITICAL`; default response targets SEV1 15, SEV2 60, SEV3 240, SEV4 1440 minutes (C7); resolution targets entered by the admin | Utsav B | Recorded 2026-10-20 |
 | D24 | Messaging and cache | Selected: RabbitMQ through a transactional outbox, added when the first async consumer lands; Redis optional, for live updates (HLD v2) | Shane | Recorded 2026-10-11 |
 | D25 | Where is the app hosted? | Selected: frontend on Vercel, backend on Render (Docker), PostgreSQL on Supabase, UptimeRobot pinging `/actuator/health` to keep the backend awake | Shane | Recorded 2026-10-11 |
 | D26 | Which database schema holds our tables? | Selected: `incident`, managed by Flyway. Supabase keeps its own objects in `public`, and its Data API only exposes `public` | Shane | Recorded 2026-10-12 |
@@ -132,8 +132,8 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D28 | Where do AI models run? | Selected: self-hosted through Ollama, on a team machine or our own container. Incident data is not sent to external AI providers (NFR-12.1) | Himanshu | Recorded 2026-10-13 |
 | D29 | Is service health monitoring required? | Selected: Must (FR-22). The project brief lists "monitor service health"; recovery never resolves an incident automatically | Shane | Recorded 2026-10-13 |
 | D30 | Which requirements document is current? | Selected: `docs/REQUIREMENTS.md`. `Group-2.pdf` is the submitted version; IDs never change | Shane | Recorded 2026-10-13 |
-| D31 | How do alert senders authenticate? | Open: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Review in Sprint 2 planning |
-| D32 | Where do alerts arrive? | Open: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Review in Sprint 2 planning |
+| D31 | How do alert senders authenticate? | Selected: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Recorded 2026-10-26 (#68) |
+| D32 | Where do alerts arrive? | Selected: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Recorded 2026-10-26 (#68) |
 | D33 | How are notifications stored in Sprint 2? | Open: rows written in the same transaction as the incident change; the outbox and RabbitMQ arrive in Sprint 3 | Shane | Review in Sprint 2 planning |
 | D34 | Where do logs and metrics live? | Open: Grafana Cloud free tier (Prometheus and Loki, 14-day retention); the backend holds the read token and runs every query | Shane | Review in Sprint 2 planning |
 | D35 | Where do probes run? | Open: 2–3 free schedulers in different regions, chosen after a Sprint 2 spike | Shane | Review in Sprint 2 |

@@ -90,21 +90,111 @@ ollama run llama3.2:1b
 
 ---
 
-## 4. Running the Service & Tests Locally
+## 4. Sprint 2: Ollama Embedding Integration (Issue #62)
+
+### Required Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama server (`http://ollama:11434` in Docker Compose) |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Name of the embedding model to use |
+| `OLLAMA_TIMEOUT` | `10` | Request timeout in seconds for Ollama HTTP calls |
+| `AI_PORT` | `8000` | Port for the AI service |
+
+### Pulling the Embedding Model
+
+The default model is `nomic-embed-text` (~274 MB, 137M parameters, 8192 context length, 768-dimensional embeddings):
+
+```powershell
+ollama pull nomic-embed-text
+```
+
+### Running Ollama
+
+**Option A: Running locally on host**
+```powershell
+ollama serve
+```
+
+**Option B: Running optionally via Docker Compose**
+Ollama is configured under the optional `ollama` profile so developers who do not need Ollama are not forced to run it:
+```bash
+# Start only the optional Ollama service
+docker compose --profile ollama up -d ollama
+
+# Pull the model inside the running Ollama container
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+### Calling `POST /embed`
+
+Generate an embedding vector for arbitrary text. `kind` is optional and defaults to `"document"` (`"search_document: "` prefix for stored incidents) or `"query"` (`"search_query: "` prefix for search queries):
+
+```bash
+curl -X POST http://localhost:8000/embed \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Payment gateway timeout on checkout", "kind": "document"}'
+```
+
+**Response (200 OK):**
+```json
+{
+  "embedding": [0.0123, -0.0456, 0.0789, ...],
+  "model": "nomic-embed-text"
+}
+```
+
+**Error Handling:**
+- `422 Unprocessable Entity`: Missing body, invalid `kind`, or empty/invalid `text`.
+- `503 Service Unavailable`: Ollama daemon is unreachable or timed out.
+- `502 Bad Gateway`: Ollama returned an error or unexpected response shape.
+
+### Health & Readiness Checks (`GET /health`, `GET /ready`)
+
+- **`GET /health`**: Instant liveness check that does not wait on Ollama. Always returns HTTP 200.
+```json
+{
+  "status": "ok",
+  "service": "ai-service",
+  "version": "0.2.0"
+}
+```
+
+- **`GET /ready`**: Readiness check that probes Ollama reachability and verifies whether the configured model is pulled.
+```json
+{
+  "status": "ok",
+  "service": "ai-service",
+  "version": "0.2.0",
+  "ollama": {
+    "reachable": true,
+    "model_pulled": true,
+    "url": "http://localhost:11434",
+    "model": "nomic-embed-text"
+  }
+}
+```
+
+---
+
+## 5. Running the Service & Tests Locally
 
 ### Quick Start
 ```powershell
-# Install dependencies (use requirements-dev.txt to include pytest & httpx)
+# Install dependencies (runtime + test)
 pip install -r requirements-dev.txt
 
 # Start FastAPI server
 python -m uvicorn main:app --reload --port 8000
 
-# Run all pytest tests
+# Run all pytest tests (with mocked Ollama HTTP calls)
 python -m pytest -v
 ```
 
 ### Endpoints
-- `GET http://localhost:8000/health` — Health check
-- `POST http://localhost:8000/suggest` — AI suggestion endpoint
-- `GET http://localhost:8000/docs` — Interactive Swagger documentation UI
+- `GET http://localhost:8000/health` — Instant liveness check
+- `GET http://localhost:8000/ready` — Readiness & Ollama model check
+- `POST http://localhost:8000/suggest` — AI suggestion endpoint (Sprint 1)
+- `POST http://localhost:8000/embed` — Text embedding endpoint (Sprint 2)
+- `GET http://localhost:8000/docs` — Interactive Swagger OpenAPI documentation
+

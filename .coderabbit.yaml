@@ -1,0 +1,116 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reviews every pull request against AGENTS.md before Shane does. Its comments are
+# suggestions: fix what is clearly right, question the rest. Shane still reviews and merges.
+language: en-US
+tone_instructions: >-
+  Be direct and brief. One comment per problem: what is wrong and the fix. No praise and no
+  retelling of what the code does. Cite the AGENTS.md rule when one applies.
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  # Compares the PR with the acceptance criteria of the issue it closes.
+  assess_linked_issues: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # Generated or third-party files: shadcn primitives, copied animation components, lockfiles, images.
+  path_filters:
+    - "!**/package-lock.json"
+    - "!frontend/src/components/ui/**"
+    - "!frontend/src/components/effects/**"
+    - "!docs/diagrams/**"
+    - "!**/*.png"
+
+  path_instructions:
+    - path: "backend/src/main/java/**"
+      instructions: >-
+        Check the rules in AGENTS.md. Controllers return DTO records, never entities. Errors use
+        NotFoundException, ConflictException, or FieldValidationException; no catch-all Exception
+        handler. Code that reads the time takes an injected Clock. Every controller has @Tag and every
+        endpoint @Operation. Lombok is limited to @Getter, @NoArgsConstructor(PROTECTED),
+        @RequiredArgsConstructor, and @Slf4j; no @Setter or @Data on entities. Apply the incident rules
+        under "Rules that are easy to get wrong": legal status transitions only, SLA targets fixed at
+        creation, a breach is over the target and not equal to it, escalation notifies but never
+        reassigns, comments never change the incident version.
+    - path: "backend/src/main/resources/db/migration/**"
+      instructions: >-
+        Flyway owns the schema. A migration already on main must never be edited; new schema is a new
+        V file. Table names are unqualified (they land in the incident schema).
+    - path: "backend/src/test/java/**"
+      instructions: >-
+        Tests must run the real code and assert its result. Flag any test that would pass whatever the
+        code does, such as one that throws the expected exception itself. A test that checks a rollback
+        must not run inside the test's own transaction (use Propagation.NOT_SUPPORTED). Use a fixed
+        Clock, not Instant.now(). Test folders mirror the source folders.
+    - path: "frontend/src/**"
+      instructions: >-
+        Style with the design tokens from index.css, not raw colours. Every API response goes through
+        apiFetch with a Zod schema. Form inputs use the field name as their id. The UI only hides
+        controls; the server checks permissions.
+    - path: "docs/TRACEABILITY.csv"
+      instructions: >-
+        A row may say Passed only after its test ran and passed, with the date and a commit on main.
+        Flag Passed rows whose test fails in this PR's CI.
+
+  labeling_instructions:
+    - label: backend
+      instructions: Changes under backend/.
+    - label: frontend
+      instructions: Changes under frontend/.
+    - label: ai-ml
+      instructions: Changes under ai-service/.
+    - label: devops
+      instructions: Changes to CI workflows, Docker, Compose, nginx, or deployment settings.
+    - label: documentation
+      instructions: Changes to docs/ or other Markdown files.
+    - label: test
+      instructions: The PR is mostly tests.
+    - label: bug
+      instructions: The PR fixes a bug.
+  auto_apply_labels: true
+
+  # Warnings only: they show on the PR but never block a merge.
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: >-
+        A type and an optional scope, as in the history: feat(scope): ..., fix: ..., docs: ...,
+        test: ..., refactor: ..., chore: ..., ci: ...
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+    custom_checks:
+      - name: Linked issue
+        mode: warning
+        instructions: >-
+          The description contains "Closes #<number>" for the issue this PR completes. Dependency
+          updates and documentation-only PRs may skip it.
+      - name: Test output
+        mode: warning
+        instructions: >-
+          For code changes, the description contains pasted output from ./mvnw verify, npm test, or
+          pytest showing the tests passed. Placeholders such as "tested locally" or "will paste later"
+          do not count.
+      - name: Matches the description
+        mode: warning
+        instructions: >-
+          Everything the description claims is in the diff, and the diff has no large changes that
+          belong to another issue.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md

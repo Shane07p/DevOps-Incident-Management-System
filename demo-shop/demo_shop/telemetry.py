@@ -92,11 +92,20 @@ class TelemetryManager:
                 if Config.OTEL_EXPORTER_OTLP_HEADERS:
                     headers = parse_otlp_headers(Config.OTEL_EXPORTER_OTLP_HEADERS)
 
+                if (
+                    endpoint.lower().startswith("http://")
+                    and Config.ENVIRONMENT.lower() != "development"
+                ):
+                    raise ValueError(
+                        "OTLP endpoint must use HTTPS outside local development"
+                    )
+
                 otlp_exporter = OTLPMetricExporter(
                     endpoint=f"{endpoint.rstrip('/')}/v1/metrics",
                     headers=headers,
                     timeout=5.0,
                 )
+
                 readers.append(
                     PeriodicExportingMetricReader(
                         otlp_exporter, export_interval_millis=5000

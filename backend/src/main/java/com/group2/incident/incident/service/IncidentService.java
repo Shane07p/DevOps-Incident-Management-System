@@ -7,6 +7,7 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
+import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.catalog.service.ServiceCatalogService;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
@@ -24,6 +25,7 @@ import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,7 @@ public class IncidentService {
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final ServiceCatalogService serviceCatalogService;
+	private final OnCallService onCallService;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
 	private final Clock clock;
@@ -70,6 +73,11 @@ public class IncidentService {
 				target.getResponseMinutes(),
 				target.getResolutionMinutes()
 		);
+		// Whoever is on call now, or the service's fallback contact outside every shift (FR-15).
+		AppUser assignee = onCallService.resolveAssignee(service, now);
+		if (assignee != null) {
+			incident.assignTo(assignee);
+		}
 		incident = incidentRepository.save(incident);
 
 		String details = "Reported as " + request.severity() + " on " + service.getName();
@@ -80,7 +88,19 @@ public class IncidentService {
 				details,
 				now
 		);
-		timelineEntry = timelineEntryRepository.save(timelineEntry);
+		List<TimelineEntry> timeline = new ArrayList<>();
+		timeline.add(timelineEntryRepository.save(timelineEntry));
+
+		if (assignee != null) {
+			// A system action, so there is no actor (FR-05.1).
+			timeline.add(timelineEntryRepository.save(new TimelineEntry(
+					incident,
+					null,
+					TimelineEventType.ASSIGNED,
+					"Assigned to " + assignee.getDisplayName(),
+					now
+			)));
+		}
 
 		auditService.record(
 				reporter,
@@ -90,7 +110,7 @@ public class IncidentService {
 				"Created incident " + incident.getReference() + " on service " + service.getName()
 		);
 
-		return toResponse(incident, List.of(timelineEntry));
+		return toResponse(incident, timeline);
 	}
 
 	@Transactional(readOnly = true)

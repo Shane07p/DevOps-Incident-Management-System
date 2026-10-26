@@ -5,6 +5,7 @@ package com.group2.incident.incident.entity;
  */
 public enum TimelineEventType {
 	INCIDENT_CREATED,
+	ASSIGNED,
 	ACKNOWLEDGED,
 	STATUS_CHANGED,
 	SEVERITY_CHANGED,

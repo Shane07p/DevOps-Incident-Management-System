@@ -43,6 +43,11 @@ public class ServiceEntity {
     @JoinColumn(name = "owner_id", nullable = false)
     private AppUser owner;
 
+    // Gets new incidents when nobody is on call (FR-15).
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fallback_contact_id")
+    private AppUser fallbackContact;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Criticality criticality;
@@ -77,6 +82,10 @@ public class ServiceEntity {
         this.owner = owner;
         this.criticality = criticality;
         this.updatedAt = updatedAt;
+    }
+
+    public void changeFallbackContact(AppUser fallbackContact) {
+        this.fallbackContact = fallbackContact;
     }
 
     public void putTarget(Severity severity, int responseMinutes, int resolutionMinutes) {

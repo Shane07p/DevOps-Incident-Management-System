@@ -84,6 +84,10 @@ public class Incident {
 		this.resolutionTargetMinutes = resolutionTargetMinutes;
 	}
 
+	public void assignTo(AppUser assignee) {
+		this.assignee = assignee;
+	}
+
 	public String getReference() {
 		return "INC-" + id;
 	}

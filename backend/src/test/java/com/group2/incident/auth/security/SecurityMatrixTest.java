@@ -177,6 +177,20 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"GET /api/services/{id}/on-call",
+						HttpMethod.GET,
+						"/api/services/{id}/on-call",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}/on-call",
+						HttpMethod.PUT,
+						"/api/services/{id}/on-call",
+						"{\"fallbackContactId\":${OWNER_ID},\"shifts\":[]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/tools",
 						HttpMethod.GET,
 						"/api/tools",

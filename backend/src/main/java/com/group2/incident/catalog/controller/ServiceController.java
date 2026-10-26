@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,15 +21,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/services")
 @Tag(name = "Services", description = "Service catalog: owner, criticality and SLA targets per severity")
 public class ServiceController {
 
     private final ServiceCatalogService serviceCatalogService;
-
-    public ServiceController(ServiceCatalogService serviceCatalogService) {
-        this.serviceCatalogService = serviceCatalogService;
-    }
 
     @GetMapping
     @Operation(summary = "List services, by name")

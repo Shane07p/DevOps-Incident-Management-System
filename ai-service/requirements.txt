@@ -1,5 +1,5 @@
 # Sprint 1 runtime dependencies
-fastapi==0.143.0
+fastapi==0.147.0
 uvicorn[standard]==0.54.0
 
 # Sprint 2 runtime dependencies (Ollama integration)

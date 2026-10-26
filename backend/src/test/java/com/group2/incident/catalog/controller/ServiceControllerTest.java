@@ -96,10 +96,10 @@ public class ServiceControllerTest {
     }
 
     @Test
-    void getUnknownServiceReturns400() throws Exception {
+    void getUnknownServiceReturns404() throws Exception {
         mvc.perform(get("/api/services/999999").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.serviceId").value("Service not found"));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Service not found"));
     }
 
     @Test
@@ -200,8 +200,15 @@ public class ServiceControllerTest {
                 .filter(e -> e.getItemType() == AuditItemType.SERVICE && e.getItemId() == id)
                 .toList();
         assertThat(auditList).hasSize(2);
-        assertThat(auditList.get(1).getAction()).isEqualTo(AuditAction.SERVICE_UPDATED);
-        assertThat(auditList.get(1).getActor().getId()).isEqualTo(admin.getId());
+        AuditEntry updated = auditList.stream()
+                .filter(e -> e.getAction() == AuditAction.SERVICE_UPDATED)
+                .findFirst()
+                .orElseThrow();
+        assertThat(updated.getActor().getId()).isEqualTo(admin.getId());
+        assertThat(updated.getDetails())
+                .contains("name: Billing → Billing v2")
+                .contains("owner: ")
+                .contains("criticality: MEDIUM → CRITICAL");
     }
 
     @Test

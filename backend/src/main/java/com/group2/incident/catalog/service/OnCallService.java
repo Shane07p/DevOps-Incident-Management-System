@@ -52,8 +52,7 @@ public class OnCallService {
         List<ShiftRequest> shiftRequests = request.shifts() != null ? request.shifts() : List.of();
         validateShifts(shiftRequests);
 
-        service.setFallbackContact(fallbackContact);
-        serviceRepository.save(service);
+        service.changeFallbackContact(fallbackContact);
 
         onCallShiftRepository.deleteByServiceId(serviceId);
 

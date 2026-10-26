@@ -1,4 +1,4 @@
-package com.group2.incident.incident;
+package com.group2.incident.incident.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -6,13 +6,10 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.incident.entity.Incident;
-import com.group2.incident.incident.entity.IncidentStatus;
-import com.group2.incident.incident.entity.Severity;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -23,8 +20,8 @@ class IncidentTest {
 	void dueTimesAreCreationTimePlusTarget() {
 		Instant now = Instant.parse("2026-10-19T10:00:00Z");
 		AppUser user = new AppUser("engineer", "Dev Engineer", "hash", Role.ENGINEER, now);
-		ServiceEntity service = new ServiceEntity(null, "Payments", "Payments service", user, Criticality.HIGH,
-				Map.of(Severity.SEV2, new SlaTarget(60, 480)), now);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, now);
+		service.putTarget(Severity.SEV2, 60, 480);
 
 		Incident incident = new Incident(
 				"Checkout failing",
@@ -47,10 +44,10 @@ class IncidentTest {
 	void incidentKeepsCopiedTargetsEvenIfServiceChanges() {
 		Instant createdTime = Instant.parse("2026-10-19T10:00:00Z");
 		AppUser user = new AppUser("engineer", "Dev Engineer", "hash", Role.ENGINEER, createdTime);
-		ServiceEntity service = new ServiceEntity(null, "Payments", "Payments service", user, Criticality.HIGH,
-				Map.of(Severity.SEV1, new SlaTarget(15, 240)), createdTime);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, createdTime);
+		service.putTarget(Severity.SEV1, 15, 240);
 
-		SlaTarget copiedTarget = service.targetFor(Severity.SEV1);
+		SlaTarget copiedTarget = service.getTargets().get(Severity.SEV1);
 		Incident incident = new Incident(
 				"Major outage",
 				"Total failure",
@@ -59,17 +56,15 @@ class IncidentTest {
 				IncidentStatus.OPEN,
 				user,
 				createdTime,
-				copiedTarget.responseMinutes(),
-				copiedTarget.resolutionMinutes()
+				copiedTarget.getResponseMinutes(),
+				copiedTarget.getResolutionMinutes()
 		);
 
-		// Service changes its targets later
-		Instant later = createdTime.plus(2, ChronoUnit.HOURS);
-		ServiceEntity updatedService = new ServiceEntity(null, "Payments", "Payments service", user, Criticality.HIGH,
-				Map.of(Severity.SEV1, new SlaTarget(30, 480)), later);
+		// The same service changes its targets later
+		service.putTarget(Severity.SEV1, 30, 480);
 
 		assertThat(incident.getResponseTargetMinutes()).isEqualTo(15);
 		assertThat(incident.getResolutionTargetMinutes()).isEqualTo(240);
-		assertThat(updatedService.targetFor(Severity.SEV1).responseMinutes()).isEqualTo(30);
+		assertThat(service.getTargets().get(Severity.SEV1).getResponseMinutes()).isEqualTo(30);
 	}
 }

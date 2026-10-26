@@ -1,7 +1,7 @@
 package com.group2.incident.incident.dto;
 
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.incident.entity.IncidentStatus;
-import com.group2.incident.incident.entity.Severity;
 import java.time.Instant;
 
 public record IncidentSummaryResponse(

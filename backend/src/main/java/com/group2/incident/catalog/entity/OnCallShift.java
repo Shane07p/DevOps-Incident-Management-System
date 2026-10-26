@@ -45,12 +45,4 @@ public class OnCallShift {
         this.startTime = startTime;
         this.endTime = endTime;
     }
-
-    public OnCallShift(Long id, ServiceEntity service, AppUser responder, Instant startTime, Instant endTime) {
-        this.id = id;
-        this.service = service;
-        this.responder = responder;
-        this.startTime = startTime;
-        this.endTime = endTime;
-    }
 }

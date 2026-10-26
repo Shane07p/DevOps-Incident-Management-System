@@ -1,8 +1,7 @@
-package com.group2.incident.incident;
+package com.group2.incident.incident.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.group2.incident.incident.service.SlaCalculator;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;

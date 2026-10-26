@@ -93,13 +93,13 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-02.1a | Equivalence | Title, description, service, and severity all given | 201 with status OPEN | `IncidentControllerTest` | Planned (Utsav D, Manan, #50) |
-| TC-FR-02.1b | Equivalence (invalid) | Each required field left out, one at a time | 400 naming that field; nothing saved | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-02.1c | Negative | The audit write fails during creation | No incident and no timeline entry saved | `IncidentCreationRollbackTest` | Planned (#50) |
-| TC-FR-02.2a | Equivalence | Two incidents created one after the other | Different IDs and `INC-` references; reporter and time from the request | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-02.2b | Equivalence | List incidents | Newest first | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-04.1a | Equivalence | Severity `SEV1` to `SEV4`; then `SEV5` and blank | Valid ones accepted; others 400 | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-16.3a | Equivalence | Create an incident, then change the service's targets | The incident keeps the targets copied at creation | `IncidentTest` | Planned (#50) |
+| TC-FR-02.1a | Equivalence | Title, description, service, and severity all given | 201 with status OPEN | `IncidentControllerTest` | Automated |
+| TC-FR-02.1b | Equivalence (invalid) | Each required field left out, one at a time | 400 naming that field; nothing saved | `IncidentControllerTest` | Automated |
+| TC-FR-02.1c | Negative | The audit write fails during creation | No incident and no timeline entry saved | `IncidentCreationRollbackTest` | Automated |
+| TC-FR-02.2a | Equivalence | Two incidents created one after the other | Different IDs and `INC-` references; reporter and time from the request | `IncidentControllerTest` | Automated |
+| TC-FR-02.2b | Equivalence | List incidents | Newest first | `IncidentControllerTest` | Automated |
+| TC-FR-04.1a | Equivalence | Severity `SEV1` to `SEV4`; then `SEV5` and blank | Valid ones accepted; others 400 | `IncidentControllerTest` | Automated |
+| TC-FR-16.3a | Equivalence | Create an incident, then change the service's targets | The incident keeps the targets copied at creation | `IncidentTest` | Automated |
 | TC-FR-02.1d | Equivalence | The incident form submitted with missing fields | Field errors shown; nothing sent | `IncidentsPage.test.tsx` | Automated |
 | TC-FR-01.2e | Equivalence | A Viewer opens the app | No "Declare incident" button; `/incidents/new` refused | `IncidentsPage.test.tsx` | Automated |
 
@@ -109,11 +109,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-16.3b | Boundary value | Elapsed time T − 1 minute | Not breached | `SlaTest` | Planned (#50) |
-| TC-FR-16.3c | Boundary value | Elapsed time exactly T | Not breached | `SlaTest` | Planned (#50) |
-| TC-FR-16.3d | Boundary value | Elapsed time T + 1 second | Breached | `SlaTest` | Planned (#50) |
-| TC-FR-16.4a | Equivalence | An incident open across a night and a weekend | All elapsed time counts | `SlaTest` | Planned (#50) |
-| TC-FR-16.1a | Equivalence | A new incident | `responseDueAt` and `resolutionDueAt` are creation time plus each target | `IncidentTest` | Planned (#50) |
+| TC-FR-16.3b | Boundary value | Elapsed time T − 1 minute | Not breached | `SlaTest` | Automated |
+| TC-FR-16.3c | Boundary value | Elapsed time exactly T | Not breached | `SlaTest` | Automated |
+| TC-FR-16.3d | Boundary value | Elapsed time T + 1 second | Breached | `SlaTest` | Automated |
+| TC-FR-16.4a | Equivalence | An incident open across a night and a weekend | All elapsed time counts | `SlaTest` | Automated |
+| TC-FR-16.1a | Equivalence | A new incident | `responseDueAt` and `resolutionDueAt` are creation time plus each target | `IncidentTest` | Automated |
 
 ### Append-only records (FR-08, FR-13)
 
@@ -132,11 +132,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-03.1a | Equivalence | Register a tool | The token is shown once; later reads never return it; only its hash is stored | `ToolControllerTest` | Planned (Het) |
-| TC-FR-03.1b | Equivalence | An alert with a valid token and all required fields | Accepted | `AlertWebhookTest` | Planned (Het) |
-| TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Planned (Het) |
-| TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Planned (Het) |
-| TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Planned (Het) |
+| TC-FR-03.1a | Equivalence | Register a tool | The token is shown once; later reads never return it; only its hash is stored | `ToolControllerTest` | Automated |
+| TC-FR-03.1b | Equivalence | An alert with a valid token and all required fields | Accepted | `AlertWebhookTest` | Automated |
+| TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Automated |
+| TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Automated |
+| TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Automated |
 
 ### Rate limits (NFR-04.4, D42): boundary values
 
@@ -173,12 +173,12 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-15.2a | Boundary value | An incident created at 09:00:00 | Assigned to A | `OnCallServiceTest` | Automated (Utsav B) |
-| TC-FR-15.2b | Boundary value | Created at 16:59:59 | Assigned to A | `OnCallServiceTest` | Automated (Utsav B) |
-| TC-FR-15.2c | Boundary value | Created at 17:00:00 | Not A: the fallback contact, since it falls in the gap | `OnCallServiceTest` | Automated (Utsav B) |
-| TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Automated (Utsav B) |
-| TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Automated (Utsav B) |
-| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Automated (Utsav B) |
+| TC-FR-15.2a | Boundary value | An incident created at 09:00:00 | Assigned to A | `OnCallServiceTest` | Automated |
+| TC-FR-15.2b | Boundary value | Created at 16:59:59 | Assigned to A | `OnCallServiceTest` | Automated |
+| TC-FR-15.2c | Boundary value | Created at 17:00:00 | Not A: the fallback contact, since it falls in the gap | `OnCallServiceTest` | Automated |
+| TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Automated |
+| TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Automated |
+| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Automated (timeline); notification with #70 |
 
 ### Notifications (FR-07.1, D33)
 

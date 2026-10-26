@@ -10,22 +10,25 @@ import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.SlaTargetDto;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.incident.entity.Severity;
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
+import com.group2.incident.common.error.NotFoundException;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ServiceCatalogService {
 
@@ -40,17 +43,6 @@ public class ServiceCatalogService {
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
     private final Clock clock;
-
-    public ServiceCatalogService(
-            ServiceRepository serviceRepository,
-            AppUserRepository appUserRepository,
-            AuditService auditService,
-            Clock clock) {
-        this.serviceRepository = serviceRepository;
-        this.appUserRepository = appUserRepository;
-        this.auditService = auditService;
-        this.clock = clock;
-    }
 
     public List<ServiceResponse> list() {
         return serviceRepository.findAllByOrderByNameAsc().stream()
@@ -149,7 +141,7 @@ public class ServiceCatalogService {
 
     private ServiceEntity load(Long id) {
         return serviceRepository.findWithDetailsById(id)
-                .orElseThrow(() -> new FieldValidationException("serviceId", "Service not found"));
+                .orElseThrow(() -> new NotFoundException("Service not found"));
     }
 
     private AppUser resolveOwner(Long ownerId) {

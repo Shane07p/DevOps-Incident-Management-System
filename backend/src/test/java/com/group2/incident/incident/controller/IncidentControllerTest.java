@@ -1,4 +1,4 @@
-package com.group2.incident.incident;
+package com.group2.incident.incident.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -6,23 +6,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.audit.entity.AuditAction;
+import com.group2.incident.audit.entity.AuditEntry;
+import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.entity.SlaTarget;
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
-import com.group2.incident.incident.entity.Severity;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -71,20 +72,12 @@ class IncidentControllerTest {
 		viewer = users.saveAndFlush(new AppUser("viewer", "Dev Viewer", passwordEncoder.encode(PASSWORD),
 				Role.VIEWER, now));
 
-		paymentsService = services.saveAndFlush(new ServiceEntity(
-				null,
-				"Payments",
-				"Card payments",
-				engineer,
-				Criticality.CRITICAL,
-				Map.of(
-						Severity.SEV1, new SlaTarget(15, 240),
-						Severity.SEV2, new SlaTarget(60, 480),
-						Severity.SEV3, new SlaTarget(240, 2880),
-						Severity.SEV4, new SlaTarget(1440, 10080)
-				),
-				now
-		));
+		ServiceEntity payments = new ServiceEntity("Payments", "Card payments", engineer, Criticality.CRITICAL, now);
+		payments.putTarget(Severity.SEV1, 15, 240);
+		payments.putTarget(Severity.SEV2, 60, 480);
+		payments.putTarget(Severity.SEV3, 240, 2880);
+		payments.putTarget(Severity.SEV4, 1440, 10080);
+		paymentsService = services.saveAndFlush(payments);
 	}
 
 	@Test
@@ -124,7 +117,9 @@ class IncidentControllerTest {
 				.andExpect(jsonPath("$.timeline[0].details").value("Reported as SEV2 on Payments"));
 
 		Number id = JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.id");
-		assertThat(auditEntries.count()).isGreaterThanOrEqualTo(1);
+		assertThat(auditEntries.findByItemTypeAndItemIdOrderByRecordedAtDesc(AuditItemType.INCIDENT, id.longValue()))
+				.extracting(AuditEntry::getAction)
+				.containsExactly(AuditAction.INCIDENT_CREATED);
 	}
 
 	@Test

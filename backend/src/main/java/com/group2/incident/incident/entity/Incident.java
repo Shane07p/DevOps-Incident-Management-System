@@ -2,6 +2,7 @@ package com.group2.incident.incident.entity;
 
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -72,34 +73,18 @@ public class Incident {
 	public Incident(String title, String description, ServiceEntity service, Severity severity,
 			IncidentStatus status, AppUser reporter, Instant createdAt,
 			int responseTargetMinutes, int resolutionTargetMinutes) {
-		this(null, title, description, service, severity, status, reporter, null, createdAt,
-				responseTargetMinutes, resolutionTargetMinutes);
-	}
-
-	public Incident(Long id, String title, String description, ServiceEntity service, Severity severity,
-			IncidentStatus status, AppUser reporter, Instant createdAt,
-			int responseTargetMinutes, int resolutionTargetMinutes) {
-		this(id, title, description, service, severity, status, reporter, null, createdAt,
-				responseTargetMinutes, resolutionTargetMinutes);
-	}
-
-	public Incident(Long id, String title, String description, ServiceEntity service, Severity severity,
-			IncidentStatus status, AppUser reporter, AppUser assignee, Instant createdAt,
-			int responseTargetMinutes, int resolutionTargetMinutes) {
-		this.id = id;
 		this.title = title;
 		this.description = description;
 		this.service = service;
 		this.severity = severity;
 		this.status = status;
 		this.reporter = reporter;
-		this.assignee = assignee;
 		this.createdAt = createdAt;
 		this.responseTargetMinutes = responseTargetMinutes;
 		this.resolutionTargetMinutes = resolutionTargetMinutes;
 	}
 
-	public void setAssignee(AppUser assignee) {
+	public void assignTo(AppUser assignee) {
 		this.assignee = assignee;
 	}
 

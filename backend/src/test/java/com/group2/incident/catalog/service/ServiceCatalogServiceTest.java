@@ -20,10 +20,11 @@ import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.SlaTargetDto;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.incident.entity.Severity;
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
+import com.group2.incident.common.error.NotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -140,11 +141,11 @@ public class ServiceCatalogServiceTest {
     }
 
     @Test
-    void getUnknownServiceThrowsFieldValidationException() {
+    void getUnknownServiceThrowsNotFoundException() {
         when(serviceRepository.findWithDetailsById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.get(999L))
-                .isInstanceOf(FieldValidationException.class)
+                .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("Service not found");
     }
 

@@ -7,8 +7,8 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
-import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.catalog.service.OnCallService;
+import com.group2.incident.catalog.service.ServiceCatalogService;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
@@ -23,7 +23,6 @@ import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
-import com.group2.incident.notification.service.NotificationService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,11 +37,10 @@ public class IncidentService {
 
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
-	private final ServiceRepository serviceRepository;
+	private final ServiceCatalogService serviceCatalogService;
+	private final OnCallService onCallService;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
-	private final OnCallService onCallService;
-	private final NotificationService notificationService;
 	private final Clock clock;
 
 	@Transactional
@@ -53,10 +51,10 @@ public class IncidentService {
 					.orElseThrow(() -> new NotFoundException("User " + reporterUserId + " not found"));
 		}
 
-		ServiceEntity service = serviceRepository.findWithDetailsById(request.serviceId())
-				.orElseThrow(() -> new FieldValidationException("serviceId", "Service not found"));
+		ServiceEntity service = serviceCatalogService.requireForIncident(request.serviceId());
 
-		SlaTarget target = service.targetFor(request.severity());
+		// Copied now and never changed afterwards, even if the service's targets change.
+		SlaTarget target = service.getTargets().get(request.severity());
 		if (target == null) {
 			throw new FieldValidationException("severity",
 					"Service " + service.getName() + " has no SLA target for " + request.severity());
@@ -72,45 +70,36 @@ public class IncidentService {
 				IncidentStatus.OPEN,
 				reporter,
 				now,
-				target.responseMinutes(),
-				target.resolutionMinutes()
+				target.getResponseMinutes(),
+				target.getResolutionMinutes()
 		);
-
+		// Whoever is on call now, or the service's fallback contact outside every shift (FR-15).
 		AppUser assignee = onCallService.resolveAssignee(service, now);
 		if (assignee != null) {
-			incident.setAssignee(assignee);
+			incident.assignTo(assignee);
 		}
-
 		incident = incidentRepository.save(incident);
 
-		List<TimelineEntry> timelineEntries = new ArrayList<>();
-
 		String details = "Reported as " + request.severity() + " on " + service.getName();
-		TimelineEntry createdEntry = new TimelineEntry(
+		TimelineEntry timelineEntry = new TimelineEntry(
 				incident,
 				reporter,
 				TimelineEventType.INCIDENT_CREATED,
 				details,
 				now
 		);
-		createdEntry = timelineEntryRepository.save(createdEntry);
-		timelineEntries.add(createdEntry);
+		List<TimelineEntry> timeline = new ArrayList<>();
+		timeline.add(timelineEntryRepository.save(timelineEntry));
 
 		if (assignee != null) {
-			TimelineEntry assignedEntry = new TimelineEntry(
+			// A system action, so there is no actor (FR-05.1).
+			timeline.add(timelineEntryRepository.save(new TimelineEntry(
 					incident,
 					null,
 					TimelineEventType.ASSIGNED,
-					"Assigned to " + assignee.getUsername(),
+					"Assigned to " + assignee.getDisplayName(),
 					now
-			);
-			assignedEntry = timelineEntryRepository.save(assignedEntry);
-			timelineEntries.add(assignedEntry);
-
-			notificationService.notifyUser(
-					assignee,
-					"Assigned to incident " + incident.getReference() + ": " + incident.getTitle()
-			);
+			)));
 		}
 
 		auditService.record(
@@ -121,7 +110,7 @@ public class IncidentService {
 				"Created incident " + incident.getReference() + " on service " + service.getName()
 		);
 
-		return toResponse(incident, timelineEntries);
+		return toResponse(incident, timeline);
 	}
 
 	@Transactional(readOnly = true)

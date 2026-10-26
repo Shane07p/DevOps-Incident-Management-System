@@ -41,6 +41,11 @@ public class ApiExceptionHandler {
 		return respond(HttpStatus.CONFLICT, ex.getMessage(), Map.of());
 	}
 
+	@ExceptionHandler(UnauthorizedException.class)
+	ResponseEntity<ApiError> unauthorized(UnauthorizedException ex) {
+		return respond(HttpStatus.UNAUTHORIZED, ex.getMessage(), Map.of());
+	}
+
 	// Same message for an unknown user and a wrong password, so login can't be used to find usernames.
 	@ExceptionHandler(AuthenticationException.class)
 	ResponseEntity<ApiError> failedLogin(AuthenticationException ex) {

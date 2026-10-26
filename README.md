@@ -133,9 +133,9 @@ cd frontend && npm run cypress:run    # end-to-end, needs both servers running
 | `.github/workflows/` | CI |
 | `compose.yaml` | Local database and packaged application |
 | `.env.example` | Example settings, no real credentials |
+| `demo-shop/` | Demo Shop v1: retail simulation with 5 fault switches and OpenTelemetry (Sprint 2) |
 
-`ai-service/` (Python, FastAPI, Ollama) runs locally only; see the
-[AI/ML roadmap](docs/plans/ai-ml-roadmap.md).
+`ai-service/` (Python, FastAPI, Ollama) and `demo-shop/` run locally or in optional Compose profiles; see the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md) and [demo-shop/README.md](demo-shop/README.md).
 
 ## Team and plans
 

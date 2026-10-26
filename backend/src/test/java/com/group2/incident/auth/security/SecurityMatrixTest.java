@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.alert.dto.CreateToolRequest;
+import com.group2.incident.alert.entity.MonitoringTool;
+import com.group2.incident.alert.repository.MonitoringToolRepository;
+import com.group2.incident.alert.service.ToolService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
@@ -58,6 +62,12 @@ public class SecurityMatrixTest {
 	@Qualifier("requestMappingHandlerMapping")
 	private RequestMappingHandlerMapping handlerMapping;
 
+	@Autowired
+	private MonitoringToolRepository tools;
+
+	@Autowired
+	private ToolService toolService;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -69,6 +79,7 @@ public class SecurityMatrixTest {
 	private Long adminUserId;
 
 	private Long targetServiceId;
+	private Long targetToolId;
 
 	public record MatrixRow(
 			String name,
@@ -157,6 +168,27 @@ public class SecurityMatrixTest {
 						"/api/services/{id}",
 						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
 						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/tools",
+						HttpMethod.GET,
+						"/api/tools",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/tools",
+						HttpMethod.POST,
+						"/api/tools",
+						"{\"name\":\"Tool_${RANDOM}\"}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/tools/{id}",
+						HttpMethod.DELETE,
+						"/api/tools/{id}",
+						null,
+						204, 403, 403, 401
 				)
 		);
 	}
@@ -169,6 +201,9 @@ public class SecurityMatrixTest {
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
 		adminUserId = admin.getId();
+
+		var tool = tools.saveAndFlush(new MonitoringTool("Matrix Tool " + UUID.randomUUID(), "dummy_hash_" + UUID.randomUUID(), clock.instant()));
+		targetToolId = tool.getId();
 
 		adminToken = tokenFor("admin");
 		engineerToken = tokenFor("engineer");
@@ -213,12 +248,10 @@ public class SecurityMatrixTest {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
-		String path = row.pathTemplate();
-		if (path.contains("/api/services/{id}")) {
-			path = path.replace("{id}", targetServiceId.toString());
-		} else {
-			path = path.replace("{id}", targetUserId.toString());
-		}
+		String id = row.pathTemplate().startsWith("/api/tools/") ? targetToolId.toString()
+				: row.pathTemplate().startsWith("/api/services/") ? targetServiceId.toString()
+				: targetUserId.toString();
+		String path = row.pathTemplate().replace("{id}", id);
 
 		// Admin
 		execute(row.method(), path, row.bodyTemplate(), adminToken, row.adminStatus());
@@ -260,5 +293,70 @@ public class SecurityMatrixTest {
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(response, "$.token");
+	}
+
+	@Test
+	void webhookAlertsAuthenticationMatrix() throws Exception {
+		String validPayload = """
+				{
+					"source": "prometheus",
+					"eventId": "evt-matrix-1",
+					"service": "Payments",
+					"title": "Alert",
+					"description": "Desc",
+					"severity": "SEV1"
+				}
+				""";
+
+		// 1. Missing token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 2. Wrong tool token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer tt_invalid_token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 3. User JWT tokens (Admin, Engineer, Viewer) are not valid tool tokens -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 4. Valid registered tool token -> 202 Accepted
+		var toolCreateResponse = toolService.createTool(
+				new CreateToolRequest("Matrix Alert Tool " + UUID.randomUUID()),
+				adminUserId
+		);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isAccepted());
+
+		// 5. Revoked tool token -> 401
+		toolService.revokeTool(toolCreateResponse.id(), adminUserId);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
 	}
 }

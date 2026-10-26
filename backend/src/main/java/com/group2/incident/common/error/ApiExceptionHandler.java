@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -24,6 +25,12 @@ public class ApiExceptionHandler {
 			errors.putIfAbsent(error.getField(), error.getDefaultMessage());
 		}
 		return respond(HttpStatus.BAD_REQUEST, "Validation failed", errors);
+	}
+
+	// A body that isn't valid JSON, or a value of the wrong type, such as severity "SEV5".
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	ResponseEntity<ApiError> unreadableBody(HttpMessageNotReadableException ex) {
+		return respond(HttpStatus.BAD_REQUEST, "Request body could not be read", Map.of());
 	}
 
 	@ExceptionHandler(FieldValidationException.class)

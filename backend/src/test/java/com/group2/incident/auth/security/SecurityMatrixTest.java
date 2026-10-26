@@ -15,6 +15,9 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.incident.entity.Incident;
+import com.group2.incident.incident.entity.IncidentStatus;
+import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -68,6 +71,9 @@ public class SecurityMatrixTest {
 	@Autowired
 	private ToolService toolService;
 
+	@Autowired
+	private IncidentRepository incidents;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -80,6 +86,7 @@ public class SecurityMatrixTest {
 
 	private Long targetServiceId;
 	private Long targetToolId;
+	private Long targetIncidentId;
 
 	public record MatrixRow(
 			String name,
@@ -189,6 +196,27 @@ public class SecurityMatrixTest {
 						"/api/tools/{id}",
 						null,
 						204, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents",
+						HttpMethod.GET,
+						"/api/incidents",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/{id}",
+						HttpMethod.GET,
+						"/api/incidents/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents",
+						HttpMethod.POST,
+						"/api/incidents",
+						"{\"title\":\"Sec incident\",\"description\":\"Desc\",\"serviceId\":${SERVICE_ID},\"severity\":\"SEV2\"}",
+						201, 201, 403, 401
 				)
 		);
 	}
@@ -216,6 +244,10 @@ public class SecurityMatrixTest {
 		service.putTarget(Severity.SEV4, 1440, 10080);
 		ServiceEntity savedService = services.saveAndFlush(service);
 		targetServiceId = savedService.getId();
+
+		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
+				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));
+		targetIncidentId = incident.getId();
 	}
 
 	@Test
@@ -250,6 +282,7 @@ public class SecurityMatrixTest {
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
 		String id = row.pathTemplate().startsWith("/api/tools/") ? targetToolId.toString()
 				: row.pathTemplate().startsWith("/api/services/") ? targetServiceId.toString()
+				: row.pathTemplate().startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: targetUserId.toString();
 		String path = row.pathTemplate().replace("{id}", id);
 
@@ -273,7 +306,8 @@ public class SecurityMatrixTest {
 		}
 		if (bodyTemplate != null) {
 			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
-					.replace("${OWNER_ID}", adminUserId.toString());
+					.replace("${OWNER_ID}", adminUserId.toString())
+					.replace("${SERVICE_ID}", targetServiceId.toString());
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

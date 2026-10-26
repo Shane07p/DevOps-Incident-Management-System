@@ -126,3 +126,24 @@ jobs:
       - name: Run tests
         working-directory: ai-service
         run: pytest
+
+  demo-shop:
+    name: Demo shop build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: demo-shop/requirements-dev.txt
+
+      - name: Install dependencies
+        working-directory: demo-shop
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        working-directory: demo-shop
+        run: pytest

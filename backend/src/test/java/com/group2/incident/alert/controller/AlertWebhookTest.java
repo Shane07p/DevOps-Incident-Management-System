@@ -123,6 +123,17 @@ class AlertWebhookTest {
 	}
 
 	@Test
+	void missingTokenAndInvalidBody_returns401BeforeValidation() throws Exception {
+		// The token is checked before the body, so a caller without one learns nothing about the payload.
+		mvc.perform(post("/webhooks/alerts")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.status").value(401))
+				.andExpect(jsonPath("$.errors").isEmpty());
+	}
+
+	@Test
 	void malformedAuthorizationHeader_returns401Unauthorized() throws Exception {
 		// Non-Bearer header
 		mvc.perform(post("/webhooks/alerts")

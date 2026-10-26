@@ -21,6 +21,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class AlertIntakeServiceTest {
 
+	private static final Instant FIXED_NOW = Instant.parse("2026-10-20T10:00:00Z");
+
 	@Mock
 	private ToolService toolService;
 
@@ -33,7 +35,7 @@ class AlertIntakeServiceTest {
 
 	@Test
 	void processAlert_validToken_returnsAcceptedResponse() {
-		MonitoringTool tool = new MonitoringTool("Prometheus", "hash", Instant.now());
+		MonitoringTool tool = new MonitoringTool("Prometheus", "hash", FIXED_NOW);
 		ReflectionTestUtils.setField(tool, "id", 1L);
 		when(toolService.validateToken("valid_token")).thenReturn(tool);
 
@@ -48,7 +50,8 @@ class AlertIntakeServiceTest {
 				Map.of("p99", "620ms")
 		);
 
-		AlertAcceptedResponse response = alertIntakeService.processAlert("Bearer valid_token", request);
+		assertThat(alertIntakeService.authenticate("Bearer valid_token")).isSameAs(tool);
+		AlertAcceptedResponse response = alertIntakeService.processAlert(tool, request);
 
 		assertThat(response.status()).isEqualTo("ACCEPTED");
 		assertThat(response.eventId()).isEqualTo("evt-100");
@@ -57,28 +60,22 @@ class AlertIntakeServiceTest {
 	}
 
 	@Test
-	void processAlert_missingHeader_throwsUnauthorizedException() {
-		AlertRequest request = new AlertRequest("source", "e1", "srv", "title", "desc", "SEV1", null, null);
-
-		assertThatThrownBy(() -> alertIntakeService.processAlert(null, request))
+	void authenticate_missingHeader_throwsUnauthorizedException() {
+		assertThatThrownBy(() -> alertIntakeService.authenticate(null))
 				.isInstanceOf(UnauthorizedException.class)
 				.hasMessage("Missing or malformed Authorization header");
 	}
 
 	@Test
-	void processAlert_nonBearerHeader_throwsUnauthorizedException() {
-		AlertRequest request = new AlertRequest("source", "e1", "srv", "title", "desc", "SEV1", null, null);
-
-		assertThatThrownBy(() -> alertIntakeService.processAlert("Basic xyz", request))
+	void authenticate_nonBearerHeader_throwsUnauthorizedException() {
+		assertThatThrownBy(() -> alertIntakeService.authenticate("Basic xyz"))
 				.isInstanceOf(UnauthorizedException.class)
 				.hasMessage("Missing or malformed Authorization header");
 	}
 
 	@Test
-	void processAlert_emptyBearerToken_throwsUnauthorizedException() {
-		AlertRequest request = new AlertRequest("source", "e1", "srv", "title", "desc", "SEV1", null, null);
-
-		assertThatThrownBy(() -> alertIntakeService.processAlert("Bearer   ", request))
+	void authenticate_emptyBearerToken_throwsUnauthorizedException() {
+		assertThatThrownBy(() -> alertIntakeService.authenticate("Bearer   "))
 				.isInstanceOf(UnauthorizedException.class)
 				.hasMessage("Missing or malformed Authorization header");
 	}
@@ -91,13 +88,13 @@ class AlertIntakeServiceTest {
 		logger.addAppender(listAppender);
 
 		String rawToken = "tt_super_secret_token_value_987654321";
-		MonitoringTool tool = new MonitoringTool("Prometheus EU", "hash", Instant.now());
+		MonitoringTool tool = new MonitoringTool("Prometheus EU", "hash", FIXED_NOW);
 		ReflectionTestUtils.setField(tool, "id", 1L);
 		when(toolService.validateToken(rawToken)).thenReturn(tool);
 
 		try {
 			AlertRequest request = new AlertRequest("prometheus", "evt-1", "Payments", "Title", "Desc", "SEV1", null, null);
-			alertIntakeService.processAlert("Bearer " + rawToken, request);
+			alertIntakeService.processAlert(alertIntakeService.authenticate("Bearer " + rawToken), request);
 
 			for (ch.qos.logback.classic.spi.ILoggingEvent event : listAppender.list) {
 				assertThat(event.getFormattedMessage()).doesNotContain(rawToken);

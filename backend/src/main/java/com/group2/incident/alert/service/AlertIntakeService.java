@@ -17,7 +17,8 @@ public class AlertIntakeService {
 
 	private final ToolService toolService;
 
-	public AlertAcceptedResponse processAlert(String authorizationHeader, AlertRequest request) {
+	/** Called by ToolTokenInterceptor before the body is read. */
+	public MonitoringTool authenticate(String authorizationHeader) {
 		if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
 			throw new UnauthorizedException("Missing or malformed Authorization header");
 		}
@@ -27,8 +28,10 @@ public class AlertIntakeService {
 			throw new UnauthorizedException("Missing or malformed Authorization header");
 		}
 
-		MonitoringTool tool = toolService.validateToken(rawToken);
+		return toolService.validateToken(rawToken);
+	}
 
+	public AlertAcceptedResponse processAlert(MonitoringTool tool, AlertRequest request) {
 		log.info("Accepted alert '{}' (eventId: {}) for service '{}' from tool '{}' (toolId: {})",
 				request.title(), request.eventId(), request.service(), tool.getName(), tool.getId());
 

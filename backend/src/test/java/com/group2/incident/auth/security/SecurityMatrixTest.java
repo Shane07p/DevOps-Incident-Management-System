@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.alert.dto.CreateToolRequest;
+import com.group2.incident.alert.entity.MonitoringTool;
+import com.group2.incident.alert.repository.MonitoringToolRepository;
+import com.group2.incident.alert.service.ToolService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
@@ -52,10 +56,10 @@ public class SecurityMatrixTest {
 	private RequestMappingHandlerMapping handlerMapping;
 
 	@Autowired
-	private com.group2.incident.alert.repository.MonitoringToolRepository tools;
+	private MonitoringToolRepository tools;
 
 	@Autowired
-	private com.group2.incident.alert.service.ToolService toolService;
+	private ToolService toolService;
 
 	private String adminToken;
 
@@ -162,7 +166,7 @@ public class SecurityMatrixTest {
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
 
-		var tool = tools.saveAndFlush(new com.group2.incident.alert.entity.MonitoringTool("Matrix Tool " + UUID.randomUUID(), "dummy_hash_" + UUID.randomUUID(), clock.instant()));
+		var tool = tools.saveAndFlush(new MonitoringTool("Matrix Tool " + UUID.randomUUID(), "dummy_hash_" + UUID.randomUUID(), clock.instant()));
 		targetToolId = tool.getId();
 
 		adminToken = tokenFor("admin");
@@ -291,7 +295,7 @@ public class SecurityMatrixTest {
 
 		// 4. Valid registered tool token -> 202 Accepted
 		var toolCreateResponse = toolService.createTool(
-				new com.group2.incident.alert.dto.CreateToolRequest("Matrix Alert Tool " + UUID.randomUUID()),
+				new CreateToolRequest("Matrix Alert Tool " + UUID.randomUUID()),
 				adminUserId
 		);
 		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")

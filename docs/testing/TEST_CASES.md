@@ -132,11 +132,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-03.1a | Equivalence | Register a tool | The token is shown once; later reads never return it; only its hash is stored | `ToolControllerTest` | Planned (Het) |
-| TC-FR-03.1b | Equivalence | An alert with a valid token and all required fields | Accepted | `AlertWebhookTest` | Planned (Het) |
-| TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Planned (Het) |
-| TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Planned (Het) |
-| TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Planned (Het) |
+| TC-FR-03.1a | Equivalence | Register a tool | The token is shown once; later reads never return it; only its hash is stored | `ToolControllerTest` | Automated |
+| TC-FR-03.1b | Equivalence | An alert with a valid token and all required fields | Accepted | `AlertWebhookTest` | Automated |
+| TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Automated |
+| TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Automated |
+| TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Automated |
 
 ### Rate limits (NFR-04.4, D42): boundary values
 

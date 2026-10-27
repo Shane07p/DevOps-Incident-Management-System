@@ -8,9 +8,14 @@ from urllib.parse import urlencode
 
 def parse_time(value):
     """Convert an ISO timestamp into a UTC datetime."""
-    return datetime.fromisoformat(
+    timestamp = datetime.fromisoformat(
         value.replace("Z", "+00:00")
-    ).astimezone(timezone.utc)
+    )
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+    return timestamp.astimezone(timezone.utc)
 
 
 def build_query_url(
@@ -25,7 +30,6 @@ def build_query_url(
     if not grafana_url or not datasource_uid:
         return ""
 
-    # Escape values used inside the LogQL expression.
     safe_service = json.dumps(service)
     safe_pattern = json.dumps(pattern)
 

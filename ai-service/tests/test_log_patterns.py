@@ -1,10 +1,17 @@
 
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from log_patterns import find_log_patterns, load_recorded_logs
+from log_patterns import (
+    build_query_url,
+    find_log_patterns,
+    load_recorded_logs,
+    parse_time,
+)
 
 
 def make_log(timestamp, event, service="payments"):
@@ -142,10 +149,6 @@ def test_recorded_demo_shop_slow_gateway():
 
 
 def test_grafana_query_link():
-    from urllib.parse import parse_qs, urlparse
-    import json
-    from log_patterns import build_query_url
-
     url = build_query_url(
         "http://localhost:3000",
         "loki",
@@ -163,3 +166,11 @@ def test_grafana_query_link():
     assert state["queries"][0]["expr"] == (
         '{service="payments"} | json | event="payment.gateway.slow"'
     )
+
+
+def test_timestamp_without_timezone_is_utc():
+    without_timezone = parse_time("2026-10-27T08:16:07")
+    with_timezone = parse_time("2026-10-27T08:16:07Z")
+
+    assert without_timezone == with_timezone
+    assert without_timezone.tzinfo == timezone.utc

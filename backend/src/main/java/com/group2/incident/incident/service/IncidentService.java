@@ -45,6 +45,24 @@ public class IncidentService {
 
 	@Transactional
 	public IncidentResponse createIncident(CreateIncidentRequest request, Long reporterUserId) {
+		return createIncident(request, reporterUserId, null, null);
+	}
+
+	@Transactional
+	public IncidentResponse createIncidentFromAlert(
+			CreateIncidentRequest request,
+			String correlationSource,
+			String correlationKey
+	) {
+		return createIncident(request, null, correlationSource, correlationKey);
+	}
+
+	private IncidentResponse createIncident(
+			CreateIncidentRequest request,
+			Long reporterUserId,
+			String correlationSource,
+			String correlationKey
+	) {
 		AppUser reporter = null;
 		if (reporterUserId != null) {
 			reporter = appUserRepository.findById(reporterUserId)
@@ -71,7 +89,9 @@ public class IncidentService {
 				reporter,
 				now,
 				target.getResponseMinutes(),
-				target.getResolutionMinutes()
+				target.getResolutionMinutes(),
+				correlationSource,
+				correlationKey
 		);
 		// Whoever is on call now, or the service's fallback contact outside every shift (FR-15).
 		AppUser assignee = onCallService.resolveAssignee(service, now);

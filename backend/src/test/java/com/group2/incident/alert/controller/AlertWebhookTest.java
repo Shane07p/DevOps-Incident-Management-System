@@ -16,6 +16,12 @@ import com.group2.incident.alert.service.ToolService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.alert.repository.AlertRepository;
+import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -29,6 +35,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @IntegrationTest
 class AlertWebhookTest {
@@ -59,6 +66,15 @@ class AlertWebhookTest {
 	private AppUserRepository users;
 
 	@Autowired
+	private ServiceRepository services;
+
+	@Autowired
+	private AlertRepository alerts;
+
+	@Autowired
+	private IncidentRepository incidents;
+
+	@Autowired
 	private PasswordEncoder passwordEncoder;
 
 	@Autowired
@@ -67,11 +83,13 @@ class AlertWebhookTest {
 	private AppUser admin;
 	private String validToolToken;
 	private Long toolId;
+	private ServiceEntity payments;
 
 	@BeforeEach
 	void setUp() {
 		admin = users.saveAndFlush(new AppUser("webhook_admin", "Webhook Admin",
 				passwordEncoder.encode("DevPassw0rd!"), Role.ADMIN, clock.instant()));
+		payments = createService("Payments");
 
 		CreateToolResponse created = toolService.createTool(new CreateToolRequest("Webhook Tool " + clock.millis()), admin.getId());
 		validToolToken = created.token();
@@ -89,6 +107,93 @@ class AlertWebhookTest {
 				.andExpect(jsonPath("$.status").value("ACCEPTED"))
 				.andExpect(jsonPath("$.eventId").value("evt-123"))
 				.andExpect(jsonPath("$.source").value("prometheus"));
+	}
+
+	@Test
+	void repeatedEventWithSameCanonicalContent_isIdempotent() throws Exception {
+		String original = """
+				{
+					"source": "prometheus",
+					"eventId": "evt-idempotent",
+					"service": "Payments",
+					"title": "High error rate",
+					"description": "500 errors on /pay",
+					"severity": "SEV2",
+					"correlationKey": "pay-error-key",
+					"details": { "z": 2, "a": 1 },
+					"receivedAt": "2026-10-27T10:00:00Z"
+				}
+				""";
+		String retry = original
+				.replace("\"z\": 2, \"a\": 1", "\"a\": 1, \"z\": 2")
+				.replace("2026-10-27T10:00:00Z", "2026-10-27T10:05:00Z");
+
+		mvc.perform(alertRequest(original)).andExpect(status().isAccepted());
+		mvc.perform(alertRequest(retry)).andExpect(status().isAccepted());
+
+		assertThat(alerts.count()).isEqualTo(1);
+		assertThat(incidents.count()).isEqualTo(1);
+	}
+
+	@Test
+	void repeatedEventWithChangedPayload_returnsConflict() throws Exception {
+		mvc.perform(alertRequest(VALID_PAYLOAD)).andExpect(status().isAccepted());
+		String changedPayload = VALID_PAYLOAD.replace("http_requests_total", "cpu_usage");
+
+		mvc.perform(alertRequest(changedPayload))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409));
+
+		assertThat(alerts.count()).isEqualTo(1);
+		assertThat(incidents.count()).isEqualTo(1);
+	}
+
+	@Test
+	void alertsWithSameSourceServiceAndCorrelationKey_shareActiveIncident() throws Exception {
+		mvc.perform(alertRequest(VALID_PAYLOAD)).andExpect(status().isAccepted());
+		String second = VALID_PAYLOAD.replace("evt-123", "evt-124");
+
+		mvc.perform(alertRequest(second)).andExpect(status().isAccepted());
+
+		assertThat(alerts.count()).isEqualTo(2);
+		assertThat(incidents.count()).isEqualTo(1);
+		assertThat(alerts.findAll()).extracting(alert -> alert.getIncident().getId()).containsOnly(incidents.findAll().getFirst().getId());
+	}
+
+	@Test
+	void sameCorrelationKeyFromDifferentSource_doesNotShareIncident() throws Exception {
+		mvc.perform(alertRequest(VALID_PAYLOAD)).andExpect(status().isAccepted());
+		String second = VALID_PAYLOAD
+				.replace("evt-123", "evt-other-source")
+				.replace("\"source\": \"prometheus\"", "\"source\": \"grafana\"");
+
+		mvc.perform(alertRequest(second)).andExpect(status().isAccepted());
+
+		assertThat(incidents.count()).isEqualTo(2);
+		assertThat(alerts.findAll()).extracting(alert -> alert.getIncident().getId()).doesNotHaveDuplicates();
+	}
+
+	@Test
+	void sameCorrelationKeyForDifferentService_doesNotShareIncident() throws Exception {
+		createService("Orders");
+		mvc.perform(alertRequest(VALID_PAYLOAD)).andExpect(status().isAccepted());
+		String second = VALID_PAYLOAD
+				.replace("evt-123", "evt-orders")
+				.replace("\"service\": \"Payments\"", "\"service\": \"Orders\"");
+
+		mvc.perform(alertRequest(second)).andExpect(status().isAccepted());
+
+		assertThat(incidents.count()).isEqualTo(2);
+		assertThat(alerts.findAll()).extracting(alert -> alert.getIncident().getId()).doesNotHaveDuplicates();
+	}
+
+	@Test
+	void alertsWithoutCorrelationKey_createSeparateIncidents() throws Exception {
+		String noKey = VALID_PAYLOAD.replace("\"correlationKey\": \"pay-error-key\",", "");
+		mvc.perform(alertRequest(noKey)).andExpect(status().isAccepted());
+		mvc.perform(alertRequest(noKey.replace("evt-123", "evt-no-key-2"))).andExpect(status().isAccepted());
+
+		assertThat(incidents.count()).isEqualTo(2);
 	}
 
 	@Test
@@ -317,5 +422,18 @@ class AlertWebhookTest {
 					""";
 			default -> VALID_PAYLOAD;
 		};
+	}
+
+	private MockHttpServletRequestBuilder alertRequest(String payload) {
+		return post("/webhooks/alerts")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + validToolToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(payload);
+	}
+
+	private ServiceEntity createService(String name) {
+		ServiceEntity service = new ServiceEntity(name, "Test service", admin, Criticality.HIGH, clock.instant());
+		service.putTarget(Severity.SEV2, 60, 480);
+		return services.saveAndFlush(service);
 	}
 }

@@ -26,11 +26,14 @@ class AlertIntakeServiceTest {
 	@Mock
 	private ToolService toolService;
 
+	@Mock
+	private AlertService alertService;
+
 	private AlertIntakeService alertIntakeService;
 
 	@BeforeEach
 	void setUp() {
-		alertIntakeService = new AlertIntakeService(toolService);
+		alertIntakeService = new AlertIntakeService(toolService, alertService);
 	}
 
 	@Test
@@ -51,12 +54,12 @@ class AlertIntakeServiceTest {
 		);
 
 		assertThat(alertIntakeService.authenticate("Bearer valid_token")).isSameAs(tool);
+		AlertAcceptedResponse expectedResponse = AlertAcceptedResponse.of(request.eventId(), request.source());
+		when(alertService.processAlert(tool, request)).thenReturn(expectedResponse);
 		AlertAcceptedResponse response = alertIntakeService.processAlert(tool, request);
 
-		assertThat(response.status()).isEqualTo("ACCEPTED");
-		assertThat(response.eventId()).isEqualTo("evt-100");
-		assertThat(response.source()).isEqualTo("prometheus");
-		assertThat(response.message()).isEqualTo("Alert accepted for processing");
+		assertThat(response).isEqualTo(expectedResponse);
+		verify(alertService).processAlert(tool, request);
 	}
 
 	@Test
@@ -94,6 +97,8 @@ class AlertIntakeServiceTest {
 
 		try {
 			AlertRequest request = new AlertRequest("prometheus", "evt-1", "Payments", "Title", "Desc", "SEV1", null, null);
+			when(alertService.processAlert(tool, request))
+					.thenReturn(AlertAcceptedResponse.of(request.eventId(), request.source()));
 			alertIntakeService.processAlert(alertIntakeService.authenticate("Bearer " + rawToken), request);
 
 			for (ch.qos.logback.classic.spi.ILoggingEvent event : listAppender.list) {

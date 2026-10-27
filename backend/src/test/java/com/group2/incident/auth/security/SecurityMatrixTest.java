@@ -226,6 +226,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/alerts",
+						HttpMethod.GET,
+						"/api/alerts",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"POST /api/incidents",
 						HttpMethod.POST,
 						"/api/incidents",
@@ -349,7 +356,7 @@ public class SecurityMatrixTest {
 				{
 					"source": "prometheus",
 					"eventId": "evt-matrix-1",
-					"service": "Payments",
+					"service": "SecurityMatrixBaseService",
 					"title": "Alert",
 					"description": "Desc",
 					"severity": "SEV1"

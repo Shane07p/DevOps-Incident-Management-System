@@ -14,6 +14,7 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.EscalationTaskRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
+import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -42,6 +43,8 @@ public class EscalationService {
 	private final OutboxRepository outboxRepository;
 	private final EntityManager entityManager;
 	private final Clock clock;
+    private final IncidentRepository incidentRepository;
+
 
 	@Transactional
 	public void createTaskForIncident(Incident incident, Instant now) {
@@ -135,6 +138,10 @@ public class EscalationService {
 		}
 
 		// Force version increment on Incident to guarantee optimistic locking race detection (TC-FR-07.4a)
+        entityManager.lock(incident, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        // Ensure the version bump is persisted
+        incidentRepository.saveAndFlush(incident);
+        entityManager.flush();
 		entityManager.lock(incident, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
 		entityManager.flush();
 

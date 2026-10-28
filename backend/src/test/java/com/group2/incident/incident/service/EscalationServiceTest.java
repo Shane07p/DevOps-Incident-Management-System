@@ -28,6 +28,7 @@ import com.group2.incident.incident.repository.TimelineEntryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Clock;
+import com.group2.incident.incident.repository.IncidentRepository;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -65,6 +66,9 @@ class EscalationServiceTest {
 	@Mock
 	private EntityManager entityManager;
 
+	@Mock
+	private IncidentRepository incidentRepository;
+
 	@Captor
 	private ArgumentCaptor<Outbox> outboxCaptor;
 
@@ -83,14 +87,16 @@ class EscalationServiceTest {
 	@BeforeEach
 	void setUp() {
 		fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
-		escalationService = new EscalationService(
+			escalationService = new EscalationService(
 				escalationPolicyRepository,
 				escalationTaskRepository,
 				timelineEntryRepository,
 				outboxRepository,
 				entityManager,
-				fixedClock
-		);
+				fixedClock,
+				incidentRepository
+			);
+
 
 		admin = new AppUser("admin", "Admin User", "hash", Role.ADMIN, T0);
 		responder1 = new AppUser("resp1", "Responder 1", "hash", Role.ENGINEER, T0);

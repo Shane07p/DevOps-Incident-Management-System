@@ -1,11 +1,11 @@
-# Weekly version updates. Minor and patch bumps arrive as one PR per area; a major bump gets its own
+# Monthly version updates. Minor and patch bumps arrive as one PR per area; a major bump gets its own
 # PR so it can be checked on its own. Security fixes are separate and arrive as soon as they exist.
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /backend
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       backend:
         update-types: [minor, patch]
@@ -13,7 +13,7 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       frontend:
         update-types: [minor, patch]
@@ -21,7 +21,7 @@ updates:
   - package-ecosystem: pip
     directory: /ai-service
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       ai-service:
         update-types: [minor, patch]
@@ -29,7 +29,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       actions:
         update-types: [minor, patch]

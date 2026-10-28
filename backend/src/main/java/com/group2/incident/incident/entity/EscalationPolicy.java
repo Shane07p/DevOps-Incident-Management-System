@@ -51,10 +51,21 @@ public class EscalationPolicy {
 	}
 
 	public void replaceSteps(List<EscalationStep> newSteps, Instant updatedAt) {
-		this.steps.clear();
-		for (EscalationStep step : newSteps) {
-			step.assignPolicy(this);
-			this.steps.add(step);
+		int i = 0;
+		while (i < this.steps.size() && i < newSteps.size()) {
+			EscalationStep existing = this.steps.get(i);
+			EscalationStep incoming = newSteps.get(i);
+			existing.update(incoming.getResponder(), incoming.getWaitMinutes());
+			i++;
+		}
+		while (this.steps.size() > newSteps.size()) {
+			this.steps.remove(this.steps.size() - 1);
+		}
+		while (i < newSteps.size()) {
+			EscalationStep incoming = newSteps.get(i);
+			incoming.assignPolicy(this);
+			this.steps.add(incoming);
+			i++;
 		}
 		this.updatedAt = updatedAt;
 	}

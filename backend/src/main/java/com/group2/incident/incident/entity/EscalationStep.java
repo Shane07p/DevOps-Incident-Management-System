@@ -47,4 +47,9 @@ public class EscalationStep {
 	void assignPolicy(EscalationPolicy policy) {
 		this.policy = policy;
 	}
+
+	public void update(AppUser responder, int waitMinutes) {
+		this.responder = responder;
+		this.waitMinutes = waitMinutes;
+	}
 }

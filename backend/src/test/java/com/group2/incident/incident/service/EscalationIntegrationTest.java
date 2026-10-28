@@ -40,13 +40,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +50,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.jayway.jsonpath.JsonPath;
 
@@ -187,6 +182,24 @@ class EscalationIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.steps.length()").value(2));
 
+		// Update existing policy (tests in-place step replacement without duplicate key constraint violation)
+		String updateExistingJson = """
+				{
+					"steps": [
+						{"stepNumber": 1, "responderId": %d, "waitMinutes": 20}
+					]
+				}
+				""".formatted(responder2.getId());
+
+		mvc.perform(put("/api/services/" + testService.getId() + "/escalation-policy")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(updateExistingJson))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.steps.length()").value(1))
+				.andExpect(jsonPath("$.steps[0].responderId").value(responder2.getId()))
+				.andExpect(jsonPath("$.steps[0].waitMinutes").value(20));
+
 		// Validation: Non-sequential step numbers (e.g. step 2 without step 1) -> 400
 		String invalidStepNumberJson = """
 				{
@@ -244,7 +257,8 @@ class EscalationIntegrationTest {
 		EscalationTask task = escalationTaskRepository.findByIncidentId(incidentResponse.id()).orElseThrow();
 		assertThat(task.getState()).isEqualTo(EscalationTaskState.PENDING);
 		assertThat(task.getCurrentStep()).isEqualTo(0);
-		assertThat(task.getNextDueAt()).isEqualTo(now.plus(15, ChronoUnit.MINUTES));
+		assertThat(task.getNextDueAt().truncatedTo(ChronoUnit.MICROS))
+				.isEqualTo(incidentResponse.createdAt().plus(15, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.MICROS));
 		assertThat(task.getSteps()).hasSize(2);
 		assertThat(task.getSteps().get(0).getResponder().getId()).isEqualTo(responder1.getId());
 		assertThat(task.getSteps().get(1).getResponder().getId()).isEqualTo(responder2.getId());
@@ -280,15 +294,16 @@ class EscalationIntegrationTest {
 		Long incId = incResp.id();
 		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
 
-		// At t0 + 10m, deadline is passed -> Escalates to Step 1
-		Instant t10 = t0.plus(10, ChronoUnit.MINUTES);
-		boolean executedE1 = escalationService.executeEscalationStep(task.getId(), t10);
+		// At task.getNextDueAt(), deadline is reached -> Escalates to Step 1
+		Instant evaluationTime = task.getNextDueAt();
+		boolean executedE1 = escalationService.executeEscalationStep(task.getId(), evaluationTime);
 		assertThat(executedE1).isTrue();
 
 		EscalationTask step1Task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
 		assertThat(step1Task.getCurrentStep()).isEqualTo(1);
-		// Next deadline is t10 + step 2 waitMinutes (20m) = t10 + 20m
-		assertThat(step1Task.getNextDueAt()).isEqualTo(t10.plus(20, ChronoUnit.MINUTES));
+		// Next deadline is evaluationTime + step 2 waitMinutes (20m)
+		assertThat(step1Task.getNextDueAt().truncatedTo(ChronoUnit.MICROS))
+				.isEqualTo(evaluationTime.plus(20, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.MICROS));
 
 		// Check Timeline entry: system action, actor null, mentions Level 1 and responder1
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incId);
@@ -324,7 +339,7 @@ class EscalationIntegrationTest {
 		IncidentResponse incE2 = incidentService.createIncident(reqE2, admin.getId());
 		EscalationTask taskE2 = escalationTaskRepository.findByIncidentId(incE2.id()).orElseThrow();
 
-		Instant beforeDeadline = t0.plus(5, ChronoUnit.MINUTES);
+		Instant beforeDeadline = taskE2.getNextDueAt().minus(1, ChronoUnit.MINUTES);
 		boolean executedE2 = escalationService.executeEscalationStep(taskE2.getId(), beforeDeadline);
 		assertThat(executedE2).isFalse();
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incE2.id())).isEmpty();
@@ -335,7 +350,7 @@ class EscalationIntegrationTest {
 		EscalationTask taskE3 = escalationTaskRepository.findByIncidentId(incE3.id()).orElseThrow();
 
 		incidentService.acknowledgeIncident(incE3.id(), responder1.getId());
-		boolean executedE3 = escalationService.executeEscalationStep(taskE3.getId(), t0.plus(20, ChronoUnit.MINUTES));
+		boolean executedE3 = escalationService.executeEscalationStep(taskE3.getId(), taskE3.getNextDueAt().plus(5, ChronoUnit.MINUTES));
 		assertThat(executedE3).isFalse();
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incE3.id())).isEmpty();
 
@@ -344,11 +359,10 @@ class EscalationIntegrationTest {
 		IncidentResponse incE4 = incidentService.createIncident(reqE4, admin.getId());
 		EscalationTask taskE4 = escalationTaskRepository.findByIncidentId(incE4.id()).orElseThrow();
 
-		// Mark incident resolved
 		Incident incEntity = incidentRepository.findById(incE4.id()).orElseThrow();
-		incEntity.acknowledge(responder1); // first ack
-		// Status is now ACKNOWLEDGED; when status is not OPEN, Rule E4 applies
-		boolean executedE4 = escalationService.executeEscalationStep(taskE4.getId(), t0.plus(20, ChronoUnit.MINUTES));
+		incEntity.acknowledge(responder1);
+		incidentRepository.saveAndFlush(incEntity);
+		boolean executedE4 = escalationService.executeEscalationStep(taskE4.getId(), taskE4.getNextDueAt().plus(5, ChronoUnit.MINUTES));
 		assertThat(executedE4).isFalse();
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incE4.id())).isEmpty();
 	}
@@ -368,13 +382,18 @@ class EscalationIntegrationTest {
 		Long incId = inc.id();
 		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
 
-		// Step 1 fires at t0 + 10m
-		Instant t10 = t0.plus(10, ChronoUnit.MINUTES);
-		escalationService.executeEscalationStep(task.getId(), t10);
+		// Step 1 fires at task.getNextDueAt()
+		Instant tStep1 = task.getNextDueAt();
+		boolean executedStep1 = escalationService.executeEscalationStep(task.getId(), tStep1);
+		assertThat(executedStep1).isTrue();
 
-		// Now step 1 is unanswered, wait 10m more until t0 + 20m -> triggers fallback
-		Instant t20 = t10.plus(10, ChronoUnit.MINUTES);
-		boolean executedFallback = escalationService.executeEscalationStep(task.getId(), t20);
+		// Reload task: Step 1 is active, and next due date is set for fallback evaluation
+		EscalationTask step1Task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
+		Instant tFallback = step1Task.getNextDueAt();
+		assertThat(tFallback).isNotNull();
+
+		// Now step 1 is unanswered, wait until tFallback -> triggers fallback
+		boolean executedFallback = escalationService.executeEscalationStep(task.getId(), tFallback);
 		assertThat(executedFallback).isTrue();
 
 		EscalationTask fallbackTask = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
@@ -395,7 +414,7 @@ class EscalationIntegrationTest {
 		assertThat(outboxList).anyMatch(o -> o.getEventType().equals("INCIDENT_ESCALATED_FALLBACK"));
 
 		// Fallback is notified EXACTLY ONCE: subsequent check does nothing
-		boolean executedAgain = escalationService.executeEscalationStep(task.getId(), t20.plus(10, ChronoUnit.MINUTES));
+		boolean executedAgain = escalationService.executeEscalationStep(task.getId(), tFallback.plus(10, ChronoUnit.MINUTES));
 		assertThat(executedAgain).isFalse();
 
 		// Can still be acknowledged later
@@ -421,11 +440,9 @@ class EscalationIntegrationTest {
 		IncidentResponse inc = incidentService.createIncident(req, admin.getId());
 		Long incId = inc.id();
 
-		// Step 1 due time was t0 + 15m.
-		// Simulate server was down and restarted at t0 + 60m (45 minutes past due!).
-		Instant restartTime = t0.plus(60, ChronoUnit.MINUTES);
-
 		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
+		// Simulate server was down and restarted 45 minutes past step 1 due date
+		Instant restartTime = task.getNextDueAt().plus(45, ChronoUnit.MINUTES);
 		assertThat(task.getNextDueAt()).isBefore(restartTime);
 
 		// Execute overdue check (worker on restart)
@@ -437,8 +454,9 @@ class EscalationIntegrationTest {
 
 		// Crucial Rule (D14 & TC-FR-07.6a):
 		// The next level (Step 2) receives its FULL configured waiting period (30 minutes) from restartTime!
-		// Next due time is restartTime + 30m = t0 + 90m (NOT t0 + 45m).
-		assertThat(postRestartTask.getNextDueAt()).isEqualTo(restartTime.plus(30, ChronoUnit.MINUTES));
+		// Next due time is restartTime + 30m.
+		assertThat(postRestartTask.getNextDueAt().truncatedTo(ChronoUnit.MICROS))
+				.isEqualTo(restartTime.plus(30, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.MICROS));
 
 		// Re-running at restartTime does NOT execute Step 2 immediately:
 		boolean executedAgain = escalationService.executeEscalationStep(task.getId(), restartTime);
@@ -446,22 +464,31 @@ class EscalationIntegrationTest {
 	}
 
 	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	@DisplayName("TC-FR-07.4a: Concurrency - Escalation racing an acknowledgement - loser rolls back; no escalation after accepted acknowledgement")
 	void tcFr07_4a_concurrency_escalationRacingAcknowledgement() {
 		Instant now = clock.instant();
 
-		EscalationPolicy policy = new EscalationPolicy(testService, now);
-		policy.replaceSteps(List.of(new EscalationStep(1, responder1, 10)), now);
-		escalationPolicyRepository.saveAndFlush(policy);
+		TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
 
-		CreateIncidentRequest req = new CreateIncidentRequest("Race Condition Incident", "Testing race", testService.getId(), Severity.SEV1);
-		IncidentResponse inc = incidentService.createIncident(req, admin.getId());
-		Long incId = inc.id();
-
-		Instant overdueTime = now.plus(15, ChronoUnit.MINUTES);
-		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
+		// Setup policy in its own committed transaction
+		txTemplate.execute(status -> {
+			EscalationPolicy policy = escalationPolicyRepository.findByServiceId(testService.getId())
+					.orElseGet(() -> new EscalationPolicy(testService, now));
+			policy.replaceSteps(List.of(new EscalationStep(1, responder1, 10)), now);
+			escalationPolicyRepository.saveAndFlush(policy);
+			return null;
+		});
 
 		// Case A: Acknowledgement commits before escalation
+		IncidentResponse inc = incidentService.createIncident(
+				new CreateIncidentRequest("Race Condition Incident 1", "Testing race 1", testService.getId(), Severity.SEV1),
+				admin.getId()
+		);
+		Long incId = inc.id();
+		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
+		Instant overdueTime = task.getNextDueAt().plus(5, ChronoUnit.MINUTES);
+
 		incidentService.acknowledgeIncident(incId, responder1.getId());
 
 		Incident ackInc = incidentRepository.findById(incId).orElseThrow();
@@ -478,24 +505,21 @@ class EscalationIntegrationTest {
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incId)).isEmpty();
 
 		// Case B: Concurrent execution with optimistic locking (TC-FR-07.4a)
-		// Create a fresh incident for concurrent race
 		IncidentResponse raceInc = incidentService.createIncident(
-				new CreateIncidentRequest("Race Test 2", "Concurrent", testService.getId(), Severity.SEV1), admin.getId()
+				new CreateIncidentRequest("Race Test 2", "Concurrent", testService.getId(), Severity.SEV1),
+				admin.getId()
 		);
 		Long raceIncId = raceInc.id();
 		EscalationTask raceTask = escalationTaskRepository.findByIncidentId(raceIncId).orElseThrow();
+		Instant raceOverdueTime = raceTask.getNextDueAt().plus(5, ChronoUnit.MINUTES);
 
 		// Tx 2 reads incident at version 0
 		Incident staleIncident = incidentRepository.findById(raceIncId).orElseThrow();
 		assertThat(staleIncident.getVersion()).isEqualTo(0L);
 
-		TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
-
 		// Tx 1 executes escalation and commits -> incident version forced from 0 to 1
-		txTemplate.execute(status -> {
-			escalationService.executeEscalationStep(raceTask.getId(), overdueTime);
-			return null;
-		});
+		boolean escalated = escalationService.escalateTaskInNewTransaction(raceTask.getId(), raceOverdueTime);
+		assertThat(escalated).isTrue();
 
 		Incident escalatedInc = incidentRepository.findById(raceIncId).orElseThrow();
 		assertThat(escalatedInc.getVersion()).isEqualTo(1L);

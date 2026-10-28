@@ -130,12 +130,13 @@ public class EscalationService {
 		}
 
 		// Rule E2: If deadline has not passed -> do nothing
-		if (task.getNextDueAt() != null && task.getNextDueAt().isAfter(now)) {
+		if (task.getNextDueAt() == null || task.getNextDueAt().isAfter(now)) {
 			return false;
 		}
 
 		// Force version increment on Incident to guarantee optimistic locking race detection (TC-FR-07.4a)
 		entityManager.lock(incident, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+		entityManager.flush();
 
 		int currentStep = task.getCurrentStep();
 		int nextStepNumber = currentStep + 1;

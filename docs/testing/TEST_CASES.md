@@ -35,8 +35,8 @@ easy to find, put its name in the Test column, and change the status in the same
 | TC-FR-01.1h | State transition | Disable a user who holds a valid token | Their next request gets 401 | `AuthControllerTest.tokenStopsWorkingWhenTheUserIsDisabled` | Automated |
 | TC-FR-01.1i | Boundary value | Token used after its one-hour expiry | 401 | `AuthControllerTest.tokenExpiresAfterOneHour`, `expiredTokenReturns401` | Automated |
 | TC-FR-01.1j | Negative | `GET /api/auth/me` with no token | 401 | `AuthControllerTest.meWithoutTokenReturns401` | Automated |
-| TC-FR-01.1k | Equivalence | The login form submitted empty | Field errors shown; no request sent | `LoginPage.test.tsx` | In review (#61) |
-| TC-FR-01.1l | Equivalence | The server answers 401 to the login form | "Invalid username or password" shown | `LoginPage.test.tsx` | In review (#61) |
+| TC-FR-01.1k | Equivalence | The login form submitted empty | Field errors shown; no request sent | `LoginPage.test.tsx` (shows a message under each empty field and sends nothing) | Automated |
+| TC-FR-01.1l | Equivalence | The server answers 401 to the login form | "Invalid username or password" shown | `LoginPage.test.tsx` (says the username or password is wrong without saying which) | Automated |
 
 ### Permissions (FR-01.2): decision table
 
@@ -54,7 +54,7 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-01.2a | Decision table | Every cell above | The status in the cell | `SecurityMatrixTest.endpointSecurityMatrix` | In review (#48) |
+| TC-FR-01.2a | Decision table | Every cell above | The status in the cell | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
 | TC-FR-01.2b | Decision table | Admin-only paths as Engineer and Viewer | 403 | `AuthControllerTest.adminOnlyPathsRefuseOtherRoles` | Automated |
 | TC-FR-01.2c | Decision table | Viewer creates an incident | 403 | `AuthControllerTest.viewerCannotCreateIncidents` | Automated |
 | TC-FR-01.2d | Equivalence | Health check and API docs with no token | 200 | `AuthControllerTest.healthAndApiDocsNeedNoToken` | Automated |
@@ -63,14 +63,14 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-01a | Boundary value | Password of 7 characters | 400 naming `password` | `UserAdminControllerTest.passwordBelowEightCharactersReturns400` | In review (#48) |
-| TC-US-01b | Boundary value | Password of 8 characters | 201 | `UserAdminControllerTest.passwordAtEightCharactersReturns201` | In review (#48) |
-| TC-US-01c | Boundary value | Password of 72 characters | 201 | `UserAdminControllerTest.passwordAtSeventyTwoCharactersReturns201` | In review (#48) |
-| TC-US-01d | Boundary value | Password of 73 characters | 400 | `UserAdminControllerTest.passwordAboveSeventyTwoCharactersReturns400` | In review (#48) |
-| TC-US-01e | Equivalence (invalid) | Username that differs from an existing one only in case | 409 | `UserAdminControllerTest.duplicateUsernameReturns409RegardlessOfCase` | In review (#48) |
-| TC-US-01f | Equivalence | Role `ADMIN`, `ENGINEER`, `VIEWER`; then an unknown role | 201 for each valid role; 400 for the unknown one | `UserAdminControllerTest.validRolesReturn201UnknownRoleReturns400` | In review (#48) |
-| TC-US-01g | State transition | Change a user's role, then reuse their old token | 401; their new login carries the new role | `UserAdminControllerTest.roleChangeIncrementsTokenVersionAndInvalidatesOldToken` | In review (#48) |
-| TC-US-01h | Negative | Creating a user and changing a role | Each writes one audit entry; the password never appears in it or in logs | `UserAdminControllerTest.createUserAndRoleChangeWriteAuditEntries` | In review (#48) |
+| TC-US-01a | Boundary value | Password of 7 characters | 400 naming `password` | `UserAdminControllerTest.passwordBelowEightCharactersReturns400` | Automated |
+| TC-US-01b | Boundary value | Password of 8 characters | 201 | `UserAdminControllerTest.passwordAtEightCharactersReturns201` | Automated |
+| TC-US-01c | Boundary value | Password of 72 characters | 201 | `UserAdminControllerTest.passwordAtSeventyTwoCharactersReturns201` | Automated |
+| TC-US-01d | Boundary value | Password of 73 characters | 400 | `UserAdminControllerTest.passwordAboveSeventyTwoCharactersReturns400` | Automated |
+| TC-US-01e | Equivalence (invalid) | Username that differs from an existing one only in case | 409 | `UserAdminControllerTest.duplicateUsernameReturns409RegardlessOfCase` | Automated |
+| TC-US-01f | Equivalence | Role `ADMIN`, `ENGINEER`, `VIEWER`; then an unknown role | 201 for each valid role; 400 for the unknown one | `UserAdminControllerTest.validRolesReturn201UnknownRoleReturns400` | Automated |
+| TC-US-01g | State transition | Change a user's role, then reuse their old token | 401; their new login carries the new role | `UserAdminControllerTest.roleChangeIncrementsTokenVersionAndInvalidatesOldToken` | Automated |
+| TC-US-01h | Negative | Creating a user and changing a role | Each writes one audit entry; the password never appears in it or in logs | `UserAdminControllerTest.createUserAndRoleChangeWriteAuditEntries` | Automated |
 | TC-US-01i | Boundary value | The Users page form with a 7-character password | "Use at least 8 characters"; nothing sent | `UsersPage.test.tsx` | Automated |
 | TC-US-01j | Equivalence (invalid) | The server answers 409 to a new username | The message shows under the username field | `UsersPage.test.tsx` | Automated |
 | TC-US-01k | State transition | Pick a new role, cancel, then pick it again and confirm | Nothing is sent until confirmed; then one `PUT` with the new role | `UsersPage.test.tsx` | Automated |
@@ -79,27 +79,27 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-14.1a | Equivalence | Valid service with targets for SEV1 to SEV4 | 201; the service can be chosen for incidents | `ServiceControllerTest` | Planned (Utsav B, #49) |
-| TC-FR-14.1b | Equivalence (invalid) | Targets missing for one severity | 400 naming the severity | `ServiceControllerTest` | Planned (Utsav B, #49) |
-| TC-FR-14.1c | Boundary value | Resolution target equal to the response target | Accepted | `DatabaseSchemaTest.slaTargetResolutionMayEqualResponse`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1d | Boundary value | Resolution target one minute below the response target | 400 | `DatabaseSchemaTest.slaTargetResolutionBelowResponseIsRejected`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1e | Boundary value | Response target of 0, then 1 minute | 0 rejected; 1 accepted | `DatabaseSchemaTest.slaTargetRejectsZeroResponse`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1f | Equivalence | Criticality `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; then an unknown value | Valid values accepted; unknown gives 400 | `ServiceControllerTest` | Planned (Utsav B, #49) |
-| TC-FR-14.1g | Equivalence (invalid) | A second service with the same name | 409 | `DatabaseSchemaTest.duplicateServiceNameIsRejected`; `ServiceControllerTest` | Automated (database); Planned (API) |
-| TC-FR-14.1h | Negative | Update a service's targets | One audit entry showing before and after | `ServiceControllerTest` | Planned (Utsav B, #49) |
+| TC-FR-14.1a | Equivalence | Valid service with targets for SEV1 to SEV4 | 201; the service can be chosen for incidents | `ServiceControllerTest.adminCreatesServiceWithAudit` | Automated |
+| TC-FR-14.1b | Equivalence (invalid) | Targets missing for one severity | 400 naming the severity | `ServiceControllerTest.missingSeverityTargetIsRejected` | Automated |
+| TC-FR-14.1c | Boundary value | Resolution target equal to the response target | Accepted | `DatabaseSchemaTest.slaTargetResolutionMayEqualResponse`; `ServiceControllerTest` | Automated (database); no API test yet |
+| TC-FR-14.1d | Boundary value | Resolution target one minute below the response target | 400 | `DatabaseSchemaTest.slaTargetResolutionBelowResponseIsRejected`; `ServiceControllerTest.resolutionShorterThanResponseIsRejected` | Automated |
+| TC-FR-14.1e | Boundary value | Response target of 0, then 1 minute | 0 rejected; 1 accepted | `DatabaseSchemaTest.slaTargetRejectsZeroResponse`; `ServiceControllerTest` | Automated (database); no API test yet |
+| TC-FR-14.1f | Equivalence | Criticality `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; then an unknown value | Valid values accepted; unknown gives 400 | `ServiceControllerTest` | No test yet: only a missing criticality is checked |
+| TC-FR-14.1g | Equivalence (invalid) | A second service with the same name | 409 | `DatabaseSchemaTest.duplicateServiceNameIsRejected`; `ServiceControllerTest.duplicateServiceNameIsRejected` | Automated |
+| TC-FR-14.1h | Negative | Update a service's targets | One audit entry showing before and after | `ServiceControllerTest.adminUpdatesService` | Automated |
 | TC-FR-14.1i | Equivalence | The services form with a resolution target below its response target | A field error; nothing sent | `ServicesPage.test.tsx` | Automated |
 
 ### Incidents (FR-02, FR-04.1)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-02.1a | Equivalence | Title, description, service, and severity all given | 201 with status OPEN | `IncidentControllerTest` | Planned (Utsav D, Manan, #50) |
-| TC-FR-02.1b | Equivalence (invalid) | Each required field left out, one at a time | 400 naming that field; nothing saved | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-02.1c | Negative | The audit write fails during creation | No incident and no timeline entry saved | `IncidentCreationRollbackTest` | Planned (#50) |
-| TC-FR-02.2a | Equivalence | Two incidents created one after the other | Different IDs and `INC-` references; reporter and time from the request | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-02.2b | Equivalence | List incidents | Newest first | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-04.1a | Equivalence | Severity `SEV1` to `SEV4`; then `SEV5` and blank | Valid ones accepted; others 400 | `IncidentControllerTest` | Planned (#50) |
-| TC-FR-16.3a | Equivalence | Create an incident, then change the service's targets | The incident keeps the targets copied at creation | `IncidentTest` | Planned (#50) |
+| TC-FR-02.1a | Equivalence | Title, description, service, and severity all given | 201 with status OPEN | `IncidentControllerTest` | Automated |
+| TC-FR-02.1b | Equivalence (invalid) | Each required field left out, one at a time | 400 naming that field; nothing saved | `IncidentControllerTest` | Automated |
+| TC-FR-02.1c | Negative | The audit write fails during creation | No incident and no timeline entry saved | `IncidentCreationRollbackTest` | Automated |
+| TC-FR-02.2a | Equivalence | Two incidents created one after the other | Different IDs and `INC-` references; reporter and time from the request | `IncidentControllerTest` | Automated |
+| TC-FR-02.2b | Equivalence | List incidents | Newest first | `IncidentControllerTest` | Automated |
+| TC-FR-04.1a | Equivalence | Severity `SEV1` to `SEV4`; then `SEV5` and blank | Valid ones accepted; others 400 | `IncidentControllerTest` | Automated |
+| TC-FR-16.3a | Equivalence | Create an incident, then change the service's targets | The incident keeps the targets copied at creation | `IncidentTest` | Automated |
 | TC-FR-02.1d | Equivalence | The incident form submitted with missing fields | Field errors shown; nothing sent | `IncidentsPage.test.tsx` | Automated |
 | TC-FR-01.2e | Equivalence | A Viewer opens the app | No "Declare incident" button; `/incidents/new` refused | `IncidentsPage.test.tsx` | Automated |
 
@@ -109,11 +109,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-16.3b | Boundary value | Elapsed time T − 1 minute | Not breached | `SlaTest` | Planned (#50) |
-| TC-FR-16.3c | Boundary value | Elapsed time exactly T | Not breached | `SlaTest` | Planned (#50) |
-| TC-FR-16.3d | Boundary value | Elapsed time T + 1 second | Breached | `SlaTest` | Planned (#50) |
-| TC-FR-16.4a | Equivalence | An incident open across a night and a weekend | All elapsed time counts | `SlaTest` | Planned (#50) |
-| TC-FR-16.1a | Equivalence | A new incident | `responseDueAt` and `resolutionDueAt` are creation time plus each target | `IncidentTest` | Planned (#50) |
+| TC-FR-16.3b | Boundary value | Elapsed time T − 1 minute | Not breached | `SlaTest` | Automated |
+| TC-FR-16.3c | Boundary value | Elapsed time exactly T | Not breached | `SlaTest` | Automated |
+| TC-FR-16.3d | Boundary value | Elapsed time T + 1 second | Breached | `SlaTest` | Automated |
+| TC-FR-16.4a | Equivalence | An incident open across a night and a weekend | All elapsed time counts | `SlaTest` | Automated |
+| TC-FR-16.1a | Equivalence | A new incident | `responseDueAt` and `resolutionDueAt` are creation time plus each target | `IncidentTest` | Automated |
 
 ### Append-only records (FR-08, FR-13)
 
@@ -132,11 +132,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-03.1a | Equivalence | Register a tool | The token is shown once; later reads never return it; only its hash is stored | `ToolControllerTest` | Planned (Het) |
-| TC-FR-03.1b | Equivalence | An alert with a valid token and all required fields | Accepted | `AlertWebhookTest` | Planned (Het) |
-| TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Planned (Het) |
-| TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Planned (Het) |
-| TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Planned (Het) |
+| TC-FR-03.1a | Equivalence | Register a tool | The token is shown once; later reads never return it; only its hash is stored | `ToolControllerTest` | Automated |
+| TC-FR-03.1b | Equivalence | An alert with a valid token and all required fields | Accepted | `AlertWebhookTest` | Automated |
+| TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Automated |
+| TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Automated |
+| TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Automated |
 
 ### Rate limits (NFR-04.4, D42): boundary values
 
@@ -173,12 +173,14 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-15.2a | Boundary value | An incident created at 09:00:00 | Assigned to A | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.2b | Boundary value | Created at 16:59:59 | Assigned to A | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.2c | Boundary value | Created at 17:00:00 | Not A: the fallback contact, since it falls in the gap | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Planned (Utsav B) |
-| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Planned (Utsav B) |
+| TC-FR-15.2a | Boundary value | An incident created at 09:00:00 | Assigned to A | `OnCallServiceTest` | Automated |
+| TC-FR-15.2b | Boundary value | Created at 16:59:59 | Assigned to A | `OnCallServiceTest` | Automated |
+| TC-FR-15.2c | Boundary value | Created at 17:00:00 | Not A: the fallback contact, since it falls in the gap | `OnCallServiceTest` | Automated |
+| TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Automated |
+| TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Automated |
+| TC-FR-15.1b | Equivalence (invalid) | The On-call page form with a shift overlapping an existing one | The error shows on the form; nothing sent | `SchedulesPage.test.tsx` | Automated |
+| TC-FR-15.2e | Boundary value | The On-call page at a shift's first moment, one second before its end, and at its end | "On call now" matches the server's rule: start inclusive, end exclusive | `schedule.test.ts` | Automated |
+| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Automated (timeline); notification with #70 |
 
 ### Notifications (FR-07.1, D33)
 

@@ -116,7 +116,7 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D06 | What counts as changed content for a repeated event ID? | Open: define the meaningful payload fields covered by the fingerprint before intake tests | Team 2 | Review 2026-09-24 |
 | D07 | When do separate alerts share an incident? | Open: exact source + service + correlation key while active; no cross-service grouping | Team 2 | Review 2026-09-24 |
 | D09 / D10 | Does changing severity change an existing SLA target? | Open: copy targets at creation and keep them fixed; severity changes priority only | Team 1 | Review 2026-09-23 |
-| D12 | How are time slots interpreted? | Open: UTC storage, one display zone to choose, start inclusive/end exclusive, no overlap for one service | Team 2 | Review 2026-09-23 |
+| D12 | How are time slots interpreted? | Selected: UTC storage; IST (Asia/Kolkata) is the one display zone, and shifts are entered in it; start inclusive, end exclusive; no overlap for one service | Team 2 | Recorded 2026-10-28 (#80) |
 | D13 | Who owns an escalated incident; do comments contend with acknowledgement? | Selected: escalation only notifies; first accepted acknowledger becomes assignee; comments insert separately without incrementing Incident version | Team 1 | Recorded 2026-09-22 |
 | D14 | How does escalation catch up after restart? | Open: process one overdue step once, then give the next contact a full wait | Team 1 | Review 2026-09-24 |
 | D17 | What is needed before closure? | Open: recovery note plus a saved, reviewed basic postmortem for every incident; Engineer/Admin may review; action items can remain open | Team 1 + Team 3 | Review 2026-09-25 |
@@ -132,8 +132,8 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D28 | Where do AI models run? | Selected: self-hosted through Ollama, on a team machine or our own container. Incident data is not sent to external AI providers (NFR-12.1) | Himanshu | Recorded 2026-10-13 |
 | D29 | Is service health monitoring required? | Selected: Must (FR-22). The project brief lists "monitor service health"; recovery never resolves an incident automatically | Shane | Recorded 2026-10-13 |
 | D30 | Which requirements document is current? | Selected: `docs/REQUIREMENTS.md`. `Group-2.pdf` is the submitted version; IDs never change | Shane | Recorded 2026-10-13 |
-| D31 | How do alert senders authenticate? | Open: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Review in Sprint 2 planning |
-| D32 | Where do alerts arrive? | Open: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Review in Sprint 2 planning |
+| D31 | How do alert senders authenticate? | Selected: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Recorded 2026-10-26 (#68) |
+| D32 | Where do alerts arrive? | Selected: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Recorded 2026-10-26 (#68) |
 | D33 | How are notifications stored in Sprint 2? | Open: rows written in the same transaction as the incident change; the outbox and RabbitMQ arrive in Sprint 3 | Shane | Review in Sprint 2 planning |
 | D34 | Where do logs and metrics live? | Open: Grafana Cloud free tier (Prometheus and Loki, 14-day retention); the backend holds the read token and runs every query | Shane | Review in Sprint 2 planning |
 | D35 | Where do probes run? | Open: 2–3 free schedulers in different regions, chosen after a Sprint 2 spike | Shane | Review in Sprint 2 |

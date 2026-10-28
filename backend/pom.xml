@@ -15,7 +15,7 @@
 	<description>Incident Management System - IT314 Group 2</description>
 	<properties>
 		<java.version>21</java.version>
-		<springdoc.version>3.1.1</springdoc.version>
+		<springdoc.version>3.2.0</springdoc.version>
 		<!-- JaCoCo fills this with its agent; empty keeps @{argLine} valid when JaCoCo is skipped. -->
 		<argLine></argLine>
 	</properties>

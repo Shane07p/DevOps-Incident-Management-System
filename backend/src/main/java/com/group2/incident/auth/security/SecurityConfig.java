@@ -25,6 +25,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -36,6 +37,17 @@ import org.springframework.security.web.SecurityFilterChain;
 class SecurityConfig {
 
 	@Bean
+	@Order(1)
+	SecurityFilterChain webhookSecurityFilterChain(HttpSecurity http) throws Exception {
+		http.securityMatcher("/webhooks/**")
+				.csrf(AbstractHttpConfigurer::disable)
+				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
+		return http.build();
+	}
+
+	@Bean
+	@Order(2)
 	SecurityFilterChain securityFilterChain(HttpSecurity http, JwtUserConverter jwtUserConverter) throws Exception {
 		http.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -45,6 +57,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
 						// The permissions table in the Sprint 1 plan; anything not listed needs any logged-in user.
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
+						.requestMatchers("/api/tools/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")

@@ -4,9 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.alert.dto.CreateToolRequest;
+import com.group2.incident.alert.entity.MonitoringTool;
+import com.group2.incident.alert.repository.MonitoringToolRepository;
+import com.group2.incident.alert.service.ToolService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.incident.entity.Incident;
+import com.group2.incident.incident.entity.IncidentStatus;
+import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -42,6 +53,9 @@ public class SecurityMatrixTest {
 	private AppUserRepository users;
 
 	@Autowired
+	private ServiceRepository services;
+
+	@Autowired
 	private PasswordEncoder passwordEncoder;
 
 	@Autowired
@@ -51,6 +65,15 @@ public class SecurityMatrixTest {
 	@Qualifier("requestMappingHandlerMapping")
 	private RequestMappingHandlerMapping handlerMapping;
 
+	@Autowired
+	private MonitoringToolRepository tools;
+
+	@Autowired
+	private ToolService toolService;
+
+	@Autowired
+	private IncidentRepository incidents;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -58,6 +81,12 @@ public class SecurityMatrixTest {
 	private String viewerToken;
 
 	private Long targetUserId;
+
+	private Long adminUserId;
+
+	private Long targetServiceId;
+	private Long targetToolId;
+	private Long targetIncidentId;
 
 	public record MatrixRow(
 			String name,
@@ -118,21 +147,121 @@ public class SecurityMatrixTest {
 						"/api/users/{id}/role",
 						"{\"role\":\"ENGINEER\"}",
 						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services",
+						HttpMethod.GET,
+						"/api/services",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}",
+						HttpMethod.GET,
+						"/api/services/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/services",
+						HttpMethod.POST,
+						"/api/services",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}",
+						HttpMethod.PUT,
+						"/api/services/{id}",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}/on-call",
+						HttpMethod.GET,
+						"/api/services/{id}/on-call",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}/on-call",
+						HttpMethod.PUT,
+						"/api/services/{id}/on-call",
+						"{\"fallbackContactId\":${OWNER_ID},\"shifts\":[]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/tools",
+						HttpMethod.GET,
+						"/api/tools",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/tools",
+						HttpMethod.POST,
+						"/api/tools",
+						"{\"name\":\"Tool_${RANDOM}\"}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/tools/{id}",
+						HttpMethod.DELETE,
+						"/api/tools/{id}",
+						null,
+						204, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents",
+						HttpMethod.GET,
+						"/api/incidents",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/{id}",
+						HttpMethod.GET,
+						"/api/incidents/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents",
+						HttpMethod.POST,
+						"/api/incidents",
+						"{\"title\":\"Sec incident\",\"description\":\"Desc\",\"serviceId\":${SERVICE_ID},\"severity\":\"SEV2\"}",
+						201, 201, 403, 401
 				)
 		);
 	}
 
 	@BeforeEach
 	void setUp() throws Exception {
-		createUser("admin", Role.ADMIN);
+		AppUser admin = createUser("admin", Role.ADMIN);
 		createUser("engineer", Role.ENGINEER);
 		createUser("viewer", Role.VIEWER);
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
+		adminUserId = admin.getId();
+
+		var tool = tools.saveAndFlush(new MonitoringTool("Matrix Tool " + UUID.randomUUID(), "dummy_hash_" + UUID.randomUUID(), clock.instant()));
+		targetToolId = tool.getId();
 
 		adminToken = tokenFor("admin");
 		engineerToken = tokenFor("engineer");
 		viewerToken = tokenFor("viewer");
+
+		ServiceEntity service = new ServiceEntity("SecurityMatrixBaseService", "Initial", admin, Criticality.HIGH, clock.instant());
+		service.putTarget(Severity.SEV1, 15, 240);
+		service.putTarget(Severity.SEV2, 60, 480);
+		service.putTarget(Severity.SEV3, 240, 2880);
+		service.putTarget(Severity.SEV4, 1440, 10080);
+		ServiceEntity savedService = services.saveAndFlush(service);
+		targetServiceId = savedService.getId();
+
+		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
+				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));
+		targetIncidentId = incident.getId();
 	}
 
 	@Test
@@ -165,7 +294,11 @@ public class SecurityMatrixTest {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
-		String path = row.pathTemplate().replace("{id}", targetUserId.toString());
+		String id = row.pathTemplate().startsWith("/api/tools/") ? targetToolId.toString()
+				: row.pathTemplate().startsWith("/api/services/") ? targetServiceId.toString()
+				: row.pathTemplate().startsWith("/api/incidents/") ? targetIncidentId.toString()
+				: targetUserId.toString();
+		String path = row.pathTemplate().replace("{id}", id);
 
 		// Admin
 		execute(row.method(), path, row.bodyTemplate(), adminToken, row.adminStatus());
@@ -186,7 +319,9 @@ public class SecurityMatrixTest {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}
 		if (bodyTemplate != null) {
-			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8));
+			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
+					.replace("${OWNER_ID}", adminUserId.toString())
+					.replace("${SERVICE_ID}", targetServiceId.toString());
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));
@@ -206,5 +341,70 @@ public class SecurityMatrixTest {
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(response, "$.token");
+	}
+
+	@Test
+	void webhookAlertsAuthenticationMatrix() throws Exception {
+		String validPayload = """
+				{
+					"source": "prometheus",
+					"eventId": "evt-matrix-1",
+					"service": "Payments",
+					"title": "Alert",
+					"description": "Desc",
+					"severity": "SEV1"
+				}
+				""";
+
+		// 1. Missing token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 2. Wrong tool token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer tt_invalid_token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 3. User JWT tokens (Admin, Engineer, Viewer) are not valid tool tokens -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 4. Valid registered tool token -> 202 Accepted
+		var toolCreateResponse = toolService.createTool(
+				new CreateToolRequest("Matrix Alert Tool " + UUID.randomUUID()),
+				adminUserId
+		);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isAccepted());
+
+		// 5. Revoked tool token -> 401
+		toolService.revokeTool(toolCreateResponse.id(), adminUserId);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
 	}
 }

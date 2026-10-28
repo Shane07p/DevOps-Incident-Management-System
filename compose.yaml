@@ -72,6 +72,18 @@ services:
     volumes:
       - incident-ollama-data:/root/.ollama
 
+  demo-shop:
+    profiles: ["demo"]
+    build:
+      context: ./demo-shop
+    container_name: incident-demo-shop
+    environment:
+      PORT: 8001
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    ports:
+      - "127.0.0.1:${DEMO_SHOP_PORT:-8001}:8001"
+
 volumes:
   incident-db-data:
   incident-ollama-data:

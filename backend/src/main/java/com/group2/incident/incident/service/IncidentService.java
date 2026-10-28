@@ -9,6 +9,7 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.catalog.service.ServiceCatalogService;
+import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
@@ -41,6 +42,7 @@ public class IncidentService {
 	private final OnCallService onCallService;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
+	private final EscalationService escalationService;
 	private final Clock clock;
 
 	@Transactional
@@ -110,6 +112,43 @@ public class IncidentService {
 				"Created incident " + incident.getReference() + " on service " + service.getName()
 		);
 
+		escalationService.createTaskForIncident(incident, now);
+
+		return toResponse(incident, timeline);
+	}
+
+	@Transactional
+	public IncidentResponse acknowledgeIncident(Long id, Long userId) {
+		AppUser user = null;
+		if (userId != null) {
+			user = appUserRepository.findById(userId)
+					.orElseThrow(() -> new NotFoundException("User " + userId + " not found"));
+		}
+
+		Instant now = clock.instant();
+		Incident incident = incidentRepository.findById(id)
+				.orElseThrow(() -> new NotFoundException("Incident " + id + " not found"));
+
+		if (incident.getStatus() != IncidentStatus.OPEN) {
+			throw new ConflictException("Incident is not OPEN; current status is " + incident.getStatus());
+		}
+
+		incident.acknowledge(user);
+		incident = incidentRepository.save(incident);
+
+		escalationService.cancelTaskForIncident(id, now);
+
+		String details = "Acknowledged" + (user != null ? " by " + user.getDisplayName() : "");
+		TimelineEntry timelineEntry = new TimelineEntry(
+				incident,
+				user,
+				TimelineEventType.ACKNOWLEDGED,
+				details,
+				now
+		);
+		timelineEntryRepository.save(timelineEntry);
+
+		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(id);
 		return toResponse(incident, timeline);
 	}
 

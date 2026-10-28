@@ -32,9 +32,10 @@ reviews:
   path_instructions:
     - path: "backend/src/main/java/**"
       instructions: >-
-        Check the rules in AGENTS.md. Controllers return DTO records, never entities. Errors use
-        NotFoundException, ConflictException, or FieldValidationException; no catch-all Exception
-        handler. Code that reads the time takes an injected Clock. Every controller has @Tag and every
+        Check the rules in AGENTS.md and backend/AGENTS.md. Controllers return DTO records, never
+        entities. Errors use NotFoundException, ConflictException, FieldValidationException, or
+        UnauthorizedException; no catch-all Exception handler. No Jackson 2 imports, and no test-only
+        constructors or setters in production classes. Code that reads the time takes an injected Clock. Every controller has @Tag and every
         endpoint @Operation. Lombok is limited to @Getter, @NoArgsConstructor(PROTECTED),
         @RequiredArgsConstructor, and @Slf4j; no @Setter or @Data on entities. Apply the incident rules
         under "Rules that are easy to get wrong": legal status transitions only, SLA targets fixed at
@@ -113,4 +114,4 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
-      - AGENTS.md
+      - "**/AGENTS.md"

@@ -11,11 +11,15 @@ import { LoginPage } from '@/pages/LoginPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { SchedulesPage } from '@/pages/SchedulesPage'
 import { ServicesPage } from '@/pages/ServicesPage'
 import { UsersPage } from '@/pages/UsersPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
-const SCREENS: Record<string, ReactNode> = { '/services': <ServicesPage /> }
+const SCREENS: Record<string, ReactNode> = {
+  '/schedules': <SchedulesPage />,
+  '/services': <ServicesPage />,
+}
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.
 const ADMIN_SCREENS: Record<string, ReactNode> = { '/users': <UsersPage /> }

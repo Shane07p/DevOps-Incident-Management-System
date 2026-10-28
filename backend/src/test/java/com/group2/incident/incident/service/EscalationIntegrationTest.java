@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
@@ -15,12 +14,8 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
-import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
-import com.group2.incident.incident.dto.EscalationPolicyResponse;
-import com.group2.incident.incident.dto.EscalationStepRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
-import com.group2.incident.incident.dto.UpdateEscalationPolicyRequest;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.EscalationTask;
@@ -36,10 +31,12 @@ import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,13 +44,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import com.jayway.jsonpath.JsonPath;
 
 @IntegrationTest
 class EscalationIntegrationTest {
@@ -103,6 +100,9 @@ class EscalationIntegrationTest {
 	private PlatformTransactionManager transactionManager;
 
 	@Autowired
+	private JdbcTemplate jdbc;
+
+	@Autowired
 	private Clock clock;
 
 	private AppUser admin;
@@ -115,6 +115,8 @@ class EscalationIntegrationTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
+		cleanup();
+
 		Instant now = clock.instant();
 
 		admin = appUserRepository.saveAndFlush(new AppUser("admin_esc", "Admin Escalation", passwordEncoder.encode(PASSWORD), Role.ADMIN, now));
@@ -131,6 +133,35 @@ class EscalationIntegrationTest {
 			testService.putTarget(sev, 15, 240);
 		}
 		testService = serviceRepository.saveAndFlush(testService);
+	}
+
+	@AfterEach
+	void tearDown() {
+		cleanup();
+	}
+
+	private void cleanup() {
+		new TransactionTemplate(transactionManager).execute(status -> {
+			try {
+				jdbc.execute("SET session_replication_role = 'replica'");
+				jdbc.execute("DELETE FROM outbox");
+				jdbc.execute("DELETE FROM escalation_task_step");
+				jdbc.execute("DELETE FROM escalation_task");
+				jdbc.execute("DELETE FROM escalation_step");
+				jdbc.execute("DELETE FROM escalation_policy");
+				jdbc.execute("DELETE FROM on_call_shift");
+				jdbc.execute("DELETE FROM timeline_entry");
+				jdbc.execute("DELETE FROM incident");
+				jdbc.execute("DELETE FROM service_sla_target");
+				jdbc.execute("DELETE FROM service");
+				jdbc.execute("DELETE FROM audit_entry");
+				jdbc.execute("DELETE FROM app_user");
+			}
+			finally {
+				jdbc.execute("SET session_replication_role = 'origin'");
+			}
+			return null;
+		});
 	}
 
 	private String tokenFor(String username) throws Exception {
@@ -350,7 +381,13 @@ class EscalationIntegrationTest {
 		EscalationTask taskE3 = escalationTaskRepository.findByIncidentId(incE3.id()).orElseThrow();
 
 		incidentService.acknowledgeIncident(incE3.id(), responder1.getId());
-		boolean executedE3 = escalationService.executeEscalationStep(taskE3.getId(), taskE3.getNextDueAt().plus(5, ChronoUnit.MINUTES));
+
+		// Task was cancelled upon acknowledgement and its deadline cleared
+		EscalationTask cancelledTaskE3 = escalationTaskRepository.findByIncidentId(incE3.id()).orElseThrow();
+		assertThat(cancelledTaskE3.getState()).isEqualTo(EscalationTaskState.CANCELLED);
+		assertThat(cancelledTaskE3.getNextDueAt()).isNull();
+
+		boolean executedE3 = escalationService.executeEscalationStep(taskE3.getId(), t0.plus(20, ChronoUnit.MINUTES));
 		assertThat(executedE3).isFalse();
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incE3.id())).isEmpty();
 
@@ -362,9 +399,14 @@ class EscalationIntegrationTest {
 		Incident incEntity = incidentRepository.findById(incE4.id()).orElseThrow();
 		incEntity.acknowledge(responder1);
 		incidentRepository.saveAndFlush(incEntity);
-		boolean executedE4 = escalationService.executeEscalationStep(taskE4.getId(), taskE4.getNextDueAt().plus(5, ChronoUnit.MINUTES));
+
+		boolean executedE4 = escalationService.executeEscalationStep(taskE4.getId(), t0.plus(20, ChronoUnit.MINUTES));
 		assertThat(executedE4).isFalse();
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incE4.id())).isEmpty();
+
+		EscalationTask cancelledTaskE4 = escalationTaskRepository.findByIncidentId(incE4.id()).orElseThrow();
+		assertThat(cancelledTaskE4.getState()).isEqualTo(EscalationTaskState.CANCELLED);
+		assertThat(cancelledTaskE4.getNextDueAt()).isNull();
 	}
 
 	@Test
@@ -502,6 +544,7 @@ class EscalationIntegrationTest {
 		// Verify task was cancelled and no outbox escalation event was written
 		EscalationTask cancelledTask = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
 		assertThat(cancelledTask.getState()).isEqualTo(EscalationTaskState.CANCELLED);
+		assertThat(cancelledTask.getNextDueAt()).isNull();
 		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", incId)).isEmpty();
 
 		// Case B: Concurrent execution with optimistic locking (TC-FR-07.4a)

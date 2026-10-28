@@ -26,6 +26,14 @@ updates:
       ai-service:
         update-types: [minor, patch]
 
+  - package-ecosystem: pip
+    directory: /demo-shop
+    schedule:
+      interval: monthly
+    groups:
+      demo-shop:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

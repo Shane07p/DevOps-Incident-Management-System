@@ -9,6 +9,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { router } from '@/router'
 import './index.css'
 
+// The dock floats 20 px above the bottom and is 56 px tall (Dock.tsx); toasts sit 12 px above it (#121).
+const ABOVE_THE_DOCK = { bottom: 88 }
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 })
@@ -20,7 +23,7 @@ createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <TooltipProvider>
             <RouterProvider router={router} />
-            <Toaster />
+            <Toaster offset={ABOVE_THE_DOCK} mobileOffset={ABOVE_THE_DOCK} />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>

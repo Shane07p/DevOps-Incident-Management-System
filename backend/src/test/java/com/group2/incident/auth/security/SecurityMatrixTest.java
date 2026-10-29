@@ -15,13 +15,17 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.incident.entity.EscalationPolicy;
+import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
+import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -73,6 +77,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private IncidentRepository incidents;
+
+	@Autowired
+	private EscalationPolicyRepository escalationPolicies;
 
 	private String adminToken;
 
@@ -191,6 +198,20 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"GET /api/services/{id}/escalation-policy",
+						HttpMethod.GET,
+						"/api/services/{id}/escalation-policy",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"PUT /api/services/{id}/escalation-policy",
+						HttpMethod.PUT,
+						"/api/services/{id}/escalation-policy",
+						"{\"steps\":[{\"stepNumber\":1,\"responderId\":${OWNER_ID},\"waitMinutes\":15}]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/tools",
 						HttpMethod.GET,
 						"/api/tools",
@@ -265,6 +286,10 @@ public class SecurityMatrixTest {
 		service.putTarget(Severity.SEV4, 1440, 10080);
 		ServiceEntity savedService = services.saveAndFlush(service);
 		targetServiceId = savedService.getId();
+
+		EscalationPolicy policy = new EscalationPolicy(savedService, clock.instant());
+		policy.replaceSteps(List.of(new EscalationStep(1, admin, 15)), clock.instant());
+		escalationPolicies.saveAndFlush(policy);
 
 		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
 				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));

@@ -41,6 +41,7 @@ public class IncidentService {
 	private final OnCallService onCallService;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
+	private final EscalationService escalationService;
 	private final Clock clock;
 
 	@Transactional
@@ -129,6 +130,8 @@ public class IncidentService {
 				incident.getId(),
 				"Created incident " + incident.getReference() + " on service " + service.getName()
 		);
+
+		escalationService.createTaskForIncident(incident, now);
 
 		return toResponse(incident, timeline);
 	}

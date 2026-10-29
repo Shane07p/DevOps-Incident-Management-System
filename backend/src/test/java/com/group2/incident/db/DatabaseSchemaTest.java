@@ -23,7 +23,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class DatabaseSchemaTest {
 
 	private static final List<String> TABLES =
-			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry", "monitoring_tool", "alert");
+			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
+					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
+					"alert");
 
 	@Autowired
 	private JdbcTemplate jdbc;

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { showRequestErrors } from '@/lib/forms'
 
 // The server checks the same rules; these only save a round trip.
 const newUserSchema = z.object({
@@ -44,10 +45,8 @@ export function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpen
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
         form.setError('username', { message: error.message })
-      } else if (error instanceof ApiRequestError && Object.keys(error.errors).length > 0) {
-        for (const [field, message] of Object.entries(error.errors)) {
-          if (field in EMPTY) form.setError(field as keyof NewUserValues, { message })
-        }
+      } else if (error instanceof ApiRequestError) {
+        showRequestErrors(form, error, Object.keys(EMPTY))
       } else {
         form.setError('root', { message: error instanceof Error ? error.message : 'The user was not saved.' })
       }

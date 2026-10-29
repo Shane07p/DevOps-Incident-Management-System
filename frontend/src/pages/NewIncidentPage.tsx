@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm, type FieldPath } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -13,6 +13,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { showRequestErrors } from '@/lib/forms'
 
 const SEVERITIES = severitySchema.options
 
@@ -61,14 +62,7 @@ export function NewIncidentPage() {
         form.setError('root', { message: 'The incident was not declared. Try again.' })
         return
       }
-      // Field errors go under their input; any the form has no input for, or a bare message, go above the buttons.
-      const unplaced: string[] = []
-      for (const [field, message] of Object.entries(error.errors)) {
-        if (field in EMPTY) form.setError(field as FieldPath<NewIncidentValues>, { message })
-        else unplaced.push(message)
-      }
-      if (unplaced.length > 0) form.setError('root', { message: unplaced.join(' ') })
-      else if (Object.keys(error.errors).length === 0) form.setError('root', { message: error.message })
+      showRequestErrors(form, error, Object.keys(EMPTY))
     }
   })
 

@@ -146,11 +146,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-NFR-04.4a | Boundary value | The 5th login attempt within a minute for one IP and username | Answered normally | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4b | Boundary value | The 6th attempt in the same minute | 429 with `Retry-After` | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4c | Boundary value | The next attempt after the minute has passed | Answered normally again | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4d | Equivalence | Another username from the same IP, while the first is limited | Not limited | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4e | Boundary value | Webhook calls for one tool token just under and just over its limit | Under passes; over gets 429 | `RateLimitTest` | Planned (Het) |
+| TC-NFR-04.4a | Boundary value | The 5th login attempt within a minute for one IP and username | Answered normally | `RateLimitTest` | Automated |
+| TC-NFR-04.4b | Boundary value | The 6th attempt in the same minute | 429 with `Retry-After` | `RateLimitTest` | Automated |
+| TC-NFR-04.4c | Boundary value | The next attempt after the minute has passed | Answered normally again | `RateLimitTest` | Automated |
+| TC-NFR-04.4d | Equivalence | Another username from the same IP, while the first is limited | Not limited | `RateLimitTest` | Automated |
+| TC-NFR-04.4e | Boundary value | Webhook calls for one tool token just under and just over its limit | Under passes; over gets 429 | `RateLimitTest` | Automated |
 
 ### Deduplication and grouping (FR-03.2 to FR-03.4): decision table
 
@@ -165,11 +165,12 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-03.2a | Decision table | R1 and R2 | As in the table | `AlertGroupingTest` | Planned (Manan) |
-| TC-FR-03.3a | Decision table | R3 | As in the table | `AlertGroupingTest` | Planned (Manan) |
-| TC-FR-03.4a | Decision table | R4, R5, and R6 | As in the table | `AlertGroupingTest` | Planned (Manan) |
-| TC-FR-03.2b | Concurrency | The same event sent twice at the same moment | One alert row; one incident | `AlertGroupingTest` (Testcontainers) | Planned (Manan) |
-| TC-FR-03.3b | Concurrency | Two different events with the same key at the same moment | One incident containing both | `AlertGroupingTest` (Testcontainers) | Planned (Manan) |
+| TC-FR-03.2a | Decision table | R1 and R2 | As in the table | `AlertWebhookTest.repeatedEventWithSameCanonicalContent_isIdempotent`, `repeatedEventWithChangedPayload_returnsConflict` | In review |
+| TC-FR-03.3a | Decision table | R3 | As in the table | `AlertWebhookTest.alertsWithSameSourceServiceAndCorrelationKey_shareActiveIncident`; `AlertGroupingTest.joiningAnIncidentLeavesItsClocksAlone` | In review |
+| TC-FR-03.4a | Decision table | R4, R5, and R6 | As in the table | `AlertGroupingTest.aKeyMatchingOnlyAFinishedIncidentOpensANewOne`; `AlertWebhookTest` (different source, different service, no key) | In review |
+| TC-FR-03.2b | Concurrency | The same event sent twice at the same moment | One alert row; one incident | `AlertGroupingTest.sameEventTwiceAtOnceMakesOneAlertAndOneIncident` | In review |
+| TC-FR-03.3b | Concurrency | Two different events with the same key at the same moment | One incident containing both | `AlertGroupingTest.twoEventsWithOneKeyAtOnceShareOneIncident` | In review |
+| TC-FR-03.2c | Concurrency | The same source and event ID for two services at the same moment | One is accepted; the other gets 409, not 500 | `AlertGroupingTest.oneEventForTwoServicesAtOnceGets409` | In review |
 
 ### On-call (FR-15, FR-05.1): boundary values
 

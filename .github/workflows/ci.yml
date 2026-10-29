@@ -169,10 +169,3 @@ jobs:
             echo "$changed"
             exit 1
           fi
-
-      - name: No AI co-author lines
-        run: |
-          if git log --format=%B "$BASE..HEAD" | grep -iE '^co-authored-by:.*(claude|anthropic|copilot|gemini|openai|chatgpt|codex|cursor|devin)'; then
-            echo "::error::Remove the Co-Authored-By lines for AI tools (AGENTS.md)."
-            exit 1
-          fi

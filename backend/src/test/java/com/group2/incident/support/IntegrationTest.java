@@ -7,6 +7,7 @@ import java.lang.annotation.Target;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestExecutionListeners;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -19,5 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 @Transactional
+@TestExecutionListeners(
+		listeners = RateLimitResetTestExecutionListener.class,
+		mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
+)
 public @interface IntegrationTest {
 }
+

@@ -15,6 +15,7 @@ public class MaxBytesValidator implements ConstraintValidator<MaxBytes, String> 
 
 	@Override
 	public boolean isValid(String value, ConstraintValidatorContext context) {
-		return value == null || value.getBytes(StandardCharsets.UTF_8).length <= max;
+		// UTF-8 never takes fewer bytes than the string has chars, so a longer string fails @Size anyway.
+		return value == null || value.length() > max || value.getBytes(StandardCharsets.UTF_8).length <= max;
 	}
 }

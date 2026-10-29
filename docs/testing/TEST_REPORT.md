@@ -43,7 +43,7 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Defects | No issues labelled `bug`. Found in review and fixed before merge: an unknown service id returned 400 instead of 404 (#102); the rollback test passed whether or not creation rolled back (#103); the handler for an unreadable body checked a Jackson 2 type that Spring Boot 4 never throws (#103). Seen in the demo, not yet filed: a toast covers the right end of the dock, in both browsers |
 | Notes | Sprint 1 closed 7 days late: several PRs needed two or three review rounds, and #103 had to be rebuilt on #102. Backend coverage is high, but frontend coverage fell from 62.31% (17 October baseline) to 46.17%, as the landing, incident, and service pages arrived with few tests. Next: API tests for TC-FR-14.1c, e, f; Vitest tests for the new pages; remove or use `SlaCalculator.dueAt` |
 
-## Sprint 2 (ends Thursday 22 October)
+## Sprint 2 (planned to end Thursday 22 October; in progress)
 
 | Section | Result |
 | --- | --- |
@@ -55,7 +55,7 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Defects | |
 | Notes | |
 
-## Sprint 3 (ends Sunday 25 October)
+## Sprint 3 (planned to end Sunday 25 October; in progress)
 
 | Section | Result |
 | --- | --- |

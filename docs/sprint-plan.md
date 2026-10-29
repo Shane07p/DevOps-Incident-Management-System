@@ -4,8 +4,9 @@
 
 ## 1. Sprint roadmap
 
-Each sprint delivers working features end to end: API, UI, tests, and docs. Sprints 1 to 3 run in
-the week of 19 to 25 October (decided 17 October); later sprints are about 2 weeks. The features are described in [FEATURES.md](FEATURES.md), and the AI work in the
+Each sprint delivers working features end to end: API, UI, tests, and docs. Sprints 1 to 3 were
+planned for the week of 19 to 25 October (decided 17 October). Sprint 1 finished on 26 October;
+Sprints 2 and 3 are still in progress. Later sprints are about 2 weeks. The features are described in [FEATURES.md](FEATURES.md), and the AI work in the
 [AI/ML roadmap](plans/ai-ml-roadmap.md). If a sprint runs late, the items in the last column go
 first.
 
@@ -23,9 +24,10 @@ requirements. Write them before the sprint that builds them.
 
 ## 2. Current sprint
 
-**Sprints 1 to 3.** Their goals, owners, order of work, API contract, and work items are in the
-[implementation plan](plans/2026-10-17-implementation-plan.md). Later sprints get their own plan in
-[plans/](plans/).
+**Sprints 2 and 3.** Their goals, owners, order of work, API contract, and work items, each with
+its issue and status, are in the [implementation plan](plans/2026-10-17-implementation-plan.md).
+GitHub's Sprint 2 and Sprint 3 milestones show what is still open. Later sprints get their own plan
+in [plans/](plans/).
 
 ## 3. Sprint records
 

@@ -27,8 +27,9 @@ The detailed HLD (v3, 17 October) is [diagrams/hld.png](diagrams/hld.png). It sh
 ## 2. Code layout
 
 Folders are listed in the [README](../README.md#layout). Inside the backend, each feature (`auth`,
-`catalog`, `incident`, `alert`, `notification`, `postmortem`) has one folder per layer. See
-`AGENTS.md`, Code layout. Controllers receive requests, services apply rules, and repositories read
+`audit`, `catalog`, `incident`, `alert`; `notification` and `postmortem` arrive with their sprints)
+has one folder per layer, and shared code lives in `common/`. See the Layout section of
+[backend/AGENTS.md](../backend/AGENTS.md#layout). Controllers receive requests, services apply rules, and repositories read
 and write records. Do not return JPA entities directly as API responses, and don't add an interface
 for every service class.
 
@@ -43,7 +44,7 @@ for every service class.
 | History and postmortem | Search older incidents; read fixes; edit postmortems and action items |
 | Notifications | View and mark personal notifications as read |
 
-Use REST endpoints under `/api`. Examples are `GET/POST /api/incidents`, `POST /api/incidents/{id}/acknowledge`, `POST /api/incidents/{id}/transitions`, and `POST /api/alerts`. Define exact fields in OpenAPI as each feature is built. Use separate endpoints for status, assignment, and severity changes so their rules stay clear.
+Use REST endpoints under `/api`. Examples are `GET/POST /api/incidents`, `POST /api/incidents/{id}/acknowledge`, and `POST /api/incidents/{id}/transitions`. Monitoring tools post alerts to `POST /webhooks/alerts`, outside `/api` and outside JWT login (D32). Define exact fields in OpenAPI as each feature is built. Use separate endpoints for status, assignment, and severity changes so their rules stay clear.
 
 ## 4. Low-level design: main records
 
@@ -52,13 +53,13 @@ This is a starting data model, not a complete migration script. Use foreign keys
 | Record | Important fields |
 | --- | --- |
 | User | ID, name, login, password hash, role |
-| Team and membership | Team ID, name; user-to-team membership |
-| Service | ID, name, owner team, fallback user |
+| Team and membership | Team ID, name; user-to-team membership. Not built: team ownership is open (D19) |
+| Service | ID, name, owner (a user), criticality, fallback contact (a user) |
 | SLA target | Service, severity, response minutes, resolution minutes |
 | On-call slot | Service, responder, start time, end time |
-| Escalation step | Service, step number, responder, waiting minutes |
+| Escalation policy and steps | One policy per service; each step has a number, a responder, and waiting minutes |
 | Incident | ID, service, title, description, severity, status, assignee, creator, timestamps, copied SLA targets, version |
-| Alert | Source, event ID, correlation key, incident ID, received time, validated payload fingerprint |
+| Alert | Source, event ID, service, correlation key, incident ID, status (`NEW` when it opened its incident, `ATTACHED` when it joined one), received time, payload fingerprint |
 | Timeline entry | ID, incident, actor, event type, details, time, optional corrected-entry ID |
 | Escalation task | Incident, copied steps, current step, next due time, state |
 | Notification | Recipient, incident, message, creation time, read time |
@@ -66,7 +67,7 @@ This is a starting data model, not a complete migration script. Use foreign keys
 | Action item | Postmortem, description, owner, completion state |
 | Audit entry | Actor, configuration change, time |
 
-Store timestamps in UTC. `@Version` on Incident detects competing changes. Use a unique constraint on `(source, event_id)` to prevent duplicate alert delivery. Configure each usable service with SLA targets, a fallback contact, and an escalation policy before accepting incidents for it.
+Store timestamps in UTC. `@Version` on Incident detects competing changes. Use a unique constraint on `(source, event_id)` to prevent duplicate alert delivery. Every service has SLA targets for all four severities; the API refuses a service without them. A fallback contact and an escalation policy are optional: without a fallback contact, an incident outside every shift has no assignee, and without a policy it is not escalated.
 
 ## 5. Main classes
 
@@ -75,13 +76,14 @@ Store timestamps in UTC. `@Version` on Incident detects competing changes. Use a
 | `IncidentService` | Create, acknowledge, assign, change severity, and change status |
 | `TransitionPolicy` | Check allowed status transitions |
 | `SlaCalculator` | Calculate elapsed time and whether targets were exceeded |
-| `AlertService` | Authenticate and validate events, check duplicates, create or link alerts |
+| `AlertIntakeService` | Authenticate the calling tool's token (D31) |
+| `AlertService` | Check duplicates, then link the alert to an active incident or create one (D06, D07) |
 | `OnCallService` | Select the responder for a service and time |
-| `EscalationService` | Check persisted deadlines and advance unanswered incidents |
+| `EscalationService`, `EscalationWorker` | Check persisted deadlines and advance unanswered incidents; the worker runs each step in its own transaction |
 | `NotificationService` | Create and read in-app notifications |
 | `PostmortemService` | Save postmortems and action items |
 
-Inject a `Clock` into timing code so tests can control time. Keep the transition and timing rules as ordinary Java methods that can be unit-tested and mutation-tested.
+`TransitionPolicy` arrives with status changes (#84), `NotificationService` with notifications (#70), and `PostmortemService` with postmortems (Sprint 5). Inject a `Clock` into timing code so tests can control time. Keep the transition and timing rules as ordinary Java methods that can be unit-tested and mutation-tested.
 
 ## 6. Create and group incidents
 
@@ -89,9 +91,9 @@ For a manual report, validate the service and required fields, select its curren
 
 For an incoming alert:
 
-1. Verify the configured source signature and validate the payload. Reject invalid requests.
-2. Check the source and event ID. A retry with the same content returns the existing result; the same ID with changed content is rejected.
-3. If an explicit correlation key matches an active incident for that source and service, attach the alert to it.
+1. Check the calling tool's bearer token (D31) and validate the payload. Reject invalid requests.
+2. Check the source and event ID. A retry with the same content returns the existing result; the same ID with changed content is rejected with 409. Which fields count as content is D06.
+3. If an explicit correlation key matches an active incident for that source and service, attach the alert to it (D07).
 4. Otherwise create an incident using the same creation flow as a manual report.
 
 Active means neither RESOLVED nor CLOSED. A recurrence after resolution creates a new incident. Without a correlation key, different events create separate incidents. Matching service names or similar text is not enough to merge them. Separate incidents can still concern related services; we defer automatic cross-service grouping.

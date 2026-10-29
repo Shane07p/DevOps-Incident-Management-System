@@ -23,7 +23,8 @@ Interviews and an online forum post are planned. Requirements change only throug
 | File | Purpose |
 | --- | --- |
 | [../README.md](../README.md) | Run, test, and deploy; live links |
-| [../AGENTS.md](../AGENTS.md) | Rules every change follows |
+| [../AGENTS.md](../AGENTS.md) | Rules every change follows; `backend/`, `frontend/`, and `ai-service/` each add their own `AGENTS.md` |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | How the team works: issues, branches, pull requests, and review |
 | [PROJECT.md](PROJECT.md) | Product, scope, stack, team, and the decision log |
 | [FEATURES.md](FEATURES.md) | Every feature, how it is used, its requirement, and its sprint |
 | [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) | Architecture and the detailed incident rules |
@@ -65,7 +66,7 @@ Interviews and an online forum post are planned. Requirements change only throug
 
 **Choices that keep it simple:**
 - One backend and one database. RabbitMQ is added only through an outbox (D24).
-- Incidents are assigned to a person. Teams own services.
+- Incidents are assigned to a person, and each service has one user as its owner. Team ownership is an open question (D19).
 - Alerts are matched only within one service, by an explicit key.
 - SLA targets are copied when an incident is created, and never change for that incident.
 - Notifications are in-app first.
@@ -111,16 +112,16 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 
 | ID | Decision or open question | Status / working default | Suggested owner | Review or recorded date |
 | --- | --- | --- | --- | --- |
-| D02 | Backend version | Selected: Boot 4.1 and Java 21. Scaffolded on patch 4.1.1; the build targets release 21, so a newer JDK compiles against that level and CI pins 21 | Team 2 | Recorded 2026-09-22 |
-| D04 / D18 | Who may read and change incidents? | Open: shared internal reads; Engineer/Admin response; Admin-only configuration; own notifications only | Team 2 | Review 2026-09-23 |
+| D02 | Backend version | Selected: Boot 4.1 and Java 21. Scaffolded on patch 4.1.1, and Dependabot keeps the 4.1 patch current; the build targets release 21, so a newer JDK compiles against that level and CI pins 21 | Team 2 | Recorded 2026-09-22 |
+| D04 / D18 | Who may read and change incidents? | Selected, as built since Sprint 1: every signed-in user reads shared incident records; Engineers and Admins respond; only Admins change users, services, on-call, escalation, and tools; notifications are visible only to their recipient. `SecurityMatrixTest` checks every endpoint for every role | Team 2 | Recorded 2026-10-30 (#109, PROJECT_STRUCTURE §9) |
 | D06 | What counts as changed content for a repeated event ID? | Selected: a SHA-256 fingerprint of source, event ID, the resolved service, title, description, severity, correlation key and `details` (map keys sorted, so their order doesn't matter). Arrival time and any other field are left out. Same fingerprint: the earlier result is returned; different: 409 | Team 2 | Recorded 2026-10-29 (#123) |
 | D07 | When do separate alerts share an incident? | Selected: the same source, service and correlation key as an incident that is not RESOLVED or CLOSED. No key, no match, or only a finished match opens a new incident; no cross-service grouping. Leading and trailing spaces are ignored | Team 2 | Recorded 2026-10-29 (#123) |
-| D09 / D10 | Does changing severity change an existing SLA target? | Open: copy targets at creation and keep them fixed; severity changes priority only | Team 1 | Review 2026-09-23 |
+| D09 / D10 | Does changing severity change an existing SLA target? | Selected: no. Targets are copied at creation and stay fixed; a severity change only changes priority and is recorded with a reason (AGENTS.md, PROJECT_STRUCTURE §8). US-10 follows this | Team 1 | Recorded 2026-10-30 (targets copied since #103; severity changes with #84) |
 | D12 | How are time slots interpreted? | Selected: UTC storage; IST (Asia/Kolkata) is the one display zone, and shifts are entered in it; start inclusive, end exclusive; no overlap for one service | Team 2 | Recorded 2026-10-28 (#80) |
 | D13 | Who owns an escalated incident; do comments contend with acknowledgement? | Selected: escalation only notifies; first accepted acknowledger becomes assignee; comments insert separately without incrementing Incident version | Team 1 | Recorded 2026-09-22 |
 | D14 | How does escalation catch up after restart? | Selected: deadlines are stored, so after a restart the worker runs one overdue step once, then gives the next level its full wait. Each level is notified its own wait after the previous notification (the first, its wait after creation); the fallback contact, the last level's wait after the last level, once | Team 1 | Recorded 2026-10-29 (#85) |
-| D17 | What is needed before closure? | Open: recovery note plus a saved, reviewed basic postmortem for every incident; Engineer/Admin may review; action items can remain open | Team 1 + Team 3 | Review 2026-09-25 |
-| D19 | Which older requirement details remain in scope? | Open: reconcile narrowed dashboard filters/averages, team assignment, catalog criticality, and any other differences flagged in the CSV | All three teams | Review 2026-09-25 |
+| D17 | What is needed before closure? | Open: recovery note plus a saved, reviewed basic postmortem for every incident; Engineer/Admin may review; action items can remain open | Team 1 + Team 3 | Decide before the postmortem work (Sprint 5) |
+| D19 | Which older requirement details remain in scope? | Open: reconcile narrowed dashboard filters/averages, team assignment, catalog criticality, and any other differences flagged in the CSV | All three teams | Decide before the sprint that builds each item |
 | D20 | Application roles | Selected: `ADMIN`, `ENGINEER`, `VIEWER` | Team 1 | Recorded 2026-10-11 |
 | D21 | How do users authenticate? | Selected: stateless JWT (HS256) sent as a Bearer header and kept in `sessionStorage`. A per-user `token_version` revokes old tokens on logout or role change. CSRF is disabled because the browser never sends the token on its own | Shane | Recorded 2026-10-11 |
 | D22 | What does creating an incident record in Sprint 1? | Selected: the incident, its copied SLA targets, a timeline entry, and an audit entry, in one transaction (E4a, epics Decision 3) | Utsav B | Recorded 2026-10-11 |
@@ -134,16 +135,16 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D30 | Which requirements document is current? | Selected: `docs/REQUIREMENTS.md`. `Group-2.pdf` is the submitted version; IDs never change | Shane | Recorded 2026-10-13 |
 | D31 | How do alert senders authenticate? | Selected: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Recorded 2026-10-26 (#68) |
 | D32 | Where do alerts arrive? | Selected: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Recorded 2026-10-26 (#68) |
-| D33 | How are notifications stored in Sprint 2? | Open: rows written in the same transaction as the incident change; the outbox and RabbitMQ arrive in Sprint 3 | Shane | Review in Sprint 2 planning |
-| D34 | Where do logs and metrics live? | Open: Grafana Cloud free tier (Prometheus and Loki, 14-day retention); the backend holds the read token and runs every query | Shane | Review in Sprint 2 planning |
-| D35 | Where do probes run? | Open: 2–3 free schedulers in different regions, chosen after a Sprint 2 spike | Shane | Review in Sprint 2 |
-| D36 | When is a monitor down? | Open: only when at least 2 regions agree | Team | Review in Sprint 3 planning |
-| D37 | Which AI models may we use? | Open: local Ollama by default; a hosted model on a free tier, off by default and on demo-shop data only. Needs NFR-12.1 reworded | Himanshu | Review in Sprint 3 planning |
+| D33 | How are notifications stored in Sprint 2? | Open: rows written in the same transaction as the incident change. The outbox table arrived with escalation (#135); RabbitMQ is #82 | Shane | Decide before #70 starts |
+| D34 | Where do logs and metrics live? | Open: Grafana Cloud free tier (Prometheus and Loki, 14-day retention); the backend holds the read token and runs every query. The demo shop already exports there when its OTLP settings are set (#111) | Shane | Decide with #75 |
+| D35 | Where do probes run? | Open: 2–3 free schedulers in different regions, chosen after a spike | Shane | Decide before #88 |
+| D36 | When is a monitor down? | Open: only when at least 2 regions agree | Team | Decide before #88 |
+| D37 | Which AI models may we use? | Open: local Ollama by default; a hosted model on a free tier, off by default and on demo-shop data only. Needs NFR-12.1 reworded | Himanshu | Decide before #91 uses a hosted model |
 | D38 | What may the MCP server do? | Open: personal access tokens; read tools first; `add_comment` and `acknowledge` later, as the user and audited; never status changes, declaring, or closing | Shane | Review in Sprint 4 planning |
-| D39 | Which incident roles exist? | Open: Lead (the assignee, replaces Commander), Comms, Ops; Scribe dropped (FEATURES.md, Incident roles) | Team | Review in Sprint 3 planning |
-| D40 | What does the demo shop simulate? | Open: payments, checkout, and search with fault switches; each switch is a labelled scenario for testing and AI evaluation | Team | Review in Sprint 2 planning |
+| D39 | Which incident roles exist? | Open: Lead (the assignee, replaces Commander), Comms, Ops; Scribe dropped (FEATURES.md, Incident roles) | Team | Decide before #86 |
+| D40 | What does the demo shop simulate? | Selected: payments, checkout, and search, with five fault switches (slow gateway, error spike, bad deploy, queue backlog, expiring certificate). Each switch is a labelled scenario for testing and AI evaluation (#64) | Team | Recorded 2026-10-26 (#111) |
 | D41 | Where does nginx run? | Selected: as the entry point of the Docker Compose stack (serves the UI, proxies `/api` and `/webhooks`, security headers, gzip, a second rate limit). Production stays on Vercel and Render: on Render's free tier the backend URL is public, so nginx there could be bypassed | Shane | Recorded 2026-10-17 |
-| D42 | How are callers rate-limited? | Selected: in the backend with Bucket4j (NFR-04.4). Login about 5 a minute per IP and username; `/webhooks/alerts` about 50 a second per tool token; MCP about 60 a minute per personal access token. Over the limit returns 429 with `Retry-After`. Buckets live in memory while there is one backend instance | Shane | Recorded 2026-10-17 |
+| D42 | How are callers rate-limited? | Selected: in the backend with Bucket4j (NFR-04.4). Login about 5 a minute per IP and username; `/webhooks/alerts` about 50 a second per tool token; MCP about 60 a minute per personal access token. Over the limit returns 429 with `Retry-After`. Buckets live in a bounded in-memory cache while there is one backend instance, and the client address comes from `X-Forwarded-For` only through a trusted proxy (#126) | Shane | Recorded 2026-10-17 |
 | D43 | How is the database connection pool set? | Selected: HikariCP, Spring Boot's default, with pool size and timeouts from environment variables. The pool stays below the Supabase session pooler's limit | Shane | Recorded 2026-10-17 |
 
 Before implementing an affected rule, its owner should record the team's decision, actual date, and Slack or issue reference. Optional features need not block EPIC 1. If a suggested review date does not fit the sprint, change it explicitly rather than presenting the review as completed.

@@ -75,7 +75,10 @@ export const AREAS: NavArea[] = [
   },
 ]
 
-export const ADMIN_PAGES: NavPage[] = [{ path: '/users', label: 'Users', description: 'Accounts and roles' }]
+export const ADMIN_PAGES: NavPage[] = [
+  { path: '/users', label: 'Users', description: 'Accounts and roles' },
+  { path: '/tools', label: 'Tools', description: 'Monitoring tools and their tokens' },
+]
 
 export function findArea(pathname: string) {
   return AREAS.find((area) => area.pages.some((page) => pathname === page.path || pathname.startsWith(`${page.path}/`)))

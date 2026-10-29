@@ -1,4 +1,4 @@
-import { Globe, LogOut, Search, Users } from 'lucide-react'
+import { Globe, LogOut, Search, Users, Webhook } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { findArea, findPage } from '@/app/navigation'
 import { useAuth } from '@/auth/AuthProvider'
@@ -75,10 +75,16 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {can(user.role, 'configure') && (
-              <DropdownMenuItem onSelect={() => navigate('/users')}>
-                <Users aria-hidden="true" />
-                Users
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem onSelect={() => navigate('/users')}>
+                  <Users aria-hidden="true" />
+                  Users
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate('/tools')}>
+                  <Webhook aria-hidden="true" />
+                  Tools
+                </DropdownMenuItem>
+              </>
             )}
             <DropdownMenuItem onSelect={() => navigate('/')}>
               <Globe aria-hidden="true" />

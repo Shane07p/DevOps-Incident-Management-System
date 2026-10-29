@@ -180,7 +180,7 @@ Each story follows this structure:
 **Acceptance criteria:**
 - Given a valid transition, then status updates and is recorded with actor and time.
 - Given an invalid transition, then it is rejected and the incident is unchanged.
-- Given I change severity, then a reason is required and SLA deadlines are recalculated.
+- Given I change severity, then a reason is required, and the SLA targets copied at creation stay unchanged (D09/D10).
 - Then the board can be sorted by severity and time remaining.
 
 ---

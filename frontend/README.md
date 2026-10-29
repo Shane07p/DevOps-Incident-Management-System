@@ -51,7 +51,7 @@ Cypress needs both the dev server and the backend running.
 | `src/pages/` | One file per screen; the landing page's sections are in `pages/landing/` |
 | `src/data/` | Sample content for pages that have no API yet. Delete each file once its API exists |
 | `src/index.css` | Tailwind, fonts, and the Settle design tokens |
-| `cypress/e2e/` | The end-to-end scenario |
+| `cypress/` | Cypress setup; the end-to-end scenario arrives with #57 (Sprint 6) |
 
 ## Design
 
@@ -82,7 +82,9 @@ After adding:
 
 Use the shadcn `Form` components with react-hook-form and a Zod schema. In this project, each
 input's `id` is its field name (`username`, `serviceId`, …), so labels, error messages, and
-Cypress all find it. Server field errors (`ApiRequestError.errors`) go under the matching input.
+Cypress all find it. Server field errors (`ApiRequestError.errors`) go under the matching input;
+`showRequestErrors` in `src/lib/forms.ts` does that, and puts any the form has no input for above
+the buttons.
 
 State that comes from the server belongs in TanStack Query, not in component state. Validate API
 responses with Zod at the boundary. The backend re-checks every rule regardless, so validation here

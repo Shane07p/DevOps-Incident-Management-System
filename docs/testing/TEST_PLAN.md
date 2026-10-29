@@ -25,13 +25,13 @@ Sprint 6.
 | API and security | Status codes, validation errors, and permissions for every endpoint and role | MockMvc, `SecurityMatrixTest` | Every build |
 | Frontend component | Forms, field errors, role-based screens, the API client | Vitest, Testing Library, jsdom | Every build |
 | AI service | Endpoints, contracts, and failure handling with fixed sample responses | pytest | Every build |
-| Mutation | Whether the tests catch small bugs in the transition and SLA rules | PIT | End of each sprint |
+| Mutation | Whether the tests catch small bugs in the transition and SLA rules | PIT | Not in CI: on demand, and at the end of each sprint |
 | Manual acceptance | The sprint demo, in Chrome and Firefox | People | End of each sprint |
 | End to end | One complete incident flow in a browser | Cypress | Sprint 6 |
 | Performance | NFR-01 response times and NFR-03 capacity on the deployed setup | k6 | Sprint 6 |
 
 Each behaviour is tested at the one level that can verify it best; the same rule is not repeated
-at three levels (see the [testing table in AGENTS.md](../../AGENTS.md#testing)).
+at three levels (see the [testing table in backend/AGENTS.md](../../backend/AGENTS.md#tests)).
 
 ## 3. Test design techniques
 
@@ -93,7 +93,8 @@ issue lists the test case IDs it must automate.
   the `backend-coverage` artifact, and each PR gets a comment with overall and changed-file coverage.
 - **Frontend:** Vitest measures coverage over every source file, including files no test imports.
   The report is saved as the `frontend-coverage` artifact.
-- **Mutation:** PIT runs at the end of each sprint on the transition and SLA classes. Its score shows
+- **Mutation:** PIT is not part of CI. Run it on demand, and at the end of each sprint on the
+  transition and SLA classes. Its score shows
   whether the tests would catch a small bug, which coverage alone cannot.
 - **Targets:** none are set yet. We report the real numbers each sprint.
 
@@ -120,6 +121,6 @@ issue lists the test case IDs it must automate.
 | --- | --- |
 | Three sprints in one week leave little time for tests | A PR without its listed tests is not merged |
 | Integration tests need Docker, which not everyone runs | CI runs them on every PR; the PR shows the result |
-| Concurrency tests can be flaky | Use latches to force the overlap, and never use sleeps |
+| Concurrency tests can be flaky | Force the overlap: hold the first transaction open, and start the second only once it is blocked on a lock (as `OnCallServiceTest` does). Never rely on a fixed sleep |
 | Tests that depend on the time | Inject `Clock`; never call `now()` directly |
 | A test passes without checking anything | PIT's mutation score exposes it |

@@ -13,23 +13,22 @@ the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md).
 
 ## Status
 
-Foundations, deployment, and login are in place. The service catalog, incidents, and the
-frontend pages are next.
+Sprint 1 is complete; Sprints 2 and 3 are in progress. Each work item's issue and status is in the
+[implementation plan](docs/plans/2026-10-17-implementation-plan.md#work-items).
 
 | Part | State |
 | --- | --- |
-| Repository, `.gitignore`, `.gitattributes` | Done |
-| Backend: Spring Boot 4.1.1, Flyway, Testcontainers, error handling, Swagger/OpenAPI | Done |
-| Frontend: Vite + React + TypeScript, Tailwind, TanStack Query, Vitest, Cypress | Done |
-| PostgreSQL 16 in Docker Compose | Done |
-| CI (build and test both applications), CodeQL, Dependabot | Done |
-| Deployment: Vercel, Render, Supabase, UptimeRobot | Done |
-| Migrations V1–V3 and opt-in dev seed data | Done |
-| Login and roles (FR-01) | Login API done; user administration next |
-| Frontend: shared UI components and the API client | Done |
-| Frontend pages (login, services, incidents, users) | Not started |
-| Service catalog and incidents API | In progress |
-| AI service skeleton (FastAPI, `/health`, stub `/suggest`) | Done |
+| Foundations: Spring Boot 4.1, Flyway (migrations V1–V8), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
+| Login, roles, and user administration | Done |
+| Service catalog with SLA targets; incidents (create, list, detail) | Done |
+| On-call schedules, with assignment at creation | Done |
+| Tool tokens, the alert webhook, deduplication and grouping, and the alert inbox | Done |
+| Rate limits on login and the alert webhook | Done |
+| Escalation policies and the escalation worker; events wait in the outbox until RabbitMQ | Done |
+| Pages: login, home, users, tools, services, incidents, on-call, alerts | Done |
+| Notifications, monitors and heartbeats, acknowledgement, status and severity changes, reassignment, comments | Not started (Sprints 2 and 3) |
+| AI service: `/health`, `/ready`, `/embed` (Ollama embeddings), stub `/suggest`, log-pattern evidence | Done |
+| Demo shop v1 with five fault switches | Done |
 
 ## Live
 
@@ -62,7 +61,7 @@ cd frontend && npm ci && npm run dev        # http://localhost:5173
 The frontend dev server proxies `/api` to `http://localhost:8080`, so both run on their own
 port without CORS configuration. API docs are at http://localhost:8080/swagger-ui.html.
 
-Three things worth knowing before you change any setting:
+Four things worth knowing before you change any setting:
 
 - The database is on **5433**, not 5432. A locally installed PostgreSQL service usually owns
   5432 and would shadow the container, which shows up as a confusing password failure.
@@ -115,9 +114,9 @@ backend, the way the stack runs in Docker (D41).
 
 ```bash
 cd backend  && ./mvnw verify          # JUnit + Testcontainers (Docker must be running)
-cd backend  && ./mvnw test-compile org.pitest:pitest-maven:mutationCoverage   # on demand
+cd backend  && ./mvnw test-compile org.pitest:pitest-maven:mutationCoverage   # not in CI: on demand
 cd frontend && npm test               # Vitest
-cd frontend && npm run cypress:run    # end-to-end, needs both servers running
+cd frontend && npm run cypress:run    # end-to-end, needs both servers; the first scenario is #57 (Sprint 6)
 ```
 
 ## Layout
@@ -133,6 +132,7 @@ cd frontend && npm run cypress:run    # end-to-end, needs both servers running
 | `.github/workflows/` | CI |
 | `compose.yaml` | Local database and packaged application |
 | `.env.example` | Example settings, no real credentials |
+| `ai-service/` | Python and FastAPI: embeddings through Ollama, the stub `/suggest`, and evidence functions |
 | `demo-shop/` | Demo Shop v1: retail simulation with 5 fault switches and OpenTelemetry (Sprint 2) |
 
 `ai-service/` (Python, FastAPI, Ollama) and `demo-shop/` run locally or in optional Compose profiles; see the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md) and [demo-shop/README.md](demo-shop/README.md).
@@ -149,7 +149,7 @@ Merging to `main` deploys automatically once CI passes:
 | Part | Host | Notes |
 | --- | --- | --- |
 | Frontend | Vercel | Every pull request also gets a preview link from the Vercel bot |
-| Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` (create the first admin while no users exist), `JAVA_TOOL_OPTIONS`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
+| Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` (create the first admin while no users exist), `JAVA_TOOL_OPTIONS`. Optional: the `DB_POOL_*` and `RATE_LIMIT_*` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
 | Database | Supabase (PostgreSQL) | Reached through the session pooler; tables in the `incident` schema |
 | Uptime | UptimeRobot | Pings `/actuator/health` every 10 minutes, which also keeps Render's free tier awake |
 

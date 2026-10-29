@@ -18,7 +18,7 @@ The product takes the best of two tools:
 | Feature | How it is used | Req. | Sprint |
 | --- | --- | --- | --- |
 | Login with three roles | Admin, Engineer, and Viewer. Viewers read; Engineers respond; Admins configure | FR-01 | 1 |
-| User administration | An Admin creates users, changes roles, and disables accounts. A role change logs the user out everywhere | FR-01 | 1 |
+| User administration | An Admin creates users, changes roles, and disables accounts. A role change logs the user out everywhere | FR-01 | 1 (disabling an account has no screen or endpoint yet) |
 | Audit log | Every configuration change, with before → after values. Read-only | FR-13 | 1–4 |
 | Personal access tokens | A user creates a token to connect an AI tool through MCP. Hashed and revocable | *New* | 4 |
 
@@ -40,7 +40,7 @@ The product takes the best of two tools:
 | Escalation policies | Levels and wait times. An unacknowledged incident notifies the next level; it never reassigns | FR-07 | 3 |
 | Alert intake | Monitoring tools, Grafana rules, and our own monitors post to one webhook, each with its own token | FR-03 | 2 |
 | Deduplication and grouping | A repeated event counts once. Related alerts join an open incident by an explicit correlation key, within one service | FR-03 | 2 |
-| Alert inbox | New, acknowledged, and attached alerts, with a "routed to me" view | FR-03 | 2–3 |
+| Alert inbox | New alerts (each opened an incident) and attached ones (each joined an incident), with how many alerts share the incident and a "routed to me" view | FR-03 | 2–3 |
 | Notifications | An in-app bell for assignments, escalations, and mentions | FR-07 | 2 |
 
 ## Incident response

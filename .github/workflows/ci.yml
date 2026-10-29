@@ -147,3 +147,32 @@ jobs:
       - name: Run tests
         working-directory: demo-shop
         run: pytest
+
+  # The AGENTS.md rules that only the pull request's history can show.
+  repository-rules:
+    name: Repository rules
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      BASE: origin/${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Flyway checksums every applied migration, so editing one breaks every database that ran it.
+      - name: Applied migrations are unchanged
+        run: |
+          changed=$(git diff --name-only --diff-filter=MDR "$BASE...HEAD" -- backend/src/main/resources/db/migration/)
+          if [ -n "$changed" ]; then
+            echo "::error::A migration already on main was changed. Add a new V file instead."
+            echo "$changed"
+            exit 1
+          fi
+
+      - name: No AI co-author lines
+        run: |
+          if git log --format=%B "$BASE..HEAD" | grep -iE '^co-authored-by:.*(claude|anthropic|copilot|gemini|openai|chatgpt|codex|cursor|devin)'; then
+            echo "::error::Remove the Co-Authored-By lines for AI tools (AGENTS.md)."
+            exit 1
+          fi

@@ -2,19 +2,24 @@ package com.group2.incident.alert.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 public record AlertRequest(
 		@NotBlank(message = "source is required")
+		@Size(max = 100, message = "source must not exceed 100 characters")
 		String source,
 
 		@NotBlank(message = "eventId is required")
+		@Size(max = 200, message = "eventId must not exceed 200 characters")
 		String eventId,
 
 		@NotBlank(message = "service is required")
+		@Size(max = 100, message = "service must not exceed 100 characters")
 		String service,
 
 		@NotBlank(message = "title is required")
+		@Size(max = 200, message = "title must not exceed 200 characters")
 		String title,
 
 		@NotBlank(message = "description is required")
@@ -24,7 +29,22 @@ public record AlertRequest(
 		@Pattern(regexp = "^(SEV1|SEV2|SEV3|SEV4)$", message = "severity must be one of: SEV1, SEV2, SEV3, SEV4")
 		String severity,
 
+		@Size(max = 200, message = "correlationKey must not exceed 200 characters")
 		String correlationKey,
 
 		Map<String, Object> details
-) {}
+) {
+
+	// Tools pad values now and then; a padded repeat must dedupe and group like the original.
+	public AlertRequest {
+		source = strip(source);
+		eventId = strip(eventId);
+		service = strip(service);
+		severity = strip(severity);
+		correlationKey = correlationKey == null || correlationKey.isBlank() ? null : correlationKey.strip();
+	}
+
+	private static String strip(String value) {
+		return value == null ? null : value.strip();
+	}
+}

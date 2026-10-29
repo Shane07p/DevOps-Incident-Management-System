@@ -16,6 +16,10 @@ import com.group2.incident.alert.service.ToolService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,6 +72,9 @@ class RateLimitTest {
 	private ToolService toolService;
 
 	@Autowired
+	private ServiceRepository services;
+
+	@Autowired
 	private Clock clock;
 
 	private AppUser testUser;
@@ -85,6 +92,11 @@ class RateLimitTest {
 
 		adminUser = users.saveAndFlush(new AppUser("rate_admin_" + clock.millis(), "Rate Admin",
 				passwordEncoder.encode(PASSWORD), Role.ADMIN, clock.instant()));
+
+		// Accepted alerts become incidents, so the service they name has to exist.
+		ServiceEntity payments = new ServiceEntity("Payments", "Rate limit test service", adminUser, Criticality.HIGH, clock.instant());
+		payments.putTarget(Severity.SEV2, 60, 480);
+		services.saveAndFlush(payments);
 
 		CreateToolResponse createdA = toolService.createTool(
 				new CreateToolRequest("Tool A " + clock.millis()), adminUser.getId());

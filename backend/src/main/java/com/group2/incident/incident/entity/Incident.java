@@ -57,6 +57,12 @@ public class Incident {
 	@JoinColumn(name = "assignee_id")
 	private AppUser assignee;
 
+	@Column(name = "correlation_source", length = 100)
+	private String correlationSource;
+
+	@Column(name = "correlation_key", length = 200)
+	private String correlationKey;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -73,6 +79,14 @@ public class Incident {
 	public Incident(String title, String description, ServiceEntity service, Severity severity,
 			IncidentStatus status, AppUser reporter, Instant createdAt,
 			int responseTargetMinutes, int resolutionTargetMinutes) {
+		this(title, description, service, severity, status, reporter, createdAt,
+				responseTargetMinutes, resolutionTargetMinutes, null, null);
+	}
+
+	public Incident(String title, String description, ServiceEntity service, Severity severity,
+			IncidentStatus status, AppUser reporter, Instant createdAt,
+			int responseTargetMinutes, int resolutionTargetMinutes,
+			String correlationSource, String correlationKey) {
 		this.title = title;
 		this.description = description;
 		this.service = service;
@@ -82,6 +96,8 @@ public class Incident {
 		this.createdAt = createdAt;
 		this.responseTargetMinutes = responseTargetMinutes;
 		this.resolutionTargetMinutes = resolutionTargetMinutes;
+		this.correlationSource = correlationSource;
+		this.correlationKey = correlationKey;
 	}
 
 	public void assignTo(AppUser assignee) {

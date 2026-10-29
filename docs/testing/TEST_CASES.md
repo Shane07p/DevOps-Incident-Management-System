@@ -165,11 +165,12 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-03.2a | Decision table | R1 and R2 | As in the table | `AlertGroupingTest` | Planned (Manan) |
-| TC-FR-03.3a | Decision table | R3 | As in the table | `AlertGroupingTest` | Planned (Manan) |
-| TC-FR-03.4a | Decision table | R4, R5, and R6 | As in the table | `AlertGroupingTest` | Planned (Manan) |
-| TC-FR-03.2b | Concurrency | The same event sent twice at the same moment | One alert row; one incident | `AlertGroupingTest` (Testcontainers) | Planned (Manan) |
-| TC-FR-03.3b | Concurrency | Two different events with the same key at the same moment | One incident containing both | `AlertGroupingTest` (Testcontainers) | Planned (Manan) |
+| TC-FR-03.2a | Decision table | R1 and R2 | As in the table | `AlertWebhookTest.repeatedEventWithSameCanonicalContent_isIdempotent`, `repeatedEventWithChangedPayload_returnsConflict` | In review |
+| TC-FR-03.3a | Decision table | R3 | As in the table | `AlertWebhookTest.alertsWithSameSourceServiceAndCorrelationKey_shareActiveIncident`; `AlertGroupingTest.joiningAnIncidentLeavesItsClocksAlone` | In review |
+| TC-FR-03.4a | Decision table | R4, R5, and R6 | As in the table | `AlertGroupingTest.aKeyMatchingOnlyAFinishedIncidentOpensANewOne`; `AlertWebhookTest` (different source, different service, no key) | In review |
+| TC-FR-03.2b | Concurrency | The same event sent twice at the same moment | One alert row; one incident | `AlertGroupingTest.sameEventTwiceAtOnceMakesOneAlertAndOneIncident` | In review |
+| TC-FR-03.3b | Concurrency | Two different events with the same key at the same moment | One incident containing both | `AlertGroupingTest.twoEventsWithOneKeyAtOnceShareOneIncident` | In review |
+| TC-FR-03.2c | Concurrency | The same source and event ID for two services at the same moment | One is accepted; the other gets 409, not 500 | `AlertGroupingTest.oneEventForTwoServicesAtOnceGets409` | In review |
 
 ### On-call (FR-15, FR-05.1): boundary values
 

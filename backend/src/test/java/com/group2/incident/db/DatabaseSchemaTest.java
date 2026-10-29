@@ -24,7 +24,8 @@ class DatabaseSchemaTest {
 
 	private static final List<String> TABLES =
 			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
-					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox");
+					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
+					"alert");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -54,6 +55,20 @@ class DatabaseSchemaTest {
 			assertThat(jdbc.queryForObject("select to_regclass(?) is null", Boolean.class, "public." + table))
 					.as("public.%s absent", table).isTrue();
 		}
+	}
+
+	@Test
+	void alertsHaveSourceEventUniquenessAndIncidentCorrelationColumns() {
+		assertThat(jdbc.queryForObject("""
+				select count(*) from pg_indexes
+				where schemaname = 'incident' and tablename = 'alert'
+				  and indexdef ilike '%unique%source, event_id%'
+				""", Integer.class)).isEqualTo(1);
+		assertThat(jdbc.queryForObject("""
+				select count(*) from information_schema.columns
+				where table_schema = 'incident' and table_name = 'incident'
+				  and column_name in ('correlation_source', 'correlation_key')
+				""", Integer.class)).isEqualTo(2);
 	}
 
 	@Test

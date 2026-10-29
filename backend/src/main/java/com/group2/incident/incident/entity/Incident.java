@@ -88,13 +88,6 @@ public class Incident {
 		this.assignee = assignee;
 	}
 
-	public void acknowledge(AppUser acknowledger) {
-		this.status = IncidentStatus.ACKNOWLEDGED;
-		if (acknowledger != null) {
-			this.assignee = acknowledger;
-		}
-	}
-
 	public String getReference() {
 		return "INC-" + id;
 	}

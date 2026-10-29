@@ -23,6 +23,7 @@ import com.group2.incident.incident.entity.EscalationTaskState;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.Outbox;
+import com.group2.incident.incident.entity.OutboxStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
@@ -32,6 +33,7 @@ import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -50,6 +52,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @IntegrationTest
@@ -79,7 +82,10 @@ class EscalationIntegrationTest {
 	private OutboxRepository outboxRepository;
 
 	@Autowired
-	private OutboxRelay outboxRelay;
+	private EscalationWorker escalationWorker;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@Autowired
 	private IncidentRepository incidentRepository;
@@ -323,6 +329,7 @@ class EscalationIntegrationTest {
 		CreateIncidentRequest createReq = new CreateIncidentRequest("API Outage", "500 errors", testService.getId(), Severity.SEV1);
 		IncidentResponse incResp = incidentService.createIncident(createReq, admin.getId());
 		Long incId = incResp.id();
+		Long assigneeBefore = incResp.assignee() == null ? null : incResp.assignee().id();
 		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
 
 		// At task.getNextDueAt(), deadline is reached -> Escalates to Step 1
@@ -346,13 +353,12 @@ class EscalationIntegrationTest {
 		assertThat(outboxList).hasSize(1);
 		assertThat(outboxList.get(0).getEventType()).isEqualTo("INCIDENT_ESCALATED");
 		assertThat(outboxList.get(0).getPayload()).contains("\"stepNumber\":1");
-		assertThat(outboxList.get(0).getStatus()).isEqualTo("PENDING");
+		assertThat(outboxList.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
 
-		// Check Incident version was incremented (optimistic locking)
+		// Escalation notifies; it never changes the assignee or the status. The version increment lands
+		// at commit, so it is checked in TC-FR-07.4a and workerEscalatesOverdueTaskAndCommits.
 		Incident reloadedInc = incidentRepository.findById(incId).orElseThrow();
-		assertThat(reloadedInc.getVersion()).isGreaterThan(0L);
-
-		// CRITICAL: The assignee never changes during an escalation!
+		assertThat(reloadedInc.getAssignee() == null ? null : reloadedInc.getAssignee().getId()).isEqualTo(assigneeBefore);
 		assertThat(reloadedInc.getStatus()).isEqualTo(IncidentStatus.OPEN);
 	}
 
@@ -380,7 +386,8 @@ class EscalationIntegrationTest {
 		IncidentResponse incE3 = incidentService.createIncident(reqE3, admin.getId());
 		EscalationTask taskE3 = escalationTaskRepository.findByIncidentId(incE3.id()).orElseThrow();
 
-		incidentService.acknowledgeIncident(incE3.id(), responder1.getId());
+		setStatus(incE3.id(), IncidentStatus.ACKNOWLEDGED);
+		escalationService.cancelTaskForIncident(incE3.id(), t0.plus(5, ChronoUnit.MINUTES));
 
 		// Task was cancelled upon acknowledgement and its deadline cleared
 		EscalationTask cancelledTaskE3 = escalationTaskRepository.findByIncidentId(incE3.id()).orElseThrow();
@@ -396,9 +403,7 @@ class EscalationIntegrationTest {
 		IncidentResponse incE4 = incidentService.createIncident(reqE4, admin.getId());
 		EscalationTask taskE4 = escalationTaskRepository.findByIncidentId(incE4.id()).orElseThrow();
 
-		Incident incEntity = incidentRepository.findById(incE4.id()).orElseThrow();
-		incEntity.acknowledge(responder1);
-		incidentRepository.saveAndFlush(incEntity);
+		setStatus(incE4.id(), IncidentStatus.RESOLVED);
 
 		boolean executedE4 = escalationService.executeEscalationStep(taskE4.getId(), t0.plus(20, ChronoUnit.MINUTES));
 		assertThat(executedE4).isFalse();
@@ -443,7 +448,7 @@ class EscalationIntegrationTest {
 		assertThat(fallbackTask.getState()).isEqualTo(EscalationTaskState.EXHAUSTED);
 		assertThat(fallbackTask.getNextDueAt()).isNull();
 
-		// Incident remains OPEN and can still be acknowledged
+		// Incident remains OPEN, so it can still be acknowledged (#83)
 		Incident reloadedInc = incidentRepository.findById(incId).orElseThrow();
 		assertThat(reloadedInc.getStatus()).isEqualTo(IncidentStatus.OPEN);
 
@@ -458,11 +463,6 @@ class EscalationIntegrationTest {
 		// Fallback is notified EXACTLY ONCE: subsequent check does nothing
 		boolean executedAgain = escalationService.executeEscalationStep(task.getId(), tFallback.plus(10, ChronoUnit.MINUTES));
 		assertThat(executedAgain).isFalse();
-
-		// Can still be acknowledged later
-		IncidentResponse ackResp = incidentService.acknowledgeIncident(incId, responder2.getId());
-		assertThat(ackResp.status()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
-		assertThat(ackResp.assignee().id()).isEqualTo(responder2.getId());
 	}
 
 	@Test
@@ -531,11 +531,7 @@ class EscalationIntegrationTest {
 		EscalationTask task = escalationTaskRepository.findByIncidentId(incId).orElseThrow();
 		Instant overdueTime = task.getNextDueAt().plus(5, ChronoUnit.MINUTES);
 
-		incidentService.acknowledgeIncident(incId, responder1.getId());
-
-		Incident ackInc = incidentRepository.findById(incId).orElseThrow();
-		assertThat(ackInc.getStatus()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
-		assertThat(ackInc.getAssignee().getId()).isEqualTo(responder1.getId());
+		setStatus(incId, IncidentStatus.ACKNOWLEDGED);
 
 		// Now escalation attempts to run on the acknowledged incident (Rule E3)
 		boolean escalationAttempt = escalationService.executeEscalationStep(task.getId(), overdueTime);
@@ -567,27 +563,49 @@ class EscalationIntegrationTest {
 		Incident escalatedInc = incidentRepository.findById(raceIncId).orElseThrow();
 		assertThat(escalatedInc.getVersion()).isEqualTo(1L);
 
-		// Tx 2 attempts to save acknowledgement with the stale entity:
+		// Tx 2 saves a change (as an acknowledgement would) from the stale entity:
 		// Hibernate detects the concurrent version increment and throws OptimisticLockingFailureException!
-		staleIncident.acknowledge(responder1);
+		staleIncident.assignTo(responder1);
 		assertThatThrownBy(() -> incidentRepository.saveAndFlush(staleIncident))
 				.isInstanceOf(OptimisticLockingFailureException.class);
 	}
 
 	@Test
-	@DisplayName("Outbox Relay: Scheduled outbox processor reads pending escalation messages and marks them SENT")
-	void outboxRelaySchedulerProcessesPendingEvents() {
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	@DisplayName("The worker escalates an overdue task in its own transaction, which commits the version increment")
+	void workerEscalatesOverdueTaskAndCommits() {
 		Instant now = clock.instant();
+		new TransactionTemplate(transactionManager).execute(status -> {
+			EscalationPolicy policy = new EscalationPolicy(testService, now);
+			policy.replaceSteps(List.of(new EscalationStep(1, responder1, 10)), now);
+			escalationPolicyRepository.saveAndFlush(policy);
+			return null;
+		});
+		IncidentResponse inc = incidentService.createIncident(
+				new CreateIncidentRequest("Worker Test", "Overdue", testService.getId(), Severity.SEV1),
+				admin.getId()
+		);
+		EscalationTask task = escalationTaskRepository.findByIncidentId(inc.id()).orElseThrow();
 
-		// Save a pending outbox entry as produced during escalation
-		Outbox outbox = new Outbox("INCIDENT", 42L, "INCIDENT_ESCALATED", "{\"step\":1}", now);
-		outboxRepository.saveAndFlush(outbox);
+		assertThat(escalationWorker.runOnce(task.getNextDueAt().minusSeconds(1))).isZero();
+		assertThat(escalationWorker.runOnce(task.getNextDueAt())).isEqualTo(1);
 
-		int processed = outboxRelay.processPendingOutboxMessages();
-		assertThat(processed).isGreaterThanOrEqualTo(1);
+		assertThat(escalationTaskRepository.findByIncidentId(inc.id()).orElseThrow().getCurrentStep()).isEqualTo(1);
+		assertThat(incidentRepository.findById(inc.id()).orElseThrow().getVersion()).isEqualTo(1L);
+		assertThat(outboxRepository.findByAggregateTypeAndAggregateIdOrderByCreatedAtAsc("INCIDENT", inc.id()))
+				.extracting(Outbox::getStatus)
+				.containsExactly(OutboxStatus.PENDING);
+	}
 
-		Outbox reloaded = outboxRepository.findById(outbox.getId()).orElseThrow();
-		assertThat(reloaded.getStatus()).isEqualTo("SENT");
-		assertThat(reloaded.getProcessedAt()).isNotNull();
+	// Acknowledging is #83's work; until it lands, set the status a committed acknowledgement would leave.
+	private void setStatus(Long incidentId, IncidentStatus status) {
+		boolean inTransaction = TransactionSynchronizationManager.isActualTransactionActive();
+		if (inTransaction) {
+			entityManager.flush();
+		}
+		jdbc.update("UPDATE incident SET status = ? WHERE id = ?", status.name(), incidentId);
+		if (inTransaction) {
+			entityManager.clear();
+		}
 	}
 }

@@ -7,8 +7,6 @@ CREATE TABLE escalation_policy (
     updated_at  timestamptz NOT NULL
 );
 
-CREATE INDEX escalation_policy_service_idx ON escalation_policy (service_id);
-
 CREATE TABLE escalation_step (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     policy_id     bigint NOT NULL REFERENCES escalation_policy (id) ON DELETE CASCADE,
@@ -35,7 +33,6 @@ CREATE TABLE escalation_task (
     CONSTRAINT escalation_task_state_check CHECK (state IN ('PENDING', 'CANCELLED', 'EXHAUSTED'))
 );
 
-CREATE INDEX escalation_task_incident_idx ON escalation_task (incident_id);
 CREATE INDEX escalation_task_due_idx ON escalation_task (state, next_due_at);
 
 CREATE TABLE escalation_task_step (

@@ -144,7 +144,7 @@ class EscalationPolicyServiceTest {
 
 		verify(auditService).record(
 				eq(admin),
-				eq(AuditAction.SERVICE_UPDATED),
+				eq(AuditAction.ESCALATION_POLICY_UPDATED),
 				eq(AuditItemType.SERVICE),
 				eq(1L),
 				any()

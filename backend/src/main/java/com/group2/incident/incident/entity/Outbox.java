@@ -2,6 +2,8 @@ package com.group2.incident.incident.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,8 +35,9 @@ public class Outbox {
 	@Column(nullable = false, columnDefinition = "text")
 	private String payload;
 
+	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
-	private String status;
+	private OutboxStatus status;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
@@ -47,16 +50,16 @@ public class Outbox {
 		this.aggregateId = aggregateId;
 		this.eventType = eventType;
 		this.payload = payload;
-		this.status = "PENDING";
+		this.status = OutboxStatus.PENDING;
 		this.createdAt = createdAt;
 	}
 
 	public void markSent(Instant processedAt) {
-		this.status = "SENT";
+		this.status = OutboxStatus.SENT;
 		this.processedAt = processedAt;
 	}
 
 	public void markFailed() {
-		this.status = "FAILED";
+		this.status = OutboxStatus.FAILED;
 	}
 }

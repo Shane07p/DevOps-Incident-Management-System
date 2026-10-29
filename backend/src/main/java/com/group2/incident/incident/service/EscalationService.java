@@ -14,25 +14,22 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.EscalationTaskRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
-import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import jakarta.persistence.OptimisticLockException;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EscalationService {
@@ -42,9 +39,7 @@ public class EscalationService {
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final OutboxRepository outboxRepository;
 	private final EntityManager entityManager;
-	private final Clock clock;
-    private final IncidentRepository incidentRepository;
-
+	private final JsonMapper jsonMapper;
 
 	@Transactional
 	public void createTaskForIncident(Incident incident, Instant now) {
@@ -83,29 +78,7 @@ public class EscalationService {
 		});
 	}
 
-	public int processOverdueEscalations() {
-		Instant now = clock.instant();
-		List<Long> taskIds = escalationTaskRepository.findOverdueTaskIds(EscalationTaskState.PENDING, now);
-		int processed = 0;
-
-		for (Long taskId : taskIds) {
-			try {
-				boolean executed = escalateTaskInNewTransaction(taskId, now);
-				if (executed) {
-					processed++;
-				}
-			}
-			catch (OptimisticLockException | OptimisticLockingFailureException e) {
-				log.info("Optimistic lock race detected during escalation for task {}. Loser rolled back.", taskId);
-			}
-			catch (Exception e) {
-				log.error("Failed to escalate task {}", taskId, e);
-			}
-		}
-
-		return processed;
-	}
-
+	/** For EscalationWorker: each task commits on its own, so one failure or lost race doesn't stop the rest. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public boolean escalateTaskInNewTransaction(Long taskId, Instant now) {
 		return executeEscalationStep(taskId, now);
@@ -120,14 +93,8 @@ public class EscalationService {
 
 		Incident incident = task.getIncident();
 
-		// Rule E4: If incident is not OPEN (e.g. RESOLVED, CLOSED) -> cancel task and do nothing
+		// Rules E3 and E4: an acknowledged, resolved, or closed incident is no longer escalated.
 		if (incident.getStatus() != IncidentStatus.OPEN) {
-			task.cancel(now);
-			return false;
-		}
-
-		// Rule E3: If incident was acknowledged -> cancel task and do nothing
-		if (incident.getStatus() == IncidentStatus.ACKNOWLEDGED) {
 			task.cancel(now);
 			return false;
 		}
@@ -137,13 +104,9 @@ public class EscalationService {
 			return false;
 		}
 
-		// Force version increment on Incident to guarantee optimistic locking race detection (TC-FR-07.4a)
-        entityManager.lock(incident, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
-        // Ensure the version bump is persisted
-        incidentRepository.saveAndFlush(incident);
-        entityManager.flush();
+		// The incident version goes up at commit, so an acknowledgement racing this step loses and
+		// rolls back (TC-FR-07.4a). The assignee is never changed.
 		entityManager.lock(incident, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
-		entityManager.flush();
 
 		int currentStep = task.getCurrentStep();
 		int nextStepNumber = currentStep + 1;
@@ -170,12 +133,12 @@ public class EscalationService {
 			timelineEntryRepository.save(timelineEntry);
 
 			// Outbox event for RabbitMQ
-			String payload = """
-					{"incidentId":%d,"incidentRef":"%s","stepNumber":%d,"responderId":%d,"responderName":"%s","escalatedAt":"%s"}"""
-					.formatted(incident.getId(), incident.getReference(), nextStep.getStepNumber(),
-							responder.getId(), responder.getDisplayName(), now);
+			Map<String, Object> event = eventFor(incident, now);
+			event.put("stepNumber", nextStep.getStepNumber());
+			event.put("responderId", responder.getId());
+			event.put("responderName", responder.getDisplayName());
 
-			Outbox outbox = new Outbox("INCIDENT", incident.getId(), "INCIDENT_ESCALATED", payload, now);
+			Outbox outbox = new Outbox("INCIDENT", incident.getId(), "INCIDENT_ESCALATED", jsonMapper.writeValueAsString(event), now);
 			outboxRepository.save(outbox);
 
 			// Calculate next deadline
@@ -207,12 +170,12 @@ public class EscalationService {
 					);
 					timelineEntryRepository.save(timelineEntry);
 
-					String payload = """
-							{"incidentId":%d,"incidentRef":"%s","fallbackContactId":%d,"fallbackContactName":"%s","escalatedAt":"%s"}"""
-							.formatted(incident.getId(), incident.getReference(),
-									fallbackContact.getId(), fallbackContact.getDisplayName(), now);
+					Map<String, Object> event = eventFor(incident, now);
+					event.put("fallbackContactId", fallbackContact.getId());
+					event.put("fallbackContactName", fallbackContact.getDisplayName());
 
-					Outbox outbox = new Outbox("INCIDENT", incident.getId(), "INCIDENT_ESCALATED_FALLBACK", payload, now);
+					Outbox outbox = new Outbox("INCIDENT", incident.getId(), "INCIDENT_ESCALATED_FALLBACK",
+							jsonMapper.writeValueAsString(event), now);
 					outboxRepository.save(outbox);
 				}
 				else {
@@ -235,5 +198,13 @@ public class EscalationService {
 				return false;
 			}
 		}
+	}
+
+	private static Map<String, Object> eventFor(Incident incident, Instant now) {
+		Map<String, Object> event = new LinkedHashMap<>();
+		event.put("incidentId", incident.getId());
+		event.put("incidentRef", incident.getReference());
+		event.put("escalatedAt", now.toString());
+		return event;
 	}
 }

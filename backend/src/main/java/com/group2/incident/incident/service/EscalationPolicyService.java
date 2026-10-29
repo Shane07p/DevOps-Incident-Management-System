@@ -87,7 +87,7 @@ public class EscalationPolicyService {
 
 		auditService.record(
 				actor,
-				AuditAction.SERVICE_UPDATED,
+				AuditAction.ESCALATION_POLICY_UPDATED,
 				AuditItemType.SERVICE,
 				serviceId,
 				"Updated escalation policy with " + steps.size() + " steps for service " + service.getName()

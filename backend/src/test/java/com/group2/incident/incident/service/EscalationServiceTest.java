@@ -19,6 +19,7 @@ import com.group2.incident.incident.entity.EscalationTaskState;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.Outbox;
+import com.group2.incident.incident.entity.OutboxStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
@@ -27,10 +28,7 @@ import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.time.Clock;
-import com.group2.incident.incident.repository.IncidentRepository;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +40,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.json.JsonMapper;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
@@ -66,16 +65,12 @@ class EscalationServiceTest {
 	@Mock
 	private EntityManager entityManager;
 
-	@Mock
-	private IncidentRepository incidentRepository;
-
 	@Captor
 	private ArgumentCaptor<Outbox> outboxCaptor;
 
 	@Captor
 	private ArgumentCaptor<TimelineEntry> timelineCaptor;
 
-	private Clock fixedClock;
 	private EscalationService escalationService;
 
 	private AppUser admin;
@@ -86,17 +81,14 @@ class EscalationServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		fixedClock = Clock.fixed(T0, ZoneOffset.UTC);
-			escalationService = new EscalationService(
+		escalationService = new EscalationService(
 				escalationPolicyRepository,
 				escalationTaskRepository,
 				timelineEntryRepository,
 				outboxRepository,
 				entityManager,
-				fixedClock,
-				incidentRepository
-			);
-
+				JsonMapper.builder().build()
+		);
 
 		admin = new AppUser("admin", "Admin User", "hash", Role.ADMIN, T0);
 		responder1 = new AppUser("resp1", "Responder 1", "hash", Role.ENGINEER, T0);
@@ -169,7 +161,7 @@ class EscalationServiceTest {
 		Outbox outbox = outboxCaptor.getValue();
 		assertThat(outbox.getAggregateType()).isEqualTo("INCIDENT");
 		assertThat(outbox.getEventType()).isEqualTo("INCIDENT_ESCALATED");
-		assertThat(outbox.getStatus()).isEqualTo("PENDING");
+		assertThat(outbox.getStatus()).isEqualTo(OutboxStatus.PENDING);
 		assertThat(outbox.getPayload()).contains("\"stepNumber\":1").contains(responder1.getDisplayName());
 	}
 
@@ -195,8 +187,7 @@ class EscalationServiceTest {
 	@Test
 	@DisplayName("TC-FR-07.7a: Rule E3: Incident ACKNOWLEDGED -> Task cancelled, nothing executed")
 	void tcFr07_7a_ruleE3IncidentAcknowledged() {
-		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.OPEN, admin, T0, 15, 240);
-		incident.acknowledge(responder1);
+		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.ACKNOWLEDGED, admin, T0, 15, 240);
 
 		Instant dueAt = T0.plus(15, ChronoUnit.MINUTES);
 		EscalationTask task = new EscalationTask(incident, dueAt, T0);
@@ -215,9 +206,7 @@ class EscalationServiceTest {
 	@Test
 	@DisplayName("TC-FR-07.7a: Rule E4: Incident not OPEN (RESOLVED) -> Task cancelled, nothing executed")
 	void tcFr07_7a_ruleE4IncidentNotOpen() {
-		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.OPEN, admin, T0, 15, 240);
-		incident.acknowledge(responder1);
-		// Status is ACKNOWLEDGED (not OPEN)
+		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.RESOLVED, admin, T0, 15, 240);
 		Instant dueAt = T0.plus(15, ChronoUnit.MINUTES);
 		EscalationTask task = new EscalationTask(incident, dueAt, T0);
 		task.addCopiedStep(1, responder1, 15);

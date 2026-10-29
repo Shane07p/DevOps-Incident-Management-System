@@ -4,7 +4,6 @@ import com.group2.incident.auth.dto.LoginRequest;
 import com.group2.incident.auth.dto.LoginResponse;
 import com.group2.incident.auth.dto.UserResponse;
 import com.group2.incident.auth.service.AuthService;
-import com.group2.incident.common.ratelimit.ClientIpResolver;
 import com.group2.incident.common.ratelimit.RateLimitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -30,14 +29,13 @@ class AuthController {
 
 	private final AuthService auth;
 	private final RateLimitService rateLimitService;
-	private final ClientIpResolver clientIpResolver;
 
 	@PostMapping("/login")
 	@Operation(summary = "Log in and get a token for the Authorization header")
 	@SecurityRequirements
 	LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-		String clientIp = clientIpResolver.resolve(servletRequest);
-		rateLimitService.checkLogin(clientIp, request.username());
+		// Behind a trusted proxy, Tomcat has already put the client's address from X-Forwarded-For here.
+		rateLimitService.checkLogin(servletRequest.getRemoteAddr(), request.username());
 		return auth.login(request);
 	}
 

@@ -18,7 +18,6 @@ import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.support.IntegrationTest;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +29,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
@@ -77,8 +77,8 @@ class RateLimitTest {
 
 	@BeforeEach
 	void setUp() {
-		rateLimitService.clear();
-		rateLimitService.setClock(Clock.fixed(BASE_TIME, ZoneOffset.UTC));
+		// A fixed time for the buckets, so none refills partway through a test.
+		setRateLimitTime(BASE_TIME);
 
 		testUser = users.saveAndFlush(new AppUser("rate_user_" + clock.millis(), "Rate Test User",
 				passwordEncoder.encode(PASSWORD), Role.ENGINEER, clock.instant()));
@@ -94,8 +94,7 @@ class RateLimitTest {
 
 	@AfterEach
 	void tearDown() {
-		rateLimitService.resetClock();
-		rateLimitService.clear();
+		ReflectionTestUtils.setField(rateLimitService, "clock", clock);
 	}
 
 	@Test
@@ -130,7 +129,7 @@ class RateLimitTest {
 		performLogin(testUser.getUsername(), PASSWORD, ip).andExpect(status().isTooManyRequests());
 
 		// Advance clock by 61 seconds (past the 60s refill duration)
-		rateLimitService.setClock(Clock.fixed(BASE_TIME.plusSeconds(61), ZoneOffset.UTC));
+		setRateLimitTime(BASE_TIME.plusSeconds(61));
 
 		// 7th attempt is now permitted
 		performLogin(testUser.getUsername(), PASSWORD, ip)
@@ -220,7 +219,7 @@ class RateLimitTest {
 				.andExpect(jsonPath("$.errors").isEmpty());
 
 		// Advance clock past the 1 second refill interval
-		rateLimitService.setClock(Clock.fixed(BASE_TIME.plusMillis(1100), ZoneOffset.UTC));
+		setRateLimitTime(BASE_TIME.plusMillis(1100));
 
 		// 52nd attempt succeeds again
 		postAlert(toolTokenA)
@@ -338,6 +337,10 @@ class RateLimitTest {
 						.content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(testUser.getUsername(), PASSWORD)))
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.status").value(429));
+	}
+
+	private void setRateLimitTime(Instant now) {
+		ReflectionTestUtils.setField(rateLimitService, "clock", Clock.fixed(now, ZoneOffset.UTC));
 	}
 
 	private ResultActions performLogin(String username, String password, String clientIp) throws Exception {

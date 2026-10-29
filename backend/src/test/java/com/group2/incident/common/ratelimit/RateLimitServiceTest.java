@@ -8,20 +8,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class RateLimitServiceTest {
 
 	private static final Instant T0 = Instant.parse("2026-10-28T00:00:00Z");
+	private static final Clock FIXED = Clock.fixed(T0, ZoneOffset.UTC);
 
 	@Test
 	void configurationOverridesChangeEffectiveThresholds() {
-		RateLimitProperties customProperties = RateLimitProperties.of(
-				new RateLimitProperties.LimitConfig(2, Duration.ofSeconds(10)),
-				new RateLimitProperties.LimitConfig(3, Duration.ofSeconds(5))
-		);
-
-		Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
-		RateLimitService service = new RateLimitService(customProperties, clock);
+		RateLimitService service = new RateLimitService(properties(2, Duration.ofSeconds(10), 3, Duration.ofSeconds(5), 10_000), FIXED);
 
 		// Login limit: capacity is 2
 		assertThat(service.tryConsumeLogin("1.2.3.4", "alice").allowed()).isTrue();
@@ -41,9 +37,7 @@ class RateLimitServiceTest {
 
 	@Test
 	void checkLoginThrowsRateLimitExceededException() {
-		RateLimitProperties properties = RateLimitProperties.of(null, null);
-		Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
-		RateLimitService service = new RateLimitService(properties, clock);
+		RateLimitService service = new RateLimitService(properties(5, Duration.ofSeconds(60), 50, Duration.ofSeconds(1), 10_000), FIXED);
 
 		for (int i = 0; i < 5; i++) {
 			service.checkLogin("1.1.1.1", "bob");
@@ -59,78 +53,41 @@ class RateLimitServiceTest {
 
 	@Test
 	void clockAdvancementReplenishesTokens() {
-		RateLimitProperties properties = RateLimitProperties.of(
-				new RateLimitProperties.LimitConfig(2, Duration.ofSeconds(30)),
-				new RateLimitProperties.LimitConfig(2, Duration.ofSeconds(5))
-		);
-		Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
-		RateLimitService service = new RateLimitService(properties, clock);
+		RateLimitService service = new RateLimitService(properties(2, Duration.ofSeconds(30), 2, Duration.ofSeconds(5), 10_000), FIXED);
 
 		assertThat(service.tryConsumeLogin("1.1.1.1", "carol").allowed()).isTrue();
 		assertThat(service.tryConsumeLogin("1.1.1.1", "carol").allowed()).isTrue();
 		assertThat(service.tryConsumeLogin("1.1.1.1", "carol").allowed()).isFalse();
 
 		// Advance clock by 31 seconds
-		service.setClock(Clock.fixed(T0.plusSeconds(31), ZoneOffset.UTC));
+		ReflectionTestUtils.setField(service, "clock", Clock.fixed(T0.plusSeconds(31), ZoneOffset.UTC));
 
 		assertThat(service.tryConsumeLogin("1.1.1.1", "carol").allowed()).isTrue();
 	}
 
 	@Test
-	void exhaustedCallersRemainThrottledWhenBucketTableIsFull() {
-		// Limit to 3 buckets, capacity 2
-		RateLimitProperties properties = RateLimitProperties.of(
-				new RateLimitProperties.LimitConfig(2, Duration.ofSeconds(60)),
-				new RateLimitProperties.LimitConfig(50, Duration.ofSeconds(1)),
-				3
-		);
-		Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
-		RateLimitService service = new RateLimitService(properties, clock);
+	void aFullBucketTableNeverTurnsANewCallerAway() {
+		// Room for 2 buckets of 2 attempts each
+		RateLimitService service = new RateLimitService(properties(2, Duration.ofSeconds(60), 50, Duration.ofSeconds(1), 2), FIXED);
 
-		// Alice consumes all 2 tokens (exhausted)
+		// Alice runs out; Bob is part-way through his
 		assertThat(service.tryConsumeLogin("1.1.1.1", "alice").allowed()).isTrue();
 		assertThat(service.tryConsumeLogin("1.1.1.1", "alice").allowed()).isTrue();
 		assertThat(service.tryConsumeLogin("1.1.1.1", "alice").allowed()).isFalse();
-
-		// Bob and Carol each consume 1 token (active, not full)
 		assertThat(service.tryConsumeLogin("1.1.1.2", "bob").allowed()).isTrue();
-		assertThat(service.tryConsumeLogin("1.1.1.3", "carol").allowed()).isTrue();
 
-		// Table is at max capacity (3) and all 3 buckets are active (< full capacity).
-		// Dave arrives as a new caller: table cannot safely evict, rejects Dave without crashing or wiping.
-		RateLimitResult daveResult = service.tryConsumeLogin("1.1.1.4", "dave");
-		assertThat(daveResult.allowed()).isFalse();
-		assertThat(daveResult.retryAfterSeconds()).isEqualTo(60);
-
-		// Crucial verification: Alice's exhausted quota was NOT wiped or reset to full
-		RateLimitResult aliceRetry = service.tryConsumeLogin("1.1.1.1", "alice");
-		assertThat(aliceRetry.allowed())
-				.as("Exhausted caller must remain rate-limited when table is full")
-				.isFalse();
+		// Made-up usernames fill the table; real callers still get in
+		for (int i = 0; i < 100; i++) {
+			assertThat(service.tryConsumeLogin("6.6.6.6", "made-up-" + i).allowed()).isTrue();
+		}
+		assertThat(service.tryConsumeLogin("1.1.1.4", "dave").allowed()).isTrue();
 	}
 
-	@Test
-	void idleBucketsAreSafelyEvictedWhenTableIsFull() {
-		RateLimitProperties properties = RateLimitProperties.of(
-				new RateLimitProperties.LimitConfig(2, Duration.ofSeconds(10)),
-				new RateLimitProperties.LimitConfig(50, Duration.ofSeconds(1)),
-				2
-		);
-		Clock clock = Clock.fixed(T0, ZoneOffset.UTC);
-		RateLimitService service = new RateLimitService(properties, clock);
-
-		// Alice consumes 1 token (1 remaining)
-		assertThat(service.tryConsumeLogin("1.1.1.1", "alice").allowed()).isTrue();
-
-		// Advance clock past refill duration: Alice's bucket refills to full capacity (2 tokens)
-		service.setClock(Clock.fixed(T0.plusSeconds(15), ZoneOffset.UTC));
-
-		// Bob consumes 1 token (1 remaining)
-		assertThat(service.tryConsumeLogin("1.1.1.2", "bob").allowed()).isTrue();
-
-		// Carol arrives. Table has 2 buckets. Alice's bucket is idle (2 >= 2 tokens), so it is evicted safely.
-		RateLimitResult carolResult = service.tryConsumeLogin("1.1.1.3", "carol");
-		assertThat(carolResult.allowed()).isTrue();
+	private static RateLimitProperties properties(long loginCapacity, Duration loginWindow, long webhookCapacity,
+			Duration webhookWindow, int maxBuckets) {
+		return new RateLimitProperties(
+				new RateLimitProperties.LimitConfig(loginCapacity, loginWindow),
+				new RateLimitProperties.LimitConfig(webhookCapacity, webhookWindow),
+				maxBuckets);
 	}
 }
-

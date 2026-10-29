@@ -2,7 +2,6 @@ package com.group2.incident.common.ratelimit;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.boot.convert.DurationUnit;
@@ -14,17 +13,8 @@ import org.springframework.boot.convert.DurationUnit;
 public record RateLimitProperties(
 		@DefaultValue LimitConfig login,
 		@DefaultValue LimitConfig webhook,
-		@DefaultValue("10000") int maxBuckets,
-		@DefaultValue List<String> trustedProxies
+		@DefaultValue("10000") int maxBuckets
 ) {
-
-	public static RateLimitProperties of(LimitConfig login, LimitConfig webhook) {
-		return new RateLimitProperties(login, webhook, 10_000, List.of());
-	}
-
-	public static RateLimitProperties of(LimitConfig login, LimitConfig webhook, int maxBuckets) {
-		return new RateLimitProperties(login, webhook, maxBuckets, List.of());
-	}
 
 	public RateLimitProperties {
 		if (login == null) {
@@ -35,14 +25,6 @@ public record RateLimitProperties(
 		}
 		if (maxBuckets <= 0) {
 			maxBuckets = 10_000;
-		}
-		if (trustedProxies == null) {
-			trustedProxies = List.of();
-		} else {
-			trustedProxies = trustedProxies.stream()
-					.map(String::trim)
-					.filter(s -> !s.isEmpty())
-					.toList();
 		}
 	}
 

@@ -10,6 +10,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.group2.incident.common.ratelimit.RateLimitExceededException;
 
 /**
  * Turns our exceptions into {@link ApiError} responses. There is deliberately no catch-all
@@ -57,6 +58,13 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(AuthenticationException.class)
 	ResponseEntity<ApiError> failedLogin(AuthenticationException ex) {
 		return respond(HttpStatus.UNAUTHORIZED, "Invalid username or password", Map.of());
+	}
+
+	@ExceptionHandler(RateLimitExceededException.class)
+	ResponseEntity<ApiError> rateLimitExceeded(RateLimitExceededException ex) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+				.body(new ApiError(HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage(), Map.of()));
 	}
 
 	private static ResponseEntity<ApiError> respond(HttpStatus status, String message, Map<String, String> errors) {

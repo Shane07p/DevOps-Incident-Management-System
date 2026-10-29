@@ -4,9 +4,11 @@ import com.group2.incident.auth.dto.LoginRequest;
 import com.group2.incident.auth.dto.LoginResponse;
 import com.group2.incident.auth.dto.UserResponse;
 import com.group2.incident.auth.service.AuthService;
+import com.group2.incident.common.ratelimit.RateLimitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,11 +28,14 @@ import org.springframework.web.bind.annotation.RestController;
 class AuthController {
 
 	private final AuthService auth;
+	private final RateLimitService rateLimitService;
 
 	@PostMapping("/login")
 	@Operation(summary = "Log in and get a token for the Authorization header")
 	@SecurityRequirements
-	LoginResponse login(@Valid @RequestBody LoginRequest request) {
+	LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+		// Behind a trusted proxy, Tomcat has already put the client's address from X-Forwarded-For here.
+		rateLimitService.checkLogin(servletRequest.getRemoteAddr(), request.username());
 		return auth.login(request);
 	}
 

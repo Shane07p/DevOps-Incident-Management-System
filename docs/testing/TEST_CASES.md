@@ -37,6 +37,7 @@ easy to find, put its name in the Test column, and change the status in the same
 | TC-FR-01.1j | Negative | `GET /api/auth/me` with no token | 401 | `AuthControllerTest.meWithoutTokenReturns401` | Automated |
 | TC-FR-01.1k | Equivalence | The login form submitted empty | Field errors shown; no request sent | `LoginPage.test.tsx` (shows a message under each empty field and sends nothing) | Automated |
 | TC-FR-01.1l | Equivalence | The server answers 401 to the login form | "Invalid username or password" shown | `LoginPage.test.tsx` (says the username or password is wrong without saying which) | Automated |
+| TC-FR-01.1m | Concurrency | Log out while an Admin's role change for the same user commits | The role change stays; the token version counts both | `AuthServiceLogoutTest.logoutKeepsARoleChangedMeanwhile` | In review |
 
 ### Permissions (FR-01.2): decision table
 
@@ -74,6 +75,7 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 | TC-US-01i | Boundary value | The Users page form with a 7-character password | "Use at least 8 characters"; nothing sent | `UsersPage.test.tsx` | Automated |
 | TC-US-01j | Equivalence (invalid) | The server answers 409 to a new username | The message shows under the username field | `UsersPage.test.tsx` | Automated |
 | TC-US-01k | State transition | Pick a new role, cancel, then pick it again and confirm | Nothing is sent until confirmed; then one `PUT` with the new role | `UsersPage.test.tsx` | Automated |
+| TC-US-01l | Boundary value | Password of 40 × `é`: 40 characters but 80 bytes | 400 naming `password`, not a 500 from BCrypt | `UserAdminControllerTest.passwordOverSeventyTwoBytesReturns400` | In review |
 
 ### Service catalog (FR-14, US-05)
 
@@ -137,6 +139,8 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 | TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Automated |
 | TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Automated |
 | TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Automated |
+| TC-US-02a | Negative | Register a tool, copy its token, then close the dialog | The token is gone from the page; opening the dialog again starts a new registration | `ToolsPage.test.tsx` | Automated |
+| TC-US-02b | State transition | Revoke a token: cancel the confirmation, then confirm it | Nothing is sent on cancel; one revoke request on confirm | `ToolsPage.test.tsx` | Automated |
 
 ### Rate limits (NFR-04.4, D42): boundary values
 
@@ -179,6 +183,7 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 | TC-FR-15.2d | Equivalence | Created at 17:30, in the gap | The fallback contact | `OnCallServiceTest` | Automated |
 | TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Automated |
 | TC-FR-15.1b | Equivalence (invalid) | The On-call page form with a shift overlapping an existing one | The error shows on the form; nothing sent | `SchedulesPage.test.tsx` | Automated |
+| TC-FR-15.1c | Concurrency | Two schedule saves for one service at once | The second waits for the first; the result is one schedule, never a mix of both | `OnCallServiceTest.concurrentScheduleSavesDoNotMix` | In review |
 | TC-FR-15.2e | Boundary value | The On-call page at a shift's first moment, one second before its end, and at its end | "On call now" matches the server's rule: start inclusive, end exclusive | `schedule.test.ts` | Automated |
 | TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Automated (timeline); notification with #70 |
 

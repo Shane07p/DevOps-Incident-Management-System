@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { useForm, type FieldPath } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { ApiRequestError } from '@/api/client'
 import type { Criticality } from '@/api/schemas'
@@ -13,6 +13,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { showRequestErrors } from '@/lib/forms'
 import { SlaTargetGrid } from './SlaTargetGrid'
 import { emptyValues, FIELD_NAMES, serviceFormSchema, toRequest, valuesFrom, type ServiceFormValues } from './serviceForm'
 
@@ -53,14 +54,7 @@ export function ServiceFormDialog({
         form.setError('name', { message: error.message })
         return
       }
-      // Field errors go under their input; any the form has no input for, or a bare message, go above the buttons.
-      const unplaced: string[] = []
-      for (const [field, message] of Object.entries(error.errors)) {
-        if (FIELD_NAMES.has(field)) form.setError(field as FieldPath<ServiceFormValues>, { message })
-        else unplaced.push(message)
-      }
-      if (unplaced.length > 0) form.setError('root', { message: unplaced.join(' ') })
-      else if (Object.keys(error.errors).length === 0) form.setError('root', { message: error.message })
+      showRequestErrors(form, error, FIELD_NAMES)
     }
   })
 

@@ -3,7 +3,6 @@ package com.group2.incident.catalog.repository;
 import com.group2.incident.catalog.entity.OnCallShift;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +15,8 @@ public interface OnCallShiftRepository extends JpaRepository<OnCallShift, Long> 
 
     void deleteByServiceId(Long serviceId);
 
-    @Query("SELECT s FROM OnCallShift s LEFT JOIN FETCH s.responder WHERE s.service.id = :serviceId AND s.startTime <= :at AND s.endTime > :at")
-    Optional<OnCallShift> findActiveShiftForService(@Param("serviceId") Long serviceId, @Param("at") Instant at);
+    // A list, not a single result: if overlapping shifts ever reach the table, creating an incident
+    // still works and takes the earliest shift.
+    @Query("SELECT s FROM OnCallShift s LEFT JOIN FETCH s.responder WHERE s.service.id = :serviceId AND s.startTime <= :at AND s.endTime > :at ORDER BY s.startTime ASC, s.id ASC")
+    List<OnCallShift> findActiveShiftsForService(@Param("serviceId") Long serviceId, @Param("at") Instant at);
 }

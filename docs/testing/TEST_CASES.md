@@ -137,6 +137,8 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 | TC-FR-03.1c | Equivalence (invalid) | Missing token, wrong token, revoked token | 401; nothing created | `AlertWebhookTest` | Automated |
 | TC-FR-03.1d | Equivalence (invalid) | Each required field left out | 400; nothing created | `AlertWebhookTest` | Automated |
 | TC-NFR-04.2a | Negative | Register a tool and send alerts while capturing the logs | The token never appears in the logs | `AlertWebhookTest` | Automated |
+| TC-US-02a | Negative | Register a tool, copy its token, then close the dialog | The token is gone from the page; opening the dialog again starts a new registration | `ToolsPage.test.tsx` | Automated |
+| TC-US-02b | State transition | Revoke a token: cancel the confirmation, then confirm it | Nothing is sent on cancel; one revoke request on confirm | `ToolsPage.test.tsx` | Automated |
 
 ### Rate limits (NFR-04.4, D42): boundary values
 

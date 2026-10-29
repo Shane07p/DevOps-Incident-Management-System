@@ -13,6 +13,7 @@ import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { ServicesPage } from '@/pages/ServicesPage'
+import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
@@ -22,7 +23,7 @@ const SCREENS: Record<string, ReactNode> = {
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.
-const ADMIN_SCREENS: Record<string, ReactNode> = { '/users': <UsersPage /> }
+const ADMIN_SCREENS: Record<string, ReactNode> = { '/tools': <ToolsPage />, '/users': <UsersPage /> }
 
 // Response screens: incidents and alerts. Open to every role; they rank above the /incidents/* and /alerts/*
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.

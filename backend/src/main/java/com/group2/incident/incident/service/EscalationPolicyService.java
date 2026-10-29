@@ -19,9 +19,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,15 +99,12 @@ public class EscalationPolicyService {
 				.sorted(Comparator.comparing(EscalationStepRequest::stepNumber))
 				.toList();
 
-		Set<Integer> seenNumbers = new HashSet<>();
+		// Sorted and numbered from 1 with no gaps, so a duplicate fails here as well.
 		for (int i = 0; i < sorted.size(); i++) {
 			EscalationStepRequest step = sorted.get(i);
 			int expectedStepNumber = i + 1;
 			if (step.stepNumber() == null || step.stepNumber() != expectedStepNumber) {
 				throw new FieldValidationException("steps", "Step numbers must be sequential starting at 1; expected " + expectedStepNumber + " but got " + step.stepNumber());
-			}
-			if (!seenNumbers.add(step.stepNumber())) {
-				throw new FieldValidationException("steps", "Duplicate step number: " + step.stepNumber());
 			}
 			if (step.waitMinutes() == null || step.waitMinutes() <= 0) {
 				throw new FieldValidationException("steps", "Wait minutes must be greater than zero");

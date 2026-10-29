@@ -39,7 +39,7 @@ public class OnCallService {
 
     @Transactional
     public OnCallScheduleResponse updateSchedule(Long serviceId, UpdateOnCallScheduleRequest request) {
-        ServiceEntity service = serviceRepository.findById(serviceId)
+        ServiceEntity service = serviceRepository.findByIdForUpdate(serviceId)
                 .orElseThrow(() -> new NotFoundException("Service " + serviceId + " not found"));
 
         AppUser fallbackContact = appUserRepository.findById(request.fallbackContactId())
@@ -75,7 +75,8 @@ public class OnCallService {
             return null;
         }
 
-        return onCallShiftRepository.findActiveShiftForService(service.getId(), at)
+        return onCallShiftRepository.findActiveShiftsForService(service.getId(), at).stream()
+                .findFirst()
                 .map(OnCallShift::getResponder)
                 .orElseGet(service::getFallbackContact);
     }

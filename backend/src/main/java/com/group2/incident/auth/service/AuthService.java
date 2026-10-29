@@ -63,7 +63,7 @@ public class AuthService {
 
 	@Transactional
 	public void logout(long userId) {
-		users.findById(userId).ifPresent(AppUser::revokeTokens);
+		users.revokeTokens(userId);
 	}
 
 }

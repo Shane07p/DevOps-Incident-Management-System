@@ -8,7 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface IncidentRepository extends JpaRepository<Incident, Long> {
 
-	@EntityGraph(attributePaths = { "service", "reporter", "assignee" })
+	// The list shows only the service name; reporter and assignee stay unloaded.
+	@EntityGraph(attributePaths = "service")
 	List<Incident> findAllByOrderByCreatedAtDescIdDesc();
 
 	@EntityGraph(attributePaths = { "service", "reporter", "assignee" })

@@ -77,7 +77,7 @@ git checkout <branch> && git rebase origin/main      # or: continue an existing 
   resolve a conflict by discarding someone's work.
 - One focused pull request per issue, reviewed and merged by Shane once CI passes.
 - Commits are credited to their author: `git config user.email` must be verified on your GitHub
-  account. No `Co-Authored-By` lines for AI tools (CI rejects them).
+  account.
 - Label every pull request with its issue's labels, including one area (`backend`, `frontend`,
   `ai-ml`, `devops`, or `documentation`); add `bug` for a fix, `test` for mostly tests, and
   `dependencies` for version bumps (`gh pr create --label backend …`).

@@ -270,6 +270,9 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-07.3a | Decision table | E1 | As in the table | `EscalationTest` | Planned (Utsav B) |
+| TC-FR-07.3b | Equivalence | The Escalation policies page as a Viewer | The levels in paging order, with when each is paged, then the fallback contact; no form | `EscalationPage.test.tsx` | In review |
+| TC-FR-07.3c | State transition | An Admin moves a level up, removes one, adds one, and saves | One `PUT` with the levels numbered 1, 2 in their new order; the last level can't be removed | `EscalationPage.test.tsx` | In review |
+| TC-FR-07.3d | Boundary value | A wait of 0 minutes, and a level with no contact | Field errors; nothing sent | `EscalationPage.test.tsx` | In review |
 | TC-FR-07.7a | Decision table | E2, E3, and E4 | Nothing is sent or saved | `EscalationTest` | Planned (Utsav B) |
 | TC-FR-07.5a | Decision table | E5 | As in the table | `EscalationTest` | Planned (Utsav B) |
 | TC-FR-07.6a | Integration | Restart with an overdue step | The step runs once; the next level gets its full waiting time | `EscalationRestartTest` (Testcontainers) | Planned (Utsav B) |

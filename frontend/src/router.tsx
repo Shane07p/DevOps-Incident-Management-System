@@ -4,6 +4,7 @@ import { AREAS, ADMIN_PAGES } from '@/app/navigation'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
 import { AlertsPage } from '@/pages/AlertsPage'
+import { EscalationPage } from '@/pages/EscalationPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
@@ -18,6 +19,7 @@ import { UsersPage } from '@/pages/UsersPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
+  '/escalation': <EscalationPage />,
   '/schedules': <SchedulesPage />,
   '/services': <ServicesPage />,
 }

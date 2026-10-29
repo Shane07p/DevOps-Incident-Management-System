@@ -33,4 +33,18 @@ public record AlertRequest(
 		String correlationKey,
 
 		Map<String, Object> details
-) {}
+) {
+
+	// Tools pad values now and then; a padded repeat must dedupe and group like the original.
+	public AlertRequest {
+		source = strip(source);
+		eventId = strip(eventId);
+		service = strip(service);
+		severity = strip(severity);
+		correlationKey = correlationKey == null || correlationKey.isBlank() ? null : correlationKey.strip();
+	}
+
+	private static String strip(String value) {
+		return value == null ? null : value.strip();
+	}
+}

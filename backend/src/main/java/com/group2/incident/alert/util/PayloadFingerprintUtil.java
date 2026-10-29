@@ -1,19 +1,17 @@
 package com.group2.incident.alert.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.group2.incident.alert.dto.AlertRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.TreeMap;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 public final class PayloadFingerprintUtil {
 
-	private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
+	private static final JsonMapper OBJECT_MAPPER = JsonMapper.builder()
 			.enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
 			.build();
 
@@ -29,12 +27,7 @@ public final class PayloadFingerprintUtil {
 		payload.put("serviceId", serviceId);
 		payload.put("source", request.source());
 		payload.put("title", request.title());
-		try {
-			return OBJECT_MAPPER.writeValueAsString(payload);
-		}
-		catch (JsonProcessingException e) {
-			throw new IllegalStateException("Unable to serialize canonical alert payload", e);
-		}
+		return OBJECT_MAPPER.writeValueAsString(payload);
 	}
 
 	public static String fingerprint(String canonicalPayload) {

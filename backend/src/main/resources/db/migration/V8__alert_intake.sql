@@ -23,7 +23,7 @@ CREATE TABLE alert (
     received_at         timestamptz  NOT NULL,
     created_at          timestamptz  NOT NULL,
     CONSTRAINT alert_severity_check CHECK (severity IN ('SEV1', 'SEV2', 'SEV3', 'SEV4')),
-    CONSTRAINT alert_status_check CHECK (status IN ('NEW', 'ATTACHED', 'ROUTED', 'DUPLICATE', 'IGNORED')),
+    CONSTRAINT alert_status_check CHECK (status IN ('NEW', 'ATTACHED')),
     CONSTRAINT alert_source_event_id_key UNIQUE (source, event_id)
 );
 

@@ -8,9 +8,11 @@ import com.group2.incident.alert.entity.AlertStatus;
 import com.group2.incident.alert.entity.MonitoringTool;
 import com.group2.incident.alert.repository.AlertRepository;
 import com.group2.incident.alert.util.PayloadFingerprintUtil;
+import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
@@ -23,7 +25,11 @@ import com.group2.incident.incident.service.IncidentService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,64 +42,74 @@ public class AlertService {
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final IncidentService incidentService;
-	private final AlertValidationService alertValidationService;
 	private final AlertDeduplicationService alertDeduplicationService;
 	private final AlertCorrelationService alertCorrelationService;
 	private final Clock clock;
 
 	@Transactional
 	public AlertAcceptedResponse processAlert(MonitoringTool tool, AlertRequest request) {
-		AlertRequest validated = alertValidationService.validate(request);
-		ServiceEntity service = serviceRepository.findByNameIgnoreCaseForUpdate(validated.service())
+		ServiceEntity service = serviceRepository.findByNameIgnoreCaseForUpdate(request.service())
 				.orElseThrow(() -> new FieldValidationException("service", "Service not found"));
 
-		String canonicalPayload = PayloadFingerprintUtil.canonicalPayload(validated, service.getId());
+		String canonicalPayload = PayloadFingerprintUtil.canonicalPayload(request, service.getId());
 		String fingerprint = PayloadFingerprintUtil.fingerprint(canonicalPayload);
-		if (alertDeduplicationService.findExisting(validated.source(), validated.eventId(), fingerprint).isPresent()) {
-			return AlertAcceptedResponse.of(validated.eventId(), validated.source());
+		if (alertDeduplicationService.findExisting(request.source(), request.eventId(), fingerprint).isPresent()) {
+			return AlertAcceptedResponse.of(request.eventId(), request.source());
 		}
 
-		Incident incident = alertCorrelationService
-				.findMatchingIncident(service.getId(), validated.source(), validated.correlationKey())
-				.orElseGet(() -> createIncident(service, validated));
+		Optional<Incident> match = alertCorrelationService
+				.findMatchingIncident(service.getId(), request.source(), request.correlationKey());
+		Incident incident = match.orElseGet(() -> createIncident(service, request));
 
 		Instant now = clock.instant();
-		alertRepository.save(new Alert(
-				validated.source(),
-				validated.eventId(),
+		Alert alert = new Alert(
+				request.source(),
+				request.eventId(),
 				service,
-				validated.correlationKey(),
+				request.correlationKey(),
 				incident,
-				validated.title(),
-				validated.description(),
-				Severity.valueOf(validated.severity()),
+				request.title(),
+				request.description(),
+				Severity.valueOf(request.severity()),
 				canonicalPayload,
 				fingerprint,
-				AlertStatus.ATTACHED,
+				match.isPresent() ? AlertStatus.ATTACHED : AlertStatus.NEW,
 				now
-		));
+		);
+		try {
+			alertRepository.saveAndFlush(alert);
+		}
+		catch (DataIntegrityViolationException e) {
+			// The same source and event ID for another service, at the same moment: each request locked
+			// only its own service, so the unique constraint is what caught it.
+			throw new ConflictException("Duplicate eventId with changed payload");
+		}
 		timelineEntryRepository.save(new TimelineEntry(
 				incident,
 				null,
 				TimelineEventType.ALERT_ATTACHED,
-				"Alert from " + validated.source() + " attached to incident " + incident.getReference(),
+				"Alert from " + request.source() + " attached to incident " + incident.getReference(),
 				now
 		));
-		return AlertAcceptedResponse.of(validated.eventId(), validated.source());
+		return AlertAcceptedResponse.of(request.eventId(), request.source());
 	}
 
 	@Transactional(readOnly = true)
 	public List<AlertInboxItemResponse> getInboxAlerts() {
-		return alertRepository.findAllByOrderByCreatedAtDescIdDesc()
-				.stream()
+		List<Alert> alerts = alertRepository.findAllByOrderByCreatedAtDescIdDesc();
+		Map<Long, Long> alertsPerIncident = alerts.stream()
+				.collect(Collectors.groupingBy(alert -> alert.getIncident().getId(), Collectors.counting()));
+		return alerts.stream()
 				.map(alert -> new AlertInboxItemResponse(
 						alert.getId(),
 						alert.getSource(),
 						alert.getService().getName(),
 						alert.getIncident().getId(),
+						Optional.ofNullable(alert.getIncident().getAssignee()).map(AppUser::getId).orElse(null),
 						alert.getStatus().name(),
 						alert.getCorrelationKey(),
-						alert.getCreatedAt()
+						alert.getCreatedAt(),
+						alertsPerIncident.get(alert.getIncident().getId())
 				))
 				.toList();
 	}

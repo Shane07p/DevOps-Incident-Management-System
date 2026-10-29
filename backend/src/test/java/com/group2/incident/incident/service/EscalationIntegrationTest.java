@@ -121,8 +121,6 @@ class EscalationIntegrationTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
-		cleanup();
-
 		Instant now = clock.instant();
 
 		admin = appUserRepository.saveAndFlush(new AppUser("admin_esc", "Admin Escalation", passwordEncoder.encode(PASSWORD), Role.ADMIN, now));
@@ -141,32 +139,28 @@ class EscalationIntegrationTest {
 		testService = serviceRepository.saveAndFlush(testService);
 	}
 
+	// Most tests roll back with the test transaction. The two outside it commit, so delete just what
+	// this class saved there, children first.
 	@AfterEach
-	void tearDown() {
-		cleanup();
-	}
-
-	private void cleanup() {
-		new TransactionTemplate(transactionManager).execute(status -> {
-			try {
-				jdbc.execute("SET session_replication_role = 'replica'");
-				jdbc.execute("DELETE FROM outbox");
-				jdbc.execute("DELETE FROM escalation_task_step");
-				jdbc.execute("DELETE FROM escalation_task");
-				jdbc.execute("DELETE FROM escalation_step");
-				jdbc.execute("DELETE FROM escalation_policy");
-				jdbc.execute("DELETE FROM on_call_shift");
-				jdbc.execute("DELETE FROM timeline_entry");
-				jdbc.execute("DELETE FROM incident");
-				jdbc.execute("DELETE FROM service_sla_target");
-				jdbc.execute("DELETE FROM service");
-				jdbc.execute("DELETE FROM audit_entry");
-				jdbc.execute("DELETE FROM app_user");
-			}
-			finally {
-				jdbc.execute("SET session_replication_role = 'origin'");
-			}
-			return null;
+	void deleteCommittedRows() {
+		if (TransactionSynchronizationManager.isActualTransactionActive()) {
+			return;
+		}
+		Long serviceId = testService.getId();
+		Object[] userIds = { admin.getId(), responder1.getId(), responder2.getId(), fallbackUser.getId() };
+		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+			// Replica mode skips the append-only triggers, but also foreign keys and cascades, so it
+			// covers only these two deletes.
+			jdbc.execute("SET LOCAL session_replication_role = 'replica'");
+			jdbc.update("DELETE FROM timeline_entry WHERE incident_id IN (SELECT id FROM incident WHERE service_id = ?)", serviceId);
+			jdbc.update("DELETE FROM audit_entry WHERE actor_id IN (?, ?, ?, ?)", userIds);
+			jdbc.execute("SET LOCAL session_replication_role = 'origin'");
+			jdbc.update("DELETE FROM outbox WHERE aggregate_type = 'INCIDENT' AND aggregate_id IN (SELECT id FROM incident WHERE service_id = ?)", serviceId);
+			// Escalation tasks go with their incident; the policy and shifts go with the service.
+			jdbc.update("DELETE FROM incident WHERE service_id = ?", serviceId);
+			jdbc.update("DELETE FROM service_sla_target WHERE service_id = ?", serviceId);
+			jdbc.update("DELETE FROM service WHERE id = ?", serviceId);
+			jdbc.update("DELETE FROM app_user WHERE id IN (?, ?, ?, ?)", userIds);
 		});
 	}
 
@@ -251,6 +245,23 @@ class EscalationIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(invalidStepNumberJson))
 				.andExpect(status().isBadRequest());
+
+		// Validation: Two steps numbered 1 -> 400
+		String duplicateStepNumberJson = """
+				{
+					"steps": [
+						{"stepNumber": 1, "responderId": %d, "waitMinutes": 15},
+						{"stepNumber": 1, "responderId": %d, "waitMinutes": 30}
+					]
+				}
+				""".formatted(responder1.getId(), responder2.getId());
+
+		mvc.perform(put("/api/services/" + testService.getId() + "/escalation-policy")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(duplicateStepNumberJson))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.steps").value("Step numbers must be sequential starting at 1; expected 2 but got 1"));
 
 		// Validation: Non-existent responder -> 400
 		String nonExistentUserJson = """

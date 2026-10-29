@@ -369,6 +369,8 @@ async def embed(request: EmbedRequest) -> EmbedResponse:
 
     try:
         body = resp.json()
+        if not isinstance(body, dict):
+            raise ValueError("Ollama response is not a JSON object")
         embeddings = body.get("embeddings")
         if not isinstance(embeddings, list) or len(embeddings) == 0:
             raise ValueError("Missing or malformed embeddings field in Ollama response")

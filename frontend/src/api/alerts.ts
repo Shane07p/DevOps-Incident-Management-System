@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { apiFetch } from './client'
 
-// The values the database allows (V7__alert_intake.sql).
-export const alertStatusSchema = z.enum(['NEW', 'ATTACHED', 'ROUTED', 'DUPLICATE', 'IGNORED'])
+// NEW: the alert opened its incident. ATTACHED: it joined one already active (V8__alert_intake.sql).
+export const alertStatusSchema = z.enum(['NEW', 'ATTACHED'])
 
 export type AlertStatus = z.infer<typeof alertStatusSchema>
 

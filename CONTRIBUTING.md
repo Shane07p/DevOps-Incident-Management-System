@@ -1,7 +1,9 @@
 # Contributing
 
-How the team works on Settle. The full rules (code layout, incident rules, tests, Git) are in
-[AGENTS.md](AGENTS.md); this page is the short version. To run the app, see the [README](README.md).
+How the team works on Settle. The full rules are in [AGENTS.md](AGENTS.md) (incident rules, Git)
+and in the `AGENTS.md` of the part you change: [backend](backend/AGENTS.md),
+[frontend](frontend/AGENTS.md), or [ai-service](ai-service/AGENTS.md). This page is the short
+version. To run the app, see the [README](README.md).
 
 ## Set up once
 
@@ -63,8 +65,8 @@ Types: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `ci`.
 
 ## Using AI coding agents
 
-Claude Code, Cursor, Copilot, Gemini, and Antigravity read [AGENTS.md](AGENTS.md) (through
-[CLAUDE.md](CLAUDE.md) and [GEMINI.md](GEMINI.md) where needed). You are still responsible for what
+Claude Code, Cursor, Copilot, Gemini, and Antigravity read [AGENTS.md](AGENTS.md) and the one in
+the folder they work in (through the `CLAUDE.md` and `GEMINI.md` next to each, where needed). You are still responsible for what
 they produce:
 
 - Read the whole diff before you push it.

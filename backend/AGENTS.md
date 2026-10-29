@@ -35,7 +35,8 @@ the injected `Clock`, and nothing uses Jackson 2.
   generated equality and `toString` break Hibernate's lazy loading. Change entity state through
   named methods (`revokeTokens()`, `assignTo(user)`).
 - **One error shape.** Throw `NotFoundException`, `ConflictException`, `FieldValidationException`,
-  or `UnauthorizedException`; `ApiExceptionHandler` turns them into `ApiError`. Exceptions thrown
+  `UnauthorizedException`, or `RateLimitExceededException`; `ApiExceptionHandler` turns them into
+  `ApiError`. Exceptions thrown
   in a `HandlerInterceptor` reach it too. Never add a catch-all `Exception` handler: it hides
   Spring Security's 403.
 - **Controllers return DTOs**, never JPA entities. `@Tag` on each controller and
@@ -64,7 +65,7 @@ Pick the level that can actually verify the behaviour, and do not repeat one rul
 | Transition rules, SLA arithmetic, fixed targets | JUnit with a controlled `Clock` |
 | Duplicates, concurrency, restart with an overdue escalation | Testcontainers against PostgreSQL |
 | Roles and rejected tokens | API security tests |
-| Transition and SLA rules | PIT, on demand: `./mvnw test-compile org.pitest:pitest-maven:mutationCoverage` |
+| Transition and SLA rules | PIT, not in CI: on demand and at the end of each sprint (`./mvnw test-compile org.pitest:pitest-maven:mutationCoverage`) |
 
 - `@IntegrationTest` runs the full app on Testcontainers PostgreSQL and rolls back after each
   test. A test of a rollback or of two requests at once must run outside that transaction

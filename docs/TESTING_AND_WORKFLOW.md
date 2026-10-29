@@ -25,10 +25,10 @@ in [testing/](testing/):
 | Two users comment while the incident changes | `COMMENT-CONCURRENT`: both entries survive; comment inserts neither require nor increment Incident version |
 | Restart with an overdue escalation | Integration or documented restart test |
 | Rejected transaction | Check that incident, timeline, and notification changes roll back together |
-| Roles and invalid alert signatures | API security tests |
+| Roles, and missing or revoked tool tokens | API security tests |
 | Complete incident flow | One focused Cypress end-to-end scenario |
 | Important form behavior | Vitest where it catches a meaningful UI error |
-| Transition and SLA rules | PIT mutation testing on the selected Java classes |
+| Transition and SLA rules | PIT mutation testing on the selected Java classes (not in CI; on demand and at the end of each sprint) |
 | Optional AI failure | Stub timeout and invalid output; core remains usable |
 
 Do not duplicate every rule across unit, integration, and browser tests. Use each test level for the behavior it can verify best. Record actual results; this document does not claim tests have run.

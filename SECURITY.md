@@ -35,8 +35,9 @@ history does not make it safe again.
 | --- | --- |
 | Passwords stored as salted hashes (bcrypt, through Spring Security's delegating encoder) | Done |
 | JWT login; logout and role changes invalidate old tokens through a token version | Done |
-| Role checks on every endpoint, covered by `SecurityMatrixTest` | In progress (#48) |
+| Role checks on every endpoint, covered by `SecurityMatrixTest` | Done (#48); every new endpoint adds its rows |
 | CodeQL code scanning on every pull request | Done |
-| Dependabot alerts and weekly dependency updates | Done |
-| One hashed, revocable token per alert-sending tool (D31) | Planned (#68) |
-| Rate limits on login, alert webhooks, and personal access tokens (D42, NFR-04.4) | Planned (#69) |
+| Dependabot alerts; security updates at once, version updates monthly | Done |
+| One hashed, revocable token per alert-sending tool (D31) | Done (#68) |
+| Rate limits on login and alert webhooks (D42, NFR-04.4); the client address is read from `X-Forwarded-For` only through a trusted proxy | Done (#69) |
+| Rate limits on personal access tokens (D42) | With the MCP server, Sprint 4 |

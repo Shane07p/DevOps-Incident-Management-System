@@ -3,8 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { listServices } from '@/api/services'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ServicePicker } from '@/components/app/ServicePicker'
 import { ServiceSchedule } from './schedules/ServiceSchedule'
 
 /** On-call shifts per service, in IST. Everyone reads them; only Admins change them, and the server checks again. */
@@ -24,21 +23,7 @@ export function SchedulesPage() {
           <p className="text-muted-foreground">Who is on call for each service, now and next. Times are IST.</p>
         </div>
         {services.data && services.data.length > 0 && (
-          <div className="flex w-[260px] flex-col gap-2">
-            <Label htmlFor="service">Service</Label>
-            <Select value={chosen ? String(chosen.id) : ''} onValueChange={(id) => setParams({ service: id })}>
-              <SelectTrigger id="service" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {services.data.map((service) => (
-                  <SelectItem key={service.id} value={String(service.id)}>
-                    {service.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <ServicePicker services={services.data} chosen={chosen} onChoose={(id) => setParams({ service: id })} />
         )}
       </div>
 

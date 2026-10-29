@@ -1,4 +1,17 @@
-# AI Service (`ai-service`) — Sprint 1
+# AI Service (`ai-service`)
+
+What is here so far:
+
+| Part | What it does | Issue |
+|---|---|---|
+| `GET /health`, `GET /ready` | Liveness; readiness checks that Ollama is reachable and its model is pulled | #21, #62 |
+| `POST /suggest` | A stub with the final contract: it returns fixed steps citing the past incidents it is given, with no model call yet | #21 |
+| `POST /embed` | An embedding of a text from Ollama (`nomic-embed-text`), for finding similar incidents (AI-1) | #62 |
+| `log_patterns.py` | Log-pattern evidence: during an incident, messages that are new, or at least 3 times and twice as often as in the same length of time before it | #92 |
+| `data/` | Public postmortems with labels, and a held-out test set for AI-1 | #63 |
+
+The backend does not call this service yet. The planned AI features are in the
+[AI/ML roadmap](../docs/plans/ai-ml-roadmap.md).
 
 **Team Member:** Himanshu (Lead, `ai-service`)  
 **Project:** IT314 DevOps Incident Management System
@@ -194,7 +207,7 @@ python -m pytest -v
 ### Endpoints
 - `GET http://localhost:8000/health` — Instant liveness check
 - `GET http://localhost:8000/ready` — Readiness & Ollama model check
-- `POST http://localhost:8000/suggest` — AI suggestion endpoint (Sprint 1)
+- `POST http://localhost:8000/suggest` — AI suggestion endpoint (a stub with the final contract)
 - `POST http://localhost:8000/embed` — Text embedding endpoint (Sprint 2)
 - `GET http://localhost:8000/docs` — Interactive Swagger OpenAPI documentation
 

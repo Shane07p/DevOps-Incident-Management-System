@@ -28,6 +28,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import com.group2.incident.catalog.dto.ShiftResponse;
 
 /** Runs against PostgreSQL, so the boundary checks exercise the real on-call query. */
 @IntegrationTest
@@ -57,6 +67,12 @@ class OnCallServiceTest {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private AppUser owner;
     private AppUser fallbackContact;
@@ -158,6 +174,56 @@ class OnCallServiceTest {
         assertThat(schedule.shifts()).hasSize(1);
         assertThat(schedule.shifts().get(0).responderId()).isEqualTo(responderA.getId());
         assertThat(schedule.shifts().get(0).startTime()).isEqualTo(T_18_00);
+    }
+
+    // Outside the test transaction: the first save holds its transaction open while a second save
+    // starts, as when two Admins save one schedule at the same moment.
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("Two saves of one schedule at once leave one of them, never a mix of both")
+    void concurrentScheduleSavesDoNotMix() throws Exception {
+        shifts.deleteAllInBatch();
+        UpdateOnCallScheduleRequest first = new UpdateOnCallScheduleRequest(fallbackContact.getId(),
+                List.of(new ShiftRequest(responderA.getId(), T_09_00, T_17_00)));
+        UpdateOnCallScheduleRequest second = new UpdateOnCallScheduleRequest(fallbackContact.getId(),
+                List.of(new ShiftRequest(responderB.getId(), Instant.parse("2026-10-19T12:00:00Z"), T_22_00)));
+        ExecutorService otherAdmin = Executors.newSingleThreadExecutor();
+        try {
+            Future<OnCallScheduleResponse> secondSave = new TransactionTemplate(transactionManager).execute(status -> {
+                onCallService.updateSchedule(service.getId(), first);
+                Future<OnCallScheduleResponse> started = otherAdmin.submit(() -> onCallService.updateSchedule(service.getId(), second));
+                waitForASessionBlockedOnALock();
+                return started;
+            });
+            secondSave.get(30, TimeUnit.SECONDS);
+
+            assertThat(onCallService.getSchedule(service.getId()).shifts())
+                    .extracting(ShiftResponse::responderId)
+                    .containsExactly(responderB.getId());
+        }
+        finally {
+            otherAdmin.shutdownNow();
+            shifts.deleteAllInBatch();
+            services.deleteById(service.getId());
+            users.deleteAll(List.of(owner, fallbackContact, responderA, responderB));
+        }
+    }
+
+    // Up to two seconds for the second save to reach the lock, so every run sees the same order.
+    private void waitForASessionBlockedOnALock() {
+        for (int i = 0; i < 40; i++) {
+            Integer blocked = jdbc.queryForObject("select count(*) from pg_stat_activity where wait_event_type = 'Lock'", Integer.class);
+            if (blocked != null && blocked > 0) {
+                return;
+            }
+            try {
+                Thread.sleep(50);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     private AppUser createUser(String username, String displayName) {

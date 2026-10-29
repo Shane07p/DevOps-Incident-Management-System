@@ -114,6 +114,19 @@ class UserAdminControllerTest {
 	}
 
 	@Test
+	void passwordOverSeventyTwoBytesReturns400() throws Exception {
+		// 40 characters pass the length check, but é takes two bytes, and BCrypt refuses more than 72.
+		String body = createUserBody("accent", "Accent", "é".repeat(40), "VIEWER");
+
+		mvc.perform(post("/api/users")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.password").value("Password must be at most 72 bytes; letters such as é count as two"));
+	}
+
+	@Test
 	void duplicateUsernameReturns409RegardlessOfCase() throws Exception {
 		// TC-US-01e: Equivalence (invalid): Username that differs from an existing one only in case -> 409
 		createUser("asha", Role.ENGINEER);

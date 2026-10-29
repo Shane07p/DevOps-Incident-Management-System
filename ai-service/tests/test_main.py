@@ -428,6 +428,19 @@ def test_embed_handles_ollama_malformed_response_gracefully():
         assert response.status_code == 502
 
 
+@pytest.mark.parametrize("body", [[], None, "text"])
+def test_embed_handles_ollama_non_object_response_gracefully(body):
+    mock_client = AsyncMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = body
+    mock_client.post.return_value = mock_resp
+
+    with patch("main._get_client", return_value=mock_client):
+        response = client.post("/embed", json={"text": "Some text"})
+        assert response.status_code == 502
+
+
 def test_embed_rejects_vector_with_booleans():
     mock_client = AsyncMock()
     mock_resp = MagicMock()

@@ -146,11 +146,11 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-NFR-04.4a | Boundary value | The 5th login attempt within a minute for one IP and username | Answered normally | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4b | Boundary value | The 6th attempt in the same minute | 429 with `Retry-After` | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4c | Boundary value | The next attempt after the minute has passed | Answered normally again | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4d | Equivalence | Another username from the same IP, while the first is limited | Not limited | `RateLimitTest` | Planned (Het) |
-| TC-NFR-04.4e | Boundary value | Webhook calls for one tool token just under and just over its limit | Under passes; over gets 429 | `RateLimitTest` | Planned (Het) |
+| TC-NFR-04.4a | Boundary value | The 5th login attempt within a minute for one IP and username | Answered normally | `RateLimitTest` | Automated |
+| TC-NFR-04.4b | Boundary value | The 6th attempt in the same minute | 429 with `Retry-After` | `RateLimitTest` | Automated |
+| TC-NFR-04.4c | Boundary value | The next attempt after the minute has passed | Answered normally again | `RateLimitTest` | Automated |
+| TC-NFR-04.4d | Equivalence | Another username from the same IP, while the first is limited | Not limited | `RateLimitTest` | Automated |
+| TC-NFR-04.4e | Boundary value | Webhook calls for one tool token just under and just over its limit | Under passes; over gets 429 | `RateLimitTest` | Automated |
 
 ### Deduplication and grouping (FR-03.2 to FR-03.4): decision table
 

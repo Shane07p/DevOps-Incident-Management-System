@@ -23,6 +23,7 @@ import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.service.NotificationService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,6 +43,7 @@ public class IncidentService {
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
 	private final EscalationService escalationService;
+	private final NotificationService notificationService;
 	private final Clock clock;
 
 	@Transactional
@@ -132,6 +134,16 @@ public class IncidentService {
 		);
 
 		escalationService.createTaskForIncident(incident, now);
+
+		// Notify the assignee in the same transaction (FR-07.1, D33).
+		if (assignee != null) {
+			notificationService.createNotification(
+					assignee,
+					incident,
+					"You have been assigned to incident " + incident.getReference()
+							+ ": " + incident.getTitle()
+			);
+		}
 
 		return toResponse(incident, timeline);
 	}

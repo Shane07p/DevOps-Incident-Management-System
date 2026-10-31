@@ -25,7 +25,7 @@ class DatabaseSchemaTest {
 	private static final List<String> TABLES =
 			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
-					"alert");
+					"alert", "notification");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -632,6 +632,21 @@ class DatabaseSchemaTest {
 				values ('Tool', null, now())"""))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("token_hash");
+	}
+
+	@Test
+	void notificationRequiresRecipientAndNonBlankMessage() {
+		long user = insertUser("notif_user");
+
+		assertThatThrownBy(() -> jdbc.update("""
+				insert into notification (recipient_id, message, created_at)
+				values (null, 'Hello', now())"""))
+				.isInstanceOf(DataIntegrityViolationException.class);
+
+		assertThatThrownBy(() -> jdbc.update("""
+				insert into notification (recipient_id, message, created_at)
+				values (?, '   ', now())""", user))
+				.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
 	// Fixtures

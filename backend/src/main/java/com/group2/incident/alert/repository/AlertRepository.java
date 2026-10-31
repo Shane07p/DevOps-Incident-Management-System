@@ -12,12 +12,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface AlertRepository extends JpaRepository<Alert, Long> {
 
-	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select a from Alert a where a.source = :source and a.eventId = :eventId")
-	Optional<Alert> findBySourceAndEventIdForUpdate(
-			@Param("source") String source,
-			@Param("eventId") String eventId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from Alert a where a.source = :source and a.eventId = :eventId")
+    Optional<Alert> findBySourceAndEventIdForUpdate(
+            @Param("source") String source,
+            @Param("eventId") String eventId);
 
-	@EntityGraph(attributePaths = { "service", "incident" })
-	List<Alert> findAllByOrderByCreatedAtDescIdDesc();
+    Optional<Alert> findBySourceAndEventId(String source, String eventId);
+
+    @EntityGraph(attributePaths = {"service", "incident"})
+    List<Alert> findAllByOrderByCreatedAtDescIdDesc();
 }

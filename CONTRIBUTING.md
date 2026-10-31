@@ -12,8 +12,12 @@ version. To run the app, see the [README](README.md).
    ```
    git clone https://github.com/Shane07p/DevOps-Incident-Management-System.git
    ```
-2. **Check your commit email.** `git config user.email` must be an email verified on the GitHub
-   account you use for this team, or your commits are credited to someone else (or no one).
+2. **Use one GitHub account, and commit with its email.** `git config user.email` must be a verified
+   email of the same account that opens your pull requests, or your commits are credited to another
+   account (or no one). After your first push, check that this prints your own login:
+   ```
+   gh api repos/Shane07p/DevOps-Incident-Management-System/commits/$(git rev-parse HEAD) --jq .author.login
+   ```
 3. **Install the GitHub CLI** and log in, so you and your AI agent can read issues, reviews, and CI logs:
    ```
    winget install --id GitHub.cli      # Windows; Mac: brew install gh

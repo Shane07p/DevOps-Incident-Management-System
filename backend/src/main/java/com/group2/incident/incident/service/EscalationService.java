@@ -15,6 +15,7 @@ import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.EscalationTaskRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.service.NotificationService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -38,6 +39,7 @@ public class EscalationService {
 	private final EscalationTaskRepository escalationTaskRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final OutboxRepository outboxRepository;
+	private final NotificationService notificationService;
 	private final EntityManager entityManager;
 	private final JsonMapper jsonMapper;
 
@@ -131,6 +133,9 @@ public class EscalationService {
 					now
 			);
 			timelineEntryRepository.save(timelineEntry);
+			notificationService.createNotification(responder, incident,
+					"Incident " + incident.getReference() + " was escalated to you (level " + nextStep.getStepNumber() + "): "
+							+ incident.getTitle());
 
 			// Outbox event for RabbitMQ
 			Map<String, Object> event = eventFor(incident, now);
@@ -169,6 +174,9 @@ public class EscalationService {
 							now
 					);
 					timelineEntryRepository.save(timelineEntry);
+					notificationService.createNotification(fallbackContact, incident,
+							"Incident " + incident.getReference() + " was escalated to you as the fallback contact: "
+									+ incident.getTitle());
 
 					Map<String, Object> event = eventFor(incident, now);
 					event.put("fallbackContactId", fallbackContact.getId());

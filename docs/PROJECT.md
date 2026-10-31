@@ -135,7 +135,7 @@ Selected means a design choice the team adopted, not completed stakeholder valid
 | D30 | Which requirements document is current? | Selected: `docs/REQUIREMENTS.md`. `Group-2.pdf` is the submitted version; IDs never change | Shane | Recorded 2026-10-13 |
 | D31 | How do alert senders authenticate? | Selected: one bearer token per registered tool, shown once, stored as a SHA-256 hash, revocable. Replaces the source signature in PROJECT_STRUCTURE §6 | Shane | Recorded 2026-10-26 (#68) |
 | D32 | Where do alerts arrive? | Selected: `POST /webhooks/alerts`, outside `/api` and outside JWT login (HLD v2) | Shane | Recorded 2026-10-26 (#68) |
-| D33 | How are notifications stored in Sprint 2? | Open: rows written in the same transaction as the incident change. The outbox table arrived with escalation (#135); RabbitMQ is #82 | Shane | Decide before #70 starts |
+| D33 | How are notifications stored in Sprint 2? | Selected: in-app rows written in the same transaction as the change that causes them (an assignment at creation, an escalation step, the fallback contact), so they roll back together; `createNotification` refuses to run outside a transaction. The outbox and RabbitMQ (#82) are for other channels | Shane | Recorded 2026-10-31 (#70) |
 | D34 | Where do logs and metrics live? | Open: Grafana Cloud free tier (Prometheus and Loki, 14-day retention); the backend holds the read token and runs every query. The demo shop already exports there when its OTLP settings are set (#111) | Shane | Decide with #75 |
 | D35 | Where do probes run? | Open: 2–3 free schedulers in different regions, chosen after a spike | Shane | Decide before #88 |
 | D36 | When is a monitor down? | Open: only when at least 2 regions agree | Team | Decide before #88 |

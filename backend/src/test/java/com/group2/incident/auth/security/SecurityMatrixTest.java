@@ -21,6 +21,8 @@ import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
+import com.group2.incident.notification.entity.Notification;
+import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -79,6 +81,9 @@ public class SecurityMatrixTest {
 	private IncidentRepository incidents;
 
 	@Autowired
+	private NotificationRepository notifications;
+
+	@Autowired
 	private EscalationPolicyRepository escalationPolicies;
 
 	private String adminToken;
@@ -94,6 +99,9 @@ public class SecurityMatrixTest {
 	private Long targetServiceId;
 	private Long targetToolId;
 	private Long targetIncidentId;
+	private Long adminNotificationId;
+	private Long engineerNotificationId;
+	private Long viewerNotificationId;
 
 	public record MatrixRow(
 			String name,
@@ -259,6 +267,20 @@ public class SecurityMatrixTest {
 						"/api/incidents",
 						"{\"title\":\"Sec incident\",\"description\":\"Desc\",\"serviceId\":${SERVICE_ID},\"severity\":\"SEV2\"}",
 						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/notifications",
+						HttpMethod.GET,
+						"/api/notifications",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/notifications/{id}/read",
+						HttpMethod.POST,
+						"/api/notifications/{id}/read",
+						null,
+						200, 200, 200, 401
 				)
 		);
 	}
@@ -266,8 +288,8 @@ public class SecurityMatrixTest {
 	@BeforeEach
 	void setUp() throws Exception {
 		AppUser admin = createUser("admin", Role.ADMIN);
-		createUser("engineer", Role.ENGINEER);
-		createUser("viewer", Role.VIEWER);
+		AppUser engineer = createUser("engineer", Role.ENGINEER);
+		AppUser viewer = createUser("viewer", Role.VIEWER);
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
 		adminUserId = admin.getId();
@@ -294,6 +316,13 @@ public class SecurityMatrixTest {
 		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
 				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));
 		targetIncidentId = incident.getId();
+
+		adminNotificationId = notifications.saveAndFlush(
+				new Notification(admin, incident, "Admin notification", clock.instant())).getId();
+		engineerNotificationId = notifications.saveAndFlush(
+				new Notification(engineer, incident, "Engineer notification", clock.instant())).getId();
+		viewerNotificationId = notifications.saveAndFlush(
+				new Notification(viewer, incident, "Viewer notification", clock.instant())).getId();
 	}
 
 	@Test
@@ -326,23 +355,26 @@ public class SecurityMatrixTest {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
-		String id = row.pathTemplate().startsWith("/api/tools/") ? targetToolId.toString()
-				: row.pathTemplate().startsWith("/api/services/") ? targetServiceId.toString()
-				: row.pathTemplate().startsWith("/api/incidents/") ? targetIncidentId.toString()
-				: targetUserId.toString();
-		String path = row.pathTemplate().replace("{id}", id);
-
 		// Admin
-		execute(row.method(), path, row.bodyTemplate(), adminToken, row.adminStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId), row.bodyTemplate(), adminToken, row.adminStatus());
 
 		// Engineer
-		execute(row.method(), path, row.bodyTemplate(), engineerToken, row.engineerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId), row.bodyTemplate(), engineerToken, row.engineerStatus());
 
 		// Viewer
-		execute(row.method(), path, row.bodyTemplate(), viewerToken, row.viewerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId), row.bodyTemplate(), viewerToken, row.viewerStatus());
 
 		// Unauthenticated
-		execute(row.method(), path, row.bodyTemplate(), null, row.unauthenticatedStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId), row.bodyTemplate(), null, row.unauthenticatedStatus());
+	}
+
+	private String resolvePath(String pathTemplate, Long notificationId) {
+		String id = pathTemplate.startsWith("/api/tools/") ? targetToolId.toString()
+				: pathTemplate.startsWith("/api/services/") ? targetServiceId.toString()
+				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
+				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
+				: targetUserId.toString();
+		return pathTemplate.replace("{id}", id);
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {

@@ -186,16 +186,16 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 | TC-FR-15.1b | Equivalence (invalid) | The On-call page form with a shift overlapping an existing one | The error shows on the form; nothing sent | `SchedulesPage.test.tsx` | Automated |
 | TC-FR-15.1c | Concurrency | Two schedule saves for one service at once | The second waits for the first; the result is one schedule, never a mix of both | `OnCallServiceTest.concurrentScheduleSavesDoNotMix` | Automated |
 | TC-FR-15.2e | Boundary value | The On-call page at a shift's first moment, one second before its end, and at its end | "On call now" matches the server's rule: start inclusive, end exclusive | `schedule.test.ts` | Automated |
-| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest` | Automated (timeline); notification with #70 |
+| TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest`; `NotificationTest.tcFr07_1a_assignedIncidentCreatesUnreadNotificationForAssignee` | Automated |
 
 ### Notifications (FR-07.1, D33)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-07.1a | Equivalence | An incident is assigned | The assignee has one unread notification | `NotificationTest` | Planned (Utsav D) |
-| TC-FR-07.1b | Negative | Another user requests that notification | 403 or 404; they never see it | `NotificationTest` | Planned (Utsav D) |
-| TC-FR-07.1c | Equivalence | Mark it as read | The unread count goes down by one | `NotificationTest` | Planned (Utsav D) |
-| TC-FR-07.8a | Negative | The change that caused the notification rolls back | No notification is left | `NotificationTest` | Planned (Utsav D) |
+| TC-FR-07.1a | Equivalence | An incident is assigned | The assignee has one unread notification | `NotificationTest.tcFr07_1a_assignedIncidentCreatesUnreadNotificationForAssignee` | Automated |
+| TC-FR-07.1b | Negative | Another user requests that notification | 404; they never see it | `NotificationTest.tcFr07_1b_userIsolationCannotAccessOtherUsersNotification` | Automated |
+| TC-FR-07.1c | Equivalence | Mark it as read | The unread count goes down by one | `NotificationTest.tcFr07_1c_markAsReadDecrementsUnreadCount` | Automated |
+| TC-FR-07.8a | Negative | The change that caused the notification rolls back | No notification is left | `NotificationTest.tcFr07_8a_transactionRollbackCleansUpNotification` | Automated |
 
 ### Monitors and heartbeats (FR-22, D29): boundary values
 

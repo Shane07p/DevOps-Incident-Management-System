@@ -31,6 +31,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @IntegrationTest
 class NotificationTest {
@@ -90,12 +92,23 @@ class NotificationTest {
 				new AppUser("other_eng", "Other Engineer", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
 		);
 
-		// testService with responder as owner/fallback contact
+		// No shifts, so every new incident goes to the fallback contact, the responder.
 		ServiceEntity service = new ServiceEntity("NotificationService_Test", "Test Service", responder, Criticality.HIGH, now);
+		service.changeFallbackContact(responder);
 		for (Severity severity : Severity.values()) {
 			service.putTarget(severity, 30, 120);
 		}
 		testService = serviceRepository.saveAndFlush(service);
+	}
+
+	// TC-FR-07.8a runs outside the test transaction, so the setup above is committed for it: delete it again.
+	@AfterEach
+	void deleteCommittedRows() {
+		if (TransactionSynchronizationManager.isActualTransactionActive()) {
+			return;
+		}
+		serviceRepository.delete(testService);
+		userRepository.deleteAll(List.of(responder, otherEngineer));
 	}
 
 	@Test
@@ -182,45 +195,28 @@ class NotificationTest {
 	@DisplayName("TC-FR-07.8a: The change that caused the notification rolls back -> No notification is left")
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void tcFr07_8a_transactionRollbackCleansUpNotification() {
-		Instant now = clock.instant();
-		AppUser isolatedUser = userRepository.saveAndFlush(
-				new AppUser("iso_eng", "Iso Engineer", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
+		long notificationsBefore = notificationRepository.count();
+		long incidentsBefore = incidentRepository.count();
+
+		// The audit entry is written after the assignee's notification, so failing it rolls that back.
+		AuditService spy = AopTestUtils.getUltimateTargetObject(auditService);
+		doThrow(new RuntimeException("Simulated audit failure"))
+				.when(spy)
+				.record(any(), eq(AuditAction.INCIDENT_CREATED), any(), anyLong(), anyString());
+
+		CreateIncidentRequest request = new CreateIncidentRequest(
+				"Rollback Test Incident",
+				"Should not persist",
+				testService.getId(),
+				Severity.SEV1
 		);
-		ServiceEntity service = new ServiceEntity("IsoService", "Iso Service", isolatedUser, Criticality.HIGH, now);
-		for (Severity s : Severity.values()) {
-			service.putTarget(s, 60, 480);
-		}
-		service = serviceRepository.saveAndFlush(service);
 
-		try {
-			long notificationsBefore = notificationRepository.count();
-			long incidentsBefore = incidentRepository.count();
+		assertThatThrownBy(() -> incidentService.createIncident(request, responder.getId()))
+				.isInstanceOf(RuntimeException.class)
+				.hasMessage("Simulated audit failure");
 
-			// Force failure in auditService during incident creation
-			AuditService spy = AopTestUtils.getUltimateTargetObject(auditService);
-			doThrow(new RuntimeException("Simulated audit failure"))
-					.when(spy)
-					.record(any(), eq(AuditAction.INCIDENT_CREATED), any(), anyLong(), anyString());
-
-			CreateIncidentRequest req = new CreateIncidentRequest(
-					"Rollback Test Incident",
-					"Should not persist",
-					service.getId(),
-					Severity.SEV1
-			);
-
-			assertThatThrownBy(() -> incidentService.createIncident(req, isolatedUser.getId()))
-					.isInstanceOf(RuntimeException.class)
-					.hasMessage("Simulated audit failure");
-
-			// Both incident and notification must be rolled back
-			assertThat(notificationRepository.count()).isEqualTo(notificationsBefore);
-			assertThat(incidentRepository.count()).isEqualTo(incidentsBefore);
-		}
-		finally {
-			serviceRepository.delete(service);
-			userRepository.delete(isolatedUser);
-		}
+		assertThat(notificationRepository.count()).isEqualTo(notificationsBefore);
+		assertThat(incidentRepository.count()).isEqualTo(incidentsBefore);
 	}
 
 	@Test

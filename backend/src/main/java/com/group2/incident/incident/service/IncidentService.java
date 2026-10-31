@@ -123,6 +123,12 @@ public class IncidentService {
 					"Assigned to " + assignee.getDisplayName(),
 					now
 			)));
+			// Same transaction as the incident, so it rolls back with it (FR-07.1, FR-07.8, D33).
+			notificationService.createNotification(
+					assignee,
+					incident,
+					"You have been assigned to incident " + incident.getReference() + ": " + incident.getTitle()
+			);
 		}
 
 		auditService.record(
@@ -134,16 +140,6 @@ public class IncidentService {
 		);
 
 		escalationService.createTaskForIncident(incident, now);
-
-		// Notify the assignee in the same transaction (FR-07.1, D33).
-		if (assignee != null) {
-			notificationService.createNotification(
-					assignee,
-					incident,
-					"You have been assigned to incident " + incident.getReference()
-							+ ": " + incident.getTitle()
-			);
-		}
 
 		return toResponse(incident, timeline);
 	}

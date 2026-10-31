@@ -634,19 +634,25 @@ class DatabaseSchemaTest {
 				.hasMessageContaining("token_hash");
 	}
 
+	// One failing insert per test: after a failed statement PostgreSQL refuses the rest of the transaction.
 	@Test
-	void notificationRequiresRecipientAndNonBlankMessage() {
+	void notificationRequiresARecipient() {
+		assertThatThrownBy(() -> jdbc.update("""
+				insert into notification (recipient_id, message, created_at)
+				values (null, 'Hello', now())"""))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("recipient_id");
+	}
+
+	@Test
+	void notificationRejectsABlankMessage() {
 		long user = insertUser("notif_user");
 
 		assertThatThrownBy(() -> jdbc.update("""
 				insert into notification (recipient_id, message, created_at)
-				values (null, 'Hello', now())"""))
-				.isInstanceOf(DataIntegrityViolationException.class);
-
-		assertThatThrownBy(() -> jdbc.update("""
-				insert into notification (recipient_id, message, created_at)
 				values (?, '   ', now())""", user))
-				.isInstanceOf(DataIntegrityViolationException.class);
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("notification_message_not_blank");
 	}
 
 	// Fixtures

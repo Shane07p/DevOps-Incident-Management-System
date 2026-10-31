@@ -156,6 +156,7 @@ class EscalationIntegrationTest {
 			jdbc.update("DELETE FROM audit_entry WHERE actor_id IN (?, ?, ?, ?)", userIds);
 			jdbc.execute("SET LOCAL session_replication_role = 'origin'");
 			jdbc.update("DELETE FROM outbox WHERE aggregate_type = 'INCIDENT' AND aggregate_id IN (SELECT id FROM incident WHERE service_id = ?)", serviceId);
+			jdbc.update("DELETE FROM notification WHERE incident_id IN (SELECT id FROM incident WHERE service_id = ?)", serviceId);
 			// Escalation tasks go with their incident; the policy and shifts go with the service.
 			jdbc.update("DELETE FROM incident WHERE service_id = ?", serviceId);
 			jdbc.update("DELETE FROM service_sla_target WHERE service_id = ?", serviceId);

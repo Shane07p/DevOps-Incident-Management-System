@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -22,10 +23,10 @@ public class NotificationService {
 	private final Clock clock;
 
 	/**
-	 * Creates a notification inside the caller's existing transaction.
-	 * If that transaction rolls back, the notification is rolled back too.
-	 * This method must be called from within a @Transactional method.
+	 * Creates a notification inside the caller's transaction, so it rolls back with the change that
+	 * caused it (FR-07.8, D33). MANDATORY: a call without a transaction fails instead of committing alone.
 	 */
+	@Transactional(propagation = Propagation.MANDATORY)
 	public Notification createNotification(AppUser recipient, Incident incident, String message) {
 		Instant now = clock.instant();
 		Notification notification = new Notification(recipient, incident, message, now);
@@ -55,7 +56,7 @@ public class NotificationService {
 		}
 
 		notification.markRead(clock.instant());
-		return toResponse(notificationRepository.save(notification));
+		return toResponse(notification);
 	}
 
 	private NotificationResponse toResponse(Notification notification) {

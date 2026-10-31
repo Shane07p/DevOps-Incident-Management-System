@@ -21,6 +21,8 @@ import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
+import com.group2.incident.notification.entity.Notification;
+import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 
@@ -81,6 +83,9 @@ public class SecurityMatrixTest {
     private IncidentRepository incidents;
 
     @Autowired
+    private NotificationRepository notifications;
+
+    @Autowired
     private EscalationPolicyRepository escalationPolicies;
 
     private String adminToken;
@@ -92,7 +97,12 @@ public class SecurityMatrixTest {
     private Long targetServiceId;
     private Long targetToolId;
     private Long targetIncidentId;
+
     private Long targetMonitorId;
+
+    private Long adminNotificationId;
+    private Long engineerNotificationId;
+    private Long viewerNotificationId;
 
     public record MatrixRow(
             String name,
@@ -231,30 +241,6 @@ public class SecurityMatrixTest {
                         null,
                         204, 403, 403, 401
                 ),
-
-                // Monitor endpoints
-                new MatrixRow(
-                        "GET /api/monitors",
-                        HttpMethod.GET,
-                        "/api/monitors",
-                        null,
-                        200, 403, 403, 401
-                ),
-                new MatrixRow(
-                        "POST /api/monitors",
-                        HttpMethod.POST,
-                        "/api/monitors",
-                        "{\"name\":\"Monitor_${RANDOM}\",\"url\":\"https://example.com/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
-                        201, 403, 403, 401
-                ),
-                new MatrixRow(
-                        "PUT /api/monitors/{id}",
-                        HttpMethod.PUT,
-                        "/api/monitors/{id}",
-                        "{\"name\":\"UpdatedMonitor_${RANDOM}\",\"url\":\"https://example.com/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
-                        200, 403, 403, 401
-                ),
-
                 new MatrixRow(
                         "GET /api/incidents",
                         HttpMethod.GET,
@@ -282,6 +268,45 @@ public class SecurityMatrixTest {
                         "/api/incidents",
                         "{\"title\":\"Sec incident\",\"description\":\"Desc\",\"serviceId\":${SERVICE_ID},\"severity\":\"SEV2\"}",
                         201, 201, 403, 401
+                ),
+
+                // Uptime monitor endpoints
+                new MatrixRow(
+                        "GET /api/monitors",
+                        HttpMethod.GET,
+                        "/api/monitors",
+                        null,
+                        200, 403, 403, 401
+                ),
+                new MatrixRow(
+                        "POST /api/monitors",
+                        HttpMethod.POST,
+                        "/api/monitors",
+                        "{\"name\":\"Monitor_${RANDOM}\",\"url\":\"https://example.com/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
+                        201, 403, 403, 401
+                ),
+                new MatrixRow(
+                        "PUT /api/monitors/{id}",
+                        HttpMethod.PUT,
+                        "/api/monitors/{id}",
+                        "{\"name\":\"UpdatedMonitor_${RANDOM}\",\"url\":\"https://example.com/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
+                        200, 403, 403, 401
+                ),
+
+                // Notification endpoints
+                new MatrixRow(
+                        "GET /api/notifications",
+                        HttpMethod.GET,
+                        "/api/notifications",
+                        null,
+                        200, 200, 200, 401
+                ),
+                new MatrixRow(
+                        "POST /api/notifications/{id}/read",
+                        HttpMethod.POST,
+                        "/api/notifications/{id}/read",
+                        null,
+                        200, 200, 200, 401
                 )
         );
     }
@@ -289,10 +314,10 @@ public class SecurityMatrixTest {
     @BeforeEach
     void setUp() throws Exception {
         AppUser admin = createUser("admin", Role.ADMIN);
-        createUser("engineer", Role.ENGINEER);
-        createUser("viewer", Role.VIEWER);
-
+        AppUser engineer = createUser("engineer", Role.ENGINEER);
+        AppUser viewer = createUser("viewer", Role.VIEWER);
         AppUser target = createUser("target", Role.VIEWER);
+
         targetUserId = target.getId();
         adminUserId = admin.getId();
 
@@ -347,7 +372,20 @@ public class SecurityMatrixTest {
         );
         targetIncidentId = incident.getId();
 
-        // Create a monitor for the PUT /api/monitors/{id} test.
+        // Create notifications for the notification endpoint tests.
+        adminNotificationId = notifications.saveAndFlush(
+                new Notification(admin, incident, "Admin notification", clock.instant())
+        ).getId();
+
+        engineerNotificationId = notifications.saveAndFlush(
+                new Notification(engineer, incident, "Engineer notification", clock.instant())
+        ).getId();
+
+        viewerNotificationId = notifications.saveAndFlush(
+                new Notification(viewer, incident, "Viewer notification", clock.instant())
+        ).getId();
+
+        // Create a monitor for the PUT monitor endpoint test.
         String monitorBody = """
                 {
                     "name": "SecurityMatrixMonitor",
@@ -379,6 +417,7 @@ public class SecurityMatrixTest {
     @Test
     void failsIfNewEndpointIsAddedWithoutItsRule() {
         Set<String> declaredEndpoints = new HashSet<>();
+
         matrixRows().forEach(
                 r -> declaredEndpoints.add(
                         r.method().name() + " " + r.pathTemplate()
@@ -416,30 +455,53 @@ public class SecurityMatrixTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("matrixRows")
     void endpointSecurityMatrix(MatrixRow row) throws Exception {
+        execute(
+                row.method(),
+                resolvePath(row.pathTemplate(), adminNotificationId),
+                row.bodyTemplate(),
+                adminToken,
+                row.adminStatus()
+        );
 
-        String id = row.pathTemplate().startsWith("/api/tools/")
+        execute(
+                row.method(),
+                resolvePath(row.pathTemplate(), engineerNotificationId),
+                row.bodyTemplate(),
+                engineerToken,
+                row.engineerStatus()
+        );
+
+        execute(
+                row.method(),
+                resolvePath(row.pathTemplate(), viewerNotificationId),
+                row.bodyTemplate(),
+                viewerToken,
+                row.viewerStatus()
+        );
+
+        execute(
+                row.method(),
+                resolvePath(row.pathTemplate(), adminNotificationId),
+                row.bodyTemplate(),
+                null,
+                row.unauthenticatedStatus()
+        );
+    }
+
+    private String resolvePath(String pathTemplate, Long notificationId) {
+        String id = pathTemplate.startsWith("/api/tools/")
                 ? targetToolId.toString()
-                : row.pathTemplate().startsWith("/api/services/")
+                : pathTemplate.startsWith("/api/services/")
                 ? targetServiceId.toString()
-                : row.pathTemplate().startsWith("/api/incidents/")
+                : pathTemplate.startsWith("/api/incidents/")
                 ? targetIncidentId.toString()
-                : row.pathTemplate().startsWith("/api/monitors/")
+                : pathTemplate.startsWith("/api/monitors/")
                 ? targetMonitorId.toString()
+                : pathTemplate.startsWith("/api/notifications/")
+                ? notificationId.toString()
                 : targetUserId.toString();
 
-        String path = row.pathTemplate().replace("{id}", id);
-
-        // Admin
-        execute(row.method(), path, row.bodyTemplate(), adminToken, row.adminStatus());
-
-        // Engineer
-        execute(row.method(), path, row.bodyTemplate(), engineerToken, row.engineerStatus());
-
-        // Viewer
-        execute(row.method(), path, row.bodyTemplate(), viewerToken, row.viewerStatus());
-
-        // Unauthenticated
-        execute(row.method(), path, row.bodyTemplate(), null, row.unauthenticatedStatus());
+        return pathTemplate.replace("{id}", id);
     }
 
     private void execute(
@@ -499,7 +561,6 @@ public class SecurityMatrixTest {
 
     @Test
     void webhookAlertsAuthenticationMatrix() throws Exception {
-
         String validPayload = """
                 {
                     "source": "prometheus",
@@ -511,7 +572,7 @@ public class SecurityMatrixTest {
                 }
                 """;
 
-        // 1. Missing token -> 401
+        // Missing token -> 401
         mvc.perform(
                         request(HttpMethod.POST, "/webhooks/alerts")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -519,7 +580,7 @@ public class SecurityMatrixTest {
                 )
                 .andExpect(status().isUnauthorized());
 
-        // 2. Wrong tool token -> 401
+        // Wrong tool token -> 401
         mvc.perform(
                         request(HttpMethod.POST, "/webhooks/alerts")
                                 .header(HttpHeaders.AUTHORIZATION, "Bearer tt_invalid_token")
@@ -528,7 +589,7 @@ public class SecurityMatrixTest {
                 )
                 .andExpect(status().isUnauthorized());
 
-        // 3. User JWT tokens are not valid tool tokens -> 401
+        // User JWT tokens are not valid tool tokens -> 401
         mvc.perform(
                         request(HttpMethod.POST, "/webhooks/alerts")
                                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
@@ -553,7 +614,7 @@ public class SecurityMatrixTest {
                 )
                 .andExpect(status().isUnauthorized());
 
-        // 4. Valid registered tool token -> 202 Accepted
+        // Valid registered tool token -> 202 Accepted
         var toolCreateResponse = toolService.createTool(
                 new CreateToolRequest("Matrix Alert Tool " + UUID.randomUUID()),
                 adminUserId
@@ -570,7 +631,7 @@ public class SecurityMatrixTest {
                 )
                 .andExpect(status().isAccepted());
 
-        // 5. Revoked tool token -> 401
+        // Revoked tool token -> 401
         toolService.revokeTool(toolCreateResponse.id(), adminUserId);
 
         mvc.perform(

@@ -26,7 +26,8 @@ Sprint 1 is complete; Sprints 2 and 3 are in progress. Each work item's issue an
 | Rate limits on login and the alert webhook | Done |
 | Escalation policies and the escalation worker; events wait in the outbox until RabbitMQ | Done |
 | Pages: login, home, users, tools, services, incidents, on-call, escalation policies, alerts | Done |
-| Notifications, monitors and heartbeats, acknowledgement, status and severity changes, reassignment, comments | Not started (Sprints 2 and 3) |
+| In-app notifications for assignments and escalations | Done |
+| Monitors and heartbeats, acknowledgement, status and severity changes, reassignment, comments | Not started (Sprints 2 and 3) |
 | AI service: `/health`, `/ready`, `/embed` (Ollama embeddings), stub `/suggest`, log-pattern evidence | Done |
 | Demo shop v1 with five fault switches | Done |
 

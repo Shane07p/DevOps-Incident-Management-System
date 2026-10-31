@@ -68,7 +68,7 @@ blocks starts.
 | --- | --- | --- | --- |
 | D31 | One bearer token per tool, shown once, stored as a hash | #68 | Selected |
 | D32 | Alerts arrive at `POST /webhooks/alerts`, outside JWT login | #68 | Selected |
-| D33 | Notifications are rows written in the same transaction | #70 | Open |
+| D33 | Notifications are rows written in the same transaction | #70 | Selected |
 | D34 | Logs and metrics in Grafana Cloud | #75 | Open |
 | D35 | Where probes run (decided by a spike) | #88 | Open |
 | D36 | A monitor is down only when 2 regions agree | #88 | Open |
@@ -131,10 +131,10 @@ blocks starts.
 | Register tools: a token is shown once, stored as a hash, and can be revoked. `POST /webhooks/alerts` validates the token and payload. Rate limits on login and webhooks (D42, NFR-04.4) | Het | US-02, D31, D32 | Valid, invalid, and revoked tokens; missing fields create nothing; the token never appears in logs; over the limit returns 429 | #68, #69: Done (PRs #115, #126) |
 | Dedup and grouping: `(source, event_id)` is unique; an explicit correlation key joins an active incident; otherwise a new incident through the normal creation flow | Manan | US-04, [§6](../PROJECT_STRUCTURE.md#6-create-and-group-incidents) | Testcontainers: a repeated event is ignored; two alerts with the same key at once make one incident; linking does not reset either clock | #72: Done (PR #123) |
 | On-call schedules per service in the project time zone; a new incident is assigned to whoever is on call, or the fallback contact; the assignment goes on the timeline | Utsav B | US-06, FR-15, FR-05.1 | JUnit with a controlled `Clock` at shift boundaries; creation picks the right person or the fallback | #71: Done (PR #112) |
-| Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Open |
+| Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
 | Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73, #74: Open |
 | On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: inbox merged (PR #125); open for the count and "routed to me", whose fields arrived with #123 |
-| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78 waits on #70; #79 waits on #73 and #74 |
+| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78 can start; #79 waits on #73 and #74 |
 | Grafana Cloud account; its settings on Render | Shane | D34 | | #75: Open |
 | Ollama embeddings | Himanshu | #62 | pytest | Done (PR #99) |
 | Demo shop v1: payments, checkout, and search, sending logs and metrics | Himanshu | D34, D40 | | #76: Done (PR #111) |
@@ -181,6 +181,7 @@ Every endpoint on `main`, as `SecurityMatrixTest` checks it.
 | `GET /api/incidents`, `GET /api/incidents/{id}` | ✓ | ✓ | ✓ | 401 |
 | `POST /api/incidents` | ✓ | ✓ | 403 | 401 |
 | `GET /api/alerts` | ✓ | ✓ | ✓ | 401 |
+| `GET /api/notifications`, `POST /api/notifications/{id}/read` (your own only; another user's is 404) | ✓ | ✓ | ✓ | 401 |
 | `GET /api/services/{id}/on-call`, `GET /api/services/{id}/escalation-policy` | ✓ | ✓ | ✓ | 401 |
 | `PUT /api/services/{id}/on-call`, `PUT /api/services/{id}/escalation-policy` | ✓ | 403 | 403 | 401 |
 | `GET/POST /api/tools`, `DELETE /api/tools/{id}` | ✓ | 403 | 403 | 401 |
@@ -240,6 +241,12 @@ is missing, unknown, or revoked (D31, D32).
 [ { "id": 9, "source": "grafana", "serviceName": "Payments", "incidentId": 7, "assigneeId": 2,
     "status": "ATTACHED", "correlationKey": "pay-5xx", "createdAt": "…", "count": 2 } ]
 
+// GET /api/notifications → 200: your own, newest first
+{ "notifications": [ { "id": 5, "incidentId": 7, "message": "You have been assigned to incident INC-7: …",
+                       "createdAt": "…", "readAt": null } ],
+  "unreadCount": 1 }
+// POST /api/notifications/{id}/read → 200: that notification, with readAt set
+
 // PUT /api/services/{id}/on-call → 200; replaces every shift
 { "fallbackContactId": 1, "shifts": [ { "responderId": 2, "startTime": "…", "endTime": "…" } ] }
 // response, also GET:
@@ -270,12 +277,12 @@ version · 429 over a rate limit, with a `Retry-After` header.
 
 Owners confirm the exact shapes in their issue before coding, then add them to the shapes above
 when the PR merges. Status, assignment, and severity have separate endpoints so their rules stay
-independent. The tools, webhook, alerts, on-call, and escalation-policy endpoints are built (shapes
-above).
+independent. The tools, webhook, alerts, notifications, on-call, and escalation-policy endpoints are built
+(shapes above).
 
 | Owner | Endpoints |
 | --- | --- |
-| Utsav D | `GET /api/notifications`, `POST /api/notifications/{id}/read`; `POST /api/incidents/{id}/acknowledge`, `POST /api/incidents/{id}/transitions`, `PUT /api/incidents/{id}/severity` |
+| Utsav D | `POST /api/incidents/{id}/acknowledge`, `POST /api/incidents/{id}/transitions`, `PUT /api/incidents/{id}/severity` |
 | Het | `PUT /api/incidents/{id}/assignee`, `PUT /api/incidents/{id}/roles` |
 | Manan | `POST /api/incidents/{id}/comments`, `POST /api/incidents/{id}/timeline/{entryId}/corrections` |
 | Manush | `GET/POST /api/monitors`, `PUT /api/monitors/{id}`; a heartbeat ping URL per job; a check-results endpoint for probes |

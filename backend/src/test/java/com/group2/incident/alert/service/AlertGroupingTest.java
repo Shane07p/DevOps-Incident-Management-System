@@ -115,6 +115,7 @@ class AlertGroupingTest {
 			jdbc.update("DELETE FROM timeline_entry WHERE incident_id IN (" + incidents + ")", serviceIds);
 			jdbc.update("DELETE FROM audit_entry WHERE item_type = 'INCIDENT' AND item_id IN (" + incidents + ")", serviceIds);
 			jdbc.execute("SET LOCAL session_replication_role = 'origin'");
+			jdbc.update("DELETE FROM notification WHERE incident_id IN (" + incidents + ")", serviceIds);
 			jdbc.update("DELETE FROM alert WHERE service_id IN (?, ?)", serviceIds);
 			jdbc.update("DELETE FROM incident WHERE service_id IN (?, ?)", serviceIds);
 			jdbc.update("DELETE FROM service_sla_target WHERE service_id IN (?, ?)", serviceIds);

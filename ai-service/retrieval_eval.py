@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+from main import get_ollama_timeout
 
 import httpx
 
@@ -59,7 +60,7 @@ def embed(client, text, kind):
     response = client.post(
         f"{OLLAMA_URL}/api/embed",
         json={"model": MODEL, "input": prefix + text},
-        timeout=60,
+        timeout=get_ollama_timeout(),
     )
     response.raise_for_status()
     vector = response.json()["embeddings"][0]

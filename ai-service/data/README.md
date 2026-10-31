@@ -95,6 +95,14 @@ At threshold 0.70, the full template accepted 35 of the 60 top-3 matches. Of the
 
 The threshold improves precision among accepted matches compared with lower tested thresholds, but it also rejects 2 relevant matches. Further validation is needed before production use.
 
+### Selection rationale and trade-off
+
+The primary objective is to maximize unfiltered Mean Precision@3 while keeping useful retrieval coverage. The full template was selected because it achieved 18.33% Mean Precision@3, compared with 13.33% for title-only.
+
+At threshold 0.70, title-only had higher precision among accepted matches (33.33%, 7/21) than the full template (25.71%, 9/35). However, the full template returned more labelled relevant matches (9 versus 7) and accepted more suggestions (35 versus 21).
+
+Therefore, we prioritize overall Precision@3 and coverage rather than accepted-match precision alone. The 0.70 threshold is a provisional cutoff, not a proven optimal threshold, and should be reassessed with more labelled data.
+
 ### Limitations
 
 These results apply only to this dataset and its 20 labelled test cases. They do not represent general model accuracy or production performance.

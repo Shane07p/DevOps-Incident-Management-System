@@ -150,9 +150,10 @@ Merging to `main` deploys automatically once CI passes:
 | Part | Host | Notes |
 | --- | --- | --- |
 | Frontend | Vercel | Every pull request also gets a preview link from the Vercel bot |
-| Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` (create the first admin while no users exist), `JAVA_TOOL_OPTIONS`. Optional: the `DB_POOL_*` and `RATE_LIMIT_*` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
+| Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` (create the first admin while no users exist), `JAVA_TOOL_OPTIONS`. `RABBITMQ_URL` (the hosted RabbitMQ). Optional: the `DB_POOL_*`, `RATE_LIMIT_*`, and `OUTBOX_RELAY_DELAY_MS` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
 | Database | Supabase (PostgreSQL) | Reached through the session pooler; tables in the `incident` schema |
 | Uptime | UptimeRobot | Pings `/actuator/health` every 10 minutes, which also keeps Render's free tier awake |
+| Messaging | CloudAMQP (RabbitMQ, free plan) | `RABBITMQ_URL` on Render, the instance's AMQP URL. Unset, events wait in the outbox; the health check never depends on RabbitMQ |
 
 Secrets live only in Render's environment variables, never in the repository.
 

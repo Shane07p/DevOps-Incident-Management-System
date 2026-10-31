@@ -34,6 +34,8 @@ services:
       # Migrations only, unless .env opts in to the dev seed (D27).
       FLYWAY_LOCATIONS: ${FLYWAY_LOCATIONS:-classpath:db/migration}
       JWT_SECRET: ${JWT_SECRET:-}
+      # Empty: events wait in the outbox. With the queue profile: amqp://settle:<password>@rabbitmq:5672
+      RABBITMQ_URL: ${RABBITMQ_URL:-}
       TZ: UTC
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -63,6 +65,25 @@ services:
     ports:
       - "127.0.0.1:${AI_PORT:-8000}:8000"
 
+  # Escalation and notification events (D24, #82). Production uses a hosted instance instead.
+  rabbitmq:
+    profiles: [ "queue" ]
+    image: rabbitmq:4.4.0-management
+    container_name: incident-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-settle}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-settle}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      # Management UI: http://localhost:15672
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - incident-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      retries: 5
+
   ollama:
     profiles: [ "ai", "ollama" ]
     image: ollama/ollama:0.40.8
@@ -87,3 +108,4 @@ services:
 volumes:
   incident-db-data:
   incident-ollama-data:
+  incident-rabbitmq-data:

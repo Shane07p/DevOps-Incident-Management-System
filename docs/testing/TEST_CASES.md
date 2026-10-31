@@ -195,6 +195,8 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 | TC-FR-07.1a | Equivalence | An incident is assigned | The assignee has one unread notification | `NotificationTest.tcFr07_1a_assignedIncidentCreatesUnreadNotificationForAssignee` | Automated |
 | TC-FR-07.1b | Negative | Another user requests that notification | 404; they never see it | `NotificationTest.tcFr07_1b_userIsolationCannotAccessOtherUsersNotification` | Automated |
 | TC-FR-07.1c | Equivalence | Mark it as read | The unread count goes down by one | `NotificationTest.tcFr07_1c_markAsReadDecrementsUnreadCount` | Automated |
+| TC-FR-07.1d | Equivalence | The bell with 1, 0, and 12 unread notifications | "1"; no count; "9+", and the label says how many | `NotificationBell.test.tsx` | Automated |
+| TC-FR-07.1e | State transition | Open an unread notification, then a read one | One mark-read request for the unread one, none for the read one; each goes to its incident | `NotificationBell.test.tsx` | Automated |
 | TC-FR-07.8a | Negative | The change that caused the notification rolls back | No notification is left | `NotificationTest.tcFr07_8a_transactionRollbackCleansUpNotification` | Automated |
 
 ### Monitors and heartbeats (FR-22, D29): boundary values

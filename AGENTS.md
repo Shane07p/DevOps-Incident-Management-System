@@ -76,8 +76,11 @@ git checkout <branch> && git rebase origin/main      # or: continue an existing 
 - If `git pull --ff-only` fails or a rebase conflicts, stop and ask the user. Never reset, or
   resolve a conflict by discarding someone's work.
 - One focused pull request per issue, reviewed and merged by Shane once CI passes.
-- Commits are credited to their author: `git config user.email` must be verified on your GitHub
-  account. No `Co-Authored-By` lines for AI tools.
+- One person, one GitHub account. `git config user.email` must be a verified email of the same
+  account that opens your pull requests; otherwise your commits count for another account, or for
+  no one. After your first push, this must print your own login:
+  `gh api repos/Shane07p/DevOps-Incident-Management-System/commits/$(git rev-parse HEAD) --jq .author.login`.
+  No `Co-Authored-By` lines for AI tools.
 - Label every pull request with its issue's labels, including one area (`backend`, `frontend`,
   `ai-ml`, `devops`, or `documentation`); add `bug` for a fix, `test` for mostly tests, and
   `dependencies` for version bumps (`gh pr create --label backend …`).

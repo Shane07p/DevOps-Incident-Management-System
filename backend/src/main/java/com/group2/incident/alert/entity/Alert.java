@@ -75,7 +75,12 @@ public class Alert {
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
+@Column(name = "recovered_at")
+private Instant recoveredAt;
 
+public void markRecovered(Instant recoveredAt) {
+    this.recoveredAt = recoveredAt;
+}
 	public Alert(
 			String source,
 			String eventId,

@@ -6,22 +6,37 @@ import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.dto.CreateServiceRequest;
+import com.group2.incident.catalog.dto.ServiceDependenciesResponse;
+import com.group2.incident.catalog.dto.ServiceMapEdgeDto;
+import com.group2.incident.catalog.dto.ServiceMapNodeDto;
+import com.group2.incident.catalog.dto.ServiceMapResponse;
 import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.SlaTargetDto;
+import com.group2.incident.catalog.dto.UpdateDependenciesRequest;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceDependency;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.entity.SlaTarget;
+import com.group2.incident.catalog.repository.ServiceDependencyRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import java.time.Clock;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -40,6 +55,7 @@ public class ServiceCatalogService {
     );
 
     private final ServiceRepository serviceRepository;
+    private final ServiceDependencyRepository serviceDependencyRepository;
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
     private final Clock clock;
@@ -122,6 +138,103 @@ public class ServiceCatalogService {
         auditService.record(actor, AuditAction.SERVICE_UPDATED, AuditItemType.SERVICE, id, String.join("; ", changes));
 
         return ServiceResponse.from(saved);
+    }
+
+    @Transactional
+    public ServiceDependenciesResponse replaceDependencies(Long serviceId, UpdateDependenciesRequest request, Long actorId) {
+        ServiceEntity service = serviceRepository.findById(serviceId)
+                .orElseThrow(() -> new NotFoundException("Service " + serviceId + " not found"));
+
+        List<Long> requested = request.dependsOn() != null ? request.dependsOn() : List.of();
+        List<Long> distinctDependsOn = requested.stream().distinct().toList();
+
+        if (distinctDependsOn.contains(serviceId)) {
+            throw new FieldValidationException("dependsOn", "A service cannot depend on itself");
+        }
+
+        if (!distinctDependsOn.isEmpty()) {
+            List<ServiceEntity> referenced = serviceRepository.findAllById(distinctDependsOn);
+            if (referenced.size() != distinctDependsOn.size()) {
+                Set<Long> foundIds = referenced.stream().map(ServiceEntity::getId).collect(Collectors.toSet());
+                Long missingId = distinctDependsOn.stream().filter(id -> !foundIds.contains(id)).findFirst().orElse(null);
+                throw new FieldValidationException("dependsOn", "Referenced service does not exist: " + missingId);
+            }
+        }
+
+        List<Long> currentDependsOn = serviceDependencyRepository.findDependsOnIdsByServiceId(serviceId);
+        Set<Long> currentSet = new HashSet<>(currentDependsOn);
+        Set<Long> newSet = new HashSet<>(distinctDependsOn);
+
+        if (currentSet.equals(newSet)) {
+            return new ServiceDependenciesResponse(serviceId, distinctDependsOn);
+        }
+
+        serviceDependencyRepository.deleteByServiceId(serviceId);
+        serviceDependencyRepository.flush();
+        List<ServiceDependency> newEntities = distinctDependsOn.stream()
+                .map(depId -> new ServiceDependency(serviceId, depId))
+                .toList();
+        serviceDependencyRepository.saveAllAndFlush(newEntities);
+
+        AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
+        String details = "dependencies: " + currentDependsOn + " -> " + distinctDependsOn;
+        auditService.record(actor, AuditAction.SERVICE_DEPENDENCIES_UPDATED, AuditItemType.SERVICE, serviceId, details);
+
+        return new ServiceDependenciesResponse(serviceId, distinctDependsOn);
+    }
+
+    public ServiceMapResponse getServiceMap() {
+        List<ServiceEntity> allServices = serviceRepository.findAll();
+        List<ServiceMapNodeDto> nodes = allServices.stream()
+                .map(s -> new ServiceMapNodeDto(s.getId(), s.getName(), s.getCriticality(), "UNKNOWN"))
+                .sorted(Comparator.comparing(ServiceMapNodeDto::id))
+                .toList();
+
+        List<ServiceDependency> allDependencies = serviceDependencyRepository.findAll();
+        List<ServiceMapEdgeDto> edges = allDependencies.stream()
+                .map(d -> new ServiceMapEdgeDto(d.getServiceId(), d.getDependsOnId()))
+                .sorted(Comparator.comparing(ServiceMapEdgeDto::from).thenComparing(ServiceMapEdgeDto::to))
+                .toList();
+
+        return new ServiceMapResponse(nodes, edges);
+    }
+
+    public List<ServiceResponse> getBlastRadius(Long serviceId) {
+        if (!serviceRepository.existsById(serviceId)) {
+            throw new NotFoundException("Service " + serviceId + " not found");
+        }
+
+        List<ServiceDependency> allDependencies = serviceDependencyRepository.findAll();
+        Map<Long, List<Long>> dependentsMap = new HashMap<>();
+        for (ServiceDependency dep : allDependencies) {
+            dependentsMap.computeIfAbsent(dep.getDependsOnId(), k -> new ArrayList<>()).add(dep.getServiceId());
+        }
+
+        Set<Long> visited = new LinkedHashSet<>();
+        Queue<Long> queue = new ArrayDeque<>();
+        queue.add(serviceId);
+
+        while (!queue.isEmpty()) {
+            Long current = queue.poll();
+            List<Long> dependents = dependentsMap.getOrDefault(current, List.of());
+            for (Long dependentId : dependents) {
+                if (dependentId.equals(serviceId)) {
+                    continue;
+                }
+                if (visited.add(dependentId)) {
+                    queue.add(dependentId);
+                }
+            }
+        }
+
+        if (visited.isEmpty()) {
+            return List.of();
+        }
+
+        return serviceRepository.findAllById(visited).stream()
+                .map(ServiceResponse::from)
+                .sorted(Comparator.comparing(ServiceResponse::name))
+                .toList();
     }
 
     private ServiceEntity saveService(ServiceEntity service, String name) {

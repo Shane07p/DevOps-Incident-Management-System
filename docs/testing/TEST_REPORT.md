@@ -66,3 +66,15 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Manual demo | |
 | Defects | |
 | Notes | |
+
+## Sprint 4 (in progress)
+
+### Issue #154 — Service map: dependencies and blast radius (1 November 2026)
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Backend: 329 run, 329 passed, 0 failed, 0 skipped (`ServiceDependencyControllerTest`: 16 passed; `DatabaseSchemaTest`: 74 passed; `SecurityMatrixTest`: 28 passed; `ServiceCatalogServiceTest`: 14 passed). Source: local run with Maven and Docker Testcontainers PostgreSQL, 1 November 2026 |
+| Coverage | Backend: `ServiceDependencyControllerTest` covers all dependency replacement, graph traversal, cycle handling, deduplication, audit logging, and security endpoints; `ServiceMapController` 100% line/branch; `ServiceCatalogService` > 88% instructions covered. |
+| Test cases | TC-FR-14.2a to p all automated and passed. |
+| Defects | None found. |
+| Notes | Implemented `PUT /api/services/{id}/dependencies`, `GET /api/service-map`, and `GET /api/services/{id}/blast-radius`. Real PostgreSQL Flyway migration `V10__service_dependencies.sql` verified with cascade deletion and check constraints. Security matrix updated for all three endpoints. |

@@ -220,6 +220,27 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"PUT /api/services/{id}/dependencies",
+						HttpMethod.PUT,
+						"/api/services/{id}/dependencies",
+						"{\"dependsOn\":[]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}/blast-radius",
+						HttpMethod.GET,
+						"/api/services/{id}/blast-radius",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/service-map",
+						HttpMethod.GET,
+						"/api/service-map",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/tools",
 						HttpMethod.GET,
 						"/api/tools",

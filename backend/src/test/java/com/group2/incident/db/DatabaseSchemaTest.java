@@ -25,7 +25,7 @@ class DatabaseSchemaTest {
 	private static final List<String> TABLES =
 			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
-					"alert", "notification");
+					"alert", "notification", "service_dependency");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -338,6 +338,76 @@ class DatabaseSchemaTest {
 		assertThatThrownBy(() -> insertTarget(-1, "SEV1", 15, 240))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("service_sla_target_service_id_fkey");
+	}
+
+	// service_dependency
+
+	@Test
+	void serviceDependencyAllowsValidLink() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+		long s2 = insertService("Database", user, "CRITICAL");
+
+		insertDependency(s1, s2);
+
+		assertThat(jdbc.queryForObject(
+				"select count(*) from service_dependency where service_id = ? and depends_on_id = ?",
+				Integer.class, s1, s2)).isEqualTo(1);
+	}
+
+	@Test
+	void serviceDependencyRejectsSelfDependency() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+
+		assertThatThrownBy(() -> insertDependency(s1, s1))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("service_dependency_no_self_dep");
+	}
+
+	@Test
+	void serviceDependencyRejectsDuplicateLink() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+		long s2 = insertService("Database", user, "CRITICAL");
+		insertDependency(s1, s2);
+
+		assertThatThrownBy(() -> insertDependency(s1, s2))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("service_dependency_pkey");
+	}
+
+	@Test
+	void serviceDependencyRejectsUnknownService() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+
+		assertThatThrownBy(() -> insertDependency(-1, s1))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("service_dependency_service_id_fkey");
+	}
+
+	@Test
+	void serviceDependencyRejectsUnknownDependsOn() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+
+		assertThatThrownBy(() -> insertDependency(s1, -1))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("service_dependency_depends_on_id_fkey");
+	}
+
+	@Test
+	void serviceDependencyCascadesOnServiceDelete() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+		long s2 = insertService("Database", user, "CRITICAL");
+		insertDependency(s1, s2);
+
+		jdbc.update("delete from service where id = ?", s1);
+
+		assertThat(jdbc.queryForObject(
+				"select count(*) from service_dependency where service_id = ?", Integer.class, s1)).isZero();
 	}
 
 	// incident
@@ -709,6 +779,12 @@ class DatabaseSchemaTest {
 		return jdbc.queryForObject("""
 				insert into monitoring_tool (name, token_hash, created_at)
 				values (?, ?, now()) returning id""", Long.class, name, tokenHash);
+	}
+
+	private void insertDependency(long serviceId, long dependsOnId) {
+		jdbc.update("""
+				insert into service_dependency (service_id, depends_on_id)
+				values (?, ?)""", serviceId, dependsOnId);
 	}
 
 }

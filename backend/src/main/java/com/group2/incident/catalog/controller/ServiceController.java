@@ -1,7 +1,9 @@
 package com.group2.incident.catalog.controller;
 
 import com.group2.incident.catalog.dto.CreateServiceRequest;
+import com.group2.incident.catalog.dto.ServiceDependenciesResponse;
 import com.group2.incident.catalog.dto.ServiceResponse;
+import com.group2.incident.catalog.dto.UpdateDependenciesRequest;
 import com.group2.incident.catalog.service.ServiceCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -58,5 +60,21 @@ public class ServiceController {
             @AuthenticationPrincipal Jwt jwt) {
         Long actorId = jwt != null ? Long.parseLong(jwt.getSubject()) : null;
         return serviceCatalogService.update(id, request, actorId);
+    }
+
+    @PutMapping("/{id}/dependencies")
+    @Operation(summary = "Replace service dependencies (Admin)")
+    public ServiceDependenciesResponse replaceDependencies(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateDependenciesRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        Long actorId = jwt != null ? Long.parseLong(jwt.getSubject()) : null;
+        return serviceCatalogService.replaceDependencies(id, request, actorId);
+    }
+
+    @GetMapping("/{id}/blast-radius")
+    @Operation(summary = "Get blast radius for service (Admin)")
+    public List<ServiceResponse> getBlastRadius(@PathVariable Long id) {
+        return serviceCatalogService.getBlastRadius(id);
     }
 }

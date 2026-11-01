@@ -66,3 +66,13 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Manual demo | |
 | Defects | |
 | Notes | |
+
+## Sprint 4 (in progress)
+
+### Issue #153 Audit Log API (2026-11-01, 0bd335c)
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Backend: `AuditControllerTest` 19 passed; `SecurityMatrixTest` 26 passed (including `GET /api/audit`); `AuditServiceTest` 4 passed; `DatabaseSchemaTest` 68 passed; `ArchitectureTest` 6 passed. Total test suite verified via `./mvnw verify` (0 failures, 0 errors). |
+| Test cases | 19 automated and passed: TC-FR-13.2a to m, TC-FR-01.2f to h, TC-FR-01.1n, TC-FR-13.3b, c. |
+| Notes | Real PostgreSQL / Testcontainers integration test verified 50-entry pagination boundaries, newest-first ordering, secondary ID sort, combined AND filters (itemType, itemId, actorId, from/to range), and immutability guarantees. |

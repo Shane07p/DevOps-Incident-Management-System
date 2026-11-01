@@ -281,6 +281,13 @@ public class SecurityMatrixTest {
 						"/api/notifications/{id}/read",
 						null,
 						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/audit",
+						HttpMethod.GET,
+						"/api/audit",
+						null,
+						200, 403, 403, 401
 				)
 		);
 	}

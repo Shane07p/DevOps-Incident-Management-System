@@ -307,6 +307,34 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 ---
 
+## Sprint 4
+
+### Audit Log API (FR-13, Issue #153)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-13.2a | Equivalence | Admin requests audit log entries | 200 with actor display name, action, item type, item ID, details, and recorded timestamp | `AuditControllerTest.responseContainsAllRequiredFields` | Automated |
+| TC-FR-13.2b | Ordering | Read entries with differing timestamps | Ordered newest first (recordedAt DESC) | `AuditControllerTest.adminReadsAuditEntriesNewestFirst` | Automated |
+| TC-FR-13.2c | Boundary value | 51 seeded entries on page 0 | Returns exactly 50 entries for page 0 and totalElements 51 | `AuditControllerTest.auditEntriesArePaginatedInPagesOfFifty` | Automated |
+| TC-FR-13.2d | State / Boundary | Page traversal across 52 records | Page boundaries do not duplicate or skip records under a stable dataset | `AuditControllerTest.pageBoundariesDoNotDuplicateOrSkipRecords` | Automated |
+| TC-FR-13.2e | Equivalence | Filter by itemType | Returns only entries matching the specified item type | `AuditControllerTest.filtersByItemType` | Automated |
+| TC-FR-13.2f | Equivalence | Filter by itemId | Returns only entries matching the specified item ID | `AuditControllerTest.filtersByItemId` | Automated |
+| TC-FR-13.2g | Equivalence | Filter by actorId | Returns only entries initiated by the specified actor | `AuditControllerTest.filtersByActor` | Automated |
+| TC-FR-13.2h | Boundary value | Filter by time range [from, to) | Returns entries within inclusive `from` and exclusive `to` bounds | `AuditControllerTest.filtersByTimeRange` | Automated |
+| TC-FR-13.2i | Decision table | Combined itemType and actorId filters | Returns only records matching every supplied filter (AND semantics) | `AuditControllerTest.combinesFiltersUsingAndSemantics` | Automated |
+| TC-FR-13.2j | Equivalence | Filter with no matching records | 200 with empty content and totalElements = 0 | `AuditControllerTest.emptyResultsReturnAnEmptyPage` | Automated |
+| TC-FR-13.2k | Equivalence (invalid) | Negative page, invalid timestamp, from >= to, unknown itemType | 400 Bad Request with field errors | `AuditControllerTest.invalidPageAndTimeRangeReturn400` | Automated |
+| TC-FR-01.2f | Decision table | Engineer calls `GET /api/audit` | 403 Forbidden | `AuditControllerTest.engineerReceives403`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-01.2g | Decision table | Viewer calls `GET /api/audit` | 403 Forbidden | `AuditControllerTest.viewerReceives403`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-01.2h | Decision table | Unauthenticated call to `GET /api/audit` | 401 Unauthorized | `AuditControllerTest.unauthenticatedReceives401`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-01.1n | Equivalence (invalid) | Invalid token header to `GET /api/audit` | 401 Unauthorized | `AuditControllerTest.invalidTokenReceives401` | Automated |
+| TC-FR-13.3b | Negative | Repeated reads to `GET /api/audit` | Audit log row count and entry contents remain completely unchanged | `AuditControllerTest.readingAuditLogDoesNotChangeExistingEntries` | Automated |
+| TC-FR-13.2l | Equivalence | System-generated audit record with null actor | 200 with null actorDisplayName, entry successfully returned | `AuditControllerTest.systemGeneratedEntryWithNullActorIsHandledCorrectly` | Automated |
+| TC-FR-13.2m | Ordering | Entries with identical recordedAt timestamps | Secondary sort by id DESC produces deterministic ordering | `AuditControllerTest.equalTimestampsDeterminiticOrdering` | Automated |
+| TC-FR-13.3c | Negative | POST, PUT, DELETE requests to `/api/audit` | 405 Method Not Allowed; endpoint is strictly read-only | `AuditControllerTest.mutationMethodsAreNotExposed` | Automated |
+
+---
+
 ## White-box testing
 
 Two rule methods get basis path testing, done by their owners once the code exists:

@@ -155,7 +155,7 @@ blocks starts.
 | Checks from 2 to 3 regions, down only when 2 agree; Grafana alert rules post into intake | Manush | D35, D36 | One failing region raises nothing; two do | #88: Open |
 | Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Open |
 | Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Open |
-| Agent tool loop on demo data | Himanshu | [AI/ML roadmap](ai-ml-roadmap.md) | pytest | #91: Open |
+| Agent tool loop on demo data | Himanshu | [AI/ML roadmap](ai-ml-roadmap.md) | pytest | #91: In review |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |
 | Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Open |
 | Metric-baseline and deploy-window evidence | Dhruva | AI/ML roadmap | pytest | #93: Open |

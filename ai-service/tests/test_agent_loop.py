@@ -137,7 +137,112 @@ def test_tool_registry_validates_argument_types():
 # 2. Evidence Vault & Hypothesis Attribution Verification
 # ---------------------------------------------------------------------------
 
-def test_evidence_vault_filters_unsupported_hypotheses():
+def test_evidence_vault_add_many_collision_and_uniqueness():
+    vault = EvidenceVault()
+    # First batch with duplicate IDs
+    ev1 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c1")
+    ev2 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c2")
+    stored1 = vault.add_many([ev1, ev2])
+    assert len(vault.all_items()) == 2
+    assert stored1[0].id == "ev-dup"
+    assert stored1[1].id != "ev-dup"
+    # Second batch adding another item with the original duplicate ID
+    ev3 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c3")
+    stored2 = vault.add_many([ev3])
+    assert len(vault.all_items()) == 3
+    # Ensure the new ID is unique and not any of the previous ones
+    new_ids = {item.id for item in stored2}
+    assert len(new_ids) == 1
+    new_id = next(iter(new_ids))
+    assert new_id not in {"ev-dup", stored1[1].id}
+    # Verify all IDs are retrievable
+    for ev in vault.all_items():
+        assert vault.get(ev.id) is ev
+
+    vault = EvidenceVault()
+    real_ev = EvidenceItem(
+        id="ev-log-0",
+        source_tool="query_log_patterns",
+        evidence_type="log_pattern",
+        content="some content",
+        details={}
+    )
+    vault.add(real_ev)
+    assert vault.get("ev-log-0") == real_ev
+
+
+# ---------------------------------------------------------------------------
+# Security regression tests for ToolRegistry argument validation
+# ---------------------------------------------------------------------------
+
+from agent_tools import build_default_tool_registry
+
+
+def test_tool_registry_rejects_unknown_argument():
+    registry = build_default_tool_registry()
+    result = registry.execute(
+        "query_log_patterns",
+        {
+            "service": "payments",
+            "incident_start": "2026-10-27T00:00:00Z",
+            "incident_end": "2026-10-28T00:00:00Z",
+            "unexpected": "value",
+        },
+    )
+    assert not result.success
+    assert "unexpected" in result.error
+
+
+def test_tool_registry_rejects_log_file_path_argument():
+    registry = build_default_tool_registry()
+    result = registry.execute(
+        "query_log_patterns",
+        {
+            "service": "payments",
+            "incident_start": "2026-10-27T00:00:00Z",
+            "incident_end": "2026-10-28T00:00:00Z",
+            "log_file_path": "C:/tmp/malicious.jsonl",
+        },
+    )
+    assert not result.success
+    assert "log_file_path" in result.error
+
+
+def test_tool_registry_valid_fixture_access():
+    registry = build_default_tool_registry()
+    result = registry.execute(
+        "query_log_patterns",
+        {
+            "service": "payments",
+            "incident_start": "2026-10-27T00:00:00Z",
+            "incident_end": "2026-10-28T00:00:00Z",
+        },
+    )
+    assert result.success
+    assert isinstance(result.evidence_items, list)
+    assert len(result.evidence_items) > 0
+
+    vault = EvidenceVault()
+    # First batch with duplicate IDs
+    ev1 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c1")
+    ev2 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c2")
+    stored1 = vault.add_many([ev1, ev2])
+    assert len(vault.all_items()) == 2
+    assert stored1[0].id == "ev-dup"
+    assert stored1[1].id != "ev-dup"
+    # Second batch adding another item with the original duplicate ID
+    ev3 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c3")
+    stored2 = vault.add_many([ev3])
+    assert len(vault.all_items()) == 3
+    # Ensure the new ID is unique and not any of the previous ones
+    new_ids = {item.id for item in stored2}
+    assert len(new_ids) == 1
+    new_id = next(iter(new_ids))
+    assert new_id not in {"ev-dup", stored1[1].id}
+    # Verify all IDs are retrievable
+    for ev in vault.all_items():
+        assert vault.get(ev.id) is ev
+
     vault = EvidenceVault()
     real_ev = EvidenceItem(
         id="ev-log-0",

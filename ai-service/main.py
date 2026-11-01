@@ -460,13 +460,17 @@ async def embed(request: EmbedRequest) -> EmbedResponse:
 
 def get_investigation_provider() -> LlmProvider:
     """
-    Return active model provider for agent investigations.
-    Prefers injected app.state.agent_provider if set (e.g. for deterministic testing),
+    Return active model provider for agent investigations. Prefers injected app.state.agent_provider if set (e.g. for deterministic testing),
     otherwise defaults to OllamaProvider using configured AGENT_MODEL and OLLAMA_URL.
+    Reuses the FastAPI lifespan-managed http client when available to avoid creating a separate client.
     """
     provider = getattr(app.state, "agent_provider", None)
     if provider is not None:
         return provider
+    # Reuse the lifespan-managed HTTP client if present and not closed.
+    http_client = getattr(app.state, "http_client", None)
+    if http_client is not None and not getattr(http_client, "is_closed", True):
+        return OllamaProvider(base_url=get_ollama_url(), model=get_agent_model(), http_client=http_client)
     return OllamaProvider(
         base_url=get_ollama_url(),
         model=get_agent_model(),

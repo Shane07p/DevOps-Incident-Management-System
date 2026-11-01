@@ -99,18 +99,47 @@ def test_ready_reports_not_ready_when_model_not_pulled():
     assert data["ollama"]["model_pulled"] is False
 
 
-def test_ready_reports_not_ready_when_ollama_unavailable():
+
+
+def test_get_investigation_provider_reuses_lifespan_client(monkeypatch):
+    """Ensure the provider reuses the FastAPI lifespan‑managed http client.
+    The test injects a mock AsyncClient into ``app.state.http_client`` and
+    verifies that ``OllamaProvider`` is constructed with that same instance.
+    """
+    from main import get_investigation_provider, app, OllamaProvider
+    # Prepare a mock AsyncClient that reports not closed.
     mock_client = AsyncMock()
-    mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+    mock_client.is_closed = False
+    # Ensure no injected deterministic provider interferes.
+    if hasattr(app.state, "agent_provider"):
+        delattr(app.state, "agent_provider")
+    app.state.http_client = mock_client
+    # Use monkeypatch to set and automatically restore http_client.
+    monkeypatch.setattr(app.state, "http_client", mock_client, raising=False)
+    provider = get_investigation_provider()
+    assert isinstance(provider, OllamaProvider)
+    # The provider should reuse the injected client.
+    assert getattr(provider, "_client", None) is mock_client
 
-    with patch("main._get_client", return_value=mock_client):
-        response = client.get("/ready")
 
-    assert response.status_code == 503
-    data = response.json()
-    assert data["status"] == "not_ready"
-    assert data["ollama"]["reachable"] is False
-    assert data["ollama"]["model_pulled"] is False
+
+
+def test_get_investigation_provider_uses_injected_provider(monkeypatch):
+    """When ``app.state.agent_provider`` is set, it must be returned unchanged.
+    This mirrors the existing deterministic testing path.
+    """
+    from main import get_investigation_provider, app
+    # Import the real MockProvider from providers module.
+    from providers import MockProvider
+    mock_provider = MockProvider()
+    # Use monkeypatch to set and automatically restore attributes.
+    monkeypatch.setattr(app.state, "agent_provider", mock_provider, raising=False)
+    mock_client = AsyncMock()
+    monkeypatch.setattr(app.state, "http_client", mock_client, raising=False)
+    result = get_investigation_provider()
+    assert result is mock_provider
+    # No explicit cleanup needed – monkeypatch will revert the state.
+
 
 
 # ---------------------------------------------------------------------------

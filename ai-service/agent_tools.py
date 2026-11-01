@@ -374,6 +374,79 @@ class ToolRegistry:
         return [tool.to_schema() for tool in self._tools.values()]
 
     def execute(self, name: str, args: Dict[str, Any]) -> ToolResult:
+        """Execute a registered tool with validated arguments.
+
+        - Checks that all required arguments are present.
+        - Rejects any arguments not declared in the tool's schema (prevents model‑controlled arbitrary parameters).
+        - Validates basic type constraints.
+        """
+        tool = self.get(name)
+        if tool is None:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error=f"Tool '{name}' is not registered. Valid tools: {list(self._tools.keys())}",
+            )
+
+        # Validate required arguments against parameters_schema
+        schema = tool.parameters_schema
+        required_fields = schema.get("required", [])
+        properties = schema.get("properties", {})
+
+        missing = [field for field in required_fields if field not in args or args[field] is None]
+        if missing:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error=f"Invalid arguments for tool '{name}': missing required fields {missing}",
+            )
+
+        # Reject undeclared arguments (security measure)
+        unexpected = [key for key in args if key not in properties]
+        if unexpected:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error=f"Invalid arguments for tool '{name}': unexpected fields {unexpected}",
+            )
+
+        # Validate types where specified
+        for key, val in args.items():
+            if key in properties:
+                expected_type = properties[key].get("type")
+                if expected_type == "string" and not isinstance(val, str):
+                    return ToolResult(
+                        tool_name=name,
+                        success=False,
+                        error=f"Invalid argument '{key}': expected string, got {type(val).__name__}",
+                    )
+                if expected_type == "number" and not isinstance(val, (int, float)):
+                    return ToolResult(
+                        tool_name=name,
+                        success=False,
+                        error=f"Invalid argument '{key}': expected number, got {type(val).__name__}",
+                    )
+                if expected_type == "integer" and not isinstance(val, int):
+                    return ToolResult(
+                        tool_name=name,
+                        success=False,
+                        error=f"Invalid argument '{key}': expected integer, got {type(val).__name__}",
+                    )
+
+        try:
+            return tool.func(**args)
+        except TypeError as exc:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error=f"Argument mismatch for tool '{name}': {exc}",
+            )
+        except Exception as exc:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error=f"Tool '{name}' failed with unhandled exception: {exc}",
+            )
         tool = self.get(name)
         if tool is None:
             return ToolResult(

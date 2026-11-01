@@ -31,6 +31,22 @@ def isolate_environment(monkeypatch):
     monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     monkeypatch.setenv("OLLAMA_TIMEOUT", "10")
+    # Reset app.state HTTP client and provider after every test to prevent
+    # mock leakage across tests (e.g. provider tests set app.state.http_client
+    # to an AsyncMock; without cleanup subsequent tests receive the mock client
+    # instead of a real one, causing wrong status codes like 502 vs 503).
+    yield
+    # Unconditionally clear any mock state set during the test.
+    # Use try/except because Starlette's State raises KeyError on missing keys
+    # even when hasattr returns True (it delegates to an internal dict).
+    try:
+        delattr(app.state, "http_client")
+    except (AttributeError, KeyError):
+        pass
+    try:
+        delattr(app.state, "agent_provider")
+    except (AttributeError, KeyError):
+        pass
 
 
 client = TestClient(app)
@@ -110,12 +126,15 @@ def test_get_investigation_provider_reuses_lifespan_client(monkeypatch):
     # Prepare a mock AsyncClient that reports not closed.
     mock_client = AsyncMock()
     mock_client.is_closed = False
+    # Set state directly; the autouse isolate_environment fixture cleans up
+    # app.state after each test, so no manual teardown is needed here.
+    app.state.http_client = mock_client
     # Ensure no injected deterministic provider interferes.
     if hasattr(app.state, "agent_provider"):
-        delattr(app.state, "agent_provider")
-    app.state.http_client = mock_client
-    # Use monkeypatch to set and automatically restore http_client.
-    monkeypatch.setattr(app.state, "http_client", mock_client, raising=False)
+        try:
+            delattr(app.state, "agent_provider")
+        except (AttributeError, KeyError):
+            pass
     provider = get_investigation_provider()
     assert isinstance(provider, OllamaProvider)
     # The provider should reuse the injected client.
@@ -132,13 +151,13 @@ def test_get_investigation_provider_uses_injected_provider(monkeypatch):
     # Import the real MockProvider from providers module.
     from providers import MockProvider
     mock_provider = MockProvider()
-    # Use monkeypatch to set and automatically restore attributes.
-    monkeypatch.setattr(app.state, "agent_provider", mock_provider, raising=False)
+    # Set state directly; the autouse isolate_environment fixture cleans up
+    # app.state after each test, so no manual teardown is needed here.
+    app.state.agent_provider = mock_provider
     mock_client = AsyncMock()
-    monkeypatch.setattr(app.state, "http_client", mock_client, raising=False)
+    app.state.http_client = mock_client
     result = get_investigation_provider()
     assert result is mock_provider
-    # No explicit cleanup needed – monkeypatch will revert the state.
 
 
 

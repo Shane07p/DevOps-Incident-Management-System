@@ -7,7 +7,7 @@ flowchart TD
   Browser[Settle UI: React on Vercel] -->|/api with JWT| Backend[Spring Boot backend on Render]
   Tools[Monitoring tools and Grafana alert rules] -->|/webhooks/alerts| Backend
   CI[CI pipelines] -->|/webhooks/deploys| Backend
-  Probes[Probe agents in 2-3 regions] -->|check results| Backend
+  Probes[Grafana checks from 2-3 locations] -->|alerts through Grafana alert rules| Backend
   Jobs[Scheduled jobs] -->|heartbeat pings| Backend
   Backend --> Database[(PostgreSQL on Supabase)]
   Backend -->|outbox| Queue[RabbitMQ: email; AI jobs later]

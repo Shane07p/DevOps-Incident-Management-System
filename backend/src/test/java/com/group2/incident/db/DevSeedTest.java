@@ -52,14 +52,18 @@ class DevSeedTest {
 	}
 
 	@Test
-	void seedCreatesOneEnabledUserPerRole() throws IOException {
+	void seedCreatesDevOrgWithOneEnabledMemberPerRole() throws IOException {
 		runSeed();
 
 		List<String> users = jdbc.queryForList("""
-				select username || ':' || role || ':' || enabled || ':' || token_version
-				from app_user order by username""", String.class);
+				select u.email || ':' || m.role || ':' || m.enabled || ':' || u.token_version
+				from app_user u
+				join membership m on m.user_id = u.id
+				join organization o on o.id = m.org_id and o.slug = 'dev-org'
+				order by u.email""", String.class);
 
-		assertThat(users).containsExactly("admin:ADMIN:true:0", "engineer:ENGINEER:true:0", "viewer:VIEWER:true:0");
+		assertThat(users).containsExactly("admin@settle.local:ADMIN:true:0", "engineer@settle.local:ENGINEER:true:0",
+				"viewer@settle.local:VIEWER:true:0");
 	}
 
 	@Test
@@ -67,7 +71,7 @@ class DevSeedTest {
 		runSeed();
 		PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
-		for (String hash : jdbc.queryForList("select password_hash from app_user", String.class)) {
+		for (String hash : jdbc.queryForList("select password_hash from app_user where email like '%@settle.local'", String.class)) {
 			assertThat(encoder.matches("DevPassw0rd!", hash)).isTrue();
 		}
 	}
@@ -77,22 +81,28 @@ class DevSeedTest {
 		runSeed();
 
 		Map<String, Object> service = jdbc.queryForMap("""
-				select s.criticality, u.username as owner
-				from service s join app_user u on u.id = s.owner_id
+				select s.criticality, u.email as owner
+				from service s
+				join app_user u on u.id = s.owner_id
+				join organization o on o.id = s.org_id and o.slug = 'dev-org'
 				where s.name = 'Payments'""");
 		List<String> targets = jdbc.queryForList("""
 				select t.severity || ':' || t.response_minutes || ':' || t.resolution_minutes
 				from service_sla_target t join service s on s.id = t.service_id
+				join organization o on o.id = s.org_id and o.slug = 'dev-org'
 				where s.name = 'Payments' order by t.severity""", String.class);
 
-		assertThat(service).containsEntry("criticality", "CRITICAL").containsEntry("owner", "admin");
+		assertThat(service).containsEntry("criticality", "CRITICAL").containsEntry("owner", "admin@settle.local");
 		assertThat(targets).containsExactly("SEV1:15:240", "SEV2:60:480", "SEV3:240:2880", "SEV4:1440:10080");
 	}
 
 	@Test
 	void seedIsIdempotent() throws IOException {
-		String counts = "select (select count(*) from app_user) || '/' || (select count(*) from service)"
-				+ " || '/' || (select count(*) from service_sla_target)";
+		// Only the dev org's rows: other tests may have committed rows in their own orgs.
+		String counts = "select (select count(*) from membership m join organization o on o.id = m.org_id where o.slug = 'dev-org')"
+				+ " || '/' || (select count(*) from service s join organization o on o.id = s.org_id where o.slug = 'dev-org')"
+				+ " || '/' || (select count(*) from service_sla_target t join service s on s.id = t.service_id"
+				+ " join organization o on o.id = s.org_id where o.slug = 'dev-org')";
 		runSeed();
 		String once = jdbc.queryForObject(counts, String.class);
 

@@ -32,6 +32,7 @@ import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -59,6 +60,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 class EscalationIntegrationTest {
 
 	private static final String PASSWORD = "Secret123!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -123,10 +127,10 @@ class EscalationIntegrationTest {
 	void setUp() throws Exception {
 		Instant now = clock.instant();
 
-		admin = appUserRepository.saveAndFlush(new AppUser("admin_esc", "admin_esc@test.local", "Admin Escalation", passwordEncoder.encode(PASSWORD), Role.ADMIN, now));
-		responder1 = appUserRepository.saveAndFlush(new AppUser("responder1", "responder1@test.local", "Responder Level 1", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
-		responder2 = appUserRepository.saveAndFlush(new AppUser("responder2", "responder2@test.local", "Responder Level 2", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
-		fallbackUser = appUserRepository.saveAndFlush(new AppUser("fallback_user", "fallback_user@test.local", "Fallback Contact", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
+		admin = accounts.save(new AppUser("admin_esc@test.local", "Admin Escalation", passwordEncoder.encode(PASSWORD), now), Role.ADMIN);
+		responder1 = accounts.save(new AppUser("responder1@test.local", "Responder Level 1", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
+		responder2 = accounts.save(new AppUser("responder2@test.local", "Responder Level 2", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
+		fallbackUser = accounts.save(new AppUser("fallback_user@test.local", "Fallback Contact", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
 
 		adminToken = tokenFor("admin_esc");
 		responderToken = tokenFor("responder1");
@@ -166,7 +170,7 @@ class EscalationIntegrationTest {
 	}
 
 	private String tokenFor(String username) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", PASSWORD);
 		String response = mvc.perform(
 						org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/login")
 								.contentType(MediaType.APPLICATION_JSON)

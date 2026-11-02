@@ -67,7 +67,7 @@ class ApiExceptionHandlerTest {
 	void failedLoginReturns401WithoutSayingWhichPartWasWrong() throws Exception {
 		mvc.perform(get("/probe/login"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.message").value("Invalid username or password"));
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
 	}
 
 	@Test

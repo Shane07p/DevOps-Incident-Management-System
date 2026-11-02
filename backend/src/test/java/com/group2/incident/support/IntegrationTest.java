@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, TestAccounts.class })
 @Transactional
 @TestExecutionListeners(
 		listeners = { RateLimitResetTestExecutionListener.class, TestOrgExecutionListener.class },

@@ -17,6 +17,7 @@ import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.List;
@@ -32,6 +33,9 @@ import org.springframework.test.web.servlet.MockMvc;
 public class ServiceControllerTest {
 
     private static final String PASSWORD = "DevPassw0rd!";
+
+    @Autowired
+    private TestAccounts accounts;
 
     @Autowired
     private MockMvc mvc;
@@ -263,12 +267,11 @@ public class ServiceControllerTest {
     }
 
     private AppUser createUser(String username, Role role) {
-        return users.saveAndFlush(new AppUser(username, username + "@test.local", "Test " + username, passwordEncoder.encode(PASSWORD), role,
-                clock.instant()));
+        return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(PASSWORD), clock.instant()), role);
     }
 
     private String tokenFor(String username) throws Exception {
-        String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
+        String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", PASSWORD);
         String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

@@ -55,8 +55,7 @@ class TenantFilteringTest {
 			orgB = orgs.save(new Organization("Org B", "tenant-b-" + suffix, NOW)).getId();
 			return null;
 		});
-		AppUser owner = tx.execute(status -> users.save(new AppUser("tenant-owner-" + suffix, "tenant-owner-" + suffix + "@test.local", "Owner", "{noop}x",
-				com.group2.incident.auth.entity.Role.ADMIN, NOW)));
+		AppUser owner = tx.execute(status -> users.save(new AppUser("tenant-owner-" + suffix + "@test.local", "Owner", "{noop}x", NOW)));
 		OrgContext.runAs(orgA, () -> tx.execute(status -> services.save(new ServiceEntity("Payments", "A", owner, Criticality.HIGH, NOW))));
 		serviceOfB = OrgContext.runAs(orgB, () -> tx.execute(status ->
 				services.save(new ServiceEntity("Payments", "B", owner, Criticality.HIGH, NOW)).getId()));

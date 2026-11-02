@@ -23,7 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class DatabaseSchemaTest {
 
 	private static final List<String> TABLES =
-			List.of("app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
+			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
 					"alert", "notification");
 
@@ -89,8 +89,16 @@ class DatabaseSchemaTest {
 	void newUserGetsDefaults() {
 		long id = insertUser("asha");
 
-		assertThat(jdbc.queryForObject("select enabled from app_user where id = ?", Boolean.class, id)).isTrue();
 		assertThat(jdbc.queryForObject("select token_version from app_user where id = ?", Integer.class, id)).isZero();
+	}
+
+	@Test
+	void aGoogleOnlyAccountMayHaveNoPassword() {
+		Long id = jdbc.queryForObject("""
+				insert into app_user (email, display_name, password_hash, created_at)
+				values ('google@test.local', 'Google', null, now()) returning id""", Long.class);
+
+		assertThat(id).isNotNull();
 	}
 
 	@Test
@@ -99,8 +107,8 @@ class DatabaseSchemaTest {
 		String argon2Sized = "{argon2@SpringSecurity_v5_8}" + "x".repeat(97);
 
 		long id = jdbc.queryForObject("""
-				insert into app_user (email, username, display_name, password_hash, role, created_at)
-				values (gen_random_uuid() || '@test.local', 'asha', 'Asha', ?, 'ENGINEER', now()) returning id""", Long.class, argon2Sized);
+				insert into app_user (email, display_name, password_hash, created_at)
+				values ('asha@test.local', 'Asha', ?, now()) returning id""", Long.class, argon2Sized);
 
 		assertThat(jdbc.queryForObject("select length(password_hash) from app_user where id = ?", Integer.class, id))
 				.isEqualTo(125);
@@ -108,29 +116,67 @@ class DatabaseSchemaTest {
 
 	@Test
 	void unknownRoleIsRejected() {
-		assertThatThrownBy(() -> jdbc.update("""
-				insert into app_user (email, username, display_name, password_hash, role, created_at)
-				values (gen_random_uuid() || '@test.local', 'asha', 'Asha', '{noop}x', 'OWNER', now())"""))
+		long user = insertUser("asha");
+
+		assertThatThrownBy(() -> insertMembership(user, "OWNER"))
 				.isInstanceOf(DataIntegrityViolationException.class)
-				.hasMessageContaining("app_user_role_check");
+				.hasMessageContaining("membership_role_check");
 	}
 
 	@Test
-	void duplicateUsernameIsRejected() {
+	void newMembershipIsEnabled() {
+		long id = insertMembership(insertUser("asha"), "ENGINEER");
+
+		assertThat(jdbc.queryForObject("select enabled from membership where id = ?", Boolean.class, id)).isTrue();
+	}
+
+	@Test
+	void aPersonBelongsToOneOrgForNow() {
+		long user = insertUser("asha");
+		insertMembership(user, "ENGINEER");
+		long otherOrg = jdbc.queryForObject(
+				"insert into organization (name, slug, created_at) values ('Other', 'other-schema', now()) returning id", Long.class);
+
+		assertThatThrownBy(() -> jdbc.update(
+				"insert into membership (org_id, user_id, role, created_at) values (?, ?, 'VIEWER', now())", otherOrg, user))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("membership_user_key");
+	}
+
+	@Test
+	void aPersonIsInAnOrgOnce() {
+		long user = insertUser("asha");
+		insertMembership(user, "ENGINEER");
+
+		assertThatThrownBy(() -> insertMembership(user, "VIEWER"))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("membership_org_user_key");
+	}
+
+	@Test
+	void anOrgSlugIsLowerCaseWordsJoinedByHyphens() {
+		assertThatThrownBy(() -> jdbc.update(
+				"insert into organization (name, slug, created_at) values ('Bad', 'Bad Slug', now())"))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("organization_slug_check");
+	}
+
+	@Test
+	void duplicateEmailIsRejected() {
 		insertUser("asha");
 
 		assertThatThrownBy(() -> insertUser("asha"))
 				.isInstanceOf(DataIntegrityViolationException.class)
-				.hasMessageContaining("app_user_username_key");
+				.hasMessageContaining("app_user_email_key");
 	}
 
 	@Test
-	void usernameDifferingOnlyInCaseIsRejected() {
+	void emailDifferingOnlyInCaseIsRejected() {
 		insertUser("asha");
 
 		assertThatThrownBy(() -> insertUser("Asha"))
 				.isInstanceOf(DataIntegrityViolationException.class)
-				.hasMessageContaining("app_user_username_key");
+				.hasMessageContaining("app_user_email_key");
 	}
 
 	@Test
@@ -665,10 +711,16 @@ class DatabaseSchemaTest {
 		return new Fixture(user, insertService("Payments", user, "HIGH"));
 	}
 
-	private long insertUser(String username) {
+	private long insertUser(String name) {
 		return jdbc.queryForObject("""
-				insert into app_user (email, username, display_name, password_hash, role, created_at)
-				values (gen_random_uuid() || '@test.local', ?, ?, '{noop}x', 'ENGINEER', now()) returning id""", Long.class, username, username);
+				insert into app_user (email, display_name, password_hash, created_at)
+				values (? || '@test.local', ?, '{noop}x', now()) returning id""", Long.class, name, name);
+	}
+
+	private long insertMembership(long userId, String role) {
+		return jdbc.queryForObject("""
+				insert into membership (org_id, user_id, role, created_at)
+				values ((select id from organization where slug = 'test-org'), ?, ?, now()) returning id""", Long.class, userId, role);
 	}
 
 	private long insertAudit(long actorId) {

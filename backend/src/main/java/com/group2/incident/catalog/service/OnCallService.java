@@ -1,7 +1,6 @@
 package com.group2.incident.catalog.service;
 
 import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.dto.OnCallScheduleResponse;
 import com.group2.incident.catalog.dto.ShiftRequest;
 import com.group2.incident.catalog.dto.UpdateOnCallScheduleRequest;
@@ -11,6 +10,8 @@ import com.group2.incident.catalog.repository.OnCallShiftRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
+import com.group2.incident.org.entity.Membership;
+import com.group2.incident.org.service.OrgMembers;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -26,7 +27,7 @@ public class OnCallService {
 
     private final ServiceRepository serviceRepository;
     private final OnCallShiftRepository onCallShiftRepository;
-    private final AppUserRepository appUserRepository;
+    private final OrgMembers orgMembers;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -42,12 +43,14 @@ public class OnCallService {
         ServiceEntity service = serviceRepository.findByIdForUpdate(serviceId)
                 .orElseThrow(() -> new NotFoundException("Service " + serviceId + " not found"));
 
-        AppUser fallbackContact = appUserRepository.findById(request.fallbackContactId())
+        // Only a member of this org (D48).
+        Membership fallbackMember = orgMembers.find(request.fallbackContactId())
                 .orElseThrow(() -> new FieldValidationException("fallbackContactId", "Fallback contact user not found"));
 
-        if (!fallbackContact.isEnabled()) {
+        if (!fallbackMember.isEnabled()) {
             throw new FieldValidationException("fallbackContactId", "Fallback contact must be an enabled user");
         }
+        AppUser fallbackContact = fallbackMember.getUser();
 
         List<ShiftRequest> shiftRequests = request.shifts() != null ? request.shifts() : List.of();
         validateShifts(shiftRequests);
@@ -58,11 +61,12 @@ public class OnCallService {
 
         List<OnCallShift> savedShifts = new ArrayList<>();
         for (ShiftRequest sr : shiftRequests) {
-            AppUser responder = appUserRepository.findById(sr.responderId())
+            Membership responderMember = orgMembers.find(sr.responderId())
                     .orElseThrow(() -> new FieldValidationException("shifts", "Responder user " + sr.responderId() + " not found"));
-            if (!responder.isEnabled()) {
+            if (!responderMember.isEnabled()) {
                 throw new FieldValidationException("shifts", "Responder must be an enabled user");
             }
+            AppUser responder = responderMember.getUser();
             OnCallShift shift = new OnCallShift(service, responder, sr.startTime(), sr.endTime());
             savedShifts.add(onCallShiftRepository.save(shift));
         }

@@ -9,7 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
+import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -23,7 +26,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +38,9 @@ import org.springframework.test.web.servlet.ResultActions;
 class AuthControllerTest {
 
 	private static final String PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -45,6 +53,9 @@ class AuthControllerTest {
 
 	@Autowired
 	private JwtEncoder jwtEncoder;
+
+	@Autowired
+	private JwtDecoder jwtDecoder;
 
 	@Autowired
 	private Clock clock;
@@ -64,10 +75,11 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.token").isNotEmpty())
 				.andExpect(jsonPath("$.expiresAt").isNotEmpty())
 				.andExpect(jsonPath("$.user.id").value(admin.getId()))
-				.andExpect(jsonPath("$.user.username").value("admin"))
+				.andExpect(jsonPath("$.user.email").value("admin@test.local"))
 				.andExpect(jsonPath("$.user.displayName").value("Test admin"))
 				.andExpect(jsonPath("$.user.role").value("ADMIN"))
-				.andExpect(jsonPath("$.user.passwordHash").doesNotExist());
+				.andExpect(jsonPath("$.user.passwordHash").doesNotExist())
+				.andExpect(jsonPath("$.org.slug").value(TestOrgExecutionListener.TEST_ORG_SLUG));
 	}
 
 	@Test
@@ -81,7 +93,7 @@ class AuthControllerTest {
 	}
 
 	@Test
-	void usernameIsCaseInsensitive() throws Exception {
+	void emailIsCaseInsensitive() throws Exception {
 		createUser("admin", Role.ADMIN);
 
 		login("ADMIN", PASSWORD).andExpect(status().isOk());
@@ -93,29 +105,31 @@ class AuthControllerTest {
 
 		login("admin", "wrong-password")
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.message").value("Invalid username or password"));
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
 	}
 
 	@Test
 	void unknownUserGetsTheSame401AsAWrongPassword() throws Exception {
 		login("nobody", PASSWORD)
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.message").value("Invalid username or password"));
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
 	}
 
 	@Test
-	void disabledUserCannotLogIn() throws Exception {
+	void aDisabledMembershipGetsTheSame401AsAWrongPassword() throws Exception {
 		createUser("engineer", Role.ENGINEER);
 		disable("engineer");
 
-		login("engineer", PASSWORD).andExpect(status().isUnauthorized());
+		login("engineer", PASSWORD)
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
 	}
 
 	@Test
 	void blankFieldsReturn400NamingEachField() throws Exception {
-		login("", "")
+		mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"\",\"password\":\"\"}"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errors.username").value("Username is required"))
+				.andExpect(jsonPath("$.errors.email").value("Email is required"))
 				.andExpect(jsonPath("$.errors.password").value("Password is required"));
 	}
 
@@ -126,8 +140,9 @@ class AuthControllerTest {
 
 		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.username").value("viewer"))
-				.andExpect(jsonPath("$.role").value("VIEWER"));
+				.andExpect(jsonPath("$.user.email").value("viewer@test.local"))
+				.andExpect(jsonPath("$.user.role").value("VIEWER"))
+				.andExpect(jsonPath("$.org.slug").value(TestOrgExecutionListener.TEST_ORG_SLUG));
 	}
 
 	@Test
@@ -167,6 +182,7 @@ class AuthControllerTest {
 				.issuedAt(issued)
 				.expiresAt(issued.plus(Duration.ofHours(1)))
 				.claim("tv", engineer.getTokenVersion())
+				.claim("org", OrgContext.current())
 				.build();
 		String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
 				.getTokenValue();
@@ -201,20 +217,75 @@ class AuthControllerTest {
 		mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
 	}
 
+	@Test
+	void theTokenCarriesTheOrgAndTheRole() throws Exception {
+		createUser("ana", Role.ENGINEER);
+
+		Jwt jwt = jwtDecoder.decode(tokenFor("ana"));
+
+		assertThat(((Number) jwt.getClaim("org")).longValue()).isEqualTo(OrgContext.current());
+		assertThat((String) jwt.getClaim("role")).isEqualTo("ENGINEER");
+	}
+
+	@Test
+	void aTokenWithoutAnOrgIsRefused() throws Exception {
+		AppUser engineer = createUser("engineer", Role.ENGINEER);
+
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + signed(engineer, null)))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void aTokenForAnOrgThePersonIsNotInIsRefused() throws Exception {
+		AppUser engineer = createUser("engineer", Role.ENGINEER);
+		Long otherOrg = jdbc.queryForObject(
+				"INSERT INTO organization (name, slug, created_at) VALUES ('Other', 'other-auth', now()) RETURNING id", Long.class);
+
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + signed(engineer, otherOrg)))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void aRoleChangeAppliesToTheNextRequest() throws Exception {
+		AppUser engineer = createUser("engineer", Role.ENGINEER);
+		String token = signed(engineer, OrgContext.current());
+		accounts.membership(engineer).changeRole(Role.VIEWER);
+		entityManager.flush();
+		entityManager.clear();
+
+		// The token still says ENGINEER; the membership says VIEWER, and the membership wins.
+		mvc.perform(post("/api/incidents").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isForbidden());
+	}
+
+	// A valid token for engineer as of now, with the role ENGINEER and the given org (none if null).
+	private String signed(AppUser user, Long org) {
+		Instant now = clock.instant();
+		JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
+				.subject(user.getId().toString())
+				.issuedAt(now)
+				.expiresAt(now.plus(Duration.ofHours(1)))
+				.claim("tv", user.getTokenVersion())
+				.claim("role", "ENGINEER");
+		if (org != null) {
+			claims.claim("org", org);
+		}
+		return jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build())).getTokenValue();
+	}
+
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, username + "@test.local", "Test " + username, passwordEncoder.encode(PASSWORD), role,
-				clock.instant()));
+		return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(PASSWORD), clock.instant()), role);
 	}
 
 	// Changes the row behind JPA's back, so the next lookup has to read it fresh.
 	private void disable(String username) {
 		entityManager.flush();
-		jdbc.update("update app_user set enabled = false where username = ?", username);
+		jdbc.update("update membership set enabled = false where user_id = (select id from app_user where email = ?)", username + "@test.local");
 		entityManager.clear();
 	}
 
 	private ResultActions login(String username, String password) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 

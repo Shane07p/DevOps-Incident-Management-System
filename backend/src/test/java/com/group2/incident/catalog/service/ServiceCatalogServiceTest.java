@@ -25,6 +25,8 @@ import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
+import com.group2.incident.org.service.OrgMembers;
+import com.group2.incident.support.Members;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -52,6 +54,9 @@ public class ServiceCatalogServiceTest {
     private AppUserRepository appUserRepository;
 
     @Mock
+    private OrgMembers orgMembers;
+
+    @Mock
     private AuditService auditService;
 
     private Clock fixedClock;
@@ -61,10 +66,11 @@ public class ServiceCatalogServiceTest {
     @BeforeEach
     void setUp() {
         fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        service = new ServiceCatalogService(serviceRepository, appUserRepository, auditService, fixedClock);
+        service = new ServiceCatalogService(serviceRepository, appUserRepository, orgMembers, auditService, fixedClock);
 
-        owner = new AppUser("alice", "alice@test.local", "Alice", "{noop}x", Role.ENGINEER, FIXED_NOW);
+        owner = new AppUser("alice@test.local", "Alice", "{noop}x", FIXED_NOW);
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(orgMembers.find(1L)).thenReturn(Optional.of(Members.of(owner, Role.ENGINEER)));
         when(serviceRepository.saveAndFlush(any(ServiceEntity.class))).thenAnswer(inv -> {
             ServiceEntity entity = inv.getArgument(0);
             try {
@@ -133,7 +139,7 @@ public class ServiceCatalogServiceTest {
         Map<Severity, SlaTargetDto> targets = validTargets();
         CreateServiceRequest request = new CreateServiceRequest("NewService", "Desc", 999L, Criticality.LOW, targets);
 
-        when(appUserRepository.findById(999L)).thenReturn(Optional.empty());
+        when(orgMembers.find(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(request, 1L))
                 .isInstanceOf(FieldValidationException.class)

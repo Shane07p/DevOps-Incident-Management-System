@@ -11,6 +11,7 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,9 @@ import org.springframework.transaction.support.DefaultTransactionDefinition;
 
 @IntegrationTest
 class AuditServiceTest {
+
+    @Autowired
+    private TestAccounts accounts;
 
     @Autowired
     private AuditService auditService;
@@ -41,8 +45,7 @@ class AuditServiceTest {
 
     @Test
     void recordSavesAllFieldsCorrectlyWithAnActor() {
-        AppUser actor = appUserRepository.save(
-                new AppUser("utsav", "utsav@test.local", "Utsav B", "{noop}secret", Role.ADMIN, clock.instant()));
+        AppUser actor = accounts.save(new AppUser("utsav@test.local", "Utsav B", "{noop}secret", clock.instant()), Role.ADMIN);
 
         AuditEntry saved = auditService.record(
                 actor, AuditAction.SERVICE_CREATED, AuditItemType.SERVICE, 42L, "name: Payments");

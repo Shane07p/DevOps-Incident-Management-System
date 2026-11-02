@@ -17,6 +17,7 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,6 +36,9 @@ import org.springframework.test.web.servlet.MockMvc;
 class ToolControllerTest {
 
 	private static final String DEFAULT_PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -196,12 +200,11 @@ class ToolControllerTest {
 	}
 
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, username + "@test.local", "Test " + username,
-				passwordEncoder.encode(DEFAULT_PASSWORD), role, clock.instant()));
+		return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), clock.instant()), role);
 	}
 
 	private String tokenFor(String username, String password) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		String response = mvc.perform(post("/api/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))

@@ -21,6 +21,7 @@ import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
@@ -38,6 +39,9 @@ import org.springframework.test.web.servlet.ResultActions;
 class IncidentControllerTest {
 
 	private static final String PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -67,10 +71,8 @@ class IncidentControllerTest {
 	@BeforeEach
 	void setUp() {
 		Instant now = clock.instant();
-		engineer = users.saveAndFlush(new AppUser("engineer", "engineer@test.local", "Dev Engineer", passwordEncoder.encode(PASSWORD),
-				Role.ENGINEER, now));
-		viewer = users.saveAndFlush(new AppUser("viewer", "viewer@test.local", "Dev Viewer", passwordEncoder.encode(PASSWORD),
-				Role.VIEWER, now));
+		engineer = accounts.save(new AppUser("engineer@test.local", "Dev Engineer", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
+		viewer = accounts.save(new AppUser("viewer@test.local", "Dev Viewer", passwordEncoder.encode(PASSWORD), now), Role.VIEWER);
 
 		ServiceEntity payments = new ServiceEntity("Payments", "Card payments", engineer, Criticality.CRITICAL, now);
 		payments.putTarget(Severity.SEV1, 15, 240);
@@ -314,7 +316,7 @@ class IncidentControllerTest {
 	}
 
 	private ResultActions login(String username, String password) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 

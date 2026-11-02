@@ -14,6 +14,7 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,9 @@ import org.springframework.test.web.servlet.MockMvc;
 class ServiceOnCallControllerTest {
 
     private static final String PASSWORD = "DevPassw0rd!";
+
+    @Autowired
+    private TestAccounts accounts;
 
     @Autowired
     private MockMvc mvc;
@@ -81,8 +85,8 @@ class ServiceOnCallControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.serviceId").value(service.getId()))
-                .andExpect(jsonPath("$.fallbackContactUsername").value("admin"))
-                .andExpect(jsonPath("$.shifts[0].responderUsername").value("responder"))
+                .andExpect(jsonPath("$.fallbackContactName").value("admin"))
+                .andExpect(jsonPath("$.shifts[0].responderName").value("responder"))
                 .andExpect(jsonPath("$.shifts[0].startTime").value("2026-10-19T09:00:00Z"));
     }
 
@@ -116,11 +120,11 @@ class ServiceOnCallControllerTest {
     }
 
     private AppUser createUser(String username, Role role) {
-        return users.saveAndFlush(new AppUser(username, username + "@test.local", username, passwordEncoder.encode(PASSWORD), role, clock.instant()));
+        return accounts.save(new AppUser(username + "@test.local", username, passwordEncoder.encode(PASSWORD), clock.instant()), role);
     }
 
     private String tokenFor(String username) throws Exception {
-        String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
+        String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", PASSWORD);
         String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

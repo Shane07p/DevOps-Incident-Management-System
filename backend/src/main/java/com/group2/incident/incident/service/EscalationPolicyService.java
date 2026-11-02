@@ -15,6 +15,8 @@ import com.group2.incident.incident.dto.UpdateEscalationPolicyRequest;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
+import com.group2.incident.org.entity.Membership;
+import com.group2.incident.org.service.OrgMembers;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,6 +34,7 @@ public class EscalationPolicyService {
 	private final ServiceRepository serviceRepository;
 	private final AppUserRepository appUserRepository;
 	private final AuditService auditService;
+	private final OrgMembers orgMembers;
 	private final Clock clock;
 
 	@Transactional(readOnly = true)
@@ -65,12 +68,14 @@ public class EscalationPolicyService {
 
 		List<EscalationStep> steps = new ArrayList<>();
 		for (EscalationStepRequest sr : stepRequests) {
-			AppUser responder = appUserRepository.findById(sr.responderId())
+			// Only a member of this org (D48).
+			Membership responderMember = orgMembers.find(sr.responderId())
 					.orElseThrow(() -> new FieldValidationException("steps", "Responder user " + sr.responderId() + " not found"));
 
-			if (!responder.isEnabled()) {
-				throw new FieldValidationException("steps", "Responder user " + responder.getUsername() + " is disabled");
+			if (!responderMember.isEnabled()) {
+				throw new FieldValidationException("steps", "Responder user " + responderMember.getUser().getDisplayName() + " is disabled");
 			}
+			AppUser responder = responderMember.getUser();
 
 			steps.add(new EscalationStep(sr.stepNumber(), responder, sr.waitMinutes()));
 		}

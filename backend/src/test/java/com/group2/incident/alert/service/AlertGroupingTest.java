@@ -22,6 +22,7 @@ import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -55,6 +56,9 @@ class AlertGroupingTest {
 	private static final String PASSWORD = "DevPassw0rd!";
 	private static final String PAYMENTS = "Grouping Payments";
 	private static final String ORDERS = "Grouping Orders";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private AlertService alertService;
@@ -94,8 +98,7 @@ class AlertGroupingTest {
 
 	@BeforeEach
 	void setUp() {
-		owner = users.saveAndFlush(new AppUser("grouping_owner", "grouping_owner@test.local", "Grouping Owner", passwordEncoder.encode(PASSWORD), Role.ENGINEER,
-				clock.instant()));
+		owner = accounts.save(new AppUser("grouping_owner@test.local", "Grouping Owner", passwordEncoder.encode(PASSWORD), clock.instant()), Role.ENGINEER);
 		payments = createService(PAYMENTS);
 		orders = createService(ORDERS);
 	}
@@ -162,7 +165,7 @@ class AlertGroupingTest {
 		alertService.processAlert(null, alert("evt-2", PAYMENTS, Severity.SEV2, "pay-5xx"));
 		alertService.processAlert(null, alert("evt-3", ORDERS, Severity.SEV2, null));
 
-		mvc.perform(get("/api/alerts").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor(owner.getUsername())))
+		mvc.perform(get("/api/alerts").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor(owner.getEmail())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(3))
 				.andExpect(jsonPath("$[0].serviceName").value(ORDERS))
@@ -281,10 +284,10 @@ class AlertGroupingTest {
 		entityManager.clear();
 	}
 
-	private String tokenFor(String username) throws Exception {
+	private String tokenFor(String email) throws Exception {
 		String response = mvc.perform(post("/api/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD)))
+						.content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD)))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(response, "$.token");

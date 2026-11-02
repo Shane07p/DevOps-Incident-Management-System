@@ -25,6 +25,8 @@ import com.group2.incident.incident.dto.UpdateEscalationPolicyRequest;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
+import com.group2.incident.org.service.OrgMembers;
+import com.group2.incident.support.Members;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -56,6 +58,9 @@ class EscalationPolicyServiceTest {
 	private AppUserRepository appUserRepository;
 
 	@Mock
+	private OrgMembers orgMembers;
+
+	@Mock
 	private AuditService auditService;
 
 	private Clock fixedClock;
@@ -74,12 +79,13 @@ class EscalationPolicyServiceTest {
 				serviceRepository,
 				appUserRepository,
 				auditService,
+				orgMembers,
 				fixedClock
 		);
 
-		admin = new AppUser("admin", "admin@test.local", "Admin User", "hash", Role.ADMIN, T0);
-		responder1 = new AppUser("resp1", "resp1@test.local", "Responder 1", "hash", Role.ENGINEER, T0);
-		responder2 = new AppUser("resp2", "resp2@test.local", "Responder 2", "hash", Role.ENGINEER, T0);
+		admin = new AppUser("admin@test.local", "Admin User", "hash", T0);
+		responder1 = new AppUser("resp1@test.local", "Responder 1", "hash", T0);
+		responder2 = new AppUser("resp2@test.local", "Responder 2", "hash", T0);
 
 		serviceEntity = new ServiceEntity("OrderService", "Orders", admin, Criticality.HIGH, T0);
 	}
@@ -125,8 +131,8 @@ class EscalationPolicyServiceTest {
 	@DisplayName("updatePolicy saves valid policy and records audit entry")
 	void updatePolicySuccess() {
 		when(serviceRepository.findById(1L)).thenReturn(Optional.of(serviceEntity));
-		when(appUserRepository.findById(10L)).thenReturn(Optional.of(responder1));
-		when(appUserRepository.findById(20L)).thenReturn(Optional.of(responder2));
+		when(orgMembers.find(10L)).thenReturn(Optional.of(Members.of(responder1, Role.ENGINEER)));
+		when(orgMembers.find(20L)).thenReturn(Optional.of(Members.of(responder2, Role.ENGINEER)));
 		when(appUserRepository.findById(1L)).thenReturn(Optional.of(admin));
 		when(escalationPolicyRepository.findByServiceId(1L)).thenReturn(Optional.empty());
 		when(escalationPolicyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

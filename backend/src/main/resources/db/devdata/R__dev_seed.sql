@@ -1,18 +1,17 @@
 -- Development data only. Flyway loads this file only when FLYWAY_LOCATIONS includes
 -- classpath:db/devdata (D27); production and the default test run never see it.
 -- One org, "Dev org", with admin@settle.local, engineer@settle.local, and viewer@settle.local.
--- Every user's password is DevPassw0rd!
--- Repeatable and idempotent: rows that already exist are left as they are.
+-- Every password is DevPassw0rd!. Repeatable and idempotent.
 
 INSERT INTO organization (name, slug, created_at)
 VALUES ('Dev org', 'dev-org', now())
 ON CONFLICT (slug) DO NOTHING;
 
-INSERT INTO app_user (username, email, display_name, password_hash, role, created_at)
-VALUES ('admin',    'admin@settle.local',    'Dev Admin',    '{bcrypt}$2a$10$VIfFAxI6UFgBeWMdFEvAp.16koHo8wb8LRuqky0e47iWLefM5Huwm', 'ADMIN',    now()),
-       ('engineer', 'engineer@settle.local', 'Dev Engineer', '{bcrypt}$2a$10$VIfFAxI6UFgBeWMdFEvAp.16koHo8wb8LRuqky0e47iWLefM5Huwm', 'ENGINEER', now()),
-       ('viewer',   'viewer@settle.local',   'Dev Viewer',   '{bcrypt}$2a$10$VIfFAxI6UFgBeWMdFEvAp.16koHo8wb8LRuqky0e47iWLefM5Huwm', 'VIEWER',   now())
-ON CONFLICT ((lower(username))) DO NOTHING;
+INSERT INTO app_user (email, display_name, password_hash, created_at)
+VALUES ('admin@settle.local',    'Dev Admin',    '{bcrypt}$2a$10$VIfFAxI6UFgBeWMdFEvAp.16koHo8wb8LRuqky0e47iWLefM5Huwm', now()),
+       ('engineer@settle.local', 'Dev Engineer', '{bcrypt}$2a$10$VIfFAxI6UFgBeWMdFEvAp.16koHo8wb8LRuqky0e47iWLefM5Huwm', now()),
+       ('viewer@settle.local',   'Dev Viewer',   '{bcrypt}$2a$10$VIfFAxI6UFgBeWMdFEvAp.16koHo8wb8LRuqky0e47iWLefM5Huwm', now())
+ON CONFLICT ((lower(email))) DO NOTHING;
 
 INSERT INTO membership (org_id, user_id, role, created_at)
 SELECT o.id, u.id, r.role, now()

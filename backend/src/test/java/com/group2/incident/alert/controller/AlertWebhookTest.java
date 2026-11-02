@@ -23,6 +23,7 @@ import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,9 @@ class AlertWebhookTest {
 				"details": { "metric": "http_requests_total" }
 			}
 			""";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -87,8 +91,7 @@ class AlertWebhookTest {
 
 	@BeforeEach
 	void setUp() {
-		admin = users.saveAndFlush(new AppUser("webhook_admin", "webhook_admin@test.local", "Webhook Admin",
-				passwordEncoder.encode("DevPassw0rd!"), Role.ADMIN, clock.instant()));
+		admin = accounts.save(new AppUser("webhook_admin@test.local", "Webhook Admin", passwordEncoder.encode("DevPassw0rd!"), clock.instant()), Role.ADMIN);
 		payments = createService("Payments");
 
 		CreateToolResponse created = toolService.createTool(new CreateToolRequest("Webhook Tool " + clock.millis()), admin.getId());
@@ -319,7 +322,7 @@ class AlertWebhookTest {
 			// Step 1: Register tool via API
 			String loginResponse = mvc.perform(post("/api/auth/login")
 							.contentType(MediaType.APPLICATION_JSON)
-							.content("{\"username\":\"webhook_admin\",\"password\":\"DevPassw0rd!\"}"))
+							.content("{\"email\":\"webhook_admin@test.local\",\"password\":\"DevPassw0rd!\"}"))
 					.andExpect(status().isOk())
 					.andReturn().getResponse().getContentAsString();
 			String adminJwt = JsonPath.read(loginResponse, "$.token");

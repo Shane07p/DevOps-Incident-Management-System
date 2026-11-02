@@ -21,6 +21,7 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -57,6 +58,9 @@ class RateLimitTest {
 			""";
 
 	@Autowired
+	private TestAccounts accounts;
+
+	@Autowired
 	private MockMvc mvc;
 
 	@Autowired
@@ -87,11 +91,9 @@ class RateLimitTest {
 		// A fixed time for the buckets, so none refills partway through a test.
 		setRateLimitTime(BASE_TIME);
 
-		testUser = users.saveAndFlush(new AppUser("rate_user_" + clock.millis(), "rate_user_" + clock.millis() + "@test.local", "Rate Test User",
-				passwordEncoder.encode(PASSWORD), Role.ENGINEER, clock.instant()));
+		testUser = accounts.save(new AppUser("rate_user_" + clock.millis() + "@test.local", "Rate Test User", passwordEncoder.encode(PASSWORD), clock.instant()), Role.ENGINEER);
 
-		adminUser = users.saveAndFlush(new AppUser("rate_admin_" + clock.millis(), "rate_admin_" + clock.millis() + "@test.local", "Rate Admin",
-				passwordEncoder.encode(PASSWORD), Role.ADMIN, clock.instant()));
+		adminUser = accounts.save(new AppUser("rate_admin_" + clock.millis() + "@test.local", "Rate Admin", passwordEncoder.encode(PASSWORD), clock.instant()), Role.ADMIN);
 
 		// Accepted alerts become incidents, so the service they name has to exist.
 		ServiceEntity payments = new ServiceEntity("Payments", "Rate limit test service", adminUser, Criticality.HIGH, clock.instant());
@@ -114,13 +116,13 @@ class RateLimitTest {
 		// TC-NFR-04.4a: The 5th login attempt within a minute for one IP and username is answered normally.
 		String ip = "192.168.10.1";
 		for (int i = 1; i <= 5; i++) {
-			performLogin(testUser.getUsername(), PASSWORD, ip)
+			performLogin(testUser.getEmail(), PASSWORD, ip)
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.token").isNotEmpty());
 		}
 
 		// TC-NFR-04.4b: The 6th attempt in the same minute returns 429 with Retry-After.
-		performLogin(testUser.getUsername(), PASSWORD, ip)
+		performLogin(testUser.getEmail(), PASSWORD, ip)
 				.andExpect(status().isTooManyRequests())
 				.andExpect(header().exists("Retry-After"))
 				.andExpect(header().string("Retry-After", matchesRegex("^[1-9][0-9]*$")))
@@ -134,17 +136,17 @@ class RateLimitTest {
 		// TC-NFR-04.4c: The next attempt after the minute has passed is answered normally again.
 		String ip = "192.168.10.2";
 		for (int i = 1; i <= 5; i++) {
-			performLogin(testUser.getUsername(), PASSWORD, ip).andExpect(status().isOk());
+			performLogin(testUser.getEmail(), PASSWORD, ip).andExpect(status().isOk());
 		}
 
 		// 6th attempt throttled
-		performLogin(testUser.getUsername(), PASSWORD, ip).andExpect(status().isTooManyRequests());
+		performLogin(testUser.getEmail(), PASSWORD, ip).andExpect(status().isTooManyRequests());
 
 		// Advance clock by 61 seconds (past the 60s refill duration)
 		setRateLimitTime(BASE_TIME.plusSeconds(61));
 
 		// 7th attempt is now permitted
-		performLogin(testUser.getUsername(), PASSWORD, ip)
+		performLogin(testUser.getEmail(), PASSWORD, ip)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.token").isNotEmpty());
 	}
@@ -153,19 +155,18 @@ class RateLimitTest {
 	void tcNfr044d_anotherUsernameFromSameIpNotLimited() throws Exception {
 		// TC-NFR-04.4d: Another username from the same IP, while the first is limited: Not limited.
 		String ip = "192.168.10.3";
-		AppUser secondUser = users.saveAndFlush(new AppUser("other_user_" + clock.millis(), "other_user_" + clock.millis() + "@test.local", "Other User",
-				passwordEncoder.encode(PASSWORD), Role.VIEWER, clock.instant()));
+		AppUser secondUser = accounts.save(new AppUser("other_user_" + clock.millis() + "@test.local", "Other User", passwordEncoder.encode(PASSWORD), clock.instant()), Role.VIEWER);
 
 		// Limit the first user
 		for (int i = 1; i <= 5; i++) {
-			performLogin(testUser.getUsername(), PASSWORD, ip).andExpect(status().isOk());
+			performLogin(testUser.getEmail(), PASSWORD, ip).andExpect(status().isOk());
 		}
-		performLogin(testUser.getUsername(), PASSWORD, ip).andExpect(status().isTooManyRequests());
+		performLogin(testUser.getEmail(), PASSWORD, ip).andExpect(status().isTooManyRequests());
 
 		// Second user from the exact same IP is answered normally
-		performLogin(secondUser.getUsername(), PASSWORD, ip)
+		performLogin(secondUser.getEmail(), PASSWORD, ip)
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.user.username").value(secondUser.getUsername()));
+				.andExpect(jsonPath("$.user.email").value(secondUser.getEmail()));
 	}
 
 	@Test
@@ -175,12 +176,12 @@ class RateLimitTest {
 
 		// Exhaust bucket on ip1
 		for (int i = 1; i <= 5; i++) {
-			performLogin(testUser.getUsername(), PASSWORD, ip1).andExpect(status().isOk());
+			performLogin(testUser.getEmail(), PASSWORD, ip1).andExpect(status().isOk());
 		}
-		performLogin(testUser.getUsername(), PASSWORD, ip1).andExpect(status().isTooManyRequests());
+		performLogin(testUser.getEmail(), PASSWORD, ip1).andExpect(status().isTooManyRequests());
 
 		// Same username from ip2 is answered normally
-		performLogin(testUser.getUsername(), PASSWORD, ip2)
+		performLogin(testUser.getEmail(), PASSWORD, ip2)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.token").isNotEmpty());
 	}
@@ -191,13 +192,13 @@ class RateLimitTest {
 
 		// 5 invalid password attempts
 		for (int i = 1; i <= 5; i++) {
-			performLogin(testUser.getUsername(), "wrong-pass", ip)
+			performLogin(testUser.getEmail(), "wrong-pass", ip)
 					.andExpect(status().isUnauthorized())
-					.andExpect(jsonPath("$.message").value("Invalid username or password"));
+					.andExpect(jsonPath("$.message").value("Invalid email or password"));
 		}
 
 		// 6th attempt (even with valid password) gets 429
-		performLogin(testUser.getUsername(), PASSWORD, ip)
+		performLogin(testUser.getEmail(), PASSWORD, ip)
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.status").value(429));
 	}
@@ -207,7 +208,7 @@ class RateLimitTest {
 		performLogin("", "", "192.168.40.1")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.status").value(400))
-				.andExpect(jsonPath("$.errors.username").value("Username is required"))
+				.andExpect(jsonPath("$.errors.email").value("Email is required"))
 				.andExpect(jsonPath("$.errors.password").value("Password is required"));
 	}
 
@@ -334,7 +335,7 @@ class RateLimitTest {
 							})
 							.header("X-Forwarded-For", "203.0.113." + i)
 							.contentType(MediaType.APPLICATION_JSON)
-							.content("{\"username\":\"%s\",\"password\":\"wrong-pass\"}".formatted(testUser.getUsername())))
+							.content("{\"email\":\"%s\",\"password\":\"wrong-pass\"}".formatted(testUser.getEmail())))
 					.andExpect(status().isUnauthorized());
 		}
 
@@ -346,7 +347,7 @@ class RateLimitTest {
 						})
 						.header("X-Forwarded-For", "203.0.113.100")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(testUser.getUsername(), PASSWORD)))
+						.content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(testUser.getEmail(), PASSWORD)))
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.status").value(429));
 	}
@@ -355,8 +356,8 @@ class RateLimitTest {
 		ReflectionTestUtils.setField(rateLimitService, "clock", Clock.fixed(now, ZoneOffset.UTC));
 	}
 
-	private ResultActions performLogin(String username, String password, String clientIp) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+	private ResultActions performLogin(String email, String password, String clientIp) throws Exception {
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password);
 		return mvc.perform(post("/api/auth/login")
 				.with(request -> {
 					if (clientIp != null) {

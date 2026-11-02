@@ -21,6 +21,7 @@ import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -50,6 +51,9 @@ class OnCallServiceTest {
     private static final Instant T_17_30 = Instant.parse("2026-10-19T17:30:00Z");
     private static final Instant T_18_00 = Instant.parse("2026-10-19T18:00:00Z");
     private static final Instant T_22_00 = Instant.parse("2026-10-19T22:00:00Z");
+
+    @Autowired
+    private TestAccounts accounts;
 
     @Autowired
     private OnCallService onCallService;
@@ -230,6 +234,6 @@ class OnCallServiceTest {
     }
 
     private AppUser createUser(String username, String displayName) {
-        return users.saveAndFlush(new AppUser(username, username + "@test.local", displayName, "hash", Role.ENGINEER, clock.instant()));
+        return accounts.save(new AppUser(username + "@test.local", displayName, "hash", clock.instant()), Role.ENGINEER);
     }
 }

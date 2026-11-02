@@ -24,8 +24,8 @@ SELECT setval(pg_get_serial_sequence('organization', 'id'), COALESCE((SELECT max
 
 CREATE TABLE membership (
     id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    org_id     bigint      NOT NULL REFERENCES organization (id),
-    user_id    bigint      NOT NULL REFERENCES app_user (id),
+    org_id     bigint      NOT NULL REFERENCES organization (id) ON DELETE CASCADE,
+    user_id    bigint      NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
     role       varchar(20) NOT NULL,
     enabled    boolean     NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL,

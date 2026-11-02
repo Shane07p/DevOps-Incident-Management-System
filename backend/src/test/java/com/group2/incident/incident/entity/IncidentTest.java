@@ -19,7 +19,7 @@ class IncidentTest {
 	@DisplayName("TC-FR-16.1a: responseDueAt and resolutionDueAt are creation time plus each target")
 	void dueTimesAreCreationTimePlusTarget() {
 		Instant now = Instant.parse("2026-10-19T10:00:00Z");
-		AppUser user = new AppUser("engineer", "engineer@test.local", "Dev Engineer", "hash", Role.ENGINEER, now);
+		AppUser user = new AppUser("engineer@test.local", "Dev Engineer", "hash", now);
 		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, now);
 		service.putTarget(Severity.SEV2, 60, 480);
 
@@ -43,7 +43,7 @@ class IncidentTest {
 	@DisplayName("TC-FR-16.3a: incident keeps the copied targets when service targets change later")
 	void incidentKeepsCopiedTargetsEvenIfServiceChanges() {
 		Instant createdTime = Instant.parse("2026-10-19T10:00:00Z");
-		AppUser user = new AppUser("engineer", "engineer@test.local", "Dev Engineer", "hash", Role.ENGINEER, createdTime);
+		AppUser user = new AppUser("engineer@test.local", "Dev Engineer", "hash", createdTime);
 		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, createdTime);
 		service.putTarget(Severity.SEV1, 15, 240);
 

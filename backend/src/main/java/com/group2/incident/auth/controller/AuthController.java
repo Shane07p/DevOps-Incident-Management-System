@@ -2,7 +2,8 @@ package com.group2.incident.auth.controller;
 
 import com.group2.incident.auth.dto.LoginRequest;
 import com.group2.incident.auth.dto.LoginResponse;
-import com.group2.incident.auth.dto.UserResponse;
+import com.group2.incident.auth.dto.MeResponse;
+import com.group2.incident.auth.security.JwtUserConverter;
 import com.group2.incident.auth.service.AuthService;
 import com.group2.incident.common.ratelimit.RateLimitService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,14 +36,14 @@ class AuthController {
 	@SecurityRequirements
 	LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
 		// Behind a trusted proxy, Tomcat has already put the client's address from X-Forwarded-For here.
-		rateLimitService.checkLogin(servletRequest.getRemoteAddr(), request.username());
+		rateLimitService.checkLogin(servletRequest.getRemoteAddr(), request.email());
 		return auth.login(request);
 	}
 
 	@GetMapping("/me")
-	@Operation(summary = "The logged-in user")
-	UserResponse me(@AuthenticationPrincipal Jwt jwt) {
-		return auth.me(userId(jwt));
+	@Operation(summary = "The logged-in user and their org")
+	MeResponse me(@AuthenticationPrincipal Jwt jwt) {
+		return auth.me(userId(jwt), orgId(jwt));
 	}
 
 	@PostMapping("/logout")
@@ -54,6 +55,10 @@ class AuthController {
 
 	private static long userId(Jwt jwt) {
 		return Long.parseLong(jwt.getSubject());
+	}
+
+	private static long orgId(Jwt jwt) {
+		return ((Number) jwt.getClaim(JwtUserConverter.ORG)).longValue();
 	}
 
 }

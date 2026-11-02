@@ -106,7 +106,7 @@ At 0.85, the title-only template accepted no matches, so its accepted-match prec
 
 Higher thresholds generally reduce the number of accepted suggestions.
 
-A high precision percentage based on only one or a few accepted matches is not strong evidence of reliable retrieval.
+A high-precision percentage based on only one or a few accepted matches is not strong evidence of reliable retrieval.
 
 ### Selected configuration
 

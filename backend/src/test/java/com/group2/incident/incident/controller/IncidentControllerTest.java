@@ -19,11 +19,15 @@ import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
+import com.group2.incident.incident.entity.TimelineEntry;
+import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
+import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,6 +54,9 @@ class IncidentControllerTest {
 
 	@Autowired
 	private IncidentRepository incidents;
+
+	@Autowired
+	private TimelineEntryRepository timelineEntries;
 
 	@Autowired
 	private AuditEntryRepository auditEntries;
@@ -287,6 +294,104 @@ class IncidentControllerTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.status").value(404));
+	}
+
+	@Test
+	@DisplayName("TC-FR-09.1a: Comments are separate timeline inserts and do not change the incident version")
+	void commentsDoNotChangeIncidentVersion() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		Long version = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		for (String comment : List.of("First note", "Second note")) {
+			mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+							.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+							.contentType(MediaType.APPLICATION_JSON)
+							.content("{\"comment\":\"" + comment + "\"}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.eventType").value("COMMENT"))
+					.andExpect(jsonPath("$.actor").value("Dev Engineer"))
+					.andExpect(jsonPath("$.details").value(comment))
+					.andExpect(jsonPath("$.correctsEntryId").value(org.hamcrest.Matchers.nullValue()));
+		}
+
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getVersion()).isEqualTo(version);
+		assertThat(timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId()))
+				.extracting(TimelineEntry::getDetails)
+				.containsExactly("First note", "Second note");
+	}
+
+	@Test
+	@DisplayName("TC-FR-09.2a: A comment on a CLOSED incident does not reopen it")
+	void commentsAreAllowedOnClosedIncidents() throws Exception {
+		Incident incident = createIncident(IncidentStatus.CLOSED);
+		Long version = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"comment\":\"Follow-up after closure\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.details").value("Follow-up after closure"));
+
+		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
+		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.CLOSED);
+		assertThat(unchanged.getVersion()).isEqualTo(version);
+	}
+
+	@Test
+	@DisplayName("TC-FR-08.3c: A correction is linked to its original timeline entry")
+	void correctionAddsLinkedEntryAndLeavesOriginalUnchanged() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		TimelineEntry original = timelineEntries.saveAndFlush(new TimelineEntry(
+				incident, engineer, TimelineEventType.STATUS_CHANGED, "Status changed to IDENTIFIED", clock.instant()));
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + original.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"Corrected status: INVESTIGATING\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.eventType").value("CORRECTION"))
+				.andExpect(jsonPath("$.details").value("Corrected status: INVESTIGATING"))
+				.andExpect(jsonPath("$.correctsEntryId").value(original.getId()));
+
+		assertThat(timelineEntries.findById(original.getId()).orElseThrow().getDetails())
+				.isEqualTo("Status changed to IDENTIFIED");
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.timeline[1].correctsEntryId").value(original.getId()));
+	}
+
+	@Test
+	void correctionCannotTargetAnEntryFromAnotherIncident() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		Incident otherIncident = createIncident(IncidentStatus.OPEN);
+		TimelineEntry otherEntry = timelineEntries.saveAndFlush(new TimelineEntry(
+				otherIncident, engineer, TimelineEventType.COMMENT, "Other incident", clock.instant()));
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + otherEntry.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"Invalid cross-incident correction\"}"))
+				.andExpect(status().isNotFound());
+	}
+
+	private Incident createIncident(IncidentStatus status) {
+		return incidents.saveAndFlush(new Incident(
+				"Comment test incident",
+				"Incident for timeline tests",
+				paymentsService,
+				Severity.SEV2,
+				status,
+				engineer,
+				clock.instant(),
+				60,
+				480
+		));
 	}
 
 	@Test

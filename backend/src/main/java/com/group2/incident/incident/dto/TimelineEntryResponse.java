@@ -8,6 +8,7 @@ public record TimelineEntryResponse(
 		TimelineEventType eventType,
 		String actor,
 		String details,
-		Instant recordedAt
+		Instant recordedAt,
+		Long correctsEntryId
 ) {
 }

@@ -1,159 +1,170 @@
 package com.group2.incident.incident.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
-import com.group2.incident.catalog.service.OnCallService;
-import com.group2.incident.catalog.service.ServiceCatalogService;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
+import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
-import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.support.IntegrationTest;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
-@ExtendWith(MockitoExtension.class)
+@IntegrationTest
 class CommentConcurrencyTest {
 
-	private static final Instant NOW = Instant.parse("2026-10-20T08:30:00Z");
+	@Autowired
+	private IncidentService incidentService;
 
-	@Mock
+	@Autowired
 	private IncidentRepository incidents;
 
-	@Mock
+	@Autowired
 	private TimelineEntryRepository timelineEntries;
 
-	@Mock
-	private ServiceCatalogService serviceCatalogService;
-
-	@Mock
-	private OnCallService onCallService;
-
-	@Mock
+	@Autowired
 	private AppUserRepository users;
 
-	@Mock
-	private AuditService auditService;
+	@Autowired
+	private ServiceRepository services;
 
-	@Mock
-	private EscalationService escalationService;
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
-	@Mock
-	private NotificationService notificationService;
+	@Autowired
+	private PlatformTransactionManager transactionManager;
 
-	private IncidentService service;
-	private Incident incident;
-	private AppUser firstAuthor;
-	private AppUser secondAuthor;
-	private ConcurrentLinkedQueue<TimelineEntry> savedEntries;
-
-	@BeforeEach
-	void setUp() {
-		service = new IncidentService(
-				incidents,
-				timelineEntries,
-				serviceCatalogService,
-				onCallService,
-				users,
-				auditService,
-				escalationService,
-				notificationService,
-				Clock.fixed(NOW, ZoneOffset.UTC)
-		);
-		firstAuthor = new AppUser("engineer", "Dev Engineer", "{noop}password", Role.ENGINEER, NOW);
-		secondAuthor = new AppUser("admin", "Dev Admin", "{noop}password", Role.ADMIN, NOW);
-		incident = new Incident(
-				"Concurrent comments",
-				"Test incident",
-				null,
-				Severity.SEV1,
-				IncidentStatus.OPEN,
-				firstAuthor,
-				NOW,
-				60,
-				480
-		);
-		when(incidents.findById(7L)).thenReturn(Optional.of(incident));
-		when(users.findById(2L)).thenReturn(Optional.of(firstAuthor));
-		when(users.findById(3L)).thenReturn(Optional.of(secondAuthor));
-
-		AtomicLong ids = new AtomicLong();
-		savedEntries = new ConcurrentLinkedQueue<>();
-		when(timelineEntries.save(any(TimelineEntry.class))).thenAnswer(invocation -> {
-			TimelineEntry submitted = invocation.getArgument(0);
-			savedEntries.add(submitted);
-			TimelineEntry persisted = mock(TimelineEntry.class);
-			when(persisted.getId()).thenReturn(ids.incrementAndGet());
-			when(persisted.getEventType()).thenReturn(submitted.getEventType());
-			when(persisted.getActor()).thenReturn(submitted.getActor());
-			when(persisted.getDetails()).thenReturn(submitted.getDetails());
-			when(persisted.getRecordedAt()).thenReturn(submitted.getRecordedAt());
-			return persisted;
-		});
-	}
+	@Autowired
+	private Clock clock;
 
 	@Test
-	void twoConcurrentCommentsCreateSeparateTimelineEntriesWithoutSavingIncident() throws Exception {
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void twoConcurrentCommentsArePersistedWithoutChangingIncidentVersion() throws Exception {
+		String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+		List<Long> userIds = new ArrayList<>();
+		Long serviceId = null;
+		Long incidentId = null;
 		ExecutorService executor = Executors.newFixedThreadPool(2);
-		CountDownLatch ready = new CountDownLatch(2);
-		CountDownLatch start = new CountDownLatch(1);
 
 		try {
-			Future<TimelineEntryResponse> first = executor.submit(() -> submitComment(ready, start, 2L, "First"));
-			Future<TimelineEntryResponse> second = executor.submit(() -> submitComment(ready, start, 3L, "Second"));
+			Instant now = clock.instant();
+			AppUser firstAuthor = users.saveAndFlush(new AppUser(
+					"comment_a_" + suffix, "Comment Author A", "{noop}password", Role.ENGINEER, now));
+			userIds.add(firstAuthor.getId());
+			AppUser secondAuthor = users.saveAndFlush(new AppUser(
+					"comment_b_" + suffix, "Comment Author B", "{noop}password", Role.ADMIN, now));
+			userIds.add(secondAuthor.getId());
+
+			ServiceEntity service = new ServiceEntity(
+					"CommentService_" + suffix, "Comment concurrency test", firstAuthor, Criticality.HIGH, now);
+			for (Severity severity : Severity.values()) {
+				service.putTarget(severity, 60, 480);
+			}
+			service = services.saveAndFlush(service);
+			serviceId = service.getId();
+
+			Incident incident = incidents.saveAndFlush(new Incident(
+					"Concurrent comments",
+					"Test incident",
+					service,
+					Severity.SEV1,
+					IncidentStatus.OPEN,
+					firstAuthor,
+					now,
+					60,
+					480
+			));
+			incidentId = incident.getId();
+			Long originalVersion = incident.getVersion();
+			Long testIncidentId = incidentId;
+			Long firstAuthorId = firstAuthor.getId();
+			Long secondAuthorId = secondAuthor.getId();
+
+			CountDownLatch ready = new CountDownLatch(2);
+			CountDownLatch start = new CountDownLatch(1);
+			Future<TimelineEntryResponse> first = executor.submit(
+					() -> addCommentAtTheSameTime(ready, start, testIncidentId, firstAuthorId, "First comment"));
+			Future<TimelineEntryResponse> second = executor.submit(
+					() -> addCommentAtTheSameTime(ready, start, testIncidentId, secondAuthorId, "Second comment"));
 
 			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
 			start.countDown();
-			TimelineEntryResponse firstResponse = first.get(5, TimeUnit.SECONDS);
-			TimelineEntryResponse secondResponse = second.get(5, TimeUnit.SECONDS);
+			TimelineEntryResponse firstResponse = first.get(10, TimeUnit.SECONDS);
+			TimelineEntryResponse secondResponse = second.get(10, TimeUnit.SECONDS);
 
-			assertThat(List.of(firstResponse.id(), secondResponse.id())).containsExactlyInAnyOrder(1L, 2L);
-			assertThat(savedEntries)
+			assertThat(List.of(firstResponse.id(), secondResponse.id())).doesNotHaveDuplicates();
+			assertThat(timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId))
+					.filteredOn(entry -> entry.getEventType() == TimelineEventType.COMMENT)
 					.extracting(TimelineEntry::getDetails)
-					.containsExactlyInAnyOrder("First", "Second");
-			assertThat(incident.getStatus()).isEqualTo(IncidentStatus.OPEN);
-			verify(timelineEntries, times(2)).save(any(TimelineEntry.class));
-			verify(incidents, never()).save(any(Incident.class));
+					.containsExactlyInAnyOrder("First comment", "Second comment");
+			assertThat(incidents.findById(incidentId).orElseThrow().getVersion()).isEqualTo(originalVersion);
 		}
 		finally {
 			executor.shutdownNow();
+			cleanup(incidentId, serviceId, userIds);
 		}
 	}
 
-	private TimelineEntryResponse submitComment(
-			CountDownLatch ready, CountDownLatch start, Long authorId, String comment) throws InterruptedException {
+	private TimelineEntryResponse addCommentAtTheSameTime(
+			CountDownLatch ready,
+			CountDownLatch start,
+			Long incidentId,
+			Long actorId,
+			String comment
+	) throws InterruptedException {
 		ready.countDown();
 		if (!start.await(5, TimeUnit.SECONDS)) {
 			throw new IllegalStateException("Timed out waiting to start concurrent comment submissions");
 		}
-		return service.addComment(7L, comment, authorId);
+		return incidentService.addComment(incidentId, comment, actorId);
+	}
+
+	private void cleanup(Long incidentId, Long serviceId, List<Long> userIds) {
+		TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+		transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		transaction.executeWithoutResult(status -> {
+			if (incidentId != null) {
+				jdbcTemplate.execute("ALTER TABLE timeline_entry DISABLE TRIGGER timeline_entry_append_only");
+				try {
+					jdbcTemplate.update("DELETE FROM timeline_entry WHERE incident_id = ?", incidentId);
+					incidents.deleteById(incidentId);
+				}
+				finally {
+					jdbcTemplate.execute("ALTER TABLE timeline_entry ENABLE TRIGGER timeline_entry_append_only");
+				}
+			}
+			if (serviceId != null) {
+				services.deleteById(serviceId);
+			}
+			for (Long userId : userIds) {
+				users.deleteById(userId);
+			}
+		});
 	}
 }

@@ -27,7 +27,7 @@ What runs where, and why it stays small (D24, D33, D46):
 - **Live updates** come from the backend itself: pages refresh every few seconds, and later the backend pushes changes with server-sent events.
 - **No Redis** while there is one backend instance: in-memory caches (Caffeine) cover rate limits. Redis is for sharing state between several instances.
 
-The detailed HLD (v4, 2 November) is [diagrams/hld.png](diagrams/hld.png). It shows the same system as the chart above, with the backend split into its parts, plus RabbitMQ and the AI service. Grey parts are not built yet. Its Eraser source is [diagrams/hld.eraser](diagrams/hld.eraser), so changes to it show up in a diff. When the architecture changes, update the source, then export the image again.
+The detailed HLD (v4, 2 November) is [diagrams/hld.png](diagrams/hld.png). It shows the same system as the chart above, with the backend split into its parts, plus RabbitMQ and the AI service. Grey parts are not built yet. Its Eraser source is [diagrams/hld.eraser](diagrams/hld.eraser), so changes to it show up in a diff. When the architecture changes, update the source, then export the image again with its background on: a transparent image loses its lines and labels in GitHub's dark theme.
 
 ![HLD v4](diagrams/hld.png)
 

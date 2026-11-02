@@ -93,6 +93,8 @@ class OutboxRelayTest {
 		assertThat(received.getMessageProperties().getReceivedRoutingKey()).isEqualTo("incident.escalated");
 		assertThat(received.getMessageProperties().getMessageId()).isEqualTo("outbox-" + event.getId());
 		assertThat(received.getMessageProperties().getContentType()).isEqualTo("application/json");
+		// Consumers learn the event's org from the message (D48).
+		assertThat(((Number) received.getMessageProperties().getHeader(OutboxRelay.ORG_HEADER)).longValue()).isEqualTo(event.getOrgId());
 
 		Outbox after = outbox.findById(event.getId()).orElseThrow();
 		assertThat(after.getStatus()).isEqualTo(OutboxStatus.SENT);

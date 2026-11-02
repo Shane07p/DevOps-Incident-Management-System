@@ -37,7 +37,7 @@ Items without an issue number get one before their sprint starts.
 | **Utsav D** | #50 Incidents API (with Manan) | #70 Notifications: in-app rows and the bell API | #83 Acknowledge; #84 status and severity changes |
 | **Manan** | #50 Incidents API (with Utsav D) | #72 Dedup and grouping: an alert creates or joins an incident | #87 Comments and corrections |
 | **Het** | #48 User admin API; creates `SecurityMatrixTest` | #68 Tool tokens, `POST /webhooks/alerts`; #69 rate limits | #86 Reassign and incident roles |
-| **Manush** | — (the monitors work is #73) | #73 Monitors from one region: a failing monitor raises an alert; #74 Heartbeats | #88 Checks from 2 to 3 regions; Grafana alerts into intake |
+| **Manush** | — (the monitors work is #73) | #73 Monitors from one region: a failing monitor raises an alert; #74 Heartbeats | #88 Grafana checks from 2 to 3 locations; Grafana alerts into intake |
 | **Shlok** | #54 Services page; #55 Incident list, create form, and detail page | #80 On-call page; #81 alert inbox | #89 Incident actions; timeline with comments |
 | **Shane** | #53 Users page; #59 Compose and settings; merge #61 | #77 Tools page; #78 notification bell; #79 monitors and heartbeats pages; #75 Grafana Cloud account | #90 Escalation policies page; #82 RabbitMQ hosting; sprint records (#58) |
 | **Himanshu** | Done (#21) | #62 Ollama embeddings; #76 demo shop v1 | #91 Agent tool loop on demo data |
@@ -69,10 +69,10 @@ blocks starts.
 | D31 | One bearer token per tool, shown once, stored as a hash | #68 | Selected |
 | D32 | Alerts arrive at `POST /webhooks/alerts`, outside JWT login | #68 | Selected |
 | D33 | Notifications are rows written in the same transaction | #70 | Selected |
-| D34 | Logs and metrics in Grafana Cloud | #75 | Open |
-| D35 | Where probes run (decided by a spike) | #88 | Open |
-| D36 | A monitor is down only when 2 regions agree | #88 | Open |
-| D39 | Incident roles: Lead, Comms, Ops | #86 | Open |
+| D34 | Logs and metrics in Grafana Cloud | #75 | Selected |
+| D35 | Probes are Grafana Cloud checks from 2–3 locations | #88 | Selected |
+| D36 | Down when 2 locations fail twice in a row; Degraded when 2 are slow 3 times in a row | #88 | Selected |
+| D39 | Incident roles: Lead, Comms, Ops | #86 | Selected |
 | D40 | What the demo shop simulates | #64, #76 | Selected |
 
 **US-10:** a severity change keeps the SLA targets copied at creation (D09/D10, PROJECT_STRUCTURE
@@ -134,7 +134,7 @@ blocks starts.
 | Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
 | Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73, #74: Open |
 | On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: inbox merged (PR #125); open for the count and "routed to me", whose fields arrived with #123 |
-| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78 can start; #79 waits on #73 and #74 |
+| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79 waits on #73 and #74 |
 | Grafana Cloud account; its settings on Render | Shane | D34 | | #75: Open |
 | Ollama embeddings | Himanshu | #62 | pytest | Done (PR #99) |
 | Demo shop v1: payments, checkout, and search, sending logs and metrics | Himanshu | D34, D40 | | #76: Done (PR #111) |
@@ -149,19 +149,18 @@ blocks starts.
 | --- | --- | --- | --- | --- |
 | Acknowledge: OPEN becomes ACKNOWLEDGED; the acknowledger becomes the assignee; the response clock stops; pending escalations are cancelled | Utsav D | US-08, [§7](../PROJECT_STRUCTURE.md#7-acknowledgement-and-escalation) | Testcontainers: two people acknowledge at once, one wins, the other gets 409 | #83: Open |
 | Status changes (legal transitions only) and severity changes with a reason; SLA targets stay fixed | Utsav D | US-10, [§8](../PROJECT_STRUCTURE.md#8-status-and-sla-rules) | JUnit: every legal and illegal transition; a breach is over the target, not equal to it | #84: Open |
-| Escalation: policies with levels and wait times; a scheduler re-checks that the incident is OPEN and unacknowledged, notifies the next level, and forces a version increment; the fallback is notified once; after a restart an overdue step runs once. Events go through the outbox to RabbitMQ | Utsav B | US-07, FR-07, D24 | Testcontainers: restart with an overdue escalation; escalation racing an acknowledgement | #85: Done (PR #135); events wait in the outbox until RabbitMQ (#82) |
+| Escalation: policies with levels and wait times; a scheduler re-checks that the incident is OPEN and unacknowledged, notifies the next level, and forces a version increment; the fallback is notified once; after a restart an overdue step runs once. Events go through the outbox to RabbitMQ | Utsav B | US-07, FR-07, D24 | Testcontainers: restart with an overdue escalation; escalation racing an acknowledgement | #85: Done (PR #135); its events reach RabbitMQ through the outbox (PR #177) |
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Open |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Open |
-| Checks from 2 to 3 regions, down only when 2 agree; Grafana alert rules post into intake | Manush | D35, D36 | One failing region raises nothing; two do | #88: Open |
+| Grafana Cloud checks from 2 to 3 locations; alert rules for Down and Degraded, and on the demo shop's error rate, post into intake | Manush | D35, D36 | One failing location raises nothing; two in a row do; two slow ones raise Degraded | #88: Open |
 | Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Open |
-| Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Open |
+| Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Done (PR #177) |
 | Agent tool loop on demo data | Himanshu | [AI/ML roadmap](ai-ml-roadmap.md) | pytest | #91: Open |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |
 | Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Open |
 | Metric-baseline and deploy-window evidence | Dhruva | AI/ML roadmap | pytest | #93: Open |
 
-**Cut first if late:** the third probe region; then RabbitMQ (keep the outbox table and a database
-scheduler, and add RabbitMQ in Sprint 4).
+**Cut first if late:** the third check location. (RabbitMQ is in: the outbox relay publishes since #82.)
 
 ---
 
@@ -414,7 +413,8 @@ Hosting is set up (D25): Vercel, Render, Supabase, and UptimeRobot.
   (D41); HikariCP pool size and timeouts from environment variables (D43); a `preview` proxy for
   `/api` in `vite.config.ts`.
 - **Sprint 2:** the Grafana Cloud account and its settings on Render (D34).
-- **Sprint 3:** RabbitMQ hosting for the escalation events.
+- **Sprint 3:** RabbitMQ hosting (CloudAMQP) for the outbox events, `RABBITMQ_URL` on Render (#82). Email
+  and AI jobs consume them later (D24).
 - A new setting is a new environment variable on Render, never a value in the repository.
 
 ---

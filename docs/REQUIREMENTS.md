@@ -17,7 +17,7 @@ the version we submitted; where the two differ, this file wins (D30).
 ### FR-01 Login and access control · Must
 - **FR-01.1** The system shall let users log in and log out.
 - **FR-01.2** Users shall only see information and perform actions their permissions allow, including changing an incident's status.
-- **FR-01.3** Application roles (Admin, Engineer, Viewer) shall be separate from incident responsibilities (Commander, Scribe).
+- **FR-01.3** Application roles (Admin, Engineer, Viewer) shall be separate from incident roles (Lead, Comms, Ops; D39).
 
 ### FR-02 Incident creation · Must
 - **FR-02.1** Authorized users shall be able to create an incident with a title, description, affected service, and severity.
@@ -39,8 +39,8 @@ the version we submitted; where the two differ, this file wins (D30).
 - **FR-05.1** The system shall assign a new incident to the service's on-call responder, or to its fallback contact.
 - **FR-05.2** Authorized users shall be able to reassign an incident to another person. Reassigning to a team is Could.
 - **FR-05.3** The system shall show the current owner and record who changed the assignment, when, and from whom to whom.
-- **FR-05.4** Authorized users shall be able to assign and transfer incident responsibilities (Commander, Scribe), with each change recorded in the timeline.
-- **FR-05.5** If one person holds both Commander and Scribe on a SEV1 or SEV2 incident, the system shall show a warning but allow it (C3).
+- **FR-05.4** Authorized users shall be able to assign and transfer incident roles (Lead, Comms, Ops; D39), with each change recorded in the timeline.
+- **FR-05.5** If one person holds more than one incident role on a SEV1 or SEV2 incident, the system shall show a warning but allow it (C3).
 
 ### FR-06 Incident status · Must
 - **FR-06.1** The system shall support OPEN, ACKNOWLEDGED, INVESTIGATING, IDENTIFIED, MONITORING, RESOLVED, and CLOSED.
@@ -208,7 +208,7 @@ SEV1 critical service or business impact · SEV2 high impact needing urgent atte
 - **DR-01.2** Severity describes impact. Response priority may also consider the time left before an SLA deadline.
 
 ### DR-02 Incident responsibilities
-- **DR-02.1** The Commander coordinates the response; Responders investigate and fix; the Scribe records events; the Communications Lead manages updates.
+- **DR-02.1** The Lead coordinates the response; Ops investigate and fix; Comms manages updates. The timeline records events, so there is no Scribe role (D39).
 - **DR-02.2** One person may hold more than one responsibility (see FR-05.5 for SEV1 and SEV2).
 - **DR-02.3** Holding an incident responsibility shall not grant system administrator permissions.
 

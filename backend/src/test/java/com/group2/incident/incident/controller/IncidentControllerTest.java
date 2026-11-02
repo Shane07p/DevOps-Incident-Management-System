@@ -326,6 +326,11 @@ class IncidentControllerTest {
 		assertThat(timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId()))
 				.extracting(TimelineEntry::getDetails)
 				.containsExactly("First note", "Second note");
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.timeline[0].details").value("First note"))
+				.andExpect(jsonPath("$.timeline[1].details").value("Second note"));
 	}
 
 	@Test
@@ -385,6 +390,29 @@ class IncidentControllerTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"details\":\"Invalid cross-incident correction\"}"))
 				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void commentAndCorrectionOver5000CharactersAreRejected() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		TimelineEntry original = timelineEntries.saveAndFlush(new TimelineEntry(
+				incident, engineer, TimelineEventType.COMMENT, "Original note", clock.instant()));
+		String token = tokenFor("engineer");
+		String oversizedText = "x".repeat(5001);
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"comment\":\"" + oversizedText + "\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.comment").value("Comment must not exceed 5000 characters"));
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + original.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"" + oversizedText + "\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.details").value("Correction details must not exceed 5000 characters"));
 	}
 
 	private Incident createIncident(IncidentStatus status) {

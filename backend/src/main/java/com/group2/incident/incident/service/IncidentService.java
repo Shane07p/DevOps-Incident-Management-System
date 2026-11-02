@@ -100,7 +100,9 @@ public class IncidentService {
 				correlationKey
 		);
 		// Each org numbers its incidents from 1; the row lock serialises concurrent creations (D48).
-		incident.assignNumber(orgs.findLockedById(OrgContext.current()).orElseThrow().takeIncidentNumber());
+		incident.assignNumber(orgs.findLockedById(OrgContext.current())
+				.orElseThrow(() -> new IllegalStateException("No org for this request"))
+				.takeIncidentNumber());
 		// Whoever is on call now, or the service's fallback contact outside every shift (FR-15).
 		AppUser assignee = onCallService.resolveAssignee(service, now);
 		if (assignee != null) {

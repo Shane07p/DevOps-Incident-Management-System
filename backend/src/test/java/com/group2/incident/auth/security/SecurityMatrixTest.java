@@ -132,6 +132,14 @@ public class SecurityMatrixTest {
 						"{\"email\":\"admin@test.local\",\"password\":\"" + DEFAULT_PASSWORD + "\"}",
 						200, 200, 200, 200
 				),
+				// The matrix sends no body, so every caller gets 400: the endpoint is reachable without login.
+				new MatrixRow(
+						"POST /api/auth/signup",
+						HttpMethod.POST,
+						"/api/auth/signup",
+						null,
+						400, 400, 400, 400
+				),
 				new MatrixRow(
 						"GET /api/auth/me",
 						HttpMethod.GET,

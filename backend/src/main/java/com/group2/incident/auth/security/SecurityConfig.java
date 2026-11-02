@@ -56,7 +56,7 @@ class SecurityConfig {
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers("/error", "/actuator/health/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
-						.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
 						// The permissions table in the Sprint 1 plan; anything not listed needs any logged-in user.
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")

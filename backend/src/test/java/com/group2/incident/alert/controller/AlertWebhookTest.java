@@ -87,7 +87,7 @@ class AlertWebhookTest {
 
 	@BeforeEach
 	void setUp() {
-		admin = users.saveAndFlush(new AppUser("webhook_admin", "Webhook Admin",
+		admin = users.saveAndFlush(new AppUser("webhook_admin", "webhook_admin@test.local", "Webhook Admin",
 				passwordEncoder.encode("DevPassw0rd!"), Role.ADMIN, clock.instant()));
 		payments = createService("Payments");
 

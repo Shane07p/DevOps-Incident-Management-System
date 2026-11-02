@@ -60,7 +60,7 @@ class ToolServiceTest {
 	void setUp() {
 		clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 		toolService = new ToolService(tools, users, auditService, clock);
-		admin = new AppUser("admin", "Admin User", "{noop}pass", Role.ADMIN, FIXED_NOW);
+		admin = new AppUser("admin", "admin@test.local", "Admin User", "{noop}pass", Role.ADMIN, FIXED_NOW);
 		ReflectionTestUtils.setField(admin, "id", 1L);
 	}
 

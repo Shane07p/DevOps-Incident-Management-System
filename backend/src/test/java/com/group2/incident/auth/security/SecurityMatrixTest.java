@@ -313,8 +313,10 @@ public class SecurityMatrixTest {
 		policy.replaceSteps(List.of(new EscalationStep(1, admin, 15)), clock.instant());
 		escalationPolicies.saveAndFlush(policy);
 
-		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
-				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));
+		Incident unsaved = new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
+				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480);
+		unsaved.assignNumber(1L);
+		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
 
 		adminNotificationId = notifications.saveAndFlush(
@@ -392,7 +394,7 @@ public class SecurityMatrixTest {
 	}
 
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), role,
+		return users.saveAndFlush(new AppUser(username, username + "@test.local", "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), role,
 				clock.instant()));
 	}
 

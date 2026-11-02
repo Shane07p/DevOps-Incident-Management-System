@@ -116,7 +116,7 @@ class ServiceOnCallControllerTest {
     }
 
     private AppUser createUser(String username, Role role) {
-        return users.saveAndFlush(new AppUser(username, username, passwordEncoder.encode(PASSWORD), role, clock.instant()));
+        return users.saveAndFlush(new AppUser(username, username + "@test.local", username, passwordEncoder.encode(PASSWORD), role, clock.instant()));
     }
 
     private String tokenFor(String username) throws Exception {

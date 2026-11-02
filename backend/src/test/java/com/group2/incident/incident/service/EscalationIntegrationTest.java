@@ -123,10 +123,10 @@ class EscalationIntegrationTest {
 	void setUp() throws Exception {
 		Instant now = clock.instant();
 
-		admin = appUserRepository.saveAndFlush(new AppUser("admin_esc", "Admin Escalation", passwordEncoder.encode(PASSWORD), Role.ADMIN, now));
-		responder1 = appUserRepository.saveAndFlush(new AppUser("responder1", "Responder Level 1", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
-		responder2 = appUserRepository.saveAndFlush(new AppUser("responder2", "Responder Level 2", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
-		fallbackUser = appUserRepository.saveAndFlush(new AppUser("fallback_user", "Fallback Contact", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
+		admin = appUserRepository.saveAndFlush(new AppUser("admin_esc", "admin_esc@test.local", "Admin Escalation", passwordEncoder.encode(PASSWORD), Role.ADMIN, now));
+		responder1 = appUserRepository.saveAndFlush(new AppUser("responder1", "responder1@test.local", "Responder Level 1", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
+		responder2 = appUserRepository.saveAndFlush(new AppUser("responder2", "responder2@test.local", "Responder Level 2", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
+		fallbackUser = appUserRepository.saveAndFlush(new AppUser("fallback_user", "fallback_user@test.local", "Fallback Contact", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now));
 
 		adminToken = tokenFor("admin_esc");
 		responderToken = tokenFor("responder1");

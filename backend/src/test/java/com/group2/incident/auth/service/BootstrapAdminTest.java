@@ -35,7 +35,7 @@ class BootstrapAdminTest {
 
 	@Test
 	void doesNothingOnceAnyUserExists() {
-		users.save(new AppUser("someone", "Someone", passwordEncoder.encode("Some-Passw0rd"), Role.VIEWER, clock.instant()));
+		users.save(new AppUser("someone", "someone@test.local", "Someone", passwordEncoder.encode("Some-Passw0rd"), Role.VIEWER, clock.instant()));
 
 		bootstrap("owner", "Owner-Passw0rd").run(null);
 

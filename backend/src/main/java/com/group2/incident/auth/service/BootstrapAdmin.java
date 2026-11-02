@@ -47,7 +47,7 @@ class BootstrapAdmin implements ApplicationRunner {
 		if (users.count() > 0) {
 			return;
 		}
-		users.save(new AppUser(username, "Administrator", passwordEncoder.encode(password), Role.ADMIN, clock.instant()));
+		users.save(new AppUser(username, username + "@settle.local", "Administrator", passwordEncoder.encode(password), Role.ADMIN, clock.instant()));
 		log.info("Created the first admin, {}", username);
 	}
 

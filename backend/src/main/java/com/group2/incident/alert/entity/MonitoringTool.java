@@ -10,6 +10,7 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "monitoring_tool")
@@ -20,6 +21,11 @@ public class MonitoringTool {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	// Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
 
 	@Column(name = "name", nullable = false, length = 100)
 	private String name;

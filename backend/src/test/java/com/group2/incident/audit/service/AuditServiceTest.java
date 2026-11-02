@@ -42,7 +42,7 @@ class AuditServiceTest {
     @Test
     void recordSavesAllFieldsCorrectlyWithAnActor() {
         AppUser actor = appUserRepository.save(
-                new AppUser("utsav", "Utsav B", "{noop}secret", Role.ADMIN, clock.instant()));
+                new AppUser("utsav", "utsav@test.local", "Utsav B", "{noop}secret", Role.ADMIN, clock.instant()));
 
         AuditEntry saved = auditService.record(
                 actor, AuditAction.SERVICE_CREATED, AuditItemType.SERVICE, 42L, "name: Payments");

@@ -99,8 +99,8 @@ class DatabaseSchemaTest {
 		String argon2Sized = "{argon2@SpringSecurity_v5_8}" + "x".repeat(97);
 
 		long id = jdbc.queryForObject("""
-				insert into app_user (username, display_name, password_hash, role, created_at)
-				values ('asha', 'Asha', ?, 'ENGINEER', now()) returning id""", Long.class, argon2Sized);
+				insert into app_user (email, username, display_name, password_hash, role, created_at)
+				values (gen_random_uuid() || '@test.local', 'asha', 'Asha', ?, 'ENGINEER', now()) returning id""", Long.class, argon2Sized);
 
 		assertThat(jdbc.queryForObject("select length(password_hash) from app_user where id = ?", Integer.class, id))
 				.isEqualTo(125);
@@ -109,8 +109,8 @@ class DatabaseSchemaTest {
 	@Test
 	void unknownRoleIsRejected() {
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into app_user (username, display_name, password_hash, role, created_at)
-				values ('asha', 'Asha', '{noop}x', 'OWNER', now())"""))
+				insert into app_user (email, username, display_name, password_hash, role, created_at)
+				values (gen_random_uuid() || '@test.local', 'asha', 'Asha', '{noop}x', 'OWNER', now())"""))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("app_user_role_check");
 	}
@@ -155,8 +155,8 @@ class DatabaseSchemaTest {
 	@Test
 	void auditEntryMayComeFromTheSystem() {
 		Long actor = jdbc.queryForObject("""
-				insert into audit_entry (actor_id, action, item_type, item_id, details, recorded_at)
-				values (null, 'ESCALATION_POLICY_APPLIED', 'INCIDENT', 1, 'Scheduled step', now())
+				insert into audit_entry (org_id, actor_id, action, item_type, item_id, details, recorded_at)
+				values ((select id from organization where slug = 'test-org'), null, 'ESCALATION_POLICY_APPLIED', 'INCIDENT', 1, 'Scheduled step', now())
 				returning actor_id""", Long.class);
 
 		assertThat(actor).isNull();
@@ -167,8 +167,8 @@ class DatabaseSchemaTest {
 		long actor = insertUser("asha");
 
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into audit_entry (actor_id, action, item_type, item_id, details, recorded_at)
-				values (?, 'created a user', 'USER', 1, 'Created', now())""", actor))
+				insert into audit_entry (org_id, actor_id, action, item_type, item_id, details, recorded_at)
+				values ((select id from organization where slug = 'test-org'), ?, 'created a user', 'USER', 1, 'Created', now())""", actor))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("audit_entry_action_check");
 	}
@@ -178,8 +178,8 @@ class DatabaseSchemaTest {
 		long actor = insertUser("asha");
 
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into audit_entry (actor_id, action, item_type, item_id, details, recorded_at)
-				values (?, 'USER_CREATED', 'user', 1, 'Created', now())""", actor))
+				insert into audit_entry (org_id, actor_id, action, item_type, item_id, details, recorded_at)
+				values ((select id from organization where slug = 'test-org'), ?, 'USER_CREATED', 'user', 1, 'Created', now())""", actor))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("audit_entry_item_type_check");
 	}
@@ -252,7 +252,7 @@ class DatabaseSchemaTest {
 
 		assertThatThrownBy(() -> insertService("Payments", owner, "LOW"))
 				.isInstanceOf(DataIntegrityViolationException.class)
-				.hasMessageContaining("service_name_key");
+				.hasMessageContaining("service_org_name_key");
 	}
 
 	@Test
@@ -385,9 +385,9 @@ class DatabaseSchemaTest {
 		Fixture f = fixture();
 
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into incident (title, description, service_id, severity, status, reporter_id, created_at,
+				insert into incident (org_id, number, title, description, service_id, severity, status, reporter_id, created_at,
 				                      response_target_minutes, resolution_target_minutes)
-				values (null, 'Checkout failing', ?, 'SEV2', 'OPEN', ?, now(), 60, 480)""", f.service, f.user))
+				values ((select id from organization where slug = 'test-org'), (select coalesce(max(number), 0) + 1 from incident), null, 'Checkout failing', ?, 'SEV2', 'OPEN', ?, now(), 60, 480)""", f.service, f.user))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("title");
 	}
@@ -539,8 +539,8 @@ class DatabaseSchemaTest {
 		long incident = insertIncident(f.service, f.user, "SEV2", "OPEN", 60, 480);
 
 		Long actor = jdbc.queryForObject("""
-				insert into timeline_entry (incident_id, actor_id, event_type, details, recorded_at)
-				values (?, null, 'ESCALATED', 'Notified the next contact', now()) returning actor_id""", Long.class, incident);
+				insert into timeline_entry (org_id, incident_id, actor_id, event_type, details, recorded_at)
+				values ((select id from organization where slug = 'test-org'), ?, null, 'ESCALATED', 'Notified the next contact', now()) returning actor_id""", Long.class, incident);
 
 		assertThat(actor).isNull();
 	}
@@ -551,8 +551,8 @@ class DatabaseSchemaTest {
 		long incident = insertIncident(f.service, f.user, "SEV2", "OPEN", 60, 480);
 
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into timeline_entry (incident_id, actor_id, event_type, details, recorded_at)
-				values (?, ?, 'status changed', 'Moved on', now())""", incident, f.user))
+				insert into timeline_entry (org_id, incident_id, actor_id, event_type, details, recorded_at)
+				values ((select id from organization where slug = 'test-org'), ?, ?, 'status changed', 'Moved on', now())""", incident, f.user))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("timeline_entry_event_type_check");
 	}
@@ -595,7 +595,7 @@ class DatabaseSchemaTest {
 
 		assertThatThrownBy(() -> insertTool("Prometheus", "hash2"))
 				.isInstanceOf(DataIntegrityViolationException.class)
-				.hasMessageContaining("monitoring_tool_name_key");
+				.hasMessageContaining("monitoring_tool_org_name_key");
 	}
 
 	@Test
@@ -604,7 +604,7 @@ class DatabaseSchemaTest {
 
 		assertThatThrownBy(() -> insertTool("prometheus", "hash2"))
 				.isInstanceOf(DataIntegrityViolationException.class)
-				.hasMessageContaining("monitoring_tool_name_key");
+				.hasMessageContaining("monitoring_tool_org_name_key");
 	}
 
 	@Test
@@ -619,8 +619,8 @@ class DatabaseSchemaTest {
 	@Test
 	void toolRequiresName() {
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into monitoring_tool (name, token_hash, created_at)
-				values (null, 'hash', now())"""))
+				insert into monitoring_tool (org_id, name, token_hash, created_at)
+				values ((select id from organization where slug = 'test-org'), null, 'hash', now())"""))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("name");
 	}
@@ -628,8 +628,8 @@ class DatabaseSchemaTest {
 	@Test
 	void toolRequiresTokenHash() {
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into monitoring_tool (name, token_hash, created_at)
-				values ('Tool', null, now())"""))
+				insert into monitoring_tool (org_id, name, token_hash, created_at)
+				values ((select id from organization where slug = 'test-org'), 'Tool', null, now())"""))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("token_hash");
 	}
@@ -638,8 +638,8 @@ class DatabaseSchemaTest {
 	@Test
 	void notificationRequiresARecipient() {
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into notification (recipient_id, message, created_at)
-				values (null, 'Hello', now())"""))
+				insert into notification (org_id, recipient_id, message, created_at)
+				values ((select id from organization where slug = 'test-org'), null, 'Hello', now())"""))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("recipient_id");
 	}
@@ -649,8 +649,8 @@ class DatabaseSchemaTest {
 		long user = insertUser("notif_user");
 
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into notification (recipient_id, message, created_at)
-				values (?, '   ', now())""", user))
+				insert into notification (org_id, recipient_id, message, created_at)
+				values ((select id from organization where slug = 'test-org'), ?, '   ', now())""", user))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("notification_message_not_blank");
 	}
@@ -667,20 +667,20 @@ class DatabaseSchemaTest {
 
 	private long insertUser(String username) {
 		return jdbc.queryForObject("""
-				insert into app_user (username, display_name, password_hash, role, created_at)
-				values (?, ?, '{noop}x', 'ENGINEER', now()) returning id""", Long.class, username, username);
+				insert into app_user (email, username, display_name, password_hash, role, created_at)
+				values (gen_random_uuid() || '@test.local', ?, ?, '{noop}x', 'ENGINEER', now()) returning id""", Long.class, username, username);
 	}
 
 	private long insertAudit(long actorId) {
 		return jdbc.queryForObject("""
-				insert into audit_entry (actor_id, action, item_type, item_id, details, recorded_at)
-				values (?, 'USER_CREATED', 'USER', 1, 'Created', now()) returning id""", Long.class, actorId);
+				insert into audit_entry (org_id, actor_id, action, item_type, item_id, details, recorded_at)
+				values ((select id from organization where slug = 'test-org'), ?, 'USER_CREATED', 'USER', 1, 'Created', now()) returning id""", Long.class, actorId);
 	}
 
 	private long insertService(String name, Long ownerId, String criticality) {
 		return jdbc.queryForObject("""
-				insert into service (name, owner_id, criticality, created_at, updated_at)
-				values (?, ?, ?, now(), now()) returning id""", Long.class, name, ownerId, criticality);
+				insert into service (org_id, name, owner_id, criticality, created_at, updated_at)
+				values ((select id from organization where slug = 'test-org'), ?, ?, ?, now(), now()) returning id""", Long.class, name, ownerId, criticality);
 	}
 
 	private void insertTarget(long serviceId, String severity, int responseMinutes, Integer resolutionMinutes) {
@@ -692,23 +692,23 @@ class DatabaseSchemaTest {
 	private long insertIncident(Long serviceId, Long reporterId, String severity, String status,
 			int responseTarget, Integer resolutionTarget) {
 		return jdbc.queryForObject("""
-				insert into incident (title, description, service_id, severity, status, reporter_id, created_at,
+				insert into incident (org_id, number, title, description, service_id, severity, status, reporter_id, created_at,
 				                      response_target_minutes, resolution_target_minutes)
-				values ('Checkout failing', 'Card payments time out', ?, ?, ?, ?, now(), ?, ?) returning id""",
+				values ((select id from organization where slug = 'test-org'), (select coalesce(max(number), 0) + 1 from incident), 'Checkout failing', 'Card payments time out', ?, ?, ?, ?, now(), ?, ?) returning id""",
 				Long.class, serviceId, severity, status, reporterId, responseTarget, resolutionTarget);
 	}
 
 	private long insertEntry(long incidentId, long actorId, Long correctsEntryId) {
 		return jdbc.queryForObject("""
-				insert into timeline_entry (incident_id, actor_id, event_type, details, recorded_at, corrects_entry_id)
-				values (?, ?, 'COMMENT', 'Looking at the gateway logs', now(), ?) returning id""",
+				insert into timeline_entry (org_id, incident_id, actor_id, event_type, details, recorded_at, corrects_entry_id)
+				values ((select id from organization where slug = 'test-org'), ?, ?, 'COMMENT', 'Looking at the gateway logs', now(), ?) returning id""",
 				Long.class, incidentId, actorId, correctsEntryId);
 	}
 
 	private long insertTool(String name, String tokenHash) {
 		return jdbc.queryForObject("""
-				insert into monitoring_tool (name, token_hash, created_at)
-				values (?, ?, now()) returning id""", Long.class, name, tokenHash);
+				insert into monitoring_tool (org_id, name, token_hash, created_at)
+				values ((select id from organization where slug = 'test-org'), ?, ?, now()) returning id""", Long.class, name, tokenHash);
 	}
 
 }

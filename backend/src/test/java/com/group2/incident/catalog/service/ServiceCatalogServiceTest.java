@@ -63,7 +63,7 @@ public class ServiceCatalogServiceTest {
         fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
         service = new ServiceCatalogService(serviceRepository, appUserRepository, auditService, fixedClock);
 
-        owner = new AppUser("alice", "Alice", "{noop}x", Role.ENGINEER, FIXED_NOW);
+        owner = new AppUser("alice", "alice@test.local", "Alice", "{noop}x", Role.ENGINEER, FIXED_NOW);
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
         when(serviceRepository.saveAndFlush(any(ServiceEntity.class))).thenAnswer(inv -> {
             ServiceEntity entity = inv.getArgument(0);

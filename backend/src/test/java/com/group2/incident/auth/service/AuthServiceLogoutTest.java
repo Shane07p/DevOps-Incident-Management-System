@@ -34,7 +34,7 @@ class AuthServiceLogoutTest {
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void logoutKeepsARoleChangedMeanwhile() {
-		long id = users.save(new AppUser("logout_race", "Logout Race", "hash", Role.ADMIN, clock.instant())).getId();
+		long id = users.save(new AppUser("logout_race", "logout_race@test.local", "Logout Race", "hash", Role.ADMIN, clock.instant())).getId();
 		TransactionTemplate demotion = new TransactionTemplate(transactionManager);
 		demotion.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		try {

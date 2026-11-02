@@ -51,6 +51,7 @@ public class UserAdminService {
 		String encodedPassword = passwordEncoder.encode(request.password());
 		AppUser newUser = new AppUser(
 				request.username(),
+				request.username() + "@settle.local",
 				request.displayName(),
 				encodedPassword,
 				request.role(),

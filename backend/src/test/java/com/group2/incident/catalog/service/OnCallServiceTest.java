@@ -16,6 +16,7 @@ import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.OnCallShiftRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.FieldValidationException;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.service.IncidentService;
@@ -187,11 +188,13 @@ class OnCallServiceTest {
                 List.of(new ShiftRequest(responderA.getId(), T_09_00, T_17_00)));
         UpdateOnCallScheduleRequest second = new UpdateOnCallScheduleRequest(fallbackContact.getId(),
                 List.of(new ShiftRequest(responderB.getId(), Instant.parse("2026-10-19T12:00:00Z"), T_22_00)));
+        // The other thread works for the same org as the test (D48).
+        long org = OrgContext.current();
         ExecutorService otherAdmin = Executors.newSingleThreadExecutor();
         try {
             Future<OnCallScheduleResponse> secondSave = new TransactionTemplate(transactionManager).execute(status -> {
                 onCallService.updateSchedule(service.getId(), first);
-                Future<OnCallScheduleResponse> started = otherAdmin.submit(() -> onCallService.updateSchedule(service.getId(), second));
+                Future<OnCallScheduleResponse> started = otherAdmin.submit(() -> OrgContext.runAs(org, () -> onCallService.updateSchedule(service.getId(), second)));
                 waitForASessionBlockedOnALock();
                 return started;
             });
@@ -227,6 +230,6 @@ class OnCallServiceTest {
     }
 
     private AppUser createUser(String username, String displayName) {
-        return users.saveAndFlush(new AppUser(username, displayName, "hash", Role.ENGINEER, clock.instant()));
+        return users.saveAndFlush(new AppUser(username, username + "@test.local", displayName, "hash", Role.ENGINEER, clock.instant()));
     }
 }

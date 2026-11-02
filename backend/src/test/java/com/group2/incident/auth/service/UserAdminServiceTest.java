@@ -57,15 +57,15 @@ class UserAdminServiceTest {
 		clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
 		userAdminService = new UserAdminService(users, passwordEncoder, auditService, clock);
 
-		admin = new AppUser("admin", "Dev Admin", "{bcrypt}hash", Role.ADMIN, FIXED_NOW);
+		admin = new AppUser("admin", "admin@test.local", "Dev Admin", "{bcrypt}hash", Role.ADMIN, FIXED_NOW);
 		ReflectionTestUtils.setField(admin, "id", 1L);
 	}
 
 	@Test
 	void listUsersReturnsAllUsersWithoutSensitiveFields() {
-		AppUser user1 = new AppUser("user1", "User One", "{bcrypt}hash1", Role.ENGINEER, FIXED_NOW);
+		AppUser user1 = new AppUser("user1", "user1@test.local", "User One", "{bcrypt}hash1", Role.ENGINEER, FIXED_NOW);
 		ReflectionTestUtils.setField(user1, "id", 10L);
-		AppUser user2 = new AppUser("user2", "User Two", "{bcrypt}hash2", Role.VIEWER, FIXED_NOW);
+		AppUser user2 = new AppUser("user2", "user2@test.local", "User Two", "{bcrypt}hash2", Role.VIEWER, FIXED_NOW);
 		ReflectionTestUtils.setField(user2, "id", 20L);
 
 		when(users.findAll()).thenReturn(List.of(user1, user2));
@@ -115,7 +115,7 @@ class UserAdminServiceTest {
 	@Test
 	void createUserThrowsConflictExceptionWhenUsernameAlreadyExists() {
 		CreateUserRequest request = new CreateUserRequest("ASHA", "Asha Upper", "ValidPassw0rd!", Role.ENGINEER);
-		AppUser existing = new AppUser("asha", "Asha Patel", "{bcrypt}hash", Role.ENGINEER, FIXED_NOW);
+		AppUser existing = new AppUser("asha", "asha@test.local", "Asha Patel", "{bcrypt}hash", Role.ENGINEER, FIXED_NOW);
 
 		when(users.findByUsername("ASHA")).thenReturn(Optional.of(existing));
 
@@ -138,7 +138,7 @@ class UserAdminServiceTest {
 
 	@Test
 	void changeRoleUpdatesRoleIncrementsTokenVersionAndAudits() {
-		AppUser target = new AppUser("target", "Target User", "{bcrypt}hash", Role.VIEWER, FIXED_NOW);
+		AppUser target = new AppUser("target", "target@test.local", "Target User", "{bcrypt}hash", Role.VIEWER, FIXED_NOW);
 		ReflectionTestUtils.setField(target, "id", 50L);
 		int initialTokenVersion = target.getTokenVersion();
 
@@ -174,7 +174,7 @@ class UserAdminServiceTest {
 
 	@Test
 	void changeRoleThrowsNotFoundExceptionWhenAdminNotFound() {
-		AppUser target = new AppUser("target", "Target User", "{bcrypt}hash", Role.VIEWER, FIXED_NOW);
+		AppUser target = new AppUser("target", "target@test.local", "Target User", "{bcrypt}hash", Role.VIEWER, FIXED_NOW);
 		when(users.findById(50L)).thenReturn(Optional.of(target));
 		when(users.findById(99L)).thenReturn(Optional.empty());
 

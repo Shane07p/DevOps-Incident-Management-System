@@ -77,9 +77,9 @@ class EscalationPolicyServiceTest {
 				fixedClock
 		);
 
-		admin = new AppUser("admin", "Admin User", "hash", Role.ADMIN, T0);
-		responder1 = new AppUser("resp1", "Responder 1", "hash", Role.ENGINEER, T0);
-		responder2 = new AppUser("resp2", "Responder 2", "hash", Role.ENGINEER, T0);
+		admin = new AppUser("admin", "admin@test.local", "Admin User", "hash", Role.ADMIN, T0);
+		responder1 = new AppUser("resp1", "resp1@test.local", "Responder 1", "hash", Role.ENGINEER, T0);
+		responder2 = new AppUser("resp2", "resp2@test.local", "Responder 2", "hash", Role.ENGINEER, T0);
 
 		serviceEntity = new ServiceEntity("OrderService", "Orders", admin, Criticality.HIGH, T0);
 	}

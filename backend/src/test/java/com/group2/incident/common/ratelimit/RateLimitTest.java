@@ -87,10 +87,10 @@ class RateLimitTest {
 		// A fixed time for the buckets, so none refills partway through a test.
 		setRateLimitTime(BASE_TIME);
 
-		testUser = users.saveAndFlush(new AppUser("rate_user_" + clock.millis(), "Rate Test User",
+		testUser = users.saveAndFlush(new AppUser("rate_user_" + clock.millis(), "rate_user_" + clock.millis() + "@test.local", "Rate Test User",
 				passwordEncoder.encode(PASSWORD), Role.ENGINEER, clock.instant()));
 
-		adminUser = users.saveAndFlush(new AppUser("rate_admin_" + clock.millis(), "Rate Admin",
+		adminUser = users.saveAndFlush(new AppUser("rate_admin_" + clock.millis(), "rate_admin_" + clock.millis() + "@test.local", "Rate Admin",
 				passwordEncoder.encode(PASSWORD), Role.ADMIN, clock.instant()));
 
 		// Accepted alerts become incidents, so the service they name has to exist.
@@ -153,7 +153,7 @@ class RateLimitTest {
 	void tcNfr044d_anotherUsernameFromSameIpNotLimited() throws Exception {
 		// TC-NFR-04.4d: Another username from the same IP, while the first is limited: Not limited.
 		String ip = "192.168.10.3";
-		AppUser secondUser = users.saveAndFlush(new AppUser("other_user_" + clock.millis(), "Other User",
+		AppUser secondUser = users.saveAndFlush(new AppUser("other_user_" + clock.millis(), "other_user_" + clock.millis() + "@test.local", "Other User",
 				passwordEncoder.encode(PASSWORD), Role.VIEWER, clock.instant()));
 
 		// Limit the first user

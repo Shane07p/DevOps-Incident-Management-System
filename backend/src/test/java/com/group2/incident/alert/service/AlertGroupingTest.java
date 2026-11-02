@@ -17,6 +17,7 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.service.IncidentService;
@@ -93,7 +94,7 @@ class AlertGroupingTest {
 
 	@BeforeEach
 	void setUp() {
-		owner = users.saveAndFlush(new AppUser("grouping_owner", "Grouping Owner", passwordEncoder.encode(PASSWORD), Role.ENGINEER,
+		owner = users.saveAndFlush(new AppUser("grouping_owner", "grouping_owner@test.local", "Grouping Owner", passwordEncoder.encode(PASSWORD), Role.ENGINEER,
 				clock.instant()));
 		payments = createService(PAYMENTS);
 		orders = createService(ORDERS);
@@ -222,7 +223,9 @@ class AlertGroupingTest {
 	private Future<AlertAcceptedResponse> whileTheFirstIsOpen(AlertRequest first, AlertRequest second) {
 		return new TransactionTemplate(transactionManager).execute(status -> {
 			alertService.processAlert(null, first);
-			Future<AlertAcceptedResponse> started = otherTool.submit(() -> alertService.processAlert(null, second));
+			// The other thread works for the same org as the test (D48).
+			long org = OrgContext.current();
+			Future<AlertAcceptedResponse> started = otherTool.submit(() -> OrgContext.runAs(org, () -> alertService.processAlert(null, second)));
 			waitForASessionBlockedOnALock();
 			return started;
 		});

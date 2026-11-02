@@ -196,7 +196,7 @@ class ToolControllerTest {
 	}
 
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, "Test " + username,
+		return users.saveAndFlush(new AppUser(username, username + "@test.local", "Test " + username,
 				passwordEncoder.encode(DEFAULT_PASSWORD), role, clock.instant()));
 	}
 

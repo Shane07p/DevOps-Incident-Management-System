@@ -263,7 +263,7 @@ public class ServiceControllerTest {
     }
 
     private AppUser createUser(String username, Role role) {
-        return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(PASSWORD), role,
+        return users.saveAndFlush(new AppUser(username, username + "@test.local", "Test " + username, passwordEncoder.encode(PASSWORD), role,
                 clock.instant()));
     }
 

@@ -61,7 +61,7 @@ class IncidentCreationRollbackTest {
 	@DisplayName("TC-FR-02.1c: When audit write fails during incident creation, no incident and no timeline entry are saved")
 	void auditFailureRollsBackIncidentAndTimeline() {
 		Instant now = clock.instant();
-		AppUser user = userRepository.saveAndFlush(new AppUser("rollback_engineer", "Rollback Engineer", "hash", Role.ENGINEER, now));
+		AppUser user = userRepository.saveAndFlush(new AppUser("rollback_engineer", "rollback_engineer@test.local", "Rollback Engineer", "hash", Role.ENGINEER, now));
 		ServiceEntity service = new ServiceEntity("RollbackService", "Auth and login", user, Criticality.HIGH, now);
 		for (Severity severity : Severity.values()) {
 			service.putTarget(severity, 60, 480);

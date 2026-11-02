@@ -86,10 +86,10 @@ class NotificationTest {
 	void setUp() {
 		Instant now = clock.instant();
 		responder = userRepository.saveAndFlush(
-				new AppUser("responder", "OnCall Responder", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
+				new AppUser("responder", "responder@test.local", "OnCall Responder", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
 		);
 		otherEngineer = userRepository.saveAndFlush(
-				new AppUser("other_eng", "Other Engineer", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
+				new AppUser("other_eng", "other_eng@test.local", "Other Engineer", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
 		);
 
 		// No shifts, so every new incident goes to the fallback contact, the responder.

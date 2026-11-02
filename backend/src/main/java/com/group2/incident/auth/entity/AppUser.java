@@ -27,6 +27,9 @@ public class AppUser {
 	private String username;
 
 	@Column(nullable = false)
+	private String email;
+
+	@Column(nullable = false)
 	private String displayName;
 
 	@Column(nullable = false)
@@ -46,8 +49,9 @@ public class AppUser {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
-	public AppUser(String username, String displayName, String passwordHash, Role role, Instant createdAt) {
+	public AppUser(String username, String email, String displayName, String passwordHash, Role role, Instant createdAt) {
 		this.username = username;
+		this.email = email;
 		this.displayName = displayName;
 		this.passwordHash = passwordHash;
 		this.role = role;

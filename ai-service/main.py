@@ -82,37 +82,21 @@ def get_agent_model() -> str:
     return os.getenv("AGENT_MODEL", "qwen2.5:0.5b")
 
 
+def get_agent_limits() -> AgentLimits:
+    """Return validated AgentLimits from environment variables."""
+    return AgentLimits.from_env()
+
+
 def get_agent_max_steps() -> int:
-    raw = os.getenv("AGENT_MAX_STEPS", "5")
-    try:
-        val = int(raw)
-        if 1 <= val <= 50:
-            return val
-        return 5
-    except (ValueError, TypeError):
-        return 5
+    return get_agent_limits().max_steps
 
 
 def get_agent_timeout() -> float:
-    raw = os.getenv("AGENT_TIMEOUT_SECONDS", "15.0")
-    try:
-        val = float(raw)
-        if math.isfinite(val) and 0.1 <= val <= 300.0:
-            return val
-        return 15.0
-    except (ValueError, TypeError):
-        return 15.0
+    return get_agent_limits().timeout_seconds
 
 
 def get_agent_max_tokens() -> int:
-    raw = os.getenv("AGENT_MAX_TOKENS", "4000")
-    try:
-        val = int(raw)
-        if 100 <= val <= 100000:
-            return val
-        return 4000
-    except (ValueError, TypeError):
-        return 4000
+    return get_agent_limits().max_tokens
 
 
 _VERSION = "0.2.0"
@@ -482,7 +466,11 @@ async def investigate(request: InvestigationRequest) -> InvestigationResult:
     """
     Autonomous AI SRE investigation tool loop on recorded Demo Shop evidence.
 
-    Accepts incident details and optional safety budget overrides.
+    Accepts incident details (service, timestamps, description).
+    Resource limits (max steps, timeout, token budget) are enforced exclusively from
+    environment variables (AGENT_MAX_STEPS, AGENT_TIMEOUT_SECONDS, AGENT_MAX_TOKENS)
+    and cannot be overridden by API callers.
+
     Executes a bounded multi-turn tool-calling loop:
       - Validates and dispatches registered evidence tools (logs, metrics, deploys, health).
       - Collects structured evidence into an Evidence Vault.
@@ -495,11 +483,7 @@ async def investigate(request: InvestigationRequest) -> InvestigationResult:
     provider = get_investigation_provider()
     tool_registry = getattr(app.state, "tool_registry", None) or build_default_tool_registry()
 
-    limits = AgentLimits.create_validated(
-        max_steps=request.max_steps if request.max_steps is not None else get_agent_max_steps(),
-        timeout_seconds=request.timeout_seconds if request.timeout_seconds is not None else get_agent_timeout(),
-        max_tokens=request.max_tokens if request.max_tokens is not None else get_agent_max_tokens(),
-    )
+    limits = get_agent_limits()
 
     loop = AgentInvestigationLoop(
         provider=provider,

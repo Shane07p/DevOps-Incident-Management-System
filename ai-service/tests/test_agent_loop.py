@@ -59,6 +59,11 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
 # ---------------------------------------------------------------------------
 # 1. Tool Registry & Evidence Tools Tests
 # ---------------------------------------------------------------------------
@@ -222,27 +227,8 @@ def test_tool_registry_valid_fixture_access():
     assert isinstance(result.evidence_items, list)
     assert len(result.evidence_items) > 0
 
-    vault = EvidenceVault()
-    # First batch with duplicate IDs
-    ev1 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c1")
-    ev2 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c2")
-    stored1 = vault.add_many([ev1, ev2])
-    assert len(vault.all_items()) == 2
-    assert stored1[0].id == "ev-dup"
-    assert stored1[1].id != "ev-dup"
-    # Second batch adding another item with the original duplicate ID
-    ev3 = EvidenceItem(id="ev-dup", source_tool="t", evidence_type="e", content="c3")
-    stored2 = vault.add_many([ev3])
-    assert len(vault.all_items()) == 3
-    # Ensure the new ID is unique and not any of the previous ones
-    new_ids = {item.id for item in stored2}
-    assert len(new_ids) == 1
-    new_id = next(iter(new_ids))
-    assert new_id not in {"ev-dup", stored1[1].id}
-    # Verify all IDs are retrievable
-    for ev in vault.all_items():
-        assert vault.get(ev.id) is ev
 
+def test_validate_and_filter_hypotheses_drops_unsupported():
     vault = EvidenceVault()
     real_ev = EvidenceItem(
         id="ev-log-0",
@@ -309,7 +295,7 @@ def test_evidence_vault_ranks_hypotheses_by_confidence_descending():
 # 3. Investigation Loop & Resource Budget Enforcement
 # ---------------------------------------------------------------------------
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_successful_multi_step_investigation_loop():
     mock_provider = MockProvider()
 
@@ -359,7 +345,7 @@ async def test_successful_multi_step_investigation_loop():
                 {
                     "hypothesis": "Upstream payment gateway slowdown exceeding 1.5s SLA",
                     "confidence": 0.95,
-                    "evidence_refs": ["ev-log-0", "ev-metric-0"],
+                    "evidenceRefs": ["ev-log-0", "ev-metric-0"],
                     "reasoning": "New payment.gateway.slow log events and p99 latency spiked to 2001ms.",
                 }
             ],
@@ -400,7 +386,90 @@ async def test_successful_multi_step_investigation_loop():
     assert len(res.evidence) >= 2
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
+async def test_investigation_loop_repeated_tool_distinct_evidence_ids():
+    """Task 2 regression: verify repeatedly calling the same evidence-producing tool
+    results in distinct stored IDs, with both records available in vault and correctly cited.
+    """
+    mock_provider = MockProvider()
+
+    # Turn 1: Model calls get_service_health -> yields ev-health-0
+    mock_provider.add_response(
+        ModelTurnResponse(
+            content="First health check for checkout.",
+            tool_calls=[
+                ToolCallRequest(
+                    call_id="call-h1",
+                    tool_name="get_service_health",
+                    arguments={"service": "checkout"},
+                )
+            ],
+            total_tokens=40,
+        )
+    )
+
+    # Turn 2: Model calls get_service_health again -> tool yields ev-health-0,
+    # but vault stores it as ev-health-0-1 and agent loop sends that actual stored ID to model.
+    mock_provider.add_response(
+        ModelTurnResponse(
+            content="Second health check for checkout.",
+            tool_calls=[
+                ToolCallRequest(
+                    call_id="call-h2",
+                    tool_name="get_service_health",
+                    arguments={"service": "checkout"},
+                )
+            ],
+            total_tokens=40,
+        )
+    )
+
+    # Turn 3: Model cites both distinct stored IDs
+    final_output = json.dumps(
+        {
+            "summary": "Both health checks confirmed checkout degradation.",
+            "hypotheses": [
+                {
+                    "hypothesis": "Persistent checkout degradation across repeated checks",
+                    "confidence": 0.92,
+                    "evidenceRefs": ["ev-health-0", "ev-health-0-1"],
+                    "reasoning": "Observed degraded status across two distinct checks",
+                }
+            ],
+        }
+    )
+    mock_provider.add_response(
+        ModelTurnResponse(
+            content=f"```json\n{final_output}\n```",
+            tool_calls=[],
+            total_tokens=80,
+        )
+    )
+
+    loop = AgentInvestigationLoop(
+        provider=mock_provider,
+        tool_registry=build_default_tool_registry(),
+        default_limits=AgentLimits(max_steps=5, timeout_seconds=10.0, max_tokens=2000),
+    )
+
+    req = InvestigationRequest(
+        service="checkout",
+        incident_start="2026-10-27T08:16:07Z",
+    )
+
+    res = await loop.run(req)
+
+    assert res.status == "completed"
+    assert res.steps_taken == 2
+    assert len(res.evidence) == 2
+    evidence_ids = [ev.id for ev in res.evidence]
+    assert evidence_ids == ["ev-health-0", "ev-health-0-1"]
+    assert all("checkout" in ev.content for ev in res.evidence)
+    assert len(res.hypotheses) == 1
+    assert res.hypotheses[0].evidence_refs == ["ev-health-0", "ev-health-0-1"]
+
+
+@pytest.mark.anyio
 async def test_step_limit_enforcement():
     # Configure mock provider to request a tool call endlessly
     mock_provider = MockProvider()
@@ -429,7 +498,6 @@ async def test_step_limit_enforcement():
     req = InvestigationRequest(
         service="checkout",
         incident_start="2026-10-27T08:16:07Z",
-        max_steps=3,
     )
 
     res = await loop.run(req)
@@ -439,7 +507,7 @@ async def test_step_limit_enforcement():
     assert "maximum limit of 3" in res.summary
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_wall_clock_timeout_enforcement():
     # Configure mock provider with artificial delay exceeding timeout
     mock_provider = MockProvider(
@@ -468,7 +536,6 @@ async def test_wall_clock_timeout_enforcement():
     req = InvestigationRequest(
         service="payments",
         incident_start="2026-10-27T08:16:07Z",
-        timeout_seconds=0.10,
     )
 
     res = await loop.run(req)
@@ -477,7 +544,7 @@ async def test_wall_clock_timeout_enforcement():
     assert "timeout" in res.summary.lower() or "timed out" in res.summary.lower()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_token_budget_enforcement():
     mock_provider = MockProvider()
     # Turn 1 uses 300 tokens out of 400 budget
@@ -512,7 +579,6 @@ async def test_token_budget_enforcement():
     req = InvestigationRequest(
         service="payments",
         incident_start="2026-10-27T08:16:07Z",
-        max_tokens=400,
     )
 
     res = await loop.run(req)
@@ -522,7 +588,7 @@ async def test_token_budget_enforcement():
     assert "token budget" in res.summary.lower()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_provider_error_graceful_recovery():
     mock_provider = MockProvider()
     mock_provider.add_response(RuntimeError("Ollama daemon disconnected"))
@@ -544,7 +610,7 @@ async def test_provider_error_graceful_recovery():
     assert res.hypotheses == []
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_empty_evidence_and_no_hypotheses():
     mock_provider = MockProvider()
     # Model calls tool on service with no errors/anomalies (e.g. search service in baseline)
@@ -592,7 +658,7 @@ async def test_empty_evidence_and_no_hypotheses():
     assert len(res.evidence) == 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_dropping_hypotheses_when_evidence_fabricated():
     mock_provider = MockProvider()
     # Turn 1: Valid tool call
@@ -694,11 +760,8 @@ def test_api_investigate_successful(client):
     try:
         payload = {
             "service": "payments",
-            "incident_start": "2026-10-27T08:16:07Z",
-            "incident_end": "2026-10-27T08:16:27Z",
-            "max_steps": 3,
-            "timeout_seconds": 10.0,
-            "max_tokens": 2000,
+            "incidentStart": "2026-10-27T08:16:07Z",
+            "incidentEnd": "2026-10-27T08:16:27Z",
         }
         response = client.post("/investigate", json=payload)
         assert response.status_code == 200
@@ -706,20 +769,24 @@ def test_api_investigate_successful(client):
         assert data["aiGenerated"] is True
         assert data["status"] == "completed"
         assert len(data["hypotheses"]) == 1
-        assert data["hypotheses"][0]["evidence_refs"] == ["ev-metric-0"]
+        assert data["hypotheses"][0]["evidenceRefs"] == ["ev-metric-0"]
         assert len(data["evidence"]) >= 1
+        assert data["evidence"][0]["sourceTool"] == "query_metric_anomalies"
+        assert data["stepsTaken"] == 1
+        assert data["tokensUsed"] == 80
+        assert "durationMs" in data
     finally:
         app.state.agent_provider = None
 
 
 def test_api_investigate_validation_error(client):
-    # Missing required 'incident_start'
+    # Missing required 'incident_start' / 'incidentStart'
     response = client.post("/investigate", json={"service": "payments"})
     assert response.status_code == 422
 
 
 # ---------------------------------------------------------------------------
-# 5. Environment Variable Limits Parsing & Defaults
+# 5. Environment Variable Limits Parsing, Safe Bounds & Validation
 # ---------------------------------------------------------------------------
 
 def test_agent_limits_env_parsing(monkeypatch):
@@ -732,11 +799,69 @@ def test_agent_limits_env_parsing(monkeypatch):
     assert get_agent_max_tokens() == 8000
 
 
-def test_agent_limits_invalid_env_falls_back_to_defaults(monkeypatch):
-    monkeypatch.setenv("AGENT_MAX_STEPS", "invalid_number")
-    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "-100.0")
-    monkeypatch.setenv("AGENT_MAX_TOKENS", "0")
+def test_agent_limits_boundary_values(monkeypatch):
+    # Min boundary
+    monkeypatch.setenv("AGENT_MAX_STEPS", "1")
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "0.1")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "100")
+    limits_min = AgentLimits.from_env()
+    assert limits_min.max_steps == 1
+    assert limits_min.timeout_seconds == 0.1
+    assert limits_min.max_tokens == 100
 
-    assert get_agent_max_steps() == 5
-    assert get_agent_timeout() == 15.0
-    assert get_agent_max_tokens() == 4000
+    # Max boundary
+    monkeypatch.setenv("AGENT_MAX_STEPS", "50")
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "300.0")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "100000")
+    limits_max = AgentLimits.from_env()
+    assert limits_max.max_steps == 50
+    assert limits_max.timeout_seconds == 300.0
+    assert limits_max.max_tokens == 100000
+
+
+def test_agent_limits_invalid_env_rejected(monkeypatch):
+    # Non-numeric values rejected
+    monkeypatch.setenv("AGENT_MAX_STEPS", "invalid_number")
+    with pytest.raises(ValueError, match="Invalid AGENT_MAX_STEPS"):
+        get_agent_max_steps()
+
+    monkeypatch.setenv("AGENT_MAX_STEPS", "5")
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "not_a_float")
+    with pytest.raises(ValueError, match="Invalid AGENT_TIMEOUT_SECONDS"):
+        get_agent_timeout()
+
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "15.0")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "not_an_int")
+    with pytest.raises(ValueError, match="Invalid AGENT_MAX_TOKENS"):
+        get_agent_max_tokens()
+
+
+def test_agent_limits_out_of_bounds_rejected(monkeypatch):
+    # Out of bounds steps (< 1 or > 50)
+    monkeypatch.setenv("AGENT_MAX_STEPS", "0")
+    with pytest.raises(Exception):
+        AgentLimits.from_env()
+
+    monkeypatch.setenv("AGENT_MAX_STEPS", "51")
+    with pytest.raises(Exception):
+        AgentLimits.from_env()
+
+    # Out of bounds timeout (< 0.1 or > 300.0)
+    monkeypatch.setenv("AGENT_MAX_STEPS", "5")
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "0.0")
+    with pytest.raises(Exception):
+        AgentLimits.from_env()
+
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "300.1")
+    with pytest.raises(Exception):
+        AgentLimits.from_env()
+
+    # Out of bounds tokens (< 100 or > 100000)
+    monkeypatch.setenv("AGENT_TIMEOUT_SECONDS", "15.0")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "99")
+    with pytest.raises(Exception):
+        AgentLimits.from_env()
+
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "100001")
+    with pytest.raises(Exception):
+        AgentLimits.from_env()

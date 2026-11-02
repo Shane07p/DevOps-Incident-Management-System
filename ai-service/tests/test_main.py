@@ -31,22 +31,21 @@ def isolate_environment(monkeypatch):
     monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     monkeypatch.setenv("OLLAMA_TIMEOUT", "10")
-    # Reset app.state HTTP client and provider after every test to prevent
-    # mock leakage across tests (e.g. provider tests set app.state.http_client
-    # to an AsyncMock; without cleanup subsequent tests receive the mock client
-    # instead of a real one, causing wrong status codes like 502 vs 503).
     yield
-    # Unconditionally clear any mock state set during the test.
-    # Use try/except because Starlette's State raises KeyError on missing keys
-    # even when hasattr returns True (it delegates to an internal dict).
-    try:
-        delattr(app.state, "http_client")
-    except (AttributeError, KeyError):
-        pass
-    try:
-        delattr(app.state, "agent_provider")
-    except (AttributeError, KeyError):
-        pass
+    # Safely clear shared Starlette State attributes after each test to prevent mock leakage.
+    # Starlette's State delegates to an internal _state dict. Direct manipulation avoids
+    # State.__delattr__ KeyError while ensuring clean isolation between tests.
+    state_dict = getattr(app.state, "_state", None)
+    if isinstance(state_dict, dict):
+        state_dict.pop("http_client", None)
+        state_dict.pop("agent_provider", None)
+        state_dict.pop("tool_registry", None)
+    else:
+        for attr in ("http_client", "agent_provider", "tool_registry"):
+            try:
+                delattr(app.state, attr)
+            except (AttributeError, KeyError):
+                pass
 
 
 client = TestClient(app)
@@ -112,6 +111,20 @@ def test_ready_reports_not_ready_when_model_not_pulled():
     data = response.json()
     assert data["status"] == "not_ready"
     assert data["ollama"]["reachable"] is True
+    assert data["ollama"]["model_pulled"] is False
+
+
+def test_ready_reports_not_ready_when_ollama_connection_fails():
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.ConnectError("Failed to connect to Ollama")
+
+    with patch("main._get_client", return_value=mock_client):
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "not_ready"
+    assert data["ollama"]["reachable"] is False
     assert data["ollama"]["model_pulled"] is False
 
 

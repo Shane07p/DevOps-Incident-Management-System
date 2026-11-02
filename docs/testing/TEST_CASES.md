@@ -309,14 +309,14 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-AI-91a | Scenario | Multi-step investigation with registered evidence tools | 200 with `status: completed`, verified hypotheses, and citations | `test_agent_loop.py::test_successful_multi_step_investigation_loop` | In review (#91) |
-| TC-AI-91b | Boundary value | Investigation loop exceeding step limit (N = 3) | Halts with `status: step_limit_exceeded`, `steps_taken == 3` | `test_agent_loop.py::test_step_limit_enforcement` | In review (#91) |
-| TC-AI-91c | Boundary value | Investigation loop exceeding wall-clock deadline | Halts with `status: timeout` | `test_agent_loop.py::test_wall_clock_timeout_enforcement` | In review (#91) |
-| TC-AI-91d | Boundary value | Cumulative tokens exceeding max budget | Halts with `status: token_budget_exhausted` | `test_agent_loop.py::test_token_budget_enforcement` | In review (#91) |
-| TC-AI-91e | Negative | Hypotheses citing fabricated/unknown evidence IDs | Unsupported hypotheses discarded; only verified citations retained | `test_agent_loop.py::test_dropping_hypotheses_when_evidence_fabricated` | In review (#91) |
-| TC-AI-91f | Negative | Tool call to unknown or unregistered tool name | Rejected safely with error description without crashing loop | `test_agent_loop.py::test_tool_registry_rejects_unknown_tool` | In review (#91) |
-| TC-AI-91g | Negative | Investigation where no evidence is found | Returns `status: no_evidence` and `hypotheses: []` | `test_agent_loop.py::test_empty_evidence_and_no_hypotheses` | In review (#91) |
-| TC-AI-91h | Integration | HTTP call to `POST /investigate` | 200 with `aiGenerated: true`, evidence, and hypotheses | `test_agent_loop.py::test_api_investigate_successful` | In review (#91) |
+| TC-AI-91a | Scenario | Multi-step investigation with registered evidence tools | 200 with `status: completed`, verified hypotheses, and citations | `test_agent_loop.py::test_successful_multi_step_investigation_loop` | Automated |
+| TC-AI-91b | Boundary value | Investigation loop exceeding step limit (N = 3) | Halts with `status: step_limit_exceeded`, `steps_taken == 3` | `test_agent_loop.py::test_step_limit_enforcement` | Automated |
+| TC-AI-91c | Boundary value | Investigation loop exceeding wall-clock deadline | Halts with `status: timeout` | `test_agent_loop.py::test_wall_clock_timeout_enforcement` | Automated |
+| TC-AI-91d | Boundary value | Cumulative tokens exceeding max budget | Halts with `status: token_budget_exhausted` | `test_agent_loop.py::test_token_budget_enforcement` | Automated |
+| TC-AI-91e | Negative | Hypotheses citing fabricated/unknown evidence IDs | Unsupported hypotheses discarded; only verified citations retained | `test_agent_loop.py::test_dropping_hypotheses_when_evidence_fabricated` | Automated |
+| TC-AI-91f | Negative | Tool call to unknown or unregistered tool name | Rejected safely with error description without crashing loop | `test_agent_loop.py::test_tool_registry_rejects_unknown_tool` | Automated |
+| TC-AI-91g | Negative | Investigation where no evidence is found | Returns `status: no_evidence` and `hypotheses: []` | `test_agent_loop.py::test_empty_evidence_and_no_hypotheses` | Automated |
+| TC-AI-91h | Integration | HTTP call to `POST /investigate` | 200 with `aiGenerated: true`, evidence, and hypotheses | `test_agent_loop.py::test_api_investigate_successful` | Automated |
 
 ---
 

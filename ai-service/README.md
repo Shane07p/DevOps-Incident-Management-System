@@ -113,14 +113,22 @@ ollama run llama3.2:1b
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama server (`http://ollama:11434` in Docker Compose) |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Name of the embedding model to use |
 | `OLLAMA_TIMEOUT` | `10` | Request timeout in seconds for Ollama HTTP calls |
+| `AGENT_MODEL` | `qwen2.5:0.5b` | Model used for autonomous AI SRE agent investigations |
+| `AGENT_MAX_STEPS` | `5` | Maximum tool steps allowed per investigation |
+| `AGENT_TIMEOUT_SECONDS` | `15.0` | Maximum wall-clock deadline in seconds for investigation loop |
+| `AGENT_MAX_TOKENS` | `4000` | Maximum cumulative token budget across investigation turns |
 | `AI_PORT` | `8000` | Port for the AI service |
 
-### Pulling the Embedding Model
+### Pulling the Models
 
-The default model is `nomic-embed-text` (~274 MB, 137M parameters, 8192 context length, 768-dimensional embeddings):
-
+1. **Embedding model** (`nomic-embed-text`, ~274 MB, 137M parameters, 8192 context length, 768-dimensional embeddings):
 ```powershell
 ollama pull nomic-embed-text
+```
+
+2. **Investigation agent model** (`qwen2.5:0.5b`, ~398 MB, 0.5B parameters, fast tool-calling on 8 GB systems):
+```powershell
+ollama pull qwen2.5:0.5b
 ```
 
 ### Running Ollama
@@ -136,8 +144,9 @@ Ollama is configured under the optional `ollama` profile so developers who do no
 # Start only the optional Ollama service
 docker compose --profile ollama up -d ollama
 
-# Pull the model inside the running Ollama container
+# Pull the models inside the running Ollama container
 docker compose exec ollama ollama pull nomic-embed-text
+docker compose exec ollama ollama pull qwen2.5:0.5b
 ```
 
 ### Calling `POST /embed`
@@ -228,19 +237,20 @@ The AI SRE investigation loop autonomously gathers structured evidence from reco
 | **Model Token Budget** | `AGENT_MAX_TOKENS` | `4000` | Integer in [100, 100000]. Cumulative tracking across input prompt + completion tokens. |
 
 ### Evidence Attribution & Grounding
-- **Strict Evidence Verification:** Every hypothesis returned MUST cite one or more real `evidence_refs` (e.g. `ev-log-0`, `ev-metric-0`, `ev-deploy-0`) collected in the investigation.
+- **Strict Evidence Verification:** Every hypothesis returned MUST cite one or more real `evidenceRefs` (e.g. `ev-log-0`, `ev-metric-0`, `ev-deploy-0`) collected in the investigation.
 - **Unsupported Hypothesis Dropping:** Hypotheses with empty citations, fabricated IDs, or unobserved evidence are strictly discarded.
-- **Honest Evidence Reporting:** If no evidence is found or no hypothesis is supported, the service returns `hypotheses: []` and status `no_evidence`.
+- **Honest Evidence Reporting:** If no evidence is found during investigation, status is `no_evidence` with `hypotheses: []`. If evidence exists but no candidate hypothesis survives verification against the Evidence Vault, status remains `completed` with `hypotheses: []` and an explanation in `summary`.
+- **Enforced Safety Bounds:** Resource limits (steps, timeout, tokens) are strictly bound to server configuration environment variables; API callers cannot override limits in the request body.
 - **Advisory Role (DR-10.2):** Labelled with `aiGenerated: true`. Never alters incident severity, assignee, status, or SLA targets.
 
 ### Example Investigation Call
 
-**Request:**
+**Request (`POST /investigate`):**
 ```json
 {
   "service": "payments",
-  "incident_start": "2026-10-27T08:16:07Z",
-  "incident_end": "2026-10-27T08:16:27Z",
+  "incidentStart": "2026-10-27T08:16:07Z",
+  "incidentEnd": "2026-10-27T08:16:27Z",
   "description": "504 Gateway Timeouts reported on payment processing."
 }
 ```
@@ -255,28 +265,28 @@ The AI SRE investigation loop autonomously gathers structured evidence from reco
     {
       "hypothesis": "Upstream payment gateway slowdown exceeding 1.5s SLA",
       "confidence": 0.95,
-      "evidence_refs": ["ev-log-0", "ev-metric-0"],
+      "evidenceRefs": ["ev-log-0", "ev-metric-0"],
       "reasoning": "New payment.gateway.slow log events and p99 latency spiked to 2001ms."
     }
   ],
   "evidence": [
     {
       "id": "ev-log-0",
-      "source_tool": "query_log_patterns",
-      "evidence_type": "log_pattern",
+      "sourceTool": "query_log_patterns",
+      "evidenceType": "log_pattern",
       "content": "Log pattern 'payment.gateway.slow' on 'payments' is new (0 before) with 5 occurrences during the incident window",
       "details": { "count_before": 0, "count_after": 5, "pattern": "payment.gateway.slow", "status": "new" }
     },
     {
       "id": "ev-metric-0",
-      "source_tool": "query_metric_anomalies",
-      "evidence_type": "metric_anomaly",
+      "sourceTool": "query_metric_anomalies",
+      "evidenceType": "metric_anomaly",
       "content": "Metric anomaly on 'payments': demo_http_request_duration_seconds - p99 latency 2001.93ms (normal baseline < 50ms, SLA threshold 1500ms)",
       "details": { "metric": "demo_http_request_duration_seconds", "incident_value": 2001.93, "normal_value": 25.0 }
     }
   ],
-  "steps_taken": 2,
-  "tokens_used": 420,
-  "duration_ms": 142.5
+  "stepsTaken": 2,
+  "tokensUsed": 420,
+  "durationMs": 142.5
 }
 ```

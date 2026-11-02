@@ -18,8 +18,9 @@ import logging
 import math
 import re
 import time
+import os
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, alias_generators
 
 from agent_tools import EvidenceItem, ToolRegistry, build_default_tool_registry
 from providers import LlmProvider, ModelTurnResponse
@@ -34,8 +35,42 @@ logger = logging.getLogger("ai-service.agent_loop")
 class AgentLimits(BaseModel):
     """Configurable hard bounds for the agent loop."""
     max_steps: int = Field(default=5, ge=1, le=50, description="Maximum tool execution steps")
-    timeout_seconds: float = Field(default=15.0, gt=0.0, le=300.0, description="Total wall-clock deadline in seconds")
+    timeout_seconds: float = Field(default=15.0, ge=0.1, le=300.0, description="Total wall-clock deadline in seconds")
     max_tokens: int = Field(default=4000, ge=100, le=100000, description="Total cumulative token budget")
+
+    @classmethod
+    def from_env(cls) -> AgentLimits:
+        """Build AgentLimits from environment variables, validating bounds strictly.
+
+        Rejects invalid values via Pydantic/ValueError rather than silently falling back to defaults.
+        """
+        raw_steps = os.getenv("AGENT_MAX_STEPS")
+        raw_timeout = os.getenv("AGENT_TIMEOUT_SECONDS")
+        raw_tokens = os.getenv("AGENT_MAX_TOKENS")
+
+        data: Dict[str, Any] = {}
+        if raw_steps is not None and raw_steps.strip() != "":
+            try:
+                data["max_steps"] = int(raw_steps)
+            except ValueError as exc:
+                raise ValueError(f"Invalid AGENT_MAX_STEPS '{raw_steps}': must be an integer between 1 and 50") from exc
+
+        if raw_timeout is not None and raw_timeout.strip() != "":
+            try:
+                val = float(raw_timeout)
+                if not math.isfinite(val):
+                    raise ValueError("must be a finite number")
+                data["timeout_seconds"] = val
+            except ValueError as exc:
+                raise ValueError(f"Invalid AGENT_TIMEOUT_SECONDS '{raw_timeout}': must be a finite float between 0.1 and 300.0") from exc
+
+        if raw_tokens is not None and raw_tokens.strip() != "":
+            try:
+                data["max_tokens"] = int(raw_tokens)
+            except ValueError as exc:
+                raise ValueError(f"Invalid AGENT_MAX_TOKENS '{raw_tokens}': must be an integer between 100 and 100000") from exc
+
+        return cls.model_validate(data)
 
     @classmethod
     def create_validated(
@@ -44,19 +79,15 @@ class AgentLimits(BaseModel):
         timeout_seconds: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> AgentLimits:
-        """Create and strictly validate limits, falling back to safe defaults if invalid."""
-        steps = max_steps if max_steps is not None and 1 <= max_steps <= 50 else 5
-
-        timeout = 15.0
+        """Construct AgentLimits validating bounds, raising ValidationError on invalid bounds."""
+        kwargs: Dict[str, Any] = {}
+        if max_steps is not None:
+            kwargs["max_steps"] = max_steps
         if timeout_seconds is not None:
-            if math.isfinite(timeout_seconds) and 0.1 <= timeout_seconds <= 300.0:
-                timeout = timeout_seconds
-
-        tokens = 4000
-        if max_tokens is not None and 100 <= max_tokens <= 100000:
-            tokens = max_tokens
-
-        return cls(max_steps=steps, timeout_seconds=timeout, max_tokens=tokens)
+            kwargs["timeout_seconds"] = timeout_seconds
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        return cls(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +96,8 @@ class AgentLimits(BaseModel):
 
 class RankedHypothesis(BaseModel):
     """Investigation hypothesis strictly supported by real evidence records."""
+    model_config = ConfigDict(populate_by_name=True, alias_generator=alias_generators.to_camel)
+
     hypothesis: str = Field(..., min_length=1, description="Root cause hypothesis description")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score between 0.0 and 1.0")
     evidence_refs: List[str] = Field(..., min_length=1, description="List of verified EvidenceItem IDs cited")
@@ -73,6 +106,8 @@ class RankedHypothesis(BaseModel):
 
 class InvestigationResult(BaseModel):
     """Complete result of an agent investigation."""
+    model_config = ConfigDict(populate_by_name=True, alias_generator=alias_generators.to_camel)
+
     aiGenerated: bool = Field(True, description="FR-18.2 AI-generated indicator")
     status: str = Field(..., description="Status: completed, timeout, step_limit_exceeded, token_budget_exhausted, provider_error, no_evidence")
     summary: str = Field(..., description="High-level investigation narrative summary")
@@ -154,7 +189,7 @@ class EvidenceVault:
                     conf = float(cand.get("confidence", 0.0))
                 except (ValueError, TypeError):
                     conf = 0.0
-                raw_refs = cand.get("evidence_refs", [])
+                raw_refs = cand.get("evidenceRefs") if "evidenceRefs" in cand else cand.get("evidence_refs", [])
                 refs = [str(r).strip() for r in raw_refs if str(r).strip()] if isinstance(raw_refs, list) else []
                 reason = cand.get("reasoning")
             else:
@@ -202,13 +237,12 @@ class EvidenceVault:
 
 class InvestigationRequest(BaseModel):
     """Input payload to trigger an AI SRE investigation."""
+    model_config = ConfigDict(populate_by_name=True, alias_generator=alias_generators.to_camel)
+
     service: str = Field(..., min_length=1, max_length=100, description="Service to investigate")
     incident_start: str = Field(..., description="ISO-8601 UTC timestamp of incident start")
     incident_end: Optional[str] = Field(None, description="ISO-8601 UTC timestamp of incident end")
     description: Optional[str] = Field(None, max_length=5000, description="Reported incident symptoms or notes")
-    max_steps: Optional[int] = Field(None, ge=1, le=50, description="Override maximum tool execution steps")
-    timeout_seconds: Optional[float] = Field(None, gt=0.0, le=300.0, description="Override wall-clock timeout in seconds")
-    max_tokens: Optional[int] = Field(None, ge=100, le=100000, description="Override token budget")
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +302,7 @@ class AgentInvestigationLoop:
     ):
         self.provider = provider
         self.tool_registry = tool_registry or build_default_tool_registry()
-        self.default_limits = default_limits or AgentLimits()
+        self.default_limits = default_limits if default_limits is not None else AgentLimits.from_env()
 
     async def run(
         self,
@@ -278,11 +312,7 @@ class AgentInvestigationLoop:
         """
         Execute the investigation loop for the given request.
         """
-        limits = limits_override or AgentLimits.create_validated(
-            max_steps=request.max_steps or self.default_limits.max_steps,
-            timeout_seconds=request.timeout_seconds or self.default_limits.timeout_seconds,
-            max_tokens=request.max_tokens or self.default_limits.max_tokens,
-        )
+        limits = limits_override or self.default_limits
 
         start_time = time.monotonic()
         steps_taken = 0
@@ -295,7 +325,7 @@ class AgentInvestigationLoop:
             "You have access to evidence tools to inspect recorded logs, metric anomalies, deploy events, and service health. "
             "Call the necessary tools to gather facts. "
             "When done, return a JSON object with 'summary' and 'hypotheses'. "
-            "Every hypothesis MUST include 'hypothesis', 'confidence' (0.0 to 1.0), and 'evidence_refs' (listing exact evidence IDs like 'ev-log-0'). "
+            "Every hypothesis MUST include 'hypothesis', 'confidence' (0.0 to 1.0), and 'evidenceRefs' (listing exact evidence IDs like 'ev-log-0'). "
             "Do NOT fabricate evidence IDs. Any hypothesis without real evidence will be discarded."
         )
 
@@ -408,16 +438,22 @@ class AgentInvestigationLoop:
                     # Dispatch tool safely through ToolRegistry
                     tool_result = self.tool_registry.execute(tc.tool_name, tc.arguments)
 
-                    # Store real evidence items in Evidence Vault
+                    # Store real evidence items in Evidence Vault and capture the
+                    # *stored* items (which may have collision-resolved IDs).
+                    stored_items: List[EvidenceItem] = []
                     if tool_result.evidence_items:
-                        vault.add_many(tool_result.evidence_items)
+                        stored_items = vault.add_many(tool_result.evidence_items)
 
-                    # Format tool message for conversation context
+                    # Inform the model of the actual stored IDs and their content
+                    # so that its citations in hypotheses match what the vault holds.
                     tool_output_str = json.dumps(
                         {
                             "success": tool_result.success,
                             "data": tool_result.data,
-                            "evidence_ids": [ev.id for ev in tool_result.evidence_items],
+                            "evidence": [
+                                {"id": ev.id, "content": ev.content}
+                                for ev in stored_items
+                            ],
                             "error": tool_result.error,
                         }
                     )

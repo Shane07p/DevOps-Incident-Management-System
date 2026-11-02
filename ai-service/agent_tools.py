@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, alias_generators
 
 from log_patterns import (
     find_log_patterns,
@@ -18,8 +18,8 @@ from log_patterns import (
     parse_time,
 )
 
-FIXTURES_DIR = Path(__file__).resolve().parent / "tests" / "fixtures"
-DEFAULT_LOG_FIXTURE = FIXTURES_DIR / "demo_shop_slow_gateway.jsonl"
+DATA_DIR = Path(__file__).resolve().parent / "data" / "fixtures"
+DEFAULT_LOG_FIXTURE = DATA_DIR / "demo_shop_slow_gateway.jsonl"
 
 
 # ---------------------------------------------------------------------------
@@ -28,6 +28,8 @@ DEFAULT_LOG_FIXTURE = FIXTURES_DIR / "demo_shop_slow_gateway.jsonl"
 
 class EvidenceItem(BaseModel):
     """Structured evidence item captured during an investigation."""
+    model_config = ConfigDict(populate_by_name=True, alias_generator=alias_generators.to_camel)
+
     id: str = Field(..., description="Stable unique identifier for evidence item (e.g. ev-log-0)")
     source_tool: str = Field(..., description="Tool that yielded this evidence")
     evidence_type: str = Field(..., description="Category: log_pattern, deploy_event, metric_anomaly, etc.")
@@ -81,12 +83,12 @@ def query_log_patterns(
     incident_end: str,
     query_base_url: str = "",
     datasource_uid: str = "",
-    log_file_path: Optional[str] = None,
 ) -> ToolResult:
     """
     Search recorded Demo Shop logs for new or spiking patterns using Issue #92 implementation.
+    The log fixture path is determined internally; callers cannot override it.
     """
-    target_path = Path(log_file_path) if log_file_path else DEFAULT_LOG_FIXTURE
+    target_path = DEFAULT_LOG_FIXTURE
     if not target_path.exists():
         return ToolResult(
             tool_name="query_log_patterns",
@@ -408,64 +410,6 @@ class ToolRegistry:
                 tool_name=name,
                 success=False,
                 error=f"Invalid arguments for tool '{name}': unexpected fields {unexpected}",
-            )
-
-        # Validate types where specified
-        for key, val in args.items():
-            if key in properties:
-                expected_type = properties[key].get("type")
-                if expected_type == "string" and not isinstance(val, str):
-                    return ToolResult(
-                        tool_name=name,
-                        success=False,
-                        error=f"Invalid argument '{key}': expected string, got {type(val).__name__}",
-                    )
-                if expected_type == "number" and not isinstance(val, (int, float)):
-                    return ToolResult(
-                        tool_name=name,
-                        success=False,
-                        error=f"Invalid argument '{key}': expected number, got {type(val).__name__}",
-                    )
-                if expected_type == "integer" and not isinstance(val, int):
-                    return ToolResult(
-                        tool_name=name,
-                        success=False,
-                        error=f"Invalid argument '{key}': expected integer, got {type(val).__name__}",
-                    )
-
-        try:
-            return tool.func(**args)
-        except TypeError as exc:
-            return ToolResult(
-                tool_name=name,
-                success=False,
-                error=f"Argument mismatch for tool '{name}': {exc}",
-            )
-        except Exception as exc:
-            return ToolResult(
-                tool_name=name,
-                success=False,
-                error=f"Tool '{name}' failed with unhandled exception: {exc}",
-            )
-        tool = self.get(name)
-        if tool is None:
-            return ToolResult(
-                tool_name=name,
-                success=False,
-                error=f"Tool '{name}' is not registered. Valid tools: {list(self._tools.keys())}",
-            )
-
-        # Validate required arguments against parameters_schema
-        schema = tool.parameters_schema
-        required_fields = schema.get("required", [])
-        properties = schema.get("properties", {})
-
-        missing = [field for field in required_fields if field not in args or args[field] is None]
-        if missing:
-            return ToolResult(
-                tool_name=name,
-                success=False,
-                error=f"Invalid arguments for tool '{name}': missing required fields {missing}",
             )
 
         # Validate types where specified

@@ -315,6 +315,125 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
 | TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
 
+### AI SRE tool loop on demo data (Issue #91, FR-18.2)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-91a | Scenario | Multi-step investigation with registered evidence tools | 200 with `status: completed`, verified hypotheses, and citations | `test_agent_loop.py::test_successful_multi_step_investigation_loop` | Automated |
+| TC-AI-91b | Boundary value | Investigation loop exceeding step limit (N = 3) | Halts with `status: step_limit_exceeded`, `steps_taken == 3` | `test_agent_loop.py::test_step_limit_enforcement` | Automated |
+| TC-AI-91c | Boundary value | Investigation loop exceeding wall-clock deadline | Halts with `status: timeout` | `test_agent_loop.py::test_wall_clock_timeout_enforcement` | Automated |
+| TC-AI-91d | Boundary value | Cumulative tokens exceeding max budget | Halts with `status: token_budget_exhausted` | `test_agent_loop.py::test_token_budget_enforcement` | Automated |
+| TC-AI-91e | Negative | Hypotheses citing fabricated/unknown evidence IDs | Unsupported hypotheses discarded; only verified citations retained | `test_agent_loop.py::test_dropping_hypotheses_when_evidence_fabricated` | Automated |
+| TC-AI-91f | Negative | Tool call to unknown or unregistered tool name | Rejected safely with error description without crashing loop | `test_agent_loop.py::test_tool_registry_rejects_unknown_tool` | Automated |
+| TC-AI-91g | Negative | Investigation where no evidence is found | Returns `status: no_evidence` and `hypotheses: []` | `test_agent_loop.py::test_empty_evidence_and_no_hypotheses` | Automated |
+| TC-AI-91h | Integration | HTTP call to `POST /investigate` | 200 with `aiGenerated: true`, evidence, and hypotheses | `test_agent_loop.py::test_api_investigate_successful` | Automated |
+
+## Sprint 4
+
+The audit log API (#153) and the service map API (#154) bring their own cases in their pull
+requests (#179, #180). The cases for #150 and #159 wait on D44.
+
+### Personal access tokens (FR-23, D38): decision table and boundary values
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Planned (Het) |
+| TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.2b | Decision table | A Viewer's token calls an Engineer action | 403 | `SecurityMatrixTest` | Planned (Het) |
+| TC-FR-23.2c | State transition | Revoke the token, or disable its owner, then use it | 401 | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.2d | Boundary value | Use the token one second before, and exactly at, 90 days after creation (controlled `Clock`) | 200, then 401 | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.2e | Boundary value | The 60th and the 61st request in one minute | 200, then 429 with `Retry-After` | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.3a | Negative | A token calls `POST /api/me/tokens` or `GET /api/me/tokens` | Refused; nothing is created | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.4a | Negative | Create and revoke a token, then read the captured logs | Two audit entries; the token is in no log line | `PersonalAccessTokenTest` | Planned (Het) |
+
+### Deploy tracking (FR-20.1): boundary values on the 2-hour window
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Planned (Het) |
+| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Planned (Het) |
+| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Planned (Het) |
+| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Planned (Het) |
+
+### Runbooks (FR-25)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Planned (Utsav B) |
+| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Planned (Utsav B) |
+| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Planned (Utsav B) |
+| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Planned (Utsav B) |
+| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Shlok) |
+
+### Logs and metrics through the backend (FR-26, FR-27, D34)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-26.1a | Equivalence | Each combination of service, level, text, and time range, against a stubbed Loki | The query is built from those parameters only; text from the user never becomes query syntax | `TelemetryServiceTest` | Planned (Utsav D) |
+| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the filters; the field becomes a filter | `LogsPage.test.tsx` | Planned (Utsav D) |
+| TC-FR-26.1c | Negative | Run a query, then read the captured logs | The read token is in no log line | `TelemetryServiceTest` | Planned (Utsav D) |
+| TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Planned (Utsav D) |
+| TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Planned (Utsav D) |
+| TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Planned (Utsav D) |
+| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentPage.test.tsx` | Planned (Utsav D) |
+| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Utsav D) |
+
+### Evidence links (FR-09.3)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `EvidenceLinkTest` | Planned (Utsav D) |
+| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceLinkTest` | Planned (Utsav D) |
+| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `EvidenceLinkTest` | Planned (Utsav D) |
+
+### History search (FR-17)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Planned (Manan) |
+| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Planned (Manan) |
+| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Planned (Manan) |
+| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Planned (Manan) |
+| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Planned (Manan) |
+
+### AI-1 Find similar (FR-18, D44)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-D44a | Equivalence | Store and read back a 768-dimension vector | The same values | `DatabaseSchemaTest` | Planned (Manan); waits on D44 |
+| TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan); waits on D44 |
+| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Manan) |
+| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |
+
+### Public status page (FR-21, D45): decision table on who may publish
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-21.1a | Negative | `GET /api/public/status` for an incident with internal notes, comments, and names | None of them in the response | `PublicStatusTest` | Planned (Manush) |
+| TC-FR-21.1b | Equivalence | Fixed monitor results over 90 days | The uptime percentage computed from them | `PublicStatusTest` | Planned (Manush) |
+| TC-FR-21.1c | Equivalence | The status page with each health state; the incident page as a Viewer | Each state renders; the Viewer sees no posting form | `StatusPage.test.tsx` | Planned (Manush) |
+| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry; 403 for the other two. Until #86 lands: accepted for Engineers and Admins | `PublicStatusTest`, `SecurityMatrixTest` | Planned (Manush) |
+
+### MCP server (FR-28, D38)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Planned (Himanshu) |
+| TC-FR-28.1b | Negative | The API answers 401 or 403 | A readable tool error | `test_mcp_server.py` | Planned (Himanshu) |
+| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Planned (Himanshu) |
+
+### Pages: audit log, service map, SLA clocks
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Planned (Utsav B) |
+| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Planned (Utsav B) |
+| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav B) |
+| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav B) |
+| TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
+| TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
+
 ---
 
 ## White-box testing

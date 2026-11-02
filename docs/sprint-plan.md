@@ -6,7 +6,7 @@
 
 Each sprint delivers working features end to end: API, UI, tests, and docs. Sprints 1 to 3 were
 planned for the week of 19 to 25 October (decided 17 October). Sprint 1 finished on 26 October;
-Sprints 2 and 3 are still in progress. Later sprints are about 2 weeks. The features are described in [FEATURES.md](FEATURES.md), and the AI work in the
+Sprints 2 to 4 are still in progress. Later sprints are about 2 weeks. The features are described in [FEATURES.md](FEATURES.md), and the AI work in the
 [AI/ML roadmap](plans/ai-ml-roadmap.md). If a sprint runs late, the items in the last column go
 first.
 
@@ -15,18 +15,18 @@ first.
 | **1** | Users and roles, service catalog with SLA targets, incidents (create, list, detail). Frontend foundation, then the login, shell, home, incidents, services, and users screens | US-01, US-05, US-03 | Home widgets beyond open incidents |
 | 2 | Alert intake and deduplication, tool tokens, on-call, notifications. Uptime monitors from one region, heartbeats. Demo shop v1 sending logs and metrics to Grafana Cloud | US-02, US-04, US-06 | Keyword and SSL monitor types |
 | 3 | Acknowledge, status and severity changes, assignment, incident roles, escalation (outbox and RabbitMQ), comments and corrections. Checks from several regions. Grafana alerts into our intake | US-07, US-08, US-09, US-10, US-11 | A third probe region |
-| 4 | Logs explorer, metrics dashboards, service map (links entered by hand), runbooks, deploy tracking, public status page, history search, live updates by refreshing every few seconds (D46). AI-1 Find similar; MCP read tools | US-12, US-15, US-17, US-19, US-20 | Log patterns and saved views |
+| 4 | Logs explorer, metrics dashboards, service map (links entered by hand), runbooks, deploy tracking, public status page, history search, live updates by refreshing every few seconds (D46). AI-1 Find similar; MCP read tools | US-12, US-15, US-17, US-19, US-20, US-25 to US-30 | Log patterns and saved views |
 | 5 | Postmortems, follow-ups, insights, live updates pushed by the backend (D46). AI-2 AI SRE, AI-3 Drafting, AI-4 Triage hint; MCP write tools | US-13, US-14, US-16, US-18 | Service map links derived from traces |
 | 6 | Hardening: the Cypress end-to-end test, accessibility, performance, the demo script, AI evaluation runs, and buffer time | — | — |
 
-The monitoring, telemetry, service map, runbook, and MCP features still need user stories and
-requirements. Write them before the sprint that builds them.
+Sprint 4's new features have their stories (US-25 to US-30) and requirements (FR-23 to FR-28). Later
+features that are still *New* in FEATURES.md get theirs before the sprint that builds them.
 
 ## 2. Current sprint
 
-**Sprints 2 and 3.** Their goals, owners, order of work, API contract, and work items, each with
+**Sprints 2 to 4.** Their goals, owners, order of work, API contract, and work items, each with
 its issue and status, are in the [implementation plan](plans/2026-10-17-implementation-plan.md).
-GitHub's Sprint 2 and Sprint 3 milestones show what is still open. Later sprints get their own plan
+GitHub's Sprint 2, 3, and 4 milestones show what is still open. Later sprints get their own plan
 in [plans/](plans/).
 
 ## 3. Sprint records

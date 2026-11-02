@@ -20,7 +20,7 @@ The product takes the best of two tools:
 | Login with three roles | Admin, Engineer, and Viewer. Viewers read; Engineers respond; Admins configure | FR-01 | 1 |
 | User administration | An Admin creates users, changes roles, and disables accounts. A role change logs the user out everywhere | FR-01 | 1 (disabling an account has no screen or endpoint yet) |
 | Audit log | Every configuration change, with before → after values. Read-only | FR-13 | 1–4 |
-| Personal access tokens | A user creates a token to connect an AI tool through MCP. Hashed and revocable | *New* | 4 |
+| Personal access tokens | A user creates a token to connect an AI tool through MCP. Hashed, revocable, and valid for 90 days (D38) | FR-23 | 4 |
 
 ## Services and ownership
 
@@ -28,8 +28,8 @@ The product takes the best of two tools:
 | --- | --- | --- | --- |
 | Service catalog | Each service has an owner, criticality, fallback contact, and response and resolution targets per severity | FR-14, FR-16 | 1 |
 | Service health | Each service shows Operational, Degraded, or Down, from its monitors | FR-22 | 2 |
-| Service map | A graph of services, databases, and external providers. Each node shows live health; each link shows traffic, errors, and latency. **Blast radius:** what breaks if this service fails | *New* | 4 (links entered by hand), 5 (links from traces) |
-| Runbooks | Step lists per service. The incident page offers the matching runbook | *New* | 4 |
+| Service map | A graph of services, databases, and external providers. Each node shows live health; each link shows traffic, errors, and latency. **Blast radius:** what breaks if this service fails | FR-14.2, FR-24 | 4 (links entered by hand), 5 (links from traces) |
+| Runbooks | Step lists per service. The incident page offers the matching runbook | FR-25 | 4 |
 | Deploy tracking | CI reports each deploy (service, version, commit, author). Deploys appear on the timeline of incidents in the same time window | FR-20 | 4 |
 
 ## On-call and alerts
@@ -83,8 +83,8 @@ The product takes the best of two tools:
 | Feature | How it is used | Req. | Sprint |
 | --- | --- | --- | --- |
 | Ingestion | Apps send logs and metrics with OpenTelemetry to Grafana Cloud (Loki for logs, Prometheus for metrics) | *New* | 2 |
-| Logs explorer | Search by service, level, and text; live tail; click a JSON field to filter; similar lines grouped into patterns; saved views | *New* | 4 |
-| Metrics dashboards | Per service: request rate, error rate, and latency (p50 and p95) | *New* | 4 |
+| Logs explorer | Search by service, level, and text; live tail; click a JSON field to filter; similar lines grouped into patterns; saved views | FR-26 | 4 |
+| Metrics dashboards | Per service: request rate, error rate, and latency (p50 and p95) | FR-27 | 4 |
 | Logs and charts on the incident | The incident page shows the logs and charts for **that service and that time window** | FR-09 | 4 |
 | Log and metric alerts | Grafana alert rules post into our alert intake | FR-03 | 3 |
 

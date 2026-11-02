@@ -135,6 +135,36 @@ the version we submitted; where the two differ, this file wins (D30).
 - **FR-22.2** When the service recovers, the system shall update the matching alert and add a timeline entry.
 - **FR-22.3** Recovery shall not resolve an incident automatically; a person resolves it (DR-11.1).
 
+### FR-23 Personal access tokens · Should
+- **FR-23.1** A user shall be able to create named personal access tokens for their own account; each is shown once, and only its hash is stored.
+- **FR-23.2** A token shall act as its owner with the owner's current role, and shall stop working when it is revoked, when its owner is disabled, or 90 days after it was created (D38).
+- **FR-23.3** A token shall not be able to create or list tokens.
+- **FR-23.4** Creating and revoking a token shall be audited, and tokens shall never be written to logs.
+
+### FR-24 Service map and blast radius · Should
+- **FR-24.1** The system shall show services as a map, with the dependencies recorded under FR-14.2 and each service's health.
+- **FR-24.2** For a service, the system shall list every service that depends on it, directly or through others (its blast radius), each once.
+- **FR-24.3** Dependencies shall be shown as possible relationships, not as proof of a shared cause.
+
+### FR-25 Runbooks · Should
+- **FR-25.1** Authorized users shall be able to write runbooks for a service as ordered steps; every change is audited.
+- **FR-25.2** The incident page shall offer the runbooks of the incident's service.
+
+### FR-26 Logs explorer · Should
+- **FR-26.1** Users shall be able to search a service's logs by level, text, and time range. The backend runs every query with its own read token (D34).
+- **FR-26.2** One query's time range shall be capped (*proposed:* 24 hours).
+- **FR-26.3** If the log store is slow or unavailable, the system shall say so within a timeout, and everything else shall keep working.
+
+### FR-27 Metrics dashboards · Should
+- **FR-27.1** For each service, the system shall show request rate, error rate, and latency (p50 and p95) over a chosen time range, queried by the backend (D34).
+- **FR-27.2** The incident page shall show the same metrics for the incident's service and time window.
+- **FR-27.3** If the metrics store is slow or unavailable, the charts shall say so, and everything else shall keep working.
+
+### FR-28 MCP server · Should
+- **FR-28.1** An MCP server shall let AI assistants read incident data through the REST API with the caller's personal access token, so the caller's permissions and the audit log apply.
+- **FR-28.2** It shall never change an incident's status, or declare or close an incident. Write tools, when added, shall act as the user and be audited (D38).
+- **FR-28.3** The MCP server shall not access the database directly.
+
 ## Non-functional requirements
 
 Targets marked *proposed* are starting points, to be confirmed after the first load test.
@@ -273,6 +303,7 @@ SEV1 critical service or business impact · SEV2 high impact needing urgent atte
 | FR-07.5 | Says escalation never acknowledges or resolves | Absorbs DR-09.4 |
 | FR-07.7 | Reworded as behaviour | Was written as an implementation step |
 | FR-09.3 | **New:** evidence links | Survey: resolvers look at logs first (epics §4.2) |
+| FR-23 to FR-28 | **New:** personal access tokens, service map and blast radius, runbooks, logs explorer, metrics dashboards, MCP server | Sprint 4 features that were *New* in FEATURES.md (#149) |
 | FR-10.3 | Merged into FR-11.3 | Same as action items |
 | FR-11.3 | Covers corrective and preventive actions | Absorbs FR-10.3 |
 | FR-18.1 | "Local" → "self-hosted" | D28 |

@@ -301,14 +301,19 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | TC-FR-09.2a | Equivalence | Comment on a CLOSED incident | Accepted; the incident stays CLOSED | `CommentTest` | Planned (Manan) |
 | TC-FR-09.2b | Negative | A Viewer or a caller with no token comments | 403 or 401 | `SecurityMatrixTest` | Planned (Manan) |
 
-### Checks from several regions (D36): boundary values on the count of failing regions
+### Checks from several locations (D35, D36): boundary values on failing locations and checks in a row
+
+The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 0 of 3 regions failing | Up | `RegionVerdictTest` | Planned (Manush) |
-| TC-D36b | Boundary value | 1 of 3 failing | Up; nothing raised | `RegionVerdictTest` | Planned (Manush) |
-| TC-D36c | Boundary value | 2 of 3 failing | Down; one alert | `RegionVerdictTest` | Planned (Manush) |
-| TC-D36d | Boundary value | 3 of 3 failing | Down; still one alert | `RegionVerdictTest` | Planned (Manush) |
+| TC-D36a | Boundary value | 1 of 3 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36b | Boundary value | 2 of 3 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36c | Boundary value | 2 of 3 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36d | Boundary value | 2 of 3 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36e | Boundary value | 2 of 3 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
 
 ---
 

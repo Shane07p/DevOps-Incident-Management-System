@@ -18,15 +18,15 @@ Sprint 1 is complete; Sprints 2 and 3 are in progress. Each work item's issue an
 
 | Part | State |
 | --- | --- |
-| Foundations: Spring Boot 4.1, Flyway (migrations V1–V8), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
+| Foundations: Spring Boot 4.1, Flyway (migrations V1–V9), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
 | Login, roles, and user administration | Done |
 | Service catalog with SLA targets; incidents (create, list, detail) | Done |
 | On-call schedules, with assignment at creation | Done |
 | Tool tokens, the alert webhook, deduplication and grouping, and the alert inbox | Done |
 | Rate limits on login and the alert webhook | Done |
-| Escalation policies and the escalation worker; events wait in the outbox until RabbitMQ | Done |
+| Escalation policies and the escalation worker; outbox events published to RabbitMQ | Done |
 | Pages: login, home, users, tools, services, incidents, on-call, escalation policies, alerts | Done |
-| In-app notifications for assignments and escalations | Done |
+| In-app notifications for assignments and escalations, and the bell | Done |
 | Monitors and heartbeats, acknowledgement, status and severity changes, reassignment, comments | Not started (Sprints 2 and 3) |
 | AI service: `/health`, `/ready`, `/embed` (Ollama embeddings), stub `/suggest`, log-pattern evidence | Done |
 | Demo shop v1 with five fault switches | Done |

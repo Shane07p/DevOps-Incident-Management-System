@@ -2,7 +2,7 @@ title Settle - High Level Design v4 (grey = not built yet)
 direction right
 
 Clients [icon: users] {
-  Users [icon: users, label: "Users: On-Call, Commander, Scribe, Service Owner, Eng Manager, Admin, Auditor (app roles: Admin, Engineer, Viewer)"]
+  Users [icon: users, label: "Users: on-call engineers, incident leads, service owners, managers, admins, auditors (app roles: Admin, Engineer, Viewer)"]
   WebApp [icon: react, label: "Settle web app (React)"]
   Customers [icon: globe, label: "Customers (public status page)", color: gray]
   AITools [icon: bot, label: "AI assistant (MCP client)", color: gray]
@@ -14,7 +14,7 @@ Signal Sources [icon: radar] {
   DemoShop [icon: store, label: "Demo shop with fault switches"]
   CI [icon: github-actions, label: "GitHub Actions (deploy events)", color: gray]
   Jobs [icon: heart-pulse, label: "Scheduled jobs (heartbeat pings)", color: gray]
-  Probes [icon: radar, label: "Probe agents in 2-3 regions", color: gray]
+  Probes [icon: radar, label: "Grafana checks from 2-3 locations (D35)", color: gray]
 }
 
 Edge [icon: shield] {
@@ -83,7 +83,7 @@ Customers > Vercel
 AITools > MCPServer: personal access token
 Vercel > Security
 Nginx > Security
-Signal Sources > Security: webhooks, check results, heartbeats, health pings
+Signal Sources > Security: alerts, heartbeats, health pings
 Security > Backend on Render
 
 Monitoring > Intake

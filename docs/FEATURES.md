@@ -73,7 +73,7 @@ The product takes the best of two tools:
 | Feature | How it is used | Req. | Sprint |
 | --- | --- | --- | --- |
 | Uptime monitors | HTTP status, a keyword on a page, ping or TCP, and SSL expiry. Each monitor has an interval and a linked service | FR-22 | 2 |
-| Checks from several regions | Probes check from 2–3 regions. A monitor is **down only when at least 2 regions agree**, so one bad network path doesn't wake anyone | *New* | 3 |
+| Checks from several locations | Grafana Cloud checks each URL from 2–3 locations (D35). **Down** when at least 2 locations fail twice in a row; **Degraded** when at least 2 are slower than the monitor's limit three times in a row (D36). One bad network path never wakes anyone | *New* | 3 |
 | Monitor detail | Response-time chart, results per region, check log, and uptime % | FR-22 | 2–3 |
 | Heartbeats | A scheduled job pings its URL; a late or missing ping raises an alert | *New* | 2 |
 | Public status page | Components mapped to services, 90-day uptime, the active incident with its updates, and history | FR-21 | 4 |
@@ -92,7 +92,7 @@ The backend runs every telemetry query, so the Grafana token never reaches the b
 
 ## Incident roles
 
-Proposed; decision D39 is still open.
+Decided in D39.
 
 | Role | Who | Responsible for | Can |
 | --- | --- | --- | --- |

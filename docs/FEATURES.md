@@ -42,6 +42,7 @@ The product takes the best of two tools:
 | Deduplication and grouping | A repeated event counts once. Related alerts join an open incident by an explicit correlation key, within one service | FR-03 | 2 |
 | Alert inbox | New alerts (each opened an incident) and attached ones (each joined an incident), with how many alerts share the incident and a "routed to me" view | FR-03 | 2–3 |
 | Notifications | An in-app bell for assignments, escalations, and mentions | FR-07 | 2 |
+| Email notifications | The same events also send an email, through RabbitMQ, retried when the provider fails | FR-07.2 | Once the provider is chosen (D47) |
 
 ## Incident response
 
@@ -53,6 +54,7 @@ The product takes the best of two tools:
 | Incident roles | Lead, Comms, and Ops. See [Incident roles](#incident-roles) | FR-05 | 3 |
 | SLA clocks | Response and resolution clocks, each running, at risk, breached, or met | FR-16 | 1–3 |
 | Timeline | Append-only: alerts, status changes, comments, corrections, deploys, and AI findings | FR-08, FR-09 | 1–3 |
+| Live updates | The incident list and incident page show other people's changes without a reload: refreshed every few seconds first, then pushed by the backend (D46) | FR-12.3, NFR-14 | 4–5 |
 | Evidence links | Links to logs, charts, and deploys attached to the incident | FR-09 | 4 |
 | Customer updates | Comms posts status page updates from inside the incident | FR-21 | 4 |
 | Closure gate | SEV1 and SEV2 incidents need a reviewed postmortem before they can close | DR-06 | 5 |

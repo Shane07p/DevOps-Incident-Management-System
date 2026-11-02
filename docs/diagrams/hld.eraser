@@ -1,67 +1,70 @@
-title Settle - High Level Design v3
+title Settle - High Level Design v4 (grey = not built yet)
 direction right
 
 Clients [icon: users] {
   Users [icon: users, label: "Users: On-Call, Commander, Scribe, Service Owner, Eng Manager, Admin, Auditor (app roles: Admin, Engineer, Viewer)"]
   WebApp [icon: react, label: "Settle web app (React)"]
-  AITools [icon: bot, label: "AI assistant (MCP client)"]
-  Customers [icon: globe, label: "Customers (public status page)"]
+  Customers [icon: globe, label: "Customers (public status page)", color: gray]
+  AITools [icon: bot, label: "AI assistant (MCP client)", color: gray]
 }
 
 Signal Sources [icon: radar] {
-  Probes [icon: radar, label: "Probe agents in 2-3 regions"]
-  Jobs [icon: heart-pulse, label: "Scheduled jobs (heartbeat pings)"]
-  AlertTools [icon: bell-ring, label: "Monitoring tools and Grafana alert rules"]
-  CI [icon: github-actions, label: "GitHub Actions (deploy events)"]
+  AlertTools [icon: bell-ring, label: "Monitoring tools and Grafana alert rules (/webhooks/alerts)"]
+  UptimeRobot [icon: activity, label: "UptimeRobot (pings /actuator/health, keeps Render awake)"]
   DemoShop [icon: store, label: "Demo shop with fault switches"]
-  UptimeRobot [icon: activity, label: "UptimeRobot (pings health, keeps Render awake)"]
+  CI [icon: github-actions, label: "GitHub Actions (deploy events)", color: gray]
+  Jobs [icon: heart-pulse, label: "Scheduled jobs (heartbeat pings)", color: gray]
+  Probes [icon: radar, label: "Probe agents in 2-3 regions", color: gray]
 }
 
 Edge [icon: shield] {
   Vercel [icon: vercel, label: "Vercel in production (HTTPS, serves the UI, rewrites /api to Render)"]
   Nginx [icon: server, label: "nginx, the Docker Compose entry point (serves the UI, proxies /api and /webhooks)"]
-  Security [icon: lock, label: "Spring Security (checks every request: JWT, tool tokens, personal access tokens; rate limits)"]
+  Security [icon: lock, label: "Spring Security (JWT, tool tokens, personal access tokens; rate limits)"]
 }
 
 Backend on Render [icon: server] {
-  Auth [icon: key-round, label: "Auth and users (login, roles, personal access tokens)"]
-  Monitoring [icon: activity, label: "Monitors and heartbeats (down when 2 regions agree)"]
+  Auth [icon: key-round, label: "Auth and users"]
+  Monitoring [icon: activity, label: "Monitors and heartbeats", color: gray]
   Intake [icon: inbox, label: "Alert intake (validate, dedup, group)"]
-  Incident [icon: siren, label: "Incident service (core: lifecycle, SLA clocks, roles)", color: orange]
-  Timeline [icon: scroll-text, label: "Timeline and audit (append-only)"]
+  Incident [icon: siren, label: "Incident service (lifecycle, SLA clocks, roles)", color: orange]
   Catalog [icon: calendar-clock, label: "Catalog and on-call (services, schedules, service map, runbooks)"]
-  Deploys [icon: rocket, label: "Deploy tracking"]
-  StatusSvc [icon: globe, label: "Status page (optional)"]
-  Reporting [icon: bar-chart-3, label: "Postmortems, insights, and search"]
-  Telemetry [icon: line-chart, label: "Telemetry queries (server-side token)"]
+  Timeline [icon: scroll-text, label: "Timeline and audit (append-only)"]
+  Notify [icon: bell, label: "In-app notifications (saved with the change)"]
   Escalation [icon: alarm-clock, label: "Escalation worker (polls every 1 min)"]
-  Relay [icon: repeat, label: "Outbox relay (publish, retry)"]
+  Relay [icon: repeat, label: "Outbox relay (publishes once committed)"]
+  Live [icon: radio, label: "Live updates (refresh every few seconds, then server-sent events)", color: gray]
+  Deploys [icon: rocket, label: "Deploy tracking", color: gray]
+  StatusSvc [icon: globe, label: "Status page", color: gray]
+  Reporting [icon: bar-chart-3, label: "Postmortems, insights, and search", color: gray]
+  Telemetry [icon: line-chart, label: "Logs and metrics queries (server-side token)", color: gray]
 }
 
 Database [icon: database] {
   Postgres [icon: postgresql, label: "PostgreSQL on Supabase (schema incident)"]
-  Outbox [icon: archive, label: "outbox table (written in the same transaction)"]
+  Outbox [icon: archive, label: "outbox table (same transaction as the change)"]
 }
 
-Event Bus [icon: rabbitmq] {
-  Exchange [icon: rabbitmq, label: "incident-events exchange (RabbitMQ, fan-out)"]
-  QInApp [icon: list, label: "in-app-notifications"]
-  QLive [icon: list, label: "live-updates"]
-  QAI [icon: list, label: "ai-jobs"]
-  QEmail [icon: list, label: "email-slack (optional)"]
-  DLQ [icon: trash-2, label: "DLQ (failed messages, all queues)"]
+RabbitMQ on CloudAMQP [icon: rabbitmq] {
+  Exchange [icon: rabbitmq, label: "settle.events (topic exchange)"]
+  QEmail [icon: list, label: "email queue", color: gray]
+  QAI [icon: list, label: "ai-jobs queue (later)", color: gray]
+  DLQ [icon: trash-2, label: "failed messages (DLQ)", color: gray]
 }
 
-Async Workers [icon: cpu] {
-  NotifWorker [icon: bell, label: "Notification worker (in-app, idempotent by event ID)"]
-  WSPusher [icon: radio, label: "WebSocket pusher (live updates to the web app)"]
-  AIWorker [icon: bot, label: "AI job worker (saves AI findings as suggestions)"]
-  Sender [icon: send, label: "External sender (optional, rate-limited)"]
+Backend workers [icon: cpu] {
+  EmailWorker [icon: send, label: "Email worker (retries)", color: gray]
+  AIWorker [icon: bot, label: "AI job worker (later)", color: gray]
 }
 
 AI Service [icon: python] {
-  AIFeatures [icon: sparkles, label: "AI features: find similar, AI SRE, drafting, triage hint (suggest only)"]
-  MCPServer [icon: plug, label: "MCP server (read tools, then comment and acknowledge)"]
+  AIFeatures [icon: sparkles, label: "AI features: find similar, AI SRE, drafting, triage hint (suggest only; Docker Compose, not on Render)"]
+  MCPServer [icon: plug, label: "MCP server (calls the REST API as the user)", color: gray]
+}
+
+Models [icon: brain] {
+  Ollama [icon: brain, label: "Ollama: LLM and embeddings (default)"]
+  Hosted [icon: cloud, label: "Hosted LLM (optional, off by default)", color: gray]
 }
 
 Grafana Cloud [icon: grafana] {
@@ -69,69 +72,48 @@ Grafana Cloud [icon: grafana] {
   Loki [icon: file-text, label: "Loki (logs)"]
 }
 
-Models [icon: brain] {
-  Ollama [icon: brain, label: "Ollama: LLM and embeddings (default)"]
-  Hosted [icon: cloud, label: "Hosted LLM (optional, off by default)"]
-}
-
 External [icon: plug] {
-  SlackEmail [icon: slack, label: "Slack / Email (optional)"]
-  Redis [icon: redis, label: "Redis (optional, pub/sub)"]
+  EmailProvider [icon: mail, label: "Email provider (to be chosen, D47)", color: gray]
 }
 
 Users > WebApp
 WebApp > Vercel: production
 WebApp > Nginx: local
-Customers > Vercel: /status
-Vercel > Security: /api
-Nginx > Security: /api
-UptimeRobot > Security: /actuator/health every 10 min
-AlertTools > Security: /webhooks/alerts
-CI > Security: /webhooks/deploys
-Probes > Security: check results
-Jobs > Security: heartbeat pings
+Customers > Vercel: status page
 AITools > MCPServer: personal access token
-MCPServer > Security: REST API as the user
+Vercel > Security: /api
+Nginx > Security: /api, /webhooks
+Signal Sources > Security: webhooks, check results, heartbeats, health pings
 Security > Backend on Render: routes
 
 Monitoring > Intake: raise alert
 Intake > Incident: create or link
+Incident > Catalog: who is on call
 Incident > Timeline: same transaction
-Incident - Catalog: who is on call
-Deploys > Timeline: deploys in the incident window
+Incident > Notify: same transaction
+Escalation > Notify: same transaction
+Deploys > Timeline: deploys in the window
 Incident --> StatusSvc: approved updates
-Incident --> AIFeatures: find similar, triage hint (optional)
 
-Backend on Render > Postgres
-Incident > Outbox: event, same transaction
-Escalation > Postgres: poll deadlines
-Escalation > Outbox: event, same transaction
+Backend on Render > Postgres: read and write
+Incident > Outbox: event
+Escalation > Outbox: event
 Relay > Outbox: read unpublished
-Relay --> Exchange: publish
+Relay > Exchange: publish
 
-Exchange --> QInApp
-Exchange --> QLive
-Exchange --> QAI
 Exchange --> QEmail
-
-QInApp --> DLQ: on failure
-QLive --> DLQ: on failure
-QAI --> DLQ: on failure
-QEmail --> DLQ: on failure
-
-QInApp --> NotifWorker
-QLive --> WSPusher
+Exchange --> QAI
+QEmail --> EmailWorker
 QAI --> AIWorker
-QEmail --> Sender
+QEmail --> DLQ: on failure
+QAI --> DLQ: on failure
+EmailWorker --> EmailProvider: send
 
-NotifWorker > Postgres: write notification
-WSPusher > Redis
-Sender > SlackEmail
-AIWorker > AIFeatures: investigate
-AIFeatures > MCPServer: evidence through MCP tools
+Incident --> AIFeatures: find similar, triage hint
+AIWorker --> AIFeatures: investigate
+AIFeatures > MCPServer: evidence
 AIFeatures > Ollama
 AIFeatures --> Hosted: optional
 
 Telemetry > Grafana Cloud: PromQL and LogQL
 DemoShop > Grafana Cloud: logs and metrics
-DemoShop > CI: deploy events

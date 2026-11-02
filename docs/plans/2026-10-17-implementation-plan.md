@@ -134,7 +134,7 @@ blocks starts.
 | Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
 | Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73, #74: Open |
 | On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: inbox merged (PR #125); open for the count and "routed to me", whose fields arrived with #123 |
-| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78 can start; #79 waits on #73 and #74 |
+| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79 waits on #73 and #74 |
 | Grafana Cloud account; its settings on Render | Shane | D34 | | #75: Open |
 | Ollama embeddings | Himanshu | #62 | pytest | Done (PR #99) |
 | Demo shop v1: payments, checkout, and search, sending logs and metrics | Himanshu | D34, D40 | | #76: Done (PR #111) |
@@ -160,8 +160,7 @@ blocks starts.
 | Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Open |
 | Metric-baseline and deploy-window evidence | Dhruva | AI/ML roadmap | pytest | #93: Open |
 
-**Cut first if late:** the third probe region; then RabbitMQ (keep the outbox table and a database
-scheduler, and add RabbitMQ in Sprint 4).
+**Cut first if late:** the third probe region. (RabbitMQ is in: the outbox relay publishes since #82.)
 
 ---
 
@@ -414,7 +413,8 @@ Hosting is set up (D25): Vercel, Render, Supabase, and UptimeRobot.
   (D41); HikariCP pool size and timeouts from environment variables (D43); a `preview` proxy for
   `/api` in `vite.config.ts`.
 - **Sprint 2:** the Grafana Cloud account and its settings on Render (D34).
-- **Sprint 3:** RabbitMQ hosting for the escalation events.
+- **Sprint 3:** RabbitMQ hosting (CloudAMQP) for the outbox events, `RABBITMQ_URL` on Render (#82). Email
+  and AI jobs consume them later (D24).
 - A new setting is a new environment variable on Render, never a value in the repository.
 
 ---

@@ -30,20 +30,21 @@ There is no testing track. Whoever builds a feature writes its tests in the same
 
 ## Who does what
 
-Items without an issue number get one before their sprint starts.
+Items without an issue number get one before their sprint starts. Work was rebalanced on 2 Nov 2026 so every sprint ends by
+Thu 12 Nov; each issue carries its own deadline at the top of its description.
 
 | Person | Sprint 1 | Sprint 2 | Sprint 3 | Sprint 4 |
 | --- | --- | --- | --- | --- |
-| **Utsav B** | #47 Audit writer; #49 Service catalog API | #71 On-call schedules: assign at creation, fallback contact | #85 Escalation: policies, scheduler, outbox and RabbitMQ | #153 Audit log API; #154 Service map; #155 Runbooks API; #166 Audit log page; #167 Service map page |
-| **Utsav D** | #50 Incidents API (with Manan) | #70 Notifications: in-app rows and the bell API | #83 Acknowledge; #84 status and severity changes | #156 Logs and metrics API; #157 Evidence links; #163 Logs explorer and metrics dashboards; #169 Incident page: deploys, logs, evidence |
-| **Manan** | #50 Incidents API (with Utsav D) | #72 Dedup and grouping: an alert creates or joins an incident | #87 Comments and corrections | #150 pgvector; #158 History search; #159 AI-1 in the backend; #168 History search page; #170 Similar incidents |
+| **Utsav B** | #47 Audit writer; #49 Service catalog API | #71 On-call schedules: assign at creation, fallback contact | #85 Escalation: policies, scheduler, outbox and RabbitMQ; #83 Acknowledge; #84 status and severity changes | #153 Audit log API; #154 Service map |
+| **Utsav D** | #50 Incidents API (with Manan) | #70 Notifications: in-app rows and the bell API | #146 On-call changes audited; #147 Disable and enable members | #155 Runbooks API; #166 Audit log page; #167 Service map page |
+| **Manan** | #50 Incidents API (with Utsav D) | #72 Dedup and grouping: an alert creates or joins an incident | #87 Comments and corrections | #150 pgvector; #158 History search; #159 AI-1 in the backend |
 | **Het** | #48 User admin API; creates `SecurityMatrixTest` | #68 Tool tokens, `POST /webhooks/alerts`; #69 rate limits | #86 Reassign and incident roles | #151 Personal access tokens; #152 Deploy tracking; #165 Access tokens page |
-| **Manush** | — (the monitors work is #73) | #73 Monitors from one region: a failing monitor raises an alert; #74 Heartbeats | #88 Grafana checks from 2 to 3 locations; Grafana alerts into intake | #160 Public status page API; #164 Status page on real data |
-| **Shlok** | #54 Services page; #55 Incident list, create form, and detail page | #80 On-call page; #81 alert inbox | #89 Incident actions; timeline with comments | #171 SLA clocks on the board; #172 Runbooks pages |
-| **Shane** | #53 Users page; #59 Compose and settings; merge #61 | #77 Tools page; #78 notification bell; #79 monitors and heartbeats pages; #75 Grafana Cloud account | #90 Escalation policies page; #82 RabbitMQ hosting; sprint records (#58) | #149 Sprint 4 stories, requirements, and decisions |
-| **Himanshu** | Done (#21) | #62 Ollama embeddings; #76 demo shop v1 | #91 Agent tool loop on demo data | #162 MCP server with read tools |
-| **Bhakti** | — | #63 Postmortem dataset | #92 Log-pattern evidence | #161 AI-1 retrieval evaluation |
-| **Dhruva** | — | #64 Demo-shop scenario table | #142 Recorded demo-shop telemetry; #93 Metric-baseline and deploy-window evidence | — (finishing #64, #142, #93) |
+| **Manush** | — (the monitors work is #73) | #73 Monitors from one region: a failing monitor raises an alert; #74 Heartbeats; #79 monitors and heartbeats pages | #88 Grafana checks from 2 to 3 locations; Grafana alerts into intake | — (finishing #73, #74, #79, #88) |
+| **Shlok** | #54 Services page; #55 Incident list, create form, and detail page | #80 On-call page; #81 alert inbox | #89 Incident actions; timeline with comments | #171 SLA clocks on the board; #198 Orgs and sign-up: frontend |
+| **Shane** | #53 Users page; #59 Compose and settings; merge #61 | #77 Tools page; #78 notification bell; #75 Grafana Cloud account | #90 Escalation policies page; #82 RabbitMQ hosting; sprint records (#58) | #149 Sprint 4 stories, requirements, and decisions; #197 Orgs and sign-up: backend; #160 Public status page API |
+| **Himanshu** | Done (#21) | #62 Ollama embeddings; #76 demo shop v1 | #91 Agent tool loop on demo data | #162 MCP server with read tools; #163 Logs explorer and metrics dashboards; #168 History search page; #170 Similar incidents |
+| **Bhakti** | — | #63 Postmortem dataset | #92 Log-pattern evidence | #161 AI-1 retrieval evaluation; #157 Evidence links; #164 Status page on real data; #169 Incident page: deploys, logs, evidence; #172 Runbooks pages |
+| **Dhruva** | — | #64 Demo-shop scenario table | #142 Recorded demo-shop telemetry; #93 Metric-baseline and deploy-window evidence | #156 Logs and metrics API |
 
 ## Order of work
 
@@ -76,7 +77,7 @@ blocks starts.
 | D38 | Personal access tokens (90 days) and read-only MCP tools | #151, #162 | Selected |
 | D39 | Incident roles: Lead, Comms, Ops | #86 | Selected |
 | D40 | What the demo shop simulates | #64, #76 | Selected |
-| D44 | Incident embeddings in PostgreSQL with pgvector | #150, #159 | Open |
+| D44 | Incident embeddings in PostgreSQL with pgvector | #150, #159 | Selected |
 | D45 | What the public status page shows; Lead, Comms, and Admins publish | #160, #164 | Selected |
 
 **US-10:** a severity change keeps the SLA targets copied at creation (D09/D10, PROJECT_STRUCTURE
@@ -138,7 +139,7 @@ blocks starts.
 | Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
 | Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73, #74: Open |
 | On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: inbox merged (PR #125); open for the count and "routed to me", whose fields arrived with #123 |
-| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79 waits on #73 and #74 |
+| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79: moved to Manush on 2 Nov; waits on #73 and #74 |
 | Grafana Cloud account; its settings on Render | Shane | D34 | | #75: Open |
 | Ollama embeddings | Himanshu | #62 | pytest | Done (PR #99) |
 | Demo shop v1: payments, checkout, and search, sending logs and metrics | Himanshu | D34, D40 | | #76: Done (PR #111) |
@@ -151,8 +152,8 @@ blocks starts.
 
 | Item | Owner | Rules | Tests | Status |
 | --- | --- | --- | --- | --- |
-| Acknowledge: OPEN becomes ACKNOWLEDGED; the acknowledger becomes the assignee; the response clock stops; pending escalations are cancelled | Utsav D | US-08, [§7](../PROJECT_STRUCTURE.md#7-acknowledgement-and-escalation) | Testcontainers: two people acknowledge at once, one wins, the other gets 409 | #83: Open |
-| Status changes (legal transitions only) and severity changes with a reason; SLA targets stay fixed | Utsav D | US-10, [§8](../PROJECT_STRUCTURE.md#8-status-and-sla-rules) | JUnit: every legal and illegal transition; a breach is over the target, not equal to it | #84: Open |
+| Acknowledge: OPEN becomes ACKNOWLEDGED; the acknowledger becomes the assignee; the response clock stops; pending escalations are cancelled | Utsav B | US-08, [§7](../PROJECT_STRUCTURE.md#7-acknowledgement-and-escalation) | Testcontainers: two people acknowledge at once, one wins, the other gets 409 | #83: Open |
+| Status changes (legal transitions only) and severity changes with a reason; SLA targets stay fixed | Utsav B | US-10, [§8](../PROJECT_STRUCTURE.md#8-status-and-sla-rules) | JUnit: every legal and illegal transition; a breach is over the target, not equal to it | #84: Open |
 | Escalation: policies with levels and wait times; a scheduler re-checks that the incident is OPEN and unacknowledged, notifies the next level, and forces a version increment; the fallback is notified once; after a restart an overdue step runs once. Events go through the outbox to RabbitMQ | Utsav B | US-07, FR-07, D24 | Testcontainers: restart with an overdue escalation; escalation racing an acknowledgement | #85: Done (PR #135); its events reach RabbitMQ through the outbox (PR #177) |
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Open |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Open |
@@ -174,30 +175,32 @@ FR-28 in [REQUIREMENTS.md](../REQUIREMENTS.md). Each item's test cases are in
 
 | Item | Owner | Rules | Tests | Status |
 | --- | --- | --- | --- | --- |
-| Sprint 4 stories, requirements, and decisions | Shane | D38, D44, D45 | | #149: In review |
-| pgvector in every environment | Manan | D44 | `DatabaseSchemaTest` | #150: Open; waits on D44 |
+| Sprint 4 stories, requirements, and decisions | Shane | D38, D44, D45 | | #149: Done |
+| Orgs and sign-up: backend (merges with #198) | Shane | D48 | `OrgIsolationTest` | #197: Open |
+| Orgs and sign-up: frontend | Shlok | D48 | Vitest | #198: Open |
+| pgvector in every environment | Manan | D44 | `DatabaseSchemaTest` | #150: Open |
 | Personal access tokens | Het | US-25, FR-23, D38 | TC-FR-23.1a to 23.4a | #151: Open |
 | Deploy tracking | Het | US-19, FR-20.1 | TC-FR-20.1a to d | #152: Open |
 | Audit log API | Utsav B | US-17, FR-13 | Its own cases (PR #179) | #153: In review (PR #179) |
 | Service map: dependencies and blast radius | Utsav B | US-26, FR-14.2, FR-24 | Its own cases (PR #180) | #154: In review (PR #180) |
-| Runbooks per service | Utsav B | US-27, FR-25 | TC-FR-25.1a to d | #155: Open |
-| Logs and metrics API through the backend | Utsav D | US-28, US-29, FR-26, FR-27, D34 | TC-FR-26.1a to 27.1a | #156: Open |
-| Evidence links on an incident | Utsav D | FR-09.3 | TC-FR-09.3a to c | #157: Open |
+| Runbooks per service | Utsav D | US-27, FR-25 | TC-FR-25.1a to d | #155: Open |
+| Logs and metrics API through the backend | Dhruva | US-28, US-29, FR-26, FR-27, D34 | TC-FR-26.1a to 27.1a | #156: Open |
+| Evidence links on an incident | Bhakti | FR-09.3 | TC-FR-09.3a to c | #157: Open |
 | History search | Manan | US-15, FR-17 | TC-FR-17.1a to d | #158: Open |
-| AI-1 Find similar in the backend | Manan | US-18, FR-18, D44 | TC-FR-18.1a, 18.4a | #159: Open; waits on D44 |
-| Public status page and customer updates | Manush | US-20, FR-21, D45 | TC-FR-21.1a to 21.2a | #160: Open |
+| AI-1 Find similar in the backend | Manan | US-18, FR-18, D44 | TC-FR-18.1a, 18.4a | #159: Open |
+| Public status page and customer updates | Shane | US-20, FR-21, D45 | TC-FR-21.1a to 21.2a | #160: Open |
 | AI-1 retrieval evaluation | Bhakti | AI/ML roadmap | pytest | #161: Done (PR #175) |
 | MCP server with read tools | Himanshu | US-30, FR-28, D38 | TC-FR-28.1a to 28.2a | #162: Open |
-| Logs explorer and metrics dashboards | Utsav D | US-28, US-29 | TC-FR-26.1b, 27.3a | #163: Open |
-| Public status page on real data, and posting updates | Manush | US-20, D45 | TC-FR-21.1c | #164: Open |
+| Logs explorer and metrics dashboards | Himanshu | US-28, US-29 | TC-FR-26.1b, 27.3a | #163: Open |
+| Public status page on real data, and posting updates | Bhakti | US-20, D45 | TC-FR-21.1c | #164: Open |
 | Access tokens page | Het | US-25 | TC-FR-23.1b | #165: Open |
-| Audit log page | Utsav B | US-17 | TC-US-17a, b | #166: Open |
-| Service map page | Utsav B | US-26 | TC-US-26a, b | #167: Open |
-| History search page | Manan | US-15 | TC-FR-17.1e | #168: Open |
-| Incident page: deploys, logs and charts, and evidence links | Utsav D | FR-09, FR-27.2 | TC-FR-27.2a | #169: Open |
-| Similar incidents and the duplicate warning | Manan | US-18 | TC-FR-18.2a | #170: Open |
+| Audit log page | Utsav D | US-17 | TC-US-17a, b | #166: Open |
+| Service map page | Utsav D | US-26 | TC-US-26a, b | #167: Open |
+| History search page | Himanshu | US-15 | TC-FR-17.1e | #168: Open |
+| Incident page: deploys, logs and charts, and evidence links | Bhakti | FR-09, FR-27.2 | TC-FR-27.2a | #169: Open |
+| Similar incidents and the duplicate warning | Himanshu | US-18 | TC-FR-18.2a | #170: Open |
 | SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: Open |
-| Runbooks pages | Shlok | US-27, FR-25.2 | TC-FR-25.2a | #172: Open |
+| Runbooks pages | Bhakti | US-27, FR-25.2 | TC-FR-25.2a | #172: Open |
 
 **Cut first if late:** log patterns and saved views in the logs explorer; then the "by meaning" mode
 of history search.

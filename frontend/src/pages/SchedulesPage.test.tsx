@@ -19,9 +19,9 @@ const signedIn: Record<Role, unknown> = {
 
 // The clock is 11:30 IST on Wed 28 Oct: engineer is on until 17:00 IST, then admin until 21:00 IST.
 const NOW = '2026-10-28T06:00:00Z'
-const engineerShift = { id: 11, responderId: 2, responderUsername: 'engineer', startTime: '2026-10-28T03:30:00Z', endTime: '2026-10-28T11:30:00Z' }
-const adminShift = { id: 12, responderId: 1, responderUsername: 'admin', startTime: '2026-10-28T11:30:00Z', endTime: '2026-10-28T15:30:00Z' }
-const schedule = { serviceId: 1, fallbackContactId: 1, fallbackContactUsername: 'admin', shifts: [engineerShift, adminShift] }
+const engineerShift = { id: 11, responderId: 2, responderName: 'engineer', startTime: '2026-10-28T03:30:00Z', endTime: '2026-10-28T11:30:00Z' }
+const adminShift = { id: 12, responderId: 1, responderName: 'admin', startTime: '2026-10-28T11:30:00Z', endTime: '2026-10-28T15:30:00Z' }
+const schedule = { serviceId: 1, fallbackContactId: 1, fallbackContactName: 'admin', shifts: [engineerShift, adminShift] }
 
 type Routes = Parameters<typeof mockFetch>[0]
 
@@ -164,10 +164,10 @@ describe('SchedulesPage', () => {
   })
 
   it('asks for a fallback contact before the first shift, then saves it', async () => {
-    const empty = { serviceId: 1, fallbackContactId: null, fallbackContactUsername: null, shifts: [] }
+    const empty = { serviceId: 1, fallbackContactId: null, fallbackContactName: null, shifts: [] }
     const fetchMock = renderSchedules('ADMIN', {
       'GET /api/services/1/on-call': { body: empty },
-      'PUT /api/services/1/on-call': { body: { ...empty, fallbackContactId: 2, fallbackContactUsername: 'engineer' } },
+      'PUT /api/services/1/on-call': { body: { ...empty, fallbackContactId: 2, fallbackContactName: 'engineer' } },
     })
 
     expect(await screen.findByText(/Set a fallback contact first/)).toBeInTheDocument()

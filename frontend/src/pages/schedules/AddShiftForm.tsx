@@ -48,7 +48,7 @@ export function AddShiftForm({
     const clash = findOverlap(schedule.shifts, Date.parse(shift.startTime), Date.parse(shift.endTime))
     if (clash) {
       form.setError('root', {
-        message: `This overlaps ${clash.responderUsername}'s shift, ${formatIst(clash.startTime)} to ${formatIst(clash.endTime)}.`,
+        message: `This overlaps ${clash.responderName}'s shift, ${formatIst(clash.startTime)} to ${formatIst(clash.endTime)}.`,
       })
       return
     }

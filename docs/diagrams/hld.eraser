@@ -77,43 +77,43 @@ External [icon: plug] {
 }
 
 Users > WebApp
-WebApp > Vercel: production
-WebApp > Nginx: local
-Customers > Vercel: status page
+WebApp > Vercel
+WebApp > Nginx
+Customers > Vercel
 AITools > MCPServer: personal access token
-Vercel > Security: /api
-Nginx > Security: /api, /webhooks
+Vercel > Security
+Nginx > Security
 Signal Sources > Security: webhooks, check results, heartbeats, health pings
-Security > Backend on Render: routes
+Security > Backend on Render
 
-Monitoring > Intake: raise alert
-Intake > Incident: create or link
-Incident > Catalog: who is on call
-Incident > Timeline: same transaction
-Incident > Notify: same transaction
-Escalation > Notify: same transaction
+Monitoring > Intake
+Intake > Incident
+Incident > Catalog
+Incident > Timeline
+Incident > Notify
+Escalation > Notify
 Deploys > Timeline: deploys in the window
-Incident --> StatusSvc: approved updates
+Incident --> StatusSvc
 
-Backend on Render > Postgres: read and write
-Incident > Outbox: event
-Escalation > Outbox: event
-Relay > Outbox: read unpublished
-Relay > Exchange: publish
+Backend on Render > Postgres
+Incident > Outbox
+Escalation > Outbox
+Relay > Outbox
+Relay > Exchange
 
 Exchange --> QEmail
 Exchange --> QAI
 QEmail --> EmailWorker
 QAI --> AIWorker
-QEmail --> DLQ: on failure
-QAI --> DLQ: on failure
-EmailWorker --> EmailProvider: send
+QEmail --> DLQ
+QAI --> DLQ
+EmailWorker --> EmailProvider
 
 Incident --> AIFeatures: find similar, triage hint
-AIWorker --> AIFeatures: investigate
-AIFeatures > MCPServer: evidence
+AIWorker --> AIFeatures
+AIFeatures > MCPServer
 AIFeatures > Ollama
-AIFeatures --> Hosted: optional
+AIFeatures --> Hosted
 
 Telemetry > Grafana Cloud: PromQL and LogQL
-DemoShop > Grafana Cloud: logs and metrics
+DemoShop > Grafana Cloud

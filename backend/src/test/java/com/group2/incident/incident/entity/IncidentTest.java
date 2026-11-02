@@ -1,6 +1,7 @@
 package com.group2.incident.incident.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
@@ -67,4 +68,21 @@ class IncidentTest {
 		assertThat(incident.getResolutionTargetMinutes()).isEqualTo(240);
 		assertThat(service.getTargets().get(Severity.SEV1).getResponseMinutes()).isEqualTo(30);
 	}
+	@Test
+	@DisplayName("An incident takes its number once (D48)")
+	void anIncidentTakesItsNumberOnce() {
+		Instant now = Instant.parse("2026-10-19T10:00:00Z");
+		AppUser user = new AppUser("engineer@test.local", "Dev Engineer", "hash", now);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, now);
+		Incident incident = new Incident("Checkout failing", "Timeouts", service, Severity.SEV2, IncidentStatus.OPEN, user, now, 60, 480);
+
+		incident.assignNumber(7L);
+
+		assertThat(incident.getReference()).isEqualTo("INC-7");
+		assertThatThrownBy(() -> incident.assignNumber(8L))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("Incident 7 already has a number");
+		assertThat(incident.getReference()).isEqualTo("INC-7");
+	}
+
 }

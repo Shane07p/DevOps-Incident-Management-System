@@ -273,14 +273,36 @@ class AuthControllerTest {
 		return jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build())).getTokenValue();
 	}
 
+	@Test
+	void aReEnabledMemberCanSignInAgain() throws Exception {
+		AppUser engineer = createUser("engineer", Role.ENGINEER);
+		disable("engineer");
+		login("engineer", PASSWORD).andExpect(status().isUnauthorized());
+
+		accounts.membership(engineer).enable();
+		entityManager.flush();
+
+		login("engineer", PASSWORD).andExpect(status().isOk());
+	}
+
+	@Test
+	void anAccountWithoutAPasswordCannotSignInWithOne() throws Exception {
+		// Google-only accounts (part 2 of D48) have no password; no password may open them.
+		accounts.save(new AppUser("google@test.local", "Google User", null, clock.instant()), Role.ENGINEER);
+
+		login("google", PASSWORD)
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
+	}
+
 	private AppUser createUser(String username, Role role) {
 		return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(PASSWORD), clock.instant()), role);
 	}
 
 	// Changes the row behind JPA's back, so the next lookup has to read it fresh.
 	private void disable(String username) {
+		accounts.membership(users.findByEmail(username + "@test.local").orElseThrow()).disable();
 		entityManager.flush();
-		jdbc.update("update membership set enabled = false where user_id = (select id from app_user where email = ?)", username + "@test.local");
 		entityManager.clear();
 	}
 

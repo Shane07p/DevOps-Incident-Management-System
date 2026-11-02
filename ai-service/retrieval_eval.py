@@ -86,7 +86,16 @@ def embed(client, text, kind):
     )
     response.raise_for_status()
 
-    vector = response.json()["embedding"]
+    data = response.json()
+
+    actual_model = data.get("model")
+    if actual_model is not None and actual_model != MODEL:
+        raise ValueError(
+            f"Embedding model mismatch: expected {MODEL}, "
+            f"got {actual_model}"
+        )
+
+    vector = data["embedding"]
 
     if not vector or not all(
         isinstance(x, (int, float))
@@ -169,7 +178,7 @@ def threshold_stats(results, cases, threshold):
                 if incident_id in relevant_by_case[case_id]:
                     relevant += 1
 
-    precision = relevant / accepted if accepted else 0.0
+    precision = relevant / accepted if accepted else None
 
     return {
         "threshold": threshold,
@@ -192,7 +201,7 @@ def main():
             "Both datasets must contain records"
         )
 
-    print(f"Model: {MODEL}")
+    print(f"Expected embedding model: {MODEL}")
     print(f"AI service: {AI_SERVICE_URL}")
     print(
         f"Incidents: {len(incidents)} | "
@@ -238,12 +247,18 @@ def main():
                     threshold,
                 )
 
+                precision_text = (
+                    f"{stats['precision']:.2%}"
+                    if stats["precision"] is not None
+                    else "N/A"
+                )
+
                 print(
                     f"  Threshold {threshold:.2f}: "
                     f"{stats['relevant']}/"
                     f"{stats['accepted']} accepted matches "
                     f"relevant, "
-                    f"precision={stats['precision']:.2%}"
+                    f"precision={precision_text}"
                 )
 
 

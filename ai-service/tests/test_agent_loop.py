@@ -95,6 +95,122 @@ def test_tool_registry_dispatches_query_deploy_events():
     assert any("v1.0.1-broken" in ev.content for ev in res.evidence_items)
 
 
+def test_query_deploy_events_time_bounds_filter():
+    registry = build_default_tool_registry()
+
+    # 1. Matching range includes checkout deploy (timestamp is 2026-10-27T08:16:00Z)
+    res_match = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T08:00:00Z",
+            "end_time": "2026-10-27T08:30:00Z",
+        },
+    )
+    assert res_match.success is True
+    assert len(res_match.data["deploys"]) == 1
+    assert len(res_match.evidence_items) == 1
+    assert res_match.data["deploys"][0]["version"] == "v1.0.1-broken"
+
+    # 2. Before start_time excluded
+    res_before = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T09:00:00Z",
+        },
+    )
+    assert res_before.success is True
+    assert len(res_before.data["deploys"]) == 0
+    assert len(res_before.evidence_items) == 0
+
+    # 3. After end_time excluded
+    res_after = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "end_time": "2026-10-27T08:00:00Z",
+        },
+    )
+    assert res_after.success is True
+    assert len(res_after.data["deploys"]) == 0
+    assert len(res_after.evidence_items) == 0
+
+    # 4. Inclusive start and end boundaries (exact match at 08:16:00Z)
+    res_inclusive = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T08:16:00Z",
+            "end_time": "2026-10-27T08:16:00Z",
+        },
+    )
+    assert res_inclusive.success is True
+    assert len(res_inclusive.data["deploys"]) == 1
+    assert len(res_inclusive.evidence_items) == 1
+
+    # 5. Timezone offsets correctly converted to UTC
+    # 08:16:00Z is 13:46:00+05:30 and 03:16:00-05:00
+    res_offset_match = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T13:46:00+05:30",
+            "end_time": "2026-10-27T14:00:00+05:30",
+        },
+    )
+    assert res_offset_match.success is True
+    assert len(res_offset_match.data["deploys"]) == 1
+    assert len(res_offset_match.evidence_items) == 1
+
+    res_offset_exclude = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T08:16:00+05:30",  # 02:46:00 UTC
+            "end_time": "2026-10-27T08:30:00+05:30",    # 03:00:00 UTC, before deploy at 08:16 UTC
+        },
+    )
+    assert res_offset_exclude.success is True
+    assert len(res_offset_exclude.data["deploys"]) == 0
+    assert len(res_offset_exclude.evidence_items) == 0
+
+    # 6. Naive timestamps treated as UTC per parse_time()
+    res_naive_match = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T08:16:00",
+            "end_time": "2026-10-27T08:20:00",
+        },
+    )
+    assert res_naive_match.success is True
+    assert len(res_naive_match.data["deploys"]) == 1
+    assert len(res_naive_match.evidence_items) == 1
+
+    res_naive_exclude = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "2026-10-27T09:00:00",
+        },
+    )
+    assert res_naive_exclude.success is True
+    assert len(res_naive_exclude.data["deploys"]) == 0
+    assert len(res_naive_exclude.evidence_items) == 0
+
+    # 7. Invalid timestamp format handled safely
+    res_invalid = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "start_time": "invalid-timestamp",
+        },
+    )
+    assert res_invalid.success is False
+    assert "Invalid timestamp" in res_invalid.error
+
+
 def test_tool_registry_dispatches_query_metric_anomalies():
     registry = build_default_tool_registry()
     res = registry.execute("query_metric_anomalies", {"service": "payments"})

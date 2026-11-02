@@ -175,9 +175,30 @@ def query_deploy_events(
     """
     Query recorded deployments for the target service within an optional time range.
     """
-    matching_deploys = [
-        d for d in DEMO_SHOP_RECORDED_DEPLOYS if d["service"].lower() == service.lower()
-    ]
+    try:
+        start_dt = parse_time(start_time) if start_time else None
+        end_dt = parse_time(end_time) if end_time else None
+    except Exception as exc:
+        return ToolResult(
+            tool_name="query_deploy_events",
+            success=False,
+            error=f"Invalid timestamp format: {exc}",
+        )
+
+    matching_deploys = []
+    for dep in DEMO_SHOP_RECORDED_DEPLOYS:
+        if dep["service"].lower() != service.lower():
+            continue
+        if start_dt or end_dt:
+            try:
+                dep_dt = parse_time(dep["timestamp"])
+            except Exception:
+                continue
+            if start_dt and dep_dt < start_dt:
+                continue
+            if end_dt and dep_dt > end_dt:
+                continue
+        matching_deploys.append(dep)
 
     evidence_items: List[EvidenceItem] = []
     for idx, dep in enumerate(matching_deploys):

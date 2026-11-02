@@ -18,6 +18,9 @@ the version we submitted; where the two differ, this file wins (D30).
 - **FR-01.1** The system shall let users log in and log out.
 - **FR-01.2** Users shall only see information and perform actions their permissions allow, including changing an incident's status.
 - **FR-01.3** Application roles (Admin, Engineer, Viewer) shall be separate from incident roles (Lead, Comms, Ops; D39).
+- **FR-01.4** Anyone shall be able to sign up with an email and password and create an org, becoming its Admin (D48).
+- **FR-01.5** Each org shall see only its own data; another org's records shall answer as not found.
+- **FR-01.6** Admins shall add people to their org with a role; an org shall always keep at least one enabled Admin.
 
 ### FR-02 Incident creation · Must
 - **FR-02.1** Authorized users shall be able to create an incident with a title, description, affected service, and severity.
@@ -297,6 +300,7 @@ SEV1 critical service or business impact · SEV2 high impact needing urgent atte
 | ID | Change | Why |
 | --- | --- | --- |
 | FR-01.2 | Covers status changes | Absorbs FR-06.2 |
+| FR-01.4 to FR-01.6 | **New:** sign-up, orgs, members | D48 |
 | FR-02.3 | **New:** incident source | Survey: support complaints had no route in (epics §4.2) |
 | FR-05.4, FR-05.5 | **New:** assign Commander and Scribe; warning when one person holds both on SEV1/SEV2 | US-09 needed an FR; C3 |
 | FR-06.2 | Merged into FR-01.2 | Same rule |

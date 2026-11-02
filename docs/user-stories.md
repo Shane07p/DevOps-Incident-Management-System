@@ -41,8 +41,9 @@ Each story follows this structure:
 | US-28 | On-Call Engineer | Search a service's logs | Should | FR-26 |
 | US-29 | Service Owner | Metrics dashboards | Should | FR-27, FR-09.3 |
 | US-30 | On-Call Engineer | Ask an AI assistant through MCP | Should | FR-28, FR-18, DR-10.2 |
+| US-31 | New user | Sign up and create an org | Must | FR-01.4 to FR-01.6, D48 |
 
-**Totals:** 17 Must, 8 Should, 1 Could. US-21 to US-24 are proposals in
+**Totals:** 18 Must, 8 Should, 1 Could. US-21 to US-24 are proposals in
 [epics-and-conflicts.md](epics-and-conflicts.md) and are not stories yet.
 
 ---
@@ -420,3 +421,18 @@ Each story follows this structure:
 - Then later write tools (comment, acknowledge) act as me and are audited as via MCP.
 - Then no tool changes status, or declares or closes an incident (D38).
 - Given the API refuses a call, then the assistant gets a readable error.
+
+---
+
+## US-31: Sign up and create an org
+
+**Story:** As a **new user**, I want to sign up and create an org for my team, so that we can use Settle without anyone setting it up for us.
+
+**Priority:** Must
+**Traces to:** FR-01.4 to FR-01.6, D48
+
+**Acceptance criteria:**
+- Given I sign up with an email, password, my name, and an org name, then the org exists, I am its Admin, and I am signed in.
+- Given the email is already used, then sign-up is refused and nothing is created.
+- Then I see only my org's services, incidents, and alerts, and other orgs never see mine.
+- Then I add people to my org with a role, and the org always keeps at least one Admin.

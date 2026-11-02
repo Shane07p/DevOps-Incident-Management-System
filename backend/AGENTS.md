@@ -29,6 +29,13 @@ the injected `Clock`, and nothing uses Jackson 2.
 
 ## Code
 
+- **Org-owned data is filtered by org (D48).** Every table that holds an org's data has `org_id`,
+  and its entity has `@TenantId private Long orgId;`, so Hibernate fills and filters it. Set the org
+  through `OrgContext` before a transaction starts: Hibernate fixes a session's org when it opens.
+  Only the workers and credential lookups run as root (`OrgContext.runAsRoot`). Raw SQL is not
+  filtered: add `org_id = :org` yourself. People (`AppUser`) are global, so look up a user id from a
+  request through `OrgMembers`, never `AppUserRepository.findById`. Every new endpoint goes into
+  `OrgIsolationTest`.
 - **Lombok, a small subset only:** `@Getter` and `@NoArgsConstructor(access = PROTECTED)` on
   entities, `@RequiredArgsConstructor` for injection, `@Slf4j` for loggers. DTOs are records.
   Never `@Data`, `@Setter`, `@EqualsAndHashCode`, `@ToString`, or `@Builder` on an entity:

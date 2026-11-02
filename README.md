@@ -20,6 +20,7 @@ Sprint 1 is complete; Sprints 2 and 3 are in progress. Each work item's issue an
 | --- | --- |
 | Foundations: Spring Boot 4.1, Flyway (migrations V1–V9), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
 | Login, roles, and user administration | Done |
+| Orgs: sign up, create an org, members by email (D48) | In review (#197, #198) |
 | Service catalog with SLA targets; incidents (create, list, detail) | Done |
 | On-call schedules, with assignment at creation | Done |
 | Tool tokens, the alert webhook, deduplication and grouping, and the alert inbox | Done |
@@ -75,9 +76,10 @@ Four things worth knowing before you change any setting:
 
 ### Dev seed data
 
-The seed (users `admin`, `engineer`, `viewer`, all with password `DevPassw0rd!`, and a `Payments`
-service) is off by default (D27), so production and the test suite never load it. Turn it on per
-command, never by exporting the variable in your shell profile:
+The seed (the org "Dev org" with `admin@settle.local`, `engineer@settle.local`, and
+`viewer@settle.local`, all with password `DevPassw0rd!`, and a `Payments` service) is off by
+default (D27), so production and the test suite never load it. Without it, open the app and choose
+**Create an org**. Turn it on per command, never by exporting the variable in your shell profile:
 
 ```bash
 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/devdata ./mvnw spring-boot:run
@@ -150,7 +152,7 @@ Merging to `main` deploys automatically once CI passes:
 | Part | Host | Notes |
 | --- | --- | --- |
 | Frontend | Vercel | Every pull request also gets a preview link from the Vercel bot |
-| Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` (create the first admin while no users exist), `JAVA_TOOL_OPTIONS`. `RABBITMQ_URL` (the hosted RabbitMQ). Optional: the `DB_POOL_*`, `RATE_LIMIT_*`, and `OUTBOX_RELAY_DELAY_MS` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
+| Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `JAVA_TOOL_OPTIONS`. No admin is created at start: the first person signs up and creates an org (D48). `RABBITMQ_URL` (the hosted RabbitMQ). Optional: the `DB_POOL_*`, `RATE_LIMIT_*`, and `OUTBOX_RELAY_DELAY_MS` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
 | Database | Supabase (PostgreSQL) | Reached through the session pooler; tables in the `incident` schema |
 | Uptime | UptimeRobot | Pings `/actuator/health` every 10 minutes, which also keeps Render's free tier awake |
 | Messaging | CloudAMQP (RabbitMQ, free plan) | `RABBITMQ_URL` on Render, the instance's AMQP URL. Unset, events wait in the outbox; the health check never depends on RabbitMQ |

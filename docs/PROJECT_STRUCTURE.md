@@ -18,6 +18,9 @@ flowchart TD
   Shop -->|deploy events| CI
 ```
 
+Settle is multi-tenant: anyone signs up and creates an org, and every org-owned row carries `org_id`,
+filtered by Hibernate (D48, [design](plans/2026-11-02-organizations-design.md)).
+
 The backend is the authority for status changes, timing, and permissions. Browser validation helps the user, but the backend checks every request again. The AI service never writes to the database: its tools call the same REST API as a person, with that person's permissions. The parts arrive sprint by sprint (see [sprint-plan.md](sprint-plan.md)); the first version was one backend instance, one database, and a scheduled escalation task.
 
 What runs where, and why it stays small (D24, D33, D46):
@@ -138,7 +141,7 @@ RESOLVED requires a recovery note. CLOSED requires the basic postmortem to be sa
 
 ## 9. Access and history
 
-For this single-organization prototype, authenticated users can read shared incident records. Viewers cannot change them. Engineers and Admins can respond to incidents and edit postmortems. Only Admins change users, service settings, on-call slots, and escalation policies. Personal notifications are visible only to their recipient.
+Within an org, authenticated users can read shared incident records; nobody sees another org's. Viewers cannot change them. Engineers and Admins can respond to incidents and edit postmortems. Only Admins change users, service settings, on-call slots, and escalation policies. Personal notifications are visible only to their recipient.
 
 Use stateless JWT bearer tokens with a per-user token version for revocation (D21), and hashed passwords. CSRF protection is not needed because the browser never sends a bearer token on its own. The alert endpoint uses separate source authentication. Keep secrets out of Git and logs.
 

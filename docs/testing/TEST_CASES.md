@@ -333,6 +333,28 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 The audit log API (#153) and the service map API (#154) bring their own cases in their pull
 requests (#179, #180).
 
+### Orgs and sign-up (FR-01.4 to FR-01.6, D48)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-01.4a | Equivalence | Sign up with an email, password, name, and org name | 201; the org exists with a slug, the person is its Admin, and the response carries a token | `SignupControllerTest` | Automated |
+| TC-FR-01.4b | Negative | Sign up with an email that exists, in another case | 409; nothing created | `SignupControllerTest` | Automated |
+| TC-FR-01.4c | Equivalence | Two orgs with the same name | Slugs `same` and `same-2` | `SignupControllerTest`, `SlugsTest` | Automated |
+| TC-FR-01.4d | Boundary | The sixth sign-up in a minute from one address | 429 | `SignupControllerTest` | Automated |
+| TC-FR-01.4e | Equivalence | Sign in by email, in any case; the token | 200; the token carries the org; the role comes from the membership | `AuthControllerTest` | Automated |
+| TC-FR-01.4f | Negative | Unknown email, wrong password, disabled membership | The same 401 "Invalid email or password" | `AuthControllerTest` | Automated |
+| TC-FR-01.5a | Negative | Every endpoint with an id, called with another org's ids | 404, never 403, never the other org's data | `OrgIsolationTest` | Automated |
+| TC-FR-01.5b | Negative | A body naming another org's service or people (owner, responder, fallback contact) | 400 or 404; nothing saved | `OrgIsolationTest` | Automated |
+| TC-FR-01.5c | Equivalence | Every list | Only the caller's org's rows | `OrgIsolationTest`, `UserAdminControllerTest` | Automated |
+| TC-FR-01.5d | Equivalence | Queries and `findById` in two orgs | Each org sees only its rows | `TenantFilteringTest` | Automated |
+| TC-FR-01.5e | Equivalence | An alert sent with another org's tool token; overdue escalations in two orgs | Each lands in, and escalates in, its own org | `AlertWebhookOrgTest`, `EscalationWorkerOrgTest` | Automated |
+| TC-FR-01.5f | Equivalence | Two orgs declare incidents | Each numbers from INC-1 | `IncidentNumberingTest` | Automated |
+| TC-FR-01.5g | Equivalence | Migrating a database with users and services | Everything moves into "Dev org"; emails become `<username>@settle.local` | `OrganizationsMigrationTest` | Automated |
+| TC-FR-01.6a | Equivalence | An Admin adds a member by email | 201 with the role; the member is in the Admin's org | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6b | Boundary | Demote the last enabled Admin | 409 "An org needs at least one Admin" | `UserAdminControllerTest`, `UserAdminServiceTest` | Automated |
+| TC-FR-01.6c | Negative | Change the role of someone in another org | 404 | `UserAdminControllerTest` | Automated |
+| TC-FR-01.4g | Equivalence | Sign-up page and sign in by email | The org is created and the app opens; the header shows the org | `SignupPage.test.tsx` | Planned (Shlok, #198) |
+
 ### Personal access tokens (FR-23, D38): decision table and boundary values
 
 | ID | Technique | Input or condition | Expected | Test | Status |

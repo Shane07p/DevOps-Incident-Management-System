@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { NotificationBell } from './NotificationBell'
 import { ThemeToggle } from './ThemeToggle'
 import { Wordmark } from './Wordmark'
 
@@ -57,6 +58,8 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
         Go to…
         <kbd className="rounded-xs border px-1 font-mono text-[11px]">⌘K</kbd>
       </button>
+
+      {user && <NotificationBell />}
 
       <ThemeToggle />
 

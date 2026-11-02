@@ -195,6 +195,8 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 | TC-FR-07.1a | Equivalence | An incident is assigned | The assignee has one unread notification | `NotificationTest.tcFr07_1a_assignedIncidentCreatesUnreadNotificationForAssignee` | Automated |
 | TC-FR-07.1b | Negative | Another user requests that notification | 404; they never see it | `NotificationTest.tcFr07_1b_userIsolationCannotAccessOtherUsersNotification` | Automated |
 | TC-FR-07.1c | Equivalence | Mark it as read | The unread count goes down by one | `NotificationTest.tcFr07_1c_markAsReadDecrementsUnreadCount` | Automated |
+| TC-FR-07.1d | Equivalence | The bell with 1, 0, and 12 unread notifications | "1"; no count; "9+", and the label says how many | `NotificationBell.test.tsx` | Automated |
+| TC-FR-07.1e | State transition | Open an unread notification, then a read one | One mark-read request for the unread one, none for the read one; each goes to its incident | `NotificationBell.test.tsx` | Automated |
 | TC-FR-07.8a | Negative | The change that caused the notification rolls back | No notification is left | `NotificationTest.tcFr07_8a_transactionRollbackCleansUpNotification` | Automated |
 
 ### Monitors and heartbeats (FR-22, D29): boundary values
@@ -277,6 +279,9 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | TC-FR-07.5a | Decision table | E5 | As in the table | `EscalationIntegrationTest.tcFr07_5a_ruleE5_notifiesFallbackOnceAndIncidentStaysOpen` | Automated |
 | TC-FR-07.6a | Integration | Restart with an overdue step | The step runs once; the next level gets its full waiting time | `EscalationIntegrationTest.tcFr07_6a_restartWithOverdueStepRunsOnceAndGivesFullWaitToNextLevel`; `workerEscalatesOverdueTaskAndCommits` | Automated |
 | TC-FR-07.4a | Concurrency | Escalation and acknowledgement at the same moment, in both orders | The loser rolls back; no escalation after an accepted acknowledgement | `EscalationIntegrationTest.tcFr07_4a_concurrency_escalationRacingAcknowledgement` | Automated (the acknowledgement is a direct status change until #83) |
+| TC-D24a | Integration | A PENDING outbox event, with RabbitMQ running | A consumer bound to `incident.#` receives it with its payload, routing key, and message id; it becomes SENT | `OutboxRelayTest.aPendingEventIsPublishedConsumedAndMarkedSent` | Automated |
+| TC-D24b | Equivalence | Two PENDING events | They leave oldest first | `OutboxRelayTest.eventsLeaveOldestFirst` | Automated |
+| TC-D24c | Negative | RabbitMQ does not confirm an event | It stays PENDING for the next pass | `OutboxRelayTest.anEventTheBrokerDoesNotConfirmStaysPending` | Automated |
 
 ### Reassignment and roles (FR-05.2 to FR-05.5, D39)
 
@@ -296,14 +301,19 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | TC-FR-09.2a | Equivalence | Comment on a CLOSED incident | Accepted; the incident stays CLOSED | `CommentTest` | Planned (Manan) |
 | TC-FR-09.2b | Negative | A Viewer or a caller with no token comments | 403 or 401 | `SecurityMatrixTest` | Planned (Manan) |
 
-### Checks from several regions (D36): boundary values on the count of failing regions
+### Checks from several locations (D35, D36): boundary values on failing locations and checks in a row
+
+The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 0 of 3 regions failing | Up | `RegionVerdictTest` | Planned (Manush) |
-| TC-D36b | Boundary value | 1 of 3 failing | Up; nothing raised | `RegionVerdictTest` | Planned (Manush) |
-| TC-D36c | Boundary value | 2 of 3 failing | Down; one alert | `RegionVerdictTest` | Planned (Manush) |
-| TC-D36d | Boundary value | 3 of 3 failing | Down; still one alert | `RegionVerdictTest` | Planned (Manush) |
+| TC-D36a | Boundary value | 1 of 3 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36b | Boundary value | 2 of 3 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36c | Boundary value | 2 of 3 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36d | Boundary value | 2 of 3 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36e | Boundary value | 2 of 3 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
+| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
 
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 

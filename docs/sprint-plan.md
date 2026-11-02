@@ -15,8 +15,8 @@ first.
 | **1** | Users and roles, service catalog with SLA targets, incidents (create, list, detail). Frontend foundation, then the login, shell, home, incidents, services, and users screens | US-01, US-05, US-03 | Home widgets beyond open incidents |
 | 2 | Alert intake and deduplication, tool tokens, on-call, notifications. Uptime monitors from one region, heartbeats. Demo shop v1 sending logs and metrics to Grafana Cloud | US-02, US-04, US-06 | Keyword and SSL monitor types |
 | 3 | Acknowledge, status and severity changes, assignment, incident roles, escalation (outbox and RabbitMQ), comments and corrections. Checks from several regions. Grafana alerts into our intake | US-07, US-08, US-09, US-10, US-11 | A third probe region |
-| 4 | Logs explorer, metrics dashboards, service map (links entered by hand), runbooks, deploy tracking, public status page, history search. AI-1 Find similar; MCP read tools | US-12, US-15, US-17, US-19, US-20 | Log patterns and saved views |
-| 5 | Postmortems, follow-ups, insights. AI-2 AI SRE, AI-3 Drafting, AI-4 Triage hint; MCP write tools | US-13, US-14, US-16, US-18 | Service map links derived from traces |
+| 4 | Logs explorer, metrics dashboards, service map (links entered by hand), runbooks, deploy tracking, public status page, history search, live updates by refreshing every few seconds (D46). AI-1 Find similar; MCP read tools | US-12, US-15, US-17, US-19, US-20 | Log patterns and saved views |
+| 5 | Postmortems, follow-ups, insights, live updates pushed by the backend (D46). AI-2 AI SRE, AI-3 Drafting, AI-4 Triage hint; MCP write tools | US-13, US-14, US-16, US-18 | Service map links derived from traces |
 | 6 | Hardening: the Cypress end-to-end test, accessibility, performance, the demo script, AI evaluation runs, and buffer time | — | — |
 
 The monitoring, telemetry, service map, runbook, and MCP features still need user stories and

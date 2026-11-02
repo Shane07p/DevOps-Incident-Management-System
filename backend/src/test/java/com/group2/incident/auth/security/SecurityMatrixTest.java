@@ -281,6 +281,20 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/comments",
+						HttpMethod.POST,
+						"/api/incidents/{id}/comments",
+						"{\"comment\":\"Security matrix comment\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/timeline/{entryId}/corrections",
+						HttpMethod.POST,
+						"/api/incidents/{id}/timeline/{entryId}/corrections",
+						"{\"details\":\"Security matrix correction\"}",
+						404, 404, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/notifications",
 						HttpMethod.GET,
 						"/api/notifications",
@@ -389,7 +403,7 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: targetUserId.toString();
-		return pathTemplate.replace("{id}", id);
+		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {

@@ -237,27 +237,27 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Planned (Utsav D) |
-| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Planned (Utsav D) |
-| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Planned (Utsav D) |
-| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Planned (Utsav D) |
+| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
+| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
+| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Planned (Utsav B) |
+| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Planned (Utsav B) |
 
 ### Acknowledgement (FR-06, FR-07.4, FR-16.2, US-08)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Planned (Utsav D) |
-| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Planned (Utsav D) |
-| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Planned (Utsav D) |
-| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeTest` (Testcontainers) | Planned (Utsav D) |
-| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Planned (Utsav D, Utsav B) |
+| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Planned (Utsav B) |
+| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Planned (Utsav B) |
+| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Planned (Utsav B) |
+| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeTest` (Testcontainers) | Planned (Utsav B) |
+| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Planned (Utsav B) |
 
 ### Severity (FR-04.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | Planned (Utsav D) |
-| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | Planned (Utsav D) |
+| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | Planned (Utsav B) |
+| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | Planned (Utsav B) |
 
 ### Escalation (FR-07.3 to FR-07.7): decision table
 
@@ -331,7 +331,7 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 ## Sprint 4
 
 The audit log API (#153) and the service map API (#154) bring their own cases in their pull
-requests (#179, #180). The cases for #150 and #159 wait on D44.
+requests (#179, #180).
 
 ### Personal access tokens (FR-23, D38): decision table and boundary values
 
@@ -360,32 +360,32 @@ requests (#179, #180). The cases for #150 and #159 wait on D44.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Planned (Utsav B) |
-| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Planned (Utsav B) |
-| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Planned (Utsav B) |
-| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Planned (Utsav B) |
-| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Shlok) |
+| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Planned (Utsav D) |
+| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Planned (Utsav D) |
+| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Planned (Utsav D) |
+| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Planned (Utsav D) |
+| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Bhakti) |
 
 ### Logs and metrics through the backend (FR-26, FR-27, D34)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-26.1a | Equivalence | Each combination of service, level, text, and time range, against a stubbed Loki | The query is built from those parameters only; text from the user never becomes query syntax | `TelemetryServiceTest` | Planned (Utsav D) |
-| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the filters; the field becomes a filter | `LogsPage.test.tsx` | Planned (Utsav D) |
-| TC-FR-26.1c | Negative | Run a query, then read the captured logs | The read token is in no log line | `TelemetryServiceTest` | Planned (Utsav D) |
-| TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Planned (Utsav D) |
-| TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Planned (Utsav D) |
-| TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Planned (Utsav D) |
-| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentPage.test.tsx` | Planned (Utsav D) |
-| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Utsav D) |
+| TC-FR-26.1a | Equivalence | Each combination of service, level, text, and time range, against a stubbed Loki | The query is built from those parameters only; text from the user never becomes query syntax | `TelemetryServiceTest` | Planned (Dhruva) |
+| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the filters; the field becomes a filter | `LogsPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-26.1c | Negative | Run a query, then read the captured logs | The read token is in no log line | `TelemetryServiceTest` | Planned (Dhruva) |
+| TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Planned (Dhruva) |
+| TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Planned (Dhruva) |
+| TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Planned (Dhruva) |
+| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentPage.test.tsx` | Planned (Bhakti) |
+| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
 
 ### Evidence links (FR-09.3)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `EvidenceLinkTest` | Planned (Utsav D) |
-| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceLinkTest` | Planned (Utsav D) |
-| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `EvidenceLinkTest` | Planned (Utsav D) |
+| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `EvidenceLinkTest` | Planned (Bhakti) |
+| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceLinkTest` | Planned (Bhakti) |
+| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `EvidenceLinkTest` | Planned (Bhakti) |
 
 ### History search (FR-17)
 
@@ -395,25 +395,25 @@ requests (#179, #180). The cases for #150 and #159 wait on D44.
 | TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Planned (Manan) |
 | TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Planned (Manan) |
 | TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Planned (Manan) |
+| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Planned (Himanshu) |
 
 ### AI-1 Find similar (FR-18, D44)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D44a | Equivalence | Store and read back a 768-dimension vector | The same values | `DatabaseSchemaTest` | Planned (Manan); waits on D44 |
-| TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan); waits on D44 |
-| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Manan) |
+| TC-D44a | Equivalence | Store and read back a 768-dimension vector | The same values | `DatabaseSchemaTest` | Planned (Manan) |
+| TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
+| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
 | TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |
 
 ### Public status page (FR-21, D45): decision table on who may publish
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-21.1a | Negative | `GET /api/public/status` for an incident with internal notes, comments, and names | None of them in the response | `PublicStatusTest` | Planned (Manush) |
-| TC-FR-21.1b | Equivalence | Fixed monitor results over 90 days | The uptime percentage computed from them | `PublicStatusTest` | Planned (Manush) |
-| TC-FR-21.1c | Equivalence | The status page with each health state; the incident page as a Viewer | Each state renders; the Viewer sees no posting form | `StatusPage.test.tsx` | Planned (Manush) |
-| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry; 403 for the other two. Until #86 lands: accepted for Engineers and Admins | `PublicStatusTest`, `SecurityMatrixTest` | Planned (Manush) |
+| TC-FR-21.1a | Negative | `GET /api/public/status` for an incident with internal notes, comments, and names | None of them in the response | `PublicStatusTest` | Planned (Shane) |
+| TC-FR-21.1b | Equivalence | Fixed monitor results over 90 days | The uptime percentage computed from them | `PublicStatusTest` | Planned (Shane) |
+| TC-FR-21.1c | Equivalence | The status page with each health state; the incident page as a Viewer | Each state renders; the Viewer sees no posting form | `StatusPage.test.tsx` | Planned (Bhakti) |
+| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry; 403 for the other two. Until #86 lands: accepted for Engineers and Admins | `PublicStatusTest`, `SecurityMatrixTest` | Planned (Shane) |
 
 ### MCP server (FR-28, D38)
 
@@ -427,10 +427,10 @@ requests (#179, #180). The cases for #150 and #159 wait on D44.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Planned (Utsav B) |
-| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Planned (Utsav B) |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav B) |
-| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav B) |
+| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Planned (Utsav D) |
+| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Planned (Utsav D) |
+| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
+| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
 

@@ -149,12 +149,12 @@ blocks starts.
 | --- | --- | --- | --- | --- |
 | Acknowledge: OPEN becomes ACKNOWLEDGED; the acknowledger becomes the assignee; the response clock stops; pending escalations are cancelled | Utsav D | US-08, [§7](../PROJECT_STRUCTURE.md#7-acknowledgement-and-escalation) | Testcontainers: two people acknowledge at once, one wins, the other gets 409 | #83: Open |
 | Status changes (legal transitions only) and severity changes with a reason; SLA targets stay fixed | Utsav D | US-10, [§8](../PROJECT_STRUCTURE.md#8-status-and-sla-rules) | JUnit: every legal and illegal transition; a breach is over the target, not equal to it | #84: Open |
-| Escalation: policies with levels and wait times; a scheduler re-checks that the incident is OPEN and unacknowledged, notifies the next level, and forces a version increment; the fallback is notified once; after a restart an overdue step runs once. Events go through the outbox to RabbitMQ | Utsav B | US-07, FR-07, D24 | Testcontainers: restart with an overdue escalation; escalation racing an acknowledgement | #85: Done (PR #135); events wait in the outbox until RabbitMQ (#82) |
+| Escalation: policies with levels and wait times; a scheduler re-checks that the incident is OPEN and unacknowledged, notifies the next level, and forces a version increment; the fallback is notified once; after a restart an overdue step runs once. Events go through the outbox to RabbitMQ | Utsav B | US-07, FR-07, D24 | Testcontainers: restart with an overdue escalation; escalation racing an acknowledgement | #85: Done (PR #135); its events reach RabbitMQ through the outbox (PR #177) |
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Open |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Open |
 | Checks from 2 to 3 regions, down only when 2 agree; Grafana alert rules post into intake | Manush | D35, D36 | One failing region raises nothing; two do | #88: Open |
 | Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Open |
-| Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Open |
+| Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Done (PR #177) |
 | Agent tool loop on demo data | Himanshu | [AI/ML roadmap](ai-ml-roadmap.md) | pytest | #91: Open |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |
 | Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Open |

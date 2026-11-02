@@ -279,6 +279,9 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | TC-FR-07.5a | Decision table | E5 | As in the table | `EscalationIntegrationTest.tcFr07_5a_ruleE5_notifiesFallbackOnceAndIncidentStaysOpen` | Automated |
 | TC-FR-07.6a | Integration | Restart with an overdue step | The step runs once; the next level gets its full waiting time | `EscalationIntegrationTest.tcFr07_6a_restartWithOverdueStepRunsOnceAndGivesFullWaitToNextLevel`; `workerEscalatesOverdueTaskAndCommits` | Automated |
 | TC-FR-07.4a | Concurrency | Escalation and acknowledgement at the same moment, in both orders | The loser rolls back; no escalation after an accepted acknowledgement | `EscalationIntegrationTest.tcFr07_4a_concurrency_escalationRacingAcknowledgement` | Automated (the acknowledgement is a direct status change until #83) |
+| TC-D24a | Integration | A PENDING outbox event, with RabbitMQ running | A consumer bound to `incident.#` receives it with its payload, routing key, and message id; it becomes SENT | `OutboxRelayTest.aPendingEventIsPublishedConsumedAndMarkedSent` | Automated |
+| TC-D24b | Equivalence | Two PENDING events | They leave oldest first | `OutboxRelayTest.eventsLeaveOldestFirst` | Automated |
+| TC-D24c | Negative | RabbitMQ does not confirm an event | It stays PENDING for the next pass | `OutboxRelayTest.anEventTheBrokerDoesNotConfirmStaysPending` | Automated |
 
 ### Reassignment and roles (FR-05.2 to FR-05.5, D39)
 

@@ -81,7 +81,7 @@ After adding:
 ## Forms
 
 Use the shadcn `Form` components with react-hook-form and a Zod schema. In this project, each
-input's `id` is its field name (`username`, `serviceId`, …), so labels, error messages, and
+input's `id` is its field name (`email`, `serviceId`, …), so labels, error messages, and
 Cypress all find it. Server field errors (`ApiRequestError.errors`) go under the matching input;
 `showRequestErrors` in `src/lib/forms.ts` does that, and puts any the form has no input for above
 the buttons.

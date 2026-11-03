@@ -9,12 +9,12 @@ import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
-import { mockFetch, payments, users } from '@/test/fetchMock'
+import { devOrg, mockFetch, payments, users } from '@/test/fetchMock'
 
 const signedIn: Record<Role, unknown> = {
   ADMIN: users[0],
   ENGINEER: users[1],
-  VIEWER: { id: 3, username: 'viewer', displayName: 'Dev Viewer', role: 'VIEWER' },
+  VIEWER: { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' },
 }
 
 // Out of order on purpose: the page must still show the newest first.
@@ -51,7 +51,7 @@ type Routes = Parameters<typeof mockFetch>[0]
 function renderApp(role: Role, path: string, extraRoutes: Routes = {}) {
   writeToken('test-token')
   const fetchMock = mockFetch({
-    'GET /api/auth/me': { body: signedIn[role] },
+    'GET /api/auth/me': { body: { user: signedIn[role], org: devOrg } },
     'GET /api/incidents': { body: summaries },
     'GET /api/incidents/7': { body: checkoutFailing },
     'GET /api/services': { body: [payments] },

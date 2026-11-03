@@ -189,7 +189,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
                 <SelectContent>
                   {users.data?.map((option) => (
                     <SelectItem key={option.id} value={String(option.id)}>
-                      {option.displayName} ({option.username})
+                      {option.displayName} ({option.email})
                     </SelectItem>
                   ))}
                 </SelectContent>

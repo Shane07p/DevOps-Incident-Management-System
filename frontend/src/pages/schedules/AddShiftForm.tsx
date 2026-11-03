@@ -83,8 +83,8 @@ export function AddShiftForm({
                   <SelectContent>
                     {users.map((user) => (
                       <SelectItem key={user.id} value={String(user.id)}>
-                        {/* The schedule shows usernames, so name both. */}
-                        {user.displayName} ({user.username})
+                        {/* Two people can share a name, so show the email too. */}
+                        {user.displayName} ({user.email})
                       </SelectItem>
                     ))}
                   </SelectContent>

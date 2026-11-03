@@ -14,18 +14,28 @@ export type Criticality = z.infer<typeof criticalitySchema>
 
 export const userSchema = z.object({
   id: z.number(),
-  username: z.string(),
+  email: z.string(),
   displayName: z.string(),
   role: roleSchema,
 })
 
 export type User = z.infer<typeof userSchema>
 
+// Everyone works inside one org; another org's data never reaches them (D48).
+export const orgSchema = z.object({ id: z.number(), name: z.string(), slug: z.string() })
+
+export type Org = z.infer<typeof orgSchema>
+
 export const loginResponseSchema = z.object({
   token: z.string(),
   expiresAt: z.iso.datetime({ offset: true }),
   user: userSchema,
+  org: orgSchema,
 })
+
+export type LoginResponse = z.infer<typeof loginResponseSchema>
+
+export const meResponseSchema = z.object({ user: userSchema, org: orgSchema })
 
 export const noContentSchema = z.undefined()
 

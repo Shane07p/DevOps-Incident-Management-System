@@ -13,10 +13,11 @@ import { devOrg, mockFetch } from '@/test/fetchMock'
 const viewer = { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' }
 
 // Out of order on purpose: the page must still show the newest first.
+// INC-2 and INC-3 are assigned to the viewer (id 3); INC-1 to someone else.
 const alerts = [
-  { id: 6, source: 'demo-shop', serviceName: 'Checkout', incidentId: 6, incidentReference: 'INC-1', status: 'ATTACHED', correlationKey: 'checkout-latency', createdAt: '2026-10-28T04:00:00Z' },
-  { id: 9, source: 'grafana', serviceName: 'Payments', incidentId: 7, incidentReference: 'INC-2', status: 'ATTACHED', correlationKey: 'payments-5xx', createdAt: '2026-10-28T06:00:00Z' },
-  { id: 8, source: 'uptime-robot', serviceName: 'Checkout', incidentId: 8, incidentReference: 'INC-3', status: 'NEW', correlationKey: null, createdAt: '2026-10-28T05:30:00Z' },
+  { id: 6, source: 'demo-shop', serviceName: 'Checkout', incidentId: 6, incidentReference: 'INC-1', assigneeId: 2, status: 'ATTACHED', correlationKey: 'checkout-latency', createdAt: '2026-10-28T04:00:00Z', count: 1 },
+  { id: 9, source: 'grafana', serviceName: 'Payments', incidentId: 7, incidentReference: 'INC-2', assigneeId: 3, status: 'ATTACHED', correlationKey: 'payments-5xx', createdAt: '2026-10-28T06:00:00Z', count: 2 },
+  { id: 8, source: 'uptime-robot', serviceName: 'Checkout', incidentId: 8, incidentReference: 'INC-3', assigneeId: 3, status: 'NEW', correlationKey: null, createdAt: '2026-10-28T05:30:00Z', count: 1 },
 ]
 
 function renderInbox(path = '/alerts', body: unknown = alerts) {
@@ -46,7 +47,7 @@ afterEach(() => {
 })
 
 describe('AlertsPage', () => {
-  it('shows each alert newest first, with its source, service, and linked incident', async () => {
+  it('shows each alert newest first, with its source, service, count, and linked incident', async () => {
     renderInbox()
 
     await screen.findByText('grafana')
@@ -57,6 +58,8 @@ describe('AlertsPage', () => {
     expect(newest).toHaveTextContent('payments-5xx')
     // The org's own number, not the incident's id (D48).
     expect(within(newest).getByRole('link', { name: 'INC-2' })).toHaveAttribute('href', '/incidents/7')
+    // Two alerts share INC-2, this one included.
+    expect(within(newest).getAllByRole('cell')[6]).toHaveTextContent('2')
   })
 
   it('shows only new alerts under New, and remembers the filter in the URL', async () => {
@@ -85,6 +88,39 @@ describe('AlertsPage', () => {
 
     await screen.findByText('grafana')
     expect(sources()).toEqual(['grafana', 'demo-shop'])
+  })
+
+  it('shows only alerts whose incident is assigned to the viewer under Routed to me', async () => {
+    const router = renderInbox()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Routed to me' }))
+
+    expect(sources()).toEqual(['grafana', 'uptime-robot'])
+    expect(screen.getByRole('button', { name: 'Routed to me' })).toHaveAttribute('aria-pressed', 'true')
+    expect(router.state.location.search).toBe('?routed=me')
+    // The status counts follow what is routed to the viewer.
+    expect(screen.getByRole('button', { name: /^All/ })).toHaveTextContent('2')
+    expect(screen.getByRole('button', { name: /^Attached/ })).toHaveTextContent('1')
+  })
+
+  it('combines Routed to me with a status filter, and keeps both in the URL', async () => {
+    const router = renderInbox('/alerts?routed=me')
+
+    await userEvent.click(await screen.findByRole('button', { name: /^New/ }))
+
+    expect(sources()).toEqual(['uptime-robot'])
+    expect(router.state.location.search).toBe('?routed=me&status=new')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Routed to me' }))
+
+    expect(router.state.location.search).toBe('?status=new')
+    expect(sources()).toEqual(['uptime-robot'])
+  })
+
+  it('says so when nothing is routed to the viewer', async () => {
+    renderInbox('/alerts?routed=me', alerts.filter((alert) => alert.assigneeId !== 3))
+
+    expect(await screen.findByText('No alerts routed to you.')).toBeInTheDocument()
   })
 
   it('says so when a filter has no alerts', async () => {

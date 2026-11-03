@@ -9,6 +9,7 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -17,6 +18,7 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -63,6 +65,9 @@ class CommentConcurrencyTest {
 	@Autowired
 	private Clock clock;
 
+	@Autowired
+	private TestAccounts accounts;
+
 	/** Posts two comments concurrently to PostgreSQL and checks persistence and version stability. */
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -75,11 +80,11 @@ class CommentConcurrencyTest {
 
 		try {
 			Instant now = clock.instant();
-			AppUser firstAuthor = users.saveAndFlush(new AppUser(
-					"comment_a_" + suffix, "Comment Author A", "{noop}password", Role.ENGINEER, now));
+			AppUser firstAuthor = accounts.save(new AppUser(
+					"comment_a_" + suffix + "@test.local", "Comment Author A", "{noop}password", now), Role.ENGINEER);
 			userIds.add(firstAuthor.getId());
-			AppUser secondAuthor = users.saveAndFlush(new AppUser(
-					"comment_b_" + suffix, "Comment Author B", "{noop}password", Role.ADMIN, now));
+			AppUser secondAuthor = accounts.save(new AppUser(
+					"comment_b_" + suffix + "@test.local", "Comment Author B", "{noop}password", now), Role.ADMIN);
 			userIds.add(secondAuthor.getId());
 
 			ServiceEntity service = new ServiceEntity(
@@ -90,7 +95,7 @@ class CommentConcurrencyTest {
 			service = services.saveAndFlush(service);
 			serviceId = service.getId();
 
-			Incident incident = incidents.saveAndFlush(new Incident(
+			Incident incident = new Incident(
 					"Concurrent comments",
 					"Test incident",
 					service,
@@ -100,19 +105,24 @@ class CommentConcurrencyTest {
 					now,
 					60,
 					480
-			));
+			);
+			incident.assignNumber(1L);
+			incident = incidents.saveAndFlush(incident);
 			incidentId = incident.getId();
 			Long originalVersion = incident.getVersion();
 			Long testIncidentId = incidentId;
 			Long firstAuthorId = firstAuthor.getId();
 			Long secondAuthorId = secondAuthor.getId();
+			long orgId = OrgContext.current();
 
 			CountDownLatch ready = new CountDownLatch(2);
 			CountDownLatch start = new CountDownLatch(1);
 			Future<TimelineEntryResponse> first = executor.submit(
-					() -> addCommentAtTheSameTime(ready, start, testIncidentId, firstAuthorId, "First comment"));
+					() -> OrgContext.runAs(orgId,
+							() -> addCommentAtTheSameTime(ready, start, testIncidentId, firstAuthorId, "First comment")));
 			Future<TimelineEntryResponse> second = executor.submit(
-					() -> addCommentAtTheSameTime(ready, start, testIncidentId, secondAuthorId, "Second comment"));
+					() -> OrgContext.runAs(orgId,
+							() -> addCommentAtTheSameTime(ready, start, testIncidentId, secondAuthorId, "Second comment")));
 
 			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
 			start.countDown();
@@ -139,10 +149,16 @@ class CommentConcurrencyTest {
 			Long incidentId,
 			Long actorId,
 			String comment
-	) throws InterruptedException {
+) {
 		ready.countDown();
-		if (!start.await(5, TimeUnit.SECONDS)) {
-			throw new IllegalStateException("Timed out waiting to start concurrent comment submissions");
+		try {
+			if (!start.await(5, TimeUnit.SECONDS)) {
+				throw new IllegalStateException("Timed out waiting to start concurrent comment submissions");
+			}
+		}
+		catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Interrupted while waiting to start concurrent comment submissions", exception);
 		}
 		return incidentService.addComment(incidentId, comment, actorId);
 	}
@@ -152,18 +168,19 @@ class CommentConcurrencyTest {
 		TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 		transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		transaction.executeWithoutResult(status -> {
+			jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
 			if (incidentId != null) {
-				jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
 				jdbcTemplate.update("DELETE FROM timeline_entry WHERE incident_id = ?", incidentId);
-				jdbcTemplate.execute("SET LOCAL session_replication_role = 'origin'");
 				incidents.deleteById(incidentId);
 			}
 			if (serviceId != null) {
 				services.deleteById(serviceId);
 			}
 			for (Long userId : userIds) {
+				jdbcTemplate.update("DELETE FROM membership WHERE user_id = ?", userId);
 				users.deleteById(userId);
 			}
+			jdbcTemplate.execute("SET LOCAL session_replication_role = 'origin'");
 		});
 	}
 }

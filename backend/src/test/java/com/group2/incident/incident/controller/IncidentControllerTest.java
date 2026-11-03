@@ -74,10 +74,12 @@ class IncidentControllerTest {
 	private AppUser engineer;
 	private AppUser viewer;
 	private ServiceEntity paymentsService;
+	private long nextIncidentNumber;
 
 	@BeforeEach
 	void setUp() {
 		Instant now = clock.instant();
+		nextIncidentNumber = 1L;
 		engineer = accounts.save(new AppUser("engineer@test.local", "Dev Engineer", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
 		viewer = accounts.save(new AppUser("viewer@test.local", "Dev Viewer", passwordEncoder.encode(PASSWORD), now), Role.VIEWER);
 
@@ -436,7 +438,7 @@ class IncidentControllerTest {
 	}
 
 	private Incident createIncident(IncidentStatus status) {
-		return incidents.saveAndFlush(new Incident(
+		Incident incident = new Incident(
 				"Comment test incident",
 				"Incident for timeline tests",
 				paymentsService,
@@ -446,7 +448,9 @@ class IncidentControllerTest {
 				clock.instant(),
 				60,
 				480
-		));
+		);
+		incident.assignNumber(nextIncidentNumber++);
+		return incidents.saveAndFlush(incident);
 	}
 
 	@Test

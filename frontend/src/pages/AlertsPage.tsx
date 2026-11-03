@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { incidentReference, listAlerts, type AlertStatus } from '@/api/alerts'
+import { listAlerts, type AlertStatus } from '@/api/alerts'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -103,7 +103,7 @@ export function AlertsPage() {
                   </TableCell>
                   <TableCell>
                     <Link to={`/incidents/${alert.incidentId}`} className="font-mono text-sm font-semibold hover:underline">
-                      {incidentReference(alert.incidentId)}
+                      {alert.incidentReference}
                     </Link>
                   </TableCell>
                 </TableRow>

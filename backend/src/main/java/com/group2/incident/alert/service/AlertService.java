@@ -105,6 +105,7 @@ public class AlertService {
 						alert.getSource(),
 						alert.getService().getName(),
 						alert.getIncident().getId(),
+						alert.getIncident().getReference(),
 						Optional.ofNullable(alert.getIncident().getAssignee()).map(AppUser::getId).orElse(null),
 						alert.getStatus().name(),
 						alert.getCorrelationKey(),

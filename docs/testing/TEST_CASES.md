@@ -353,6 +353,9 @@ requests (#179, #180).
 | TC-FR-01.6a | Equivalence | An Admin adds a member by email | 201 with the role; the member is in the Admin's org | `UserAdminControllerTest` | Automated |
 | TC-FR-01.6b | Boundary | Demote the last enabled Admin | 409 "An org needs at least one Admin" | `UserAdminControllerTest`, `UserAdminServiceTest` | Automated |
 | TC-FR-01.6c | Negative | Change the role of someone in another org | 404 | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6d | Concurrency | Two Admins demote each other at the same moment | The second waits for the first, then gets 409; one Admin remains | `LastAdminRaceTest` | Automated |
+| TC-FR-01.4h | Concurrency | A slug or an email taken between the check and the insert | A taken slug is looked for again (up to 3 times); a taken email is 409 | `SignupServiceTest` | Automated |
+| TC-FR-01.5h | Equivalence | Alert inbox in an org whose incident ids differ from its numbers | Each alert shows its incident's reference (INC-1), not its id | `AlertGroupingTest`, `AlertsPage.test.tsx` | Automated |
 | TC-FR-01.4g | Equivalence | Sign-up page and sign in by email | The org is created and the app opens; the header shows the org | `SignupPage.test.tsx` | Planned (Shlok, #198) |
 
 ### Personal access tokens (FR-23, D38): decision table and boundary values

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +22,7 @@ import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.MembershipRepository;
+import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.support.Members;
 import java.time.Clock;
 import java.time.Instant;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,6 +54,9 @@ class UserAdminServiceTest {
 	private MembershipRepository memberships;
 
 	@Mock
+	private OrganizationRepository orgs;
+
+	@Mock
 	private PasswordEncoder passwordEncoder;
 
 	@Mock
@@ -65,7 +71,7 @@ class UserAdminServiceTest {
 	@BeforeEach
 	void setUp() {
 		OrgContext.set(ORG);
-		userAdminService = new UserAdminService(users, memberships, passwordEncoder, auditService, Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+		userAdminService = new UserAdminService(users, memberships, orgs, passwordEncoder, auditService, Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 
 		admin = user(1L, "admin@test.local", "Dev Admin");
 		adminMembership = Members.of(admin, Role.ADMIN);
@@ -137,6 +143,7 @@ class UserAdminServiceTest {
 
 	@Test
 	void changeRoleUpdatesTheMembershipRevokesTokensAndAudits() {
+		lockableOrg();
 		AppUser target = user(50L, "target@test.local", "Target User");
 		Membership targetMembership = Members.of(target, Role.VIEWER);
 		when(memberships.findByUserIdAndOrgId(50L, ORG)).thenReturn(Optional.of(targetMembership));
@@ -153,6 +160,7 @@ class UserAdminServiceTest {
 
 	@Test
 	void theLastAdminCannotBeDemoted() {
+		lockableOrg();
 		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
 		when(memberships.countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN)).thenReturn(1L);
 
@@ -164,6 +172,7 @@ class UserAdminServiceTest {
 
 	@Test
 	void anAdminMayBeDemotedWhileAnotherAdminRemains() {
+		lockableOrg();
 		AppUser other = user(2L, "other@test.local", "Other Admin");
 		Membership otherMembership = Members.of(other, Role.ADMIN);
 		when(memberships.findByUserIdAndOrgId(2L, ORG)).thenReturn(Optional.of(otherMembership));
@@ -177,11 +186,30 @@ class UserAdminServiceTest {
 
 	@Test
 	void aTargetOutsideThisOrgIsNotFound() {
+		lockableOrg();
 		when(memberships.findByUserIdAndOrgId(999L, ORG)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> userAdminService.changeRole(999L, new ChangeRoleRequest(Role.ADMIN), 1L))
 				.isInstanceOf(NotFoundException.class)
 				.hasMessage("User 999 not found");
+	}
+
+	@Test
+	void aRoleChangeTakesTheOrgsLockBeforeCountingAdmins() {
+		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
+		when(memberships.countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN)).thenReturn(1L);
+		lockableOrg();
+
+		assertThatThrownBy(() -> userAdminService.changeRole(1L, new ChangeRoleRequest(Role.VIEWER), 1L))
+				.isInstanceOf(ConflictException.class);
+
+		InOrder order = inOrder(orgs, memberships);
+		order.verify(orgs).findLockedById(ORG);
+		order.verify(memberships).countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN);
+	}
+
+	private void lockableOrg() {
+		when(orgs.findLockedById(ORG)).thenReturn(Optional.of(adminMembership.getOrg()));
 	}
 
 	private static AppUser user(long id, String email, String name) {

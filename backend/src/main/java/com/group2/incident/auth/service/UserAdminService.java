@@ -14,6 +14,7 @@ import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.MembershipRepository;
+import com.group2.incident.org.repository.OrganizationRepository;
 import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,8 @@ public class UserAdminService {
 	private final AppUserRepository users;
 
 	private final MembershipRepository memberships;
+
+	private final OrganizationRepository orgs;
 
 	private final PasswordEncoder passwordEncoder;
 
@@ -60,6 +63,9 @@ public class UserAdminService {
 	/** Changes a member's role and ends their sessions. An org always keeps at least one enabled Admin. */
 	@Transactional
 	public UserResponse changeRole(long targetUserId, ChangeRoleRequest request, long adminUserId) {
+		// Role changes in one org take turns on the org's row, so two Admins demoting each other at once
+		// cannot both see the other still an Admin and leave the org with none.
+		orgs.findLockedById(OrgContext.current()).orElseThrow(() -> new IllegalStateException("No org for this request"));
 		Membership target = member(targetUserId);
 		Membership admin = member(adminUserId);
 		Role oldRole = target.getRole();

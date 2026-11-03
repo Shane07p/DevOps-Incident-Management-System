@@ -175,6 +175,7 @@ class AlertGroupingTest {
 				.andExpect(jsonPath("$[1].count").value(2))
 				.andExpect(jsonPath("$[1].assigneeId").value(owner.getId()))
 				.andExpect(jsonPath("$[1].incidentId").value(incidentOf("evt-1")))
+				.andExpect(jsonPath("$[1].incidentReference").value(referenceOf("evt-1")))
 				.andExpect(jsonPath("$[2].status").value("NEW"))
 				.andExpect(jsonPath("$[2].count").value(2));
 	}
@@ -263,6 +264,12 @@ class AlertGroupingTest {
 		// No shifts, so every incident goes to the fallback contact.
 		service.changeFallbackContact(owner);
 		return services.saveAndFlush(service);
+	}
+
+	// The org's number for the incident, which is not its id (D48).
+	private String referenceOf(String eventId) {
+		return jdbc.queryForObject("select 'INC-' || i.number from alert a join incident i on i.id = a.incident_id where a.event_id = ?",
+				String.class, eventId);
 	}
 
 	private Long incidentOf(String eventId) {

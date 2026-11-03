@@ -175,6 +175,7 @@ public class IncidentService {
 				.toList();
 	}
 
+	/** Maps an incident and its append-only timeline, including correction links, to API data. */
 	private static IncidentResponse toResponse(Incident incident, List<TimelineEntry> timeline) {
 		IncidentServiceDto serviceDto = new IncidentServiceDto(
 				incident.getService().getId(),
@@ -193,7 +194,8 @@ public class IncidentService {
 						t.getEventType(),
 						t.getActor() != null ? t.getActor().getDisplayName() : null,
 						t.getDetails(),
-						t.getRecordedAt()
+						t.getRecordedAt(),
+						t.getCorrectsEntry() != null ? t.getCorrectsEntry().getId() : null
 				))
 				.toList();
 
@@ -213,6 +215,62 @@ public class IncidentService {
 				incident.getResponseDueAt(),
 				incident.getResolutionDueAt(),
 				timelineResponses
+		);
+	}
+
+	/** Persists a comment as an independent timeline insert, including for closed incidents. */
+	@Transactional
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+		Incident incident = requireIncident(incidentId);
+		AppUser actor = requireActor(actorId);
+		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.COMMENT,
+				comment,
+				clock.instant()
+		));
+		return toTimelineEntryResponse(entry);
+	}
+
+	/** Appends an attributed correction while preserving the original timeline entry. */
+	@Transactional
+	public TimelineEntryResponse correctTimelineEntry(
+			Long incidentId, Long entryId, String details, Long actorId) {
+		Incident incident = requireIncident(incidentId);
+		TimelineEntry original = timelineEntryRepository.findByIdAndIncidentId(entryId, incidentId)
+				.orElseThrow(() -> new NotFoundException(
+						"Timeline entry " + entryId + " not found for incident " + incidentId));
+		AppUser actor = requireActor(actorId);
+		TimelineEntry correction = timelineEntryRepository.save(new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.CORRECTION,
+				details,
+				clock.instant(),
+				original
+		));
+		return toTimelineEntryResponse(correction);
+	}
+
+	private Incident requireIncident(Long incidentId) {
+		return incidentRepository.findById(incidentId)
+				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
+	}
+
+	private AppUser requireActor(Long actorId) {
+		return appUserRepository.findById(actorId)
+				.orElseThrow(() -> new NotFoundException("User " + actorId + " not found"));
+	}
+
+	private static TimelineEntryResponse toTimelineEntryResponse(TimelineEntry entry) {
+		return new TimelineEntryResponse(
+				entry.getId(),
+				entry.getEventType(),
+				entry.getActor() != null ? entry.getActor().getDisplayName() : null,
+				entry.getDetails(),
+				entry.getRecordedAt(),
+				entry.getCorrectsEntry() != null ? entry.getCorrectsEntry().getId() : null
 		);
 	}
 }

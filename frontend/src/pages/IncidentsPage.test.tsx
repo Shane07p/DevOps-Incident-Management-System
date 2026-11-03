@@ -41,7 +41,7 @@ const checkoutFailing = {
   responseDueAt: '2026-10-20T09:30:00Z',
   resolutionDueAt: '2026-10-20T16:30:00Z',
   timeline: [
-    { id: 3, eventType: 'INCIDENT_CREATED', actor: 'Dev Engineer', details: 'Reported as SEV2 on Payments', recordedAt: '2026-10-20T08:30:00Z' },
+    { id: 3, eventType: 'INCIDENT_CREATED', actor: 'Dev Engineer', details: 'Reported as SEV2 on Payments', recordedAt: '2026-10-20T08:30:00Z', correctsEntryId: null },
   ],
 }
 

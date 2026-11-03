@@ -14,7 +14,7 @@ export const alertSchema = z.object({
   incidentId: z.number(),
   // The org numbers its incidents from INC-1, so the reference is not the id.
   incidentReference: z.string(),
-  // Whoever the incident is assigned to; null until someone acknowledges it.
+  // Whoever the incident is assigned to: set at creation from on-call, or the fallback contact; null when neither exists.
   assigneeId: z.number().nullable(),
   status: alertStatusSchema,
   correlationKey: z.string().nullable(),

@@ -106,7 +106,8 @@ class CommentConcurrencyTest {
 					60,
 					480
 			);
-			incident.assignNumber(1L);
+			// Committed in the shared test org, where (org_id, number) is unique: far above the numbers the API hands out.
+			incident.assignNumber(990_002L);
 			incident = incidents.saveAndFlush(incident);
 			incidentId = incident.getId();
 			Long originalVersion = incident.getVersion();

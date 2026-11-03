@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { listAlerts, type AlertStatus } from '@/api/alerts'
+import { useAuth } from '@/auth/AuthProvider'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -29,13 +30,31 @@ function AlertStatusBadge({ status }: { status: AlertStatus }) {
 
 /** Alerts from tools and monitors, newest first, with the incident each one belongs to. */
 export function AlertsPage() {
+  const { user } = useAuth()
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: listAlerts })
-  // The filter lives in the URL, so a link opens the same view.
+  // The filters live in the URL, so a link opens the same view.
   const [params, setParams] = useSearchParams()
   const filter = FILTERS.find((candidate) => candidate.id === params.get('status')) ?? FILTERS[0]
-  const shown = alerts.data
+  // Routed to me: the alert's incident is assigned to the viewer. It narrows whichever status is chosen.
+  const routedToMe = params.get('routed') === 'me'
+  const inScope = alerts.data?.filter((alert) => !routedToMe || alert.assigneeId === user?.id)
+  const shown = inScope
     ?.filter((alert) => filter.matches(alert.status))
     .toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+
+  function showStatus(id: string) {
+    const next = new URLSearchParams(params)
+    if (id === 'all') next.delete('status')
+    else next.set('status', id)
+    setParams(next)
+  }
+
+  function toggleRoutedToMe() {
+    const next = new URLSearchParams(params)
+    if (routedToMe) next.delete('routed')
+    else next.set('routed', 'me')
+    setParams(next)
+  }
 
   return (
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
@@ -48,26 +67,39 @@ export function AlertsPage() {
         </p>
       </div>
 
-      <div role="group" aria-label="Show alerts" className="flex w-fit gap-1 rounded-lg border bg-card p-1">
-        {FILTERS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={option.id === filter.id}
-            onClick={() => setParams(option.id === 'all' ? {} : { status: option.id })}
-            className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-              option.id === filter.id && 'bg-primary text-primary-foreground hover:text-primary-foreground',
-            )}
-          >
-            {option.label}
-            {alerts.data && (
-              <span className="ml-1.5 font-mono text-xs opacity-70 tnum">
-                {alerts.data.filter((alert) => option.matches(alert.status)).length}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div role="group" aria-label="Show alerts" className="flex w-fit gap-1 rounded-lg border bg-card p-1">
+          {FILTERS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={option.id === filter.id}
+              onClick={() => showStatus(option.id)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                option.id === filter.id && 'bg-primary text-primary-foreground hover:text-primary-foreground',
+              )}
+            >
+              {option.label}
+              {inScope && (
+                <span className="ml-1.5 font-mono text-xs opacity-70 tnum">
+                  {inScope.filter((alert) => option.matches(alert.status)).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-pressed={routedToMe}
+          onClick={toggleRoutedToMe}
+          className={cn(
+            'rounded-lg border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+            routedToMe && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
+          )}
+        >
+          Routed to me
+        </button>
       </div>
 
       {alerts.isPending ? (
@@ -76,7 +108,11 @@ export function AlertsPage() {
         <ErrorState message={alerts.error.message} onRetry={() => alerts.refetch()} />
       ) : shown?.length === 0 ? (
         <p className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
-          {filter.id === 'all' ? 'No alerts yet. Tools send them to /webhooks/alerts.' : `No ${filter.label.toLowerCase()} alerts.`}
+          {routedToMe
+            ? `No ${filter.id === 'all' ? '' : `${filter.label.toLowerCase()} `}alerts routed to you.`
+            : filter.id === 'all'
+              ? 'No alerts yet. Tools send them to /webhooks/alerts.'
+              : `No ${filter.label.toLowerCase()} alerts.`}
         </p>
       ) : (
         <div className="rounded-lg border bg-card">
@@ -89,6 +125,7 @@ export function AlertsPage() {
                 <TableHead>Correlation key</TableHead>
                 <TableHead className="w-[110px]">Status</TableHead>
                 <TableHead className="w-[100px]">Incident</TableHead>
+                <TableHead className="w-[80px] text-right">Alerts</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,6 +142,12 @@ export function AlertsPage() {
                     <Link to={`/incidents/${alert.incidentId}`} className="font-mono text-sm font-semibold hover:underline">
                       {alert.incidentReference}
                     </Link>
+                  </TableCell>
+                  <TableCell
+                    className="text-right font-mono text-sm tnum"
+                    title={`${alert.count} ${alert.count === 1 ? 'alert' : 'alerts'} grouped into ${alert.incidentReference}`}
+                  >
+                    {alert.count}
                   </TableCell>
                 </TableRow>
               ))}

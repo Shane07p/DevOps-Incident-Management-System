@@ -63,6 +63,7 @@ class CommentConcurrencyTest {
 	@Autowired
 	private Clock clock;
 
+	/** Posts two comments concurrently to PostgreSQL and checks persistence and version stability. */
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void twoConcurrentCommentsArePersistedWithoutChangingIncidentVersion() throws Exception {
@@ -131,6 +132,7 @@ class CommentConcurrencyTest {
 		}
 	}
 
+	/** Releases each worker to submit its comment together with the other worker. */
 	private TimelineEntryResponse addCommentAtTheSameTime(
 			CountDownLatch ready,
 			CountDownLatch start,
@@ -145,19 +147,16 @@ class CommentConcurrencyTest {
 		return incidentService.addComment(incidentId, comment, actorId);
 	}
 
+	/** Deletes the independently committed test rows and restores the append-only trigger. */
 	private void cleanup(Long incidentId, Long serviceId, List<Long> userIds) {
 		TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 		transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		transaction.executeWithoutResult(status -> {
 			if (incidentId != null) {
-				jdbcTemplate.execute("ALTER TABLE timeline_entry DISABLE TRIGGER timeline_entry_append_only");
-				try {
-					jdbcTemplate.update("DELETE FROM timeline_entry WHERE incident_id = ?", incidentId);
-					incidents.deleteById(incidentId);
-				}
-				finally {
-					jdbcTemplate.execute("ALTER TABLE timeline_entry ENABLE TRIGGER timeline_entry_append_only");
-				}
+				jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
+				jdbcTemplate.update("DELETE FROM timeline_entry WHERE incident_id = ?", incidentId);
+				jdbcTemplate.execute("SET LOCAL session_replication_role = 'origin'");
+				incidents.deleteById(incidentId);
 			}
 			if (serviceId != null) {
 				services.deleteById(serviceId);

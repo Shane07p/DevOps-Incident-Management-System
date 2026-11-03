@@ -53,6 +53,7 @@ public class IncidentController {
 		return incidentService.getIncident(id);
 	}
 
+	/** Adds a separate timeline entry without changing the incident version or status. */
 	@PostMapping("/{id}/comments")
 	@ResponseStatus(HttpStatus.CREATED)
 	@Operation(summary = "Add a comment to an incident timeline")
@@ -63,6 +64,7 @@ public class IncidentController {
 		return incidentService.addComment(id, request.comment(), Long.parseLong(jwt.getSubject()));
 	}
 
+	/** Appends a correction linked to an entry on this incident's timeline. */
 	@PostMapping("/{id}/timeline/{entryId}/corrections")
 	@ResponseStatus(HttpStatus.CREATED)
 	@Operation(summary = "Add a correction to an incident timeline entry")

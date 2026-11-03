@@ -296,7 +296,7 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-09.1a | Concurrency | Two people comment at the same moment | Both saved; the incident version is unchanged | `CommentConcurrencyTest.twoConcurrentCommentsArePersistedWithoutChangingIncidentVersion`; `IncidentControllerTest.commentsDoNotChangeIncidentVersion`, `commentAndCorrectionOver5000CharactersAreRejected` (Testcontainers) | Automated |
+| TC-FR-09.1a | Concurrency | Two people comment at the same moment; comment and correction text at and over 5,000 characters | Both comments saved; the incident version is unchanged; 5,000 accepted and 5,001 rejected | `CommentConcurrencyTest.twoConcurrentCommentsArePersistedWithoutChangingIncidentVersion`; `IncidentControllerTest.commentsDoNotChangeIncidentVersion`, `commentAndCorrectionEnforce5000CharacterLimit` (Testcontainers) | Automated |
 | TC-FR-08.3c | Equivalence | Correct an entry | A new linked entry; the original is unchanged | `IncidentControllerTest.correctionAddsLinkedEntryAndLeavesOriginalUnchanged` (Testcontainers) | Automated |
 | TC-FR-09.2a | Equivalence | Comment on a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest.commentsAreAllowedOnClosedIncidents` (Testcontainers) | Automated |
 | TC-FR-09.2b | Negative | A Viewer or a caller with no token comments | 403 or 401 | `SecurityMatrixTest.endpointSecurityMatrix`; `IncidentControllerTest.commentsDoNotChangeIncidentVersion` (Testcontainers) | Automated |

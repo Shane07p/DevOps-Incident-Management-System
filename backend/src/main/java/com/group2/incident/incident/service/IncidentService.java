@@ -175,6 +175,7 @@ public class IncidentService {
 				.toList();
 	}
 
+	/** Maps an incident and its append-only timeline, including correction links, to API data. */
 	private static IncidentResponse toResponse(Incident incident, List<TimelineEntry> timeline) {
 		IncidentServiceDto serviceDto = new IncidentServiceDto(
 				incident.getService().getId(),
@@ -217,6 +218,7 @@ public class IncidentService {
 		);
 	}
 
+	/** Persists a comment as an independent timeline insert, including for closed incidents. */
 	@Transactional
 	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
 		Incident incident = requireIncident(incidentId);
@@ -231,6 +233,7 @@ public class IncidentService {
 		return toTimelineEntryResponse(entry);
 	}
 
+	/** Appends an attributed correction while preserving the original timeline entry. */
 	@Transactional
 	public TimelineEntryResponse correctTimelineEntry(
 			Long incidentId, Long entryId, String details, Long actorId) {

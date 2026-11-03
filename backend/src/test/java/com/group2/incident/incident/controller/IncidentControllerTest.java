@@ -303,6 +303,7 @@ class IncidentControllerTest {
 				.andExpect(jsonPath("$.status").value(404));
 	}
 
+	/** Confirms comments persist on the timeline without changing the incident version. */
 	@Test
 	@DisplayName("TC-FR-09.1a: Comments are separate timeline inserts and do not change the incident version")
 	void commentsDoNotChangeIncidentVersion() throws Exception {
@@ -333,6 +334,7 @@ class IncidentControllerTest {
 				.andExpect(jsonPath("$.timeline[1].details").value("Second note"));
 	}
 
+	/** Confirms a follow-up comment leaves a closed incident closed. */
 	@Test
 	@DisplayName("TC-FR-09.2a: A comment on a CLOSED incident does not reopen it")
 	void commentsAreAllowedOnClosedIncidents() throws Exception {
@@ -352,6 +354,7 @@ class IncidentControllerTest {
 		assertThat(unchanged.getVersion()).isEqualTo(version);
 	}
 
+	/** Confirms corrections append a linked entry and preserve the original details. */
 	@Test
 	@DisplayName("TC-FR-08.3c: A correction is linked to its original timeline entry")
 	void correctionAddsLinkedEntryAndLeavesOriginalUnchanged() throws Exception {
@@ -377,6 +380,7 @@ class IncidentControllerTest {
 				.andExpect(jsonPath("$.timeline[1].correctsEntryId").value(original.getId()));
 	}
 
+	/** Rejects corrections that try to reference another incident's timeline. */
 	@Test
 	void correctionCannotTargetAnEntryFromAnotherIncident() throws Exception {
 		Incident incident = createIncident(IncidentStatus.OPEN);
@@ -392,13 +396,29 @@ class IncidentControllerTest {
 				.andExpect(status().isNotFound());
 	}
 
+	/** Accepts exactly 5,000 characters and rejects longer comments and corrections. */
 	@Test
-	void commentAndCorrectionOver5000CharactersAreRejected() throws Exception {
+	void commentAndCorrectionEnforce5000CharacterLimit() throws Exception {
 		Incident incident = createIncident(IncidentStatus.OPEN);
 		TimelineEntry original = timelineEntries.saveAndFlush(new TimelineEntry(
 				incident, engineer, TimelineEventType.COMMENT, "Original note", clock.instant()));
 		String token = tokenFor("engineer");
+		String maxLengthText = "x".repeat(5000);
 		String oversizedText = "x".repeat(5001);
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"comment\":\"" + maxLengthText + "\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.details").value(maxLengthText));
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + original.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"" + maxLengthText + "\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.details").value(maxLengthText));
 
 		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)

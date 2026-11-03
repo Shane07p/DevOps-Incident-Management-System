@@ -4,6 +4,7 @@ package com.group2.incident.auth.security;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.Base64;
+
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -18,7 +19,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
@@ -41,7 +41,8 @@ class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http.securityMatcher("/webhooks/**")
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf ->
+                        csrf.ignoringRequestMatchers("/webhooks/**"))
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS))
@@ -57,7 +58,8 @@ class SecurityConfig {
             HttpSecurity http,
             JwtUserConverter jwtUserConverter) throws Exception {
 
-        http.csrf(AbstractHttpConfigurer::disable)
+        http.csrf(csrf ->
+                        csrf.ignoringRequestMatchers("/api/**"))
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS))

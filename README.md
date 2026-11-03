@@ -20,7 +20,7 @@ Sprint 1 is complete; Sprints 2 and 3 are in progress. Each work item's issue an
 | --- | --- |
 | Foundations: Spring Boot 4.1, Flyway (migrations V1–V9), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
 | Login, roles, and user administration | Done |
-| Orgs: sign up, create an org, members by email (D48) | In review (#197, #198) |
+| Orgs: sign up, create an org, members by email (D48) | In review (#198) |
 | Service catalog with SLA targets; incidents (create, list, detail) | Done |
 | On-call schedules, with assignment at creation | Done |
 | Tool tokens, the alert webhook, deduplication and grouping, and the alert inbox | Done |

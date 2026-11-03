@@ -1,6 +1,7 @@
 package com.group2.incident.incident.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
@@ -19,7 +20,7 @@ class IncidentTest {
 	@DisplayName("TC-FR-16.1a: responseDueAt and resolutionDueAt are creation time plus each target")
 	void dueTimesAreCreationTimePlusTarget() {
 		Instant now = Instant.parse("2026-10-19T10:00:00Z");
-		AppUser user = new AppUser("engineer", "Dev Engineer", "hash", Role.ENGINEER, now);
+		AppUser user = new AppUser("engineer@test.local", "Dev Engineer", "hash", now);
 		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, now);
 		service.putTarget(Severity.SEV2, 60, 480);
 
@@ -43,7 +44,7 @@ class IncidentTest {
 	@DisplayName("TC-FR-16.3a: incident keeps the copied targets when service targets change later")
 	void incidentKeepsCopiedTargetsEvenIfServiceChanges() {
 		Instant createdTime = Instant.parse("2026-10-19T10:00:00Z");
-		AppUser user = new AppUser("engineer", "Dev Engineer", "hash", Role.ENGINEER, createdTime);
+		AppUser user = new AppUser("engineer@test.local", "Dev Engineer", "hash", createdTime);
 		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, createdTime);
 		service.putTarget(Severity.SEV1, 15, 240);
 
@@ -67,4 +68,21 @@ class IncidentTest {
 		assertThat(incident.getResolutionTargetMinutes()).isEqualTo(240);
 		assertThat(service.getTargets().get(Severity.SEV1).getResponseMinutes()).isEqualTo(30);
 	}
+	@Test
+	@DisplayName("An incident takes its number once (D48)")
+	void anIncidentTakesItsNumberOnce() {
+		Instant now = Instant.parse("2026-10-19T10:00:00Z");
+		AppUser user = new AppUser("engineer@test.local", "Dev Engineer", "hash", now);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, now);
+		Incident incident = new Incident("Checkout failing", "Timeouts", service, Severity.SEV2, IncidentStatus.OPEN, user, now, 60, 480);
+
+		incident.assignNumber(7L);
+
+		assertThat(incident.getReference()).isEqualTo("INC-7");
+		assertThatThrownBy(() -> incident.assignNumber(8L))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("Incident 7 already has a number");
+		assertThat(incident.getReference()).isEqualTo("INC-7");
+	}
+
 }

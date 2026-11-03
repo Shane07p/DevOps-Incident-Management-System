@@ -11,6 +11,7 @@ import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.catalog.service.ServiceCatalogService;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.dto.IncidentServiceDto;
@@ -24,6 +25,7 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.org.repository.OrganizationRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -44,6 +46,7 @@ public class IncidentService {
 	private final AuditService auditService;
 	private final EscalationService escalationService;
 	private final NotificationService notificationService;
+	private final OrganizationRepository orgs;
 	private final Clock clock;
 
 	@Transactional
@@ -96,6 +99,10 @@ public class IncidentService {
 				correlationSource,
 				correlationKey
 		);
+		// Each org numbers its incidents from 1; the row lock serialises concurrent creations (D48).
+		incident.assignNumber(orgs.findLockedById(OrgContext.current())
+				.orElseThrow(() -> new IllegalStateException("No org for this request"))
+				.takeIncidentNumber());
 		// Whoever is on call now, or the service's fallback contact outside every shift (FR-15).
 		AppUser assignee = onCallService.resolveAssignee(service, now);
 		if (assignee != null) {

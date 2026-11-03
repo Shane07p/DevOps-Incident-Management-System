@@ -9,9 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
-	// lower() on both sides, so the case-insensitive unique index from V1 applies.
-	@Query("select u from AppUser u where lower(u.username) = lower(:username)")
-	Optional<AppUser> findByUsername(String username);
+	// lower() on both sides, so the case-insensitive unique index from V10 applies.
+	@Query("select u from AppUser u where lower(u.email) = lower(:email)")
+	Optional<AppUser> findByEmail(@Param("email") String email);
 
 	// One UPDATE of the token version alone: saving a loaded user would write back its other
 	// columns too, and could undo a role change committed in the meantime.

@@ -21,6 +21,7 @@ import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
@@ -38,6 +39,9 @@ import org.springframework.test.web.servlet.ResultActions;
 class IncidentControllerTest {
 
 	private static final String PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -67,10 +71,8 @@ class IncidentControllerTest {
 	@BeforeEach
 	void setUp() {
 		Instant now = clock.instant();
-		engineer = users.saveAndFlush(new AppUser("engineer", "Dev Engineer", passwordEncoder.encode(PASSWORD),
-				Role.ENGINEER, now));
-		viewer = users.saveAndFlush(new AppUser("viewer", "Dev Viewer", passwordEncoder.encode(PASSWORD),
-				Role.VIEWER, now));
+		engineer = accounts.save(new AppUser("engineer@test.local", "Dev Engineer", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
+		viewer = accounts.save(new AppUser("viewer@test.local", "Dev Viewer", passwordEncoder.encode(PASSWORD), now), Role.VIEWER);
 
 		ServiceEntity payments = new ServiceEntity("Payments", "Card payments", engineer, Criticality.CRITICAL, now);
 		payments.putTarget(Severity.SEV1, 15, 240);
@@ -193,8 +195,9 @@ class IncidentControllerTest {
 		String ref2 = JsonPath.read(res2, "$.reference");
 
 		assertThat(id1).isNotEqualTo(id2);
-		assertThat(ref1).isEqualTo("INC-" + id1);
-		assertThat(ref2).isEqualTo("INC-" + id2);
+		// The org numbers its incidents in order (D48), so the second takes the next number.
+		assertThat(ref1).matches("INC-\\d+");
+		assertThat(ref2).isEqualTo("INC-" + (Long.parseLong(ref1.substring(4)) + 1));
 	}
 
 	@Test
@@ -203,18 +206,22 @@ class IncidentControllerTest {
 		String token = tokenFor("engineer");
 
 		Instant now = clock.instant();
-		Incident first = incidents.saveAndFlush(new Incident("First Incident", "Desc 1", paymentsService,
-				Severity.SEV3, IncidentStatus.OPEN, engineer, now.minusSeconds(100), 240, 2880));
-		Incident second = incidents.saveAndFlush(new Incident("Second Incident", "Desc 2", paymentsService,
-				Severity.SEV2, IncidentStatus.OPEN, engineer, now, 60, 480));
+		Incident firstUnsaved = new Incident("First Incident", "Desc 1", paymentsService,
+				Severity.SEV3, IncidentStatus.OPEN, engineer, now.minusSeconds(100), 240, 2880);
+		firstUnsaved.assignNumber(901L);
+		Incident first = incidents.saveAndFlush(firstUnsaved);
+		Incident secondUnsaved = new Incident("Second Incident", "Desc 2", paymentsService,
+				Severity.SEV2, IncidentStatus.OPEN, engineer, now, 60, 480);
+		secondUnsaved.assignNumber(902L);
+		Incident second = incidents.saveAndFlush(secondUnsaved);
 
 		mvc.perform(get("/api/incidents").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].id").value(second.getId()))
-				.andExpect(jsonPath("$[0].reference").value("INC-" + second.getId()))
+				.andExpect(jsonPath("$[0].reference").value("INC-902"))
 				.andExpect(jsonPath("$[0].serviceName").value("Payments"))
 				.andExpect(jsonPath("$[1].id").value(first.getId()))
-				.andExpect(jsonPath("$[1].reference").value("INC-" + first.getId()));
+				.andExpect(jsonPath("$[1].reference").value("INC-901"));
 	}
 
 	@Test
@@ -273,7 +280,7 @@ class IncidentControllerTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.id").value(id))
-				.andExpect(jsonPath("$.reference").value("INC-" + id))
+				.andExpect(jsonPath("$.reference").value(JsonPath.<String>read(res, "$.reference")))
 				.andExpect(jsonPath("$.title").value("Payment gateway down"))
 				.andExpect(jsonPath("$.timeline[0].eventType").value("INCIDENT_CREATED"));
 	}
@@ -309,7 +316,7 @@ class IncidentControllerTest {
 	}
 
 	private ResultActions login(String username, String password) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 

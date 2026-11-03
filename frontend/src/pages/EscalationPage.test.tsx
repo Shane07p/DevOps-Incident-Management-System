@@ -27,7 +27,7 @@ const policy = {
   ],
   updatedAt: '2026-10-29T10:00:00Z',
 }
-const schedule = { serviceId: 1, fallbackContactId: 1, fallbackContactUsername: 'admin', shifts: [] }
+const schedule = { serviceId: 1, fallbackContactId: 1, fallbackContactName: 'admin', shifts: [] }
 const saved = { ...policy, updatedAt: '2026-10-30T10:00:00Z' }
 
 type Routes = Parameters<typeof mockFetch>[0]

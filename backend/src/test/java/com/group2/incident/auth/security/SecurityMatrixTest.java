@@ -24,6 +24,7 @@ import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.HashSet;
@@ -51,6 +52,9 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 public class SecurityMatrixTest {
 
 	private static final String DEFAULT_PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -125,8 +129,16 @@ public class SecurityMatrixTest {
 						"POST /api/auth/login",
 						HttpMethod.POST,
 						"/api/auth/login",
-						"{\"username\":\"admin\",\"password\":\"" + DEFAULT_PASSWORD + "\"}",
+						"{\"email\":\"admin@test.local\",\"password\":\"" + DEFAULT_PASSWORD + "\"}",
 						200, 200, 200, 200
+				),
+				// The matrix sends no body, so every caller gets 400: the endpoint is reachable without login.
+				new MatrixRow(
+						"POST /api/auth/signup",
+						HttpMethod.POST,
+						"/api/auth/signup",
+						null,
+						400, 400, 400, 400
 				),
 				new MatrixRow(
 						"GET /api/auth/me",
@@ -153,7 +165,7 @@ public class SecurityMatrixTest {
 						"POST /api/users",
 						HttpMethod.POST,
 						"/api/users",
-						"{\"username\":\"sec_${RANDOM}\",\"displayName\":\"Sec User\",\"password\":\"ValidPass123!\",\"role\":\"ENGINEER\"}",
+						"{\"email\":\"sec_${RANDOM}@test.local\",\"displayName\":\"Sec User\",\"password\":\"ValidPass123!\",\"role\":\"ENGINEER\"}",
 						201, 403, 403, 401
 				),
 				new MatrixRow(
@@ -313,8 +325,11 @@ public class SecurityMatrixTest {
 		policy.replaceSteps(List.of(new EscalationStep(1, admin, 15)), clock.instant());
 		escalationPolicies.saveAndFlush(policy);
 
-		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
-				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));
+		Incident unsaved = new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
+				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480);
+		// Far above the numbers the incident API hands out in the test org.
+		unsaved.assignNumber(990_001L);
+		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
 
 		adminNotificationId = notifications.saveAndFlush(
@@ -392,12 +407,11 @@ public class SecurityMatrixTest {
 	}
 
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), role,
-				clock.instant()));
+		return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), clock.instant()), role);
 	}
 
 	private String tokenFor(String username) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, DEFAULT_PASSWORD);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", DEFAULT_PASSWORD);
 		String response = mvc.perform(
 						request(HttpMethod.POST, "/api/auth/login")
 								.contentType(MediaType.APPLICATION_JSON)

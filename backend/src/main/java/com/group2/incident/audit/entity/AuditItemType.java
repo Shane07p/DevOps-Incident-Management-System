@@ -4,5 +4,6 @@ public enum AuditItemType {
     USER,
     SERVICE,
     INCIDENT,
-    TOOL
+    TOOL,
+    ORG
 }

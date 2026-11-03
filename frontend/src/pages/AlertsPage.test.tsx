@@ -14,9 +14,9 @@ const viewer = { id: 3, username: 'viewer', displayName: 'Dev Viewer', role: 'VI
 
 // Out of order on purpose: the page must still show the newest first.
 const alerts = [
-  { id: 6, source: 'demo-shop', serviceName: 'Checkout', incidentId: 6, status: 'ATTACHED', correlationKey: 'checkout-latency', createdAt: '2026-10-28T04:00:00Z' },
-  { id: 9, source: 'grafana', serviceName: 'Payments', incidentId: 7, status: 'ATTACHED', correlationKey: 'payments-5xx', createdAt: '2026-10-28T06:00:00Z' },
-  { id: 8, source: 'uptime-robot', serviceName: 'Checkout', incidentId: 8, status: 'NEW', correlationKey: null, createdAt: '2026-10-28T05:30:00Z' },
+  { id: 6, source: 'demo-shop', serviceName: 'Checkout', incidentId: 6, incidentReference: 'INC-1', status: 'ATTACHED', correlationKey: 'checkout-latency', createdAt: '2026-10-28T04:00:00Z' },
+  { id: 9, source: 'grafana', serviceName: 'Payments', incidentId: 7, incidentReference: 'INC-2', status: 'ATTACHED', correlationKey: 'payments-5xx', createdAt: '2026-10-28T06:00:00Z' },
+  { id: 8, source: 'uptime-robot', serviceName: 'Checkout', incidentId: 8, incidentReference: 'INC-3', status: 'NEW', correlationKey: null, createdAt: '2026-10-28T05:30:00Z' },
 ]
 
 function renderInbox(path = '/alerts', body: unknown = alerts) {
@@ -55,7 +55,8 @@ describe('AlertsPage', () => {
     expect(newest).toHaveTextContent('28 Oct, 11:30 IST')
     expect(newest).toHaveTextContent('Payments')
     expect(newest).toHaveTextContent('payments-5xx')
-    expect(within(newest).getByRole('link', { name: 'INC-7' })).toHaveAttribute('href', '/incidents/7')
+    // The org's own number, not the incident's id (D48).
+    expect(within(newest).getByRole('link', { name: 'INC-2' })).toHaveAttribute('href', '/incidents/7')
   })
 
   it('shows only new alerts under New, and remembers the filter in the URL', async () => {

@@ -2,17 +2,21 @@ package com.group2.incident.auth.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Locale;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * A person. Global, not filtered by org (D48): the role and the enabled flag live on their
+ * {@link com.group2.incident.org.entity.Membership}. A user id from a request must be checked against
+ * the current org with {@link com.group2.incident.org.service.OrgMembers}.
+ */
 @Entity
 @Table(name = "app_user")
 @Getter
@@ -23,21 +27,15 @@ public class AppUser {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	// The sign-in name, stored lower-case; unique regardless of case.
 	@Column(nullable = false)
-	private String username;
+	private String email;
 
 	@Column(nullable = false)
 	private String displayName;
 
-	@Column(nullable = false)
+	// Null for accounts that only sign in with Google (part 2 of D48).
 	private String passwordHash;
-
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
-	private Role role;
-
-	@Column(nullable = false)
-	private boolean enabled = true;
 
 	// Carried in every token as "tv"; a token with an older value is refused (D21).
 	@Column(nullable = false)
@@ -46,23 +44,16 @@ public class AppUser {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
-	public AppUser(String username, String displayName, String passwordHash, Role role, Instant createdAt) {
-		this.username = username;
+	public AppUser(String email, String displayName, String passwordHash, Instant createdAt) {
+		this.email = email.trim().toLowerCase(Locale.ROOT);
 		this.displayName = displayName;
 		this.passwordHash = passwordHash;
-		this.role = role;
 		this.createdAt = createdAt;
 	}
 
-	/** Every token issued so far stops working. Used by logout and, later, role changes. */
+	/** Every token issued so far stops working. Used by logout and role changes. */
 	public void revokeTokens() {
 		tokenVersion++;
-	}
-
-	/** Updates the user's role and immediately invalidates all active tokens. */
-	public void changeRole(Role newRole) {
-		this.role = newRole;
-		revokeTokens();
 	}
 
 }

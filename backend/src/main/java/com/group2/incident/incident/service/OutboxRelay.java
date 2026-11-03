@@ -1,6 +1,7 @@
 package com.group2.incident.incident.service;
 
 import com.group2.incident.common.config.MessagingConfig;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.entity.Outbox;
 import com.group2.incident.incident.entity.OutboxStatus;
 import com.group2.incident.incident.repository.OutboxRepository;
@@ -30,6 +31,9 @@ import org.springframework.stereotype.Component;
 @ConditionalOnExpression("!'${spring.rabbitmq.addresses:}'.isBlank()")
 public class OutboxRelay {
 
+	/** Message header with the id of the org the event belongs to (D48). */
+	public static final String ORG_HEADER = "orgId";
+
 	private static final long CONFIRM_TIMEOUT_MS = 5_000;
 
 	private final OutboxRepository outboxRepository;
@@ -46,6 +50,11 @@ public class OutboxRelay {
 
 	/** One pass: sends what is PENDING until the broker refuses one, which waits for the next pass. */
 	public int relayOnce() {
+		// The outbox of every org (D48); each message says which org it belongs to.
+		return OrgContext.runAsRoot(this::relayPendingEvents);
+	}
+
+	private int relayPendingEvents() {
 		int sent = 0;
 		for (Outbox event : outboxRepository.findTop50ByStatusOrderByCreatedAtAscIdAsc(OutboxStatus.PENDING)) {
 			try {
@@ -76,6 +85,7 @@ public class OutboxRelay {
 				.setContentEncoding(StandardCharsets.UTF_8.name())
 				.setMessageId("outbox-" + event.getId())
 				.setType(event.getEventType())
+				.setHeader(ORG_HEADER, event.getOrgId())
 				.setTimestamp(Date.from(event.getCreatedAt()))
 				.build();
 	}

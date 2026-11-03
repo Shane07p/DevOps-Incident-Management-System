@@ -26,14 +26,14 @@ describe('apiFetch', () => {
     mockFetch({
       'POST /api/users': {
         status: 400,
-        body: { status: 400, message: 'Validation failed', errors: { username: 'Username is taken' } },
+        body: { status: 400, message: 'Validation failed', errors: { email: 'Email is taken' } },
       },
     })
 
     const error = await apiFetch('/users', z.unknown(), { method: 'POST', body: {} }).catch((e: unknown) => e)
 
     expect(error).toBeInstanceOf(ApiRequestError)
-    expect(error).toMatchObject({ status: 400, message: 'Validation failed', errors: { username: 'Username is taken' } })
+    expect(error).toMatchObject({ status: 400, message: 'Validation failed', errors: { email: 'Email is taken' } })
   })
 
   it('rejects a response that does not match the schema', async () => {
@@ -48,7 +48,8 @@ describe('apiFetch', () => {
         body: {
           token: 't',
           expiresAt: '2026-10-14T07:06:57.990535700Z',
-          user: { id: 2, username: 'engineer', displayName: 'Dev Engineer', role: 'ENGINEER' },
+          user: { id: 2, email: 'engineer@settle.local', displayName: 'Dev Engineer', role: 'ENGINEER' },
+          org: { id: 1, name: 'Dev org', slug: 'dev-org' },
         },
       },
     })
@@ -78,7 +79,7 @@ describe('apiFetch', () => {
   it('does not call the unauthorized handler for a wrong password', async () => {
     const handler = vi.fn()
     setUnauthorizedHandler(handler)
-    mockFetch({ 'POST /api/auth/login': { status: 401, body: { status: 401, message: 'Invalid username or password' } } })
+    mockFetch({ 'POST /api/auth/login': { status: 401, body: { status: 401, message: 'Invalid email or password' } } })
 
     await apiFetch('/auth/login', z.unknown(), { method: 'POST', body: {} }).catch(() => undefined)
 

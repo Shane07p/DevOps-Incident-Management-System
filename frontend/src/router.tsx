@@ -9,6 +9,7 @@ import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { SignupPage } from '@/pages/SignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -46,6 +47,7 @@ export const routes: RouteObject[] = [
   // Public pages load on demand, so logged-in users never download the landing animations.
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
   { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
   {
     element: <RequireAuth />,

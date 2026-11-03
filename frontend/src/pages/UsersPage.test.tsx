@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/auth/AuthProvider'
@@ -18,12 +18,12 @@ function renderUsers() {
 }
 
 async function openCreateDialog() {
-  await userEvent.click(await screen.findByRole('button', { name: 'Add user' }))
-  return screen.findByRole('dialog', { name: 'Add a user' })
+  await userEvent.click(await screen.findByRole('button', { name: 'Add member' }))
+  return screen.findByRole('dialog', { name: 'Add a member' })
 }
 
 async function fillCreateForm(dialog: HTMLElement, password: string) {
-  await userEvent.type(within(dialog).getByLabelText('Username'), 'asha')
+  await userEvent.type(within(dialog).getByLabelText('Email'), 'asha@acme.test')
   await userEvent.type(within(dialog).getByLabelText('Display name'), 'Asha')
   await userEvent.type(within(dialog).getByLabelText('Password'), password)
 }
@@ -36,12 +36,13 @@ afterEach(() => {
 })
 
 describe('UsersPage', () => {
-  it('lists every user with their username and role', async () => {
+  it('lists every member with their email and role', async () => {
     mockFetch({ 'GET /api/users': { body: users } })
     renderUsers()
 
     expect(await screen.findByText('Dev Admin')).toBeInTheDocument()
-    expect(screen.getByText('engineer')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Members' })).toBeInTheDocument()
+    expect(screen.getByText('engineer@settle.local')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Role of Dev Engineer' })).toHaveTextContent('Engineer')
   })
 
@@ -52,26 +53,43 @@ describe('UsersPage', () => {
     const dialog = await openCreateDialog()
 
     await fillCreateForm(dialog, 'seven77')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add user' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add member' }))
 
     expect(await within(dialog).findByText('Use at least 8 characters')).toBeInTheDocument()
     expect(postsTo(fetchMock, 'POST')).toHaveLength(0)
   })
 
-  // TC-US-01j: the server's 409 for a taken username lands on the username field.
-  it('shows a duplicate username under the username field', async () => {
-    mockFetch({
+  it('adds a member by email', async () => {
+    const fetchMock = mockFetch({
       'GET /api/users': { body: users },
-      'POST /api/users': { status: 409, body: { status: 409, message: 'That username is already taken' } },
+      'POST /api/users': { status: 201, body: { id: 4, email: 'asha@acme.test', displayName: 'Asha', role: 'ENGINEER' } },
     })
     renderUsers()
     const dialog = await openCreateDialog()
 
     await fillCreateForm(dialog, 'eight888')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add user' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add member' }))
 
-    expect(await within(dialog).findByText('That username is already taken')).toBeInTheDocument()
-    expect(within(dialog).getByLabelText('Username')).toHaveAccessibleDescription('That username is already taken')
+    await waitFor(() => expect(postsTo(fetchMock, 'POST')).toHaveLength(1))
+    const [[url, init]] = postsTo(fetchMock, 'POST')
+    expect(url).toBe('/api/users')
+    expect(JSON.parse(String(init?.body))).toEqual({ email: 'asha@acme.test', displayName: 'Asha', password: 'eight888', role: 'ENGINEER' })
+  })
+
+  // TC-US-01j: the server's 409 for a taken email lands on the email field.
+  it('shows a taken email under the email field', async () => {
+    mockFetch({
+      'GET /api/users': { body: users },
+      'POST /api/users': { status: 409, body: { status: 409, message: 'An account with this email already exists' } },
+    })
+    renderUsers()
+    const dialog = await openCreateDialog()
+
+    await fillCreateForm(dialog, 'eight888')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add member' }))
+
+    expect(await within(dialog).findByText('An account with this email already exists')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Email')).toHaveAccessibleDescription('An account with this email already exists')
   })
 
   // TC-US-01k: a role change waits for confirmation; cancelling sends nothing.

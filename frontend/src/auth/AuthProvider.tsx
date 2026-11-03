@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fetchMe, login as loginRequest, logout as logoutRequest } from '@/api/auth'
+import { fetchMe, login as loginRequest, logout as logoutRequest, signup as signupRequest, type SignupValues } from '@/api/auth'
 import { setUnauthorizedHandler } from '@/api/client'
-import type { User } from '@/api/schemas'
+import type { LoginResponse, Org, User } from '@/api/schemas'
 import { clearToken, readToken, writeToken } from '@/api/token'
 
 type Status = 'loading' | 'authenticated' | 'anonymous'
@@ -9,7 +9,9 @@ type Status = 'loading' | 'authenticated' | 'anonymous'
 interface AuthState {
   status: Status
   user: User | null
-  login: (username: string, password: string) => Promise<User>
+  org: Org | null
+  login: (email: string, password: string) => Promise<User>
+  signup: (values: SignupValues) => Promise<User>
   logout: () => Promise<void>
 }
 
@@ -17,11 +19,13 @@ const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [org, setOrg] = useState<Org | null>(null)
   const [status, setStatus] = useState<Status>(() => (readToken() ? 'loading' : 'anonymous'))
 
   const signOutLocally = useCallback(() => {
     clearToken()
     setUser(null)
+    setOrg(null)
     setStatus('anonymous')
   }, [])
 
@@ -30,7 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!readToken()) return
     fetchMe()
       .then((me) => {
-        setUser(me)
+        setUser(me.user)
+        setOrg(me.org)
         setStatus('authenticated')
       })
       .catch(signOutLocally)
@@ -41,13 +46,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null)
   }, [signOutLocally])
 
-  const login = useCallback(async (username: string, password: string) => {
-    const response = await loginRequest(username, password)
+  const signIn = useCallback((response: LoginResponse) => {
     writeToken(response.token)
     setUser(response.user)
+    setOrg(response.org)
     setStatus('authenticated')
     return response.user
   }, [])
+
+  const login = useCallback(async (email: string, password: string) => signIn(await loginRequest(email, password)), [signIn])
+
+  const signup = useCallback(async (values: SignupValues) => signIn(await signupRequest(values)), [signIn])
 
   const logout = useCallback(async () => {
     // The server bumps the token version so the token stops working everywhere; sign out
@@ -56,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOutLocally()
   }, [signOutLocally])
 
-  const value = useMemo(() => ({ status, user, login, logout }), [status, user, login, logout])
+  const value = useMemo(() => ({ status, user, org, login, signup, logout }), [status, user, org, login, signup, logout])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

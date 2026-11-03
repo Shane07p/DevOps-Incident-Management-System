@@ -73,7 +73,7 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 | TC-US-01g | State transition | Change a user's role, then reuse their old token | 401; their new login carries the new role | `UserAdminControllerTest.roleChangeIncrementsTokenVersionAndInvalidatesOldToken` | Automated |
 | TC-US-01h | Negative | Creating a user and changing a role | Each writes one audit entry; the password never appears in it or in logs | `UserAdminControllerTest.createUserAndRoleChangeWriteAuditEntries` | Automated |
 | TC-US-01i | Boundary value | The Users page form with a 7-character password | "Use at least 8 characters"; nothing sent | `UsersPage.test.tsx` | Automated |
-| TC-US-01j | Equivalence (invalid) | The server answers 409 to a new username | The message shows under the username field | `UsersPage.test.tsx` | Automated |
+| TC-US-01j | Equivalence (invalid) | The server answers 409 to a new member's email | The message shows under the email field | `UsersPage.test.tsx` | Automated |
 | TC-US-01k | State transition | Pick a new role, cancel, then pick it again and confirm | Nothing is sent until confirmed; then one `PUT` with the new role | `UsersPage.test.tsx` | Automated |
 | TC-US-01l | Boundary value | Password of 40 × `é`: 40 characters but 80 bytes | 400 naming `password`, not a 500 from BCrypt | `UserAdminControllerTest.passwordOverSeventyTwoBytesReturns400` | Automated |
 
@@ -356,7 +356,7 @@ requests (#179, #180).
 | TC-FR-01.6d | Concurrency | Two Admins demote each other at the same moment | The second waits for the first, then gets 409; one Admin remains | `LastAdminRaceTest` | Automated |
 | TC-FR-01.4h | Concurrency | A slug or an email taken between the check and the insert | A taken slug is looked for again (up to 3 times); a taken email is 409 | `SignupServiceTest` | Automated |
 | TC-FR-01.5h | Equivalence | Alert inbox in an org whose incident ids differ from its numbers | Each alert shows its incident's reference (INC-1), not its id | `AlertGroupingTest`, `AlertsPage.test.tsx` | Automated |
-| TC-FR-01.4g | Equivalence | Sign-up page and sign in by email | The org is created and the app opens; the header shows the org | `SignupPage.test.tsx` | Planned (Shlok, #198) |
+| TC-FR-01.4g | Equivalence | Sign-up page and sign in by email | The org is created and the app opens; the header shows the org; a taken email shows on its field; sign-in posts `email` | `SignupPage.test.tsx`, `LoginPage.test.tsx`, `TopBar.test.tsx` | Automated |
 
 ### Personal access tokens (FR-23, D38): decision table and boundary values
 

@@ -24,7 +24,9 @@ export function CallToAction() {
             >
               Log in
             </Link>
-            <span className="text-muted-foreground">No sign-up. Your admin creates your account.</span>
+            <span className="text-muted-foreground">
+              New team? <Link to="/signup">Create an org</Link>
+            </span>
           </div>
         </div>
         <div aria-hidden="true" className="relative size-60">

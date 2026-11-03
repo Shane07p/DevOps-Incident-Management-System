@@ -8,9 +8,9 @@ import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
-import { mockFetch } from '@/test/fetchMock'
+import { devOrg, mockFetch } from '@/test/fetchMock'
 
-const viewer = { id: 3, username: 'viewer', displayName: 'Dev Viewer', role: 'VIEWER' }
+const viewer = { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' }
 
 // Out of order on purpose: the page must still show the newest first.
 // INC-2 and INC-3 are assigned to the viewer (id 3); INC-1 to someone else.
@@ -22,7 +22,7 @@ const alerts = [
 
 function renderInbox(path = '/alerts', body: unknown = alerts) {
   writeToken('test-token')
-  mockFetch({ 'GET /api/auth/me': { body: viewer }, 'GET /api/alerts': { body } })
+  mockFetch({ 'GET /api/auth/me': { body: { user: viewer, org: devOrg } }, 'GET /api/alerts': { body } })
   const router = createMemoryRouter(routes, { initialEntries: [path] })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(

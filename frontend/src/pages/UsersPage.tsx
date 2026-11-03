@@ -21,7 +21,7 @@ interface RoleChange {
   role: Role
 }
 
-/** Accounts and roles. The route is Admin-only, and the server checks every request again. */
+/** The org's members and their roles. The route is Admin-only, and the server checks every request again. */
 export function UsersPage() {
   const { user: me } = useAuth()
   const queryClient = useQueryClient()
@@ -44,18 +44,18 @@ export function UsersPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <h1 className="text-[44px] leading-[0.9] font-[750]" style={{ fontStretch: '62%' }}>
-            Users
+            Members
           </h1>
           <p className="text-muted-foreground">Viewers read, Engineers respond to incidents, and Admins configure Settle.</p>
         </div>
         <Button onClick={() => setCreating(true)}>
           <UserPlus aria-hidden="true" />
-          Add user
+          Add member
         </Button>
       </div>
 
       {users.isPending ? (
-        <LoadingState message="Loading users" />
+        <LoadingState message="Loading members" />
       ) : users.isError ? (
         <ErrorState message={users.error.message} onRetry={() => users.refetch()} />
       ) : (
@@ -76,7 +76,7 @@ export function UsersPage() {
                         {user.displayName}
                         {user.id === me?.id && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>}
                       </span>
-                      <span className="font-mono text-xs text-muted-foreground">{user.username}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{user.email}</span>
                     </div>
                   </TableCell>
                   <TableCell>

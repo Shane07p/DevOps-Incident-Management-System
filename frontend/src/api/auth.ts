@@ -1,12 +1,24 @@
 import { apiFetch } from './client'
-import { loginResponseSchema, noContentSchema, userSchema } from './schemas'
+import { loginResponseSchema, meResponseSchema, noContentSchema } from './schemas'
 
-export function login(username: string, password: string) {
-  return apiFetch('/auth/login', loginResponseSchema, { method: 'POST', body: { username, password } })
+export function login(email: string, password: string) {
+  return apiFetch('/auth/login', loginResponseSchema, { method: 'POST', body: { email, password } })
+}
+
+export interface SignupValues {
+  email: string
+  password: string
+  displayName: string
+  orgName: string
+}
+
+/** Creates the account and a new org with the caller as its Admin, and signs them in. */
+export function signup(values: SignupValues) {
+  return apiFetch('/auth/signup', loginResponseSchema, { method: 'POST', body: values })
 }
 
 export function fetchMe() {
-  return apiFetch('/auth/me', userSchema)
+  return apiFetch('/auth/me', meResponseSchema)
 }
 
 export function logout() {

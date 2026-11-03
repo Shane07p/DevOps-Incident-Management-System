@@ -76,7 +76,7 @@ export const AREAS: NavArea[] = [
 ]
 
 export const ADMIN_PAGES: NavPage[] = [
-  { path: '/users', label: 'Users', description: 'Accounts and roles' },
+  { path: '/users', label: 'Members', description: 'People in your org and their roles' },
   { path: '/tools', label: 'Tools', description: 'Monitoring tools and their tokens' },
 ]
 

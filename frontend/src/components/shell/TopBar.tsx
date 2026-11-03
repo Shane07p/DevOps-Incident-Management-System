@@ -26,7 +26,7 @@ const initials = (name: string) =>
 export function TopBar({ onSearch }: { onSearch: () => void }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, org, logout } = useAuth()
   const area = findArea(pathname)
   const page = findPage(pathname)
 
@@ -37,6 +37,7 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
       </Link>
 
       <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-2 text-[13px] whitespace-nowrap text-muted-foreground sm:flex">
+        {org && <span className="font-semibold text-foreground">{org.name}</span>}
         <span className="text-input">/</span>
         <span>{area?.label ?? page?.label ?? ''}</span>
         {page && area && page.label !== area.label && (
@@ -75,13 +76,14 @@ export function TopBar({ onSearch }: { onSearch: () => void }) {
             <DropdownMenuLabel className="flex flex-col gap-0.5">
               <span className="text-[13.5px] font-semibold">{user.displayName}</span>
               <span className="text-xs font-normal text-muted-foreground">{ROLE_LABEL[user.role]}</span>
+              {org && <span className="text-xs font-normal text-muted-foreground">{org.name}</span>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {can(user.role, 'configure') && (
               <>
                 <DropdownMenuItem onSelect={() => navigate('/users')}>
                   <Users aria-hidden="true" />
-                  Users
+                  Members
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => navigate('/tools')}>
                   <Webhook aria-hidden="true" />

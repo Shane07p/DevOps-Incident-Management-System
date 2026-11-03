@@ -9,12 +9,12 @@ import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
-import { mockFetch, payments, users } from '@/test/fetchMock'
+import { devOrg, mockFetch, payments, users } from '@/test/fetchMock'
 
 const signedIn: Record<Role, unknown> = {
   ADMIN: users[0],
   ENGINEER: users[1],
-  VIEWER: { id: 3, username: 'viewer', displayName: 'Dev Viewer', role: 'VIEWER' },
+  VIEWER: { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' },
 }
 
 // The clock is 11:30 IST on Wed 28 Oct: engineer is on until 17:00 IST, then admin until 21:00 IST.
@@ -28,7 +28,7 @@ type Routes = Parameters<typeof mockFetch>[0]
 function renderSchedules(role: Role, extraRoutes: Routes = {}) {
   writeToken('test-token')
   const fetchMock = mockFetch({
-    'GET /api/auth/me': { body: signedIn[role] },
+    'GET /api/auth/me': { body: { user: signedIn[role], org: devOrg } },
     'GET /api/services': { body: [payments] },
     'GET /api/services/1/on-call': { body: schedule },
     'GET /api/users': { body: users },
@@ -101,7 +101,7 @@ describe('SchedulesPage', () => {
   it('shows an overlapping shift as an error on the form and sends nothing', async () => {
     const fetchMock = renderSchedules('ADMIN', { 'PUT /api/services/1/on-call': { body: schedule } })
 
-    const form = await fillShift('Dev Engineer (engineer)', '2026-10-28T10:00', '2026-10-28T12:00')
+    const form = await fillShift('Dev Engineer (engineer@settle.local)', '2026-10-28T10:00', '2026-10-28T12:00')
 
     expect(await within(form).findByRole('alert')).toHaveTextContent(
       "This overlaps engineer's shift, 28 Oct, 09:00 IST to 28 Oct, 17:00 IST.",
@@ -112,7 +112,7 @@ describe('SchedulesPage', () => {
   it('refuses a shift that ends before it starts', async () => {
     const fetchMock = renderSchedules('ADMIN')
 
-    const form = await fillShift('Dev Engineer (engineer)', '2026-10-29T17:00', '2026-10-29T09:00')
+    const form = await fillShift('Dev Engineer (engineer@settle.local)', '2026-10-29T17:00', '2026-10-29T09:00')
 
     expect(await within(form).findByText('End the shift after it starts')).toBeInTheDocument()
     expect(puts(fetchMock)).toHaveLength(0)
@@ -121,7 +121,7 @@ describe('SchedulesPage', () => {
   it('adds a shift by sending the whole schedule with the new shift in UTC', async () => {
     const fetchMock = renderSchedules('ADMIN', { 'PUT /api/services/1/on-call': { body: schedule } })
 
-    await fillShift('Dev Engineer (engineer)', '2026-10-29T09:00', '2026-10-29T17:00')
+    await fillShift('Dev Engineer (engineer@settle.local)', '2026-10-29T09:00', '2026-10-29T17:00')
 
     await waitFor(() => expect(puts(fetchMock)).toHaveLength(1))
     expect(puts(fetchMock)[0][0]).toBe('/api/services/1/on-call')
@@ -143,7 +143,7 @@ describe('SchedulesPage', () => {
       },
     })
 
-    const form = await fillShift('Dev Admin (admin)', '2026-10-29T09:00', '2026-10-29T17:00')
+    const form = await fillShift('Dev Admin (admin@settle.local)', '2026-10-29T09:00', '2026-10-29T17:00')
 
     expect(await within(form).findByRole('alert')).toHaveTextContent('Shifts cannot overlap for the same service')
   })
@@ -174,7 +174,7 @@ describe('SchedulesPage', () => {
     expect(screen.queryByRole('form', { name: 'Add a shift' })).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByLabelText('Contact')).toBeEnabled())
     await userEvent.click(screen.getByLabelText('Contact'))
-    await userEvent.click(await screen.findByRole('option', { name: 'Dev Engineer (engineer)' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Dev Engineer (engineer@settle.local)' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save fallback' }))
 
     await waitFor(() => expect(puts(fetchMock)).toHaveLength(1))

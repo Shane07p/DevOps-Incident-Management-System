@@ -14,9 +14,13 @@ export const alertSchema = z.object({
   incidentId: z.number(),
   // The org numbers its incidents from INC-1, so the reference is not the id.
   incidentReference: z.string(),
+  // Whoever the incident is assigned to; null until someone acknowledges it.
+  assigneeId: z.number().nullable(),
   status: alertStatusSchema,
   correlationKey: z.string().nullable(),
   createdAt: z.iso.datetime({ offset: true }),
+  // Alerts grouped into the same incident, this one included.
+  count: z.number(),
 })
 
 export type Alert = z.infer<typeof alertSchema>

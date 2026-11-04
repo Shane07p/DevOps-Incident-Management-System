@@ -9,6 +9,7 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.catalog.service.ServiceCatalogService;
+import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.tenancy.OrgContext;
@@ -17,6 +18,7 @@ import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.dto.IncidentServiceDto;
 import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.IncidentUserDto;
+import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -25,12 +27,15 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.OrganizationRepository;
+import com.group2.incident.org.service.OrgMembers;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +52,7 @@ public class IncidentService {
 	private final EscalationService escalationService;
 	private final NotificationService notificationService;
 	private final OrganizationRepository orgs;
+	private final OrgMembers orgMembers;
 	private final Clock clock;
 
 	@Transactional
@@ -251,6 +257,61 @@ public class IncidentService {
 				original
 		));
 		return toTimelineEntryResponse(correction);
+	}
+
+	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */
+	@Transactional
+	public IncidentResponse reassignIncident(Long incidentId, ReassignRequest request, Long actorId) {
+		if (request == null || request.assigneeId() == null) {
+			throw new FieldValidationException("assigneeId", "Assignee is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+
+		if (incident.getStatus() == IncidentStatus.CLOSED) {
+			throw new ConflictException("Cannot reassign a closed incident");
+		}
+
+		Membership assigneeMember = orgMembers.find(request.assigneeId())
+				.orElseThrow(() -> new FieldValidationException("assigneeId", "Assignee user not found"));
+
+		if (!assigneeMember.isEnabled()) {
+			throw new FieldValidationException("assigneeId", "Assignee must be an enabled user");
+		}
+
+		AppUser newAssignee = assigneeMember.getUser();
+		AppUser actor = requireActor(actorId);
+
+		String previousName = incident.getAssignee() != null ? incident.getAssignee().getDisplayName() : "unassigned";
+		String newName = newAssignee.getDisplayName();
+
+		incident.assignTo(newAssignee);
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		}
+		catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException("Incident was updated by another request");
+		}
+
+		Instant now = clock.instant();
+		String details = "Reassigned from " + previousName + " to " + newName;
+		TimelineEntry timelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.REASSIGNED,
+				details,
+				now
+		);
+		timelineEntryRepository.save(timelineEntry);
+
+		notificationService.createNotification(
+				newAssignee,
+				incident,
+				"You have been assigned to incident " + incident.getReference() + ": " + incident.getTitle()
+		);
+
+		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, timeline);
 	}
 
 	private Incident requireIncident(Long incidentId) {

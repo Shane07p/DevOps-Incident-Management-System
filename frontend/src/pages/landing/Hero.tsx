@@ -102,7 +102,9 @@ export function Hero() {
             Replay the incident
           </button>
         </div>
-        <span className="text-[13px] text-muted-foreground">No sign-up. Your admin creates your account.</span>
+        <span className="text-[13px] text-muted-foreground">
+          New team? <Link to="/signup">Create an org</Link>
+        </span>
       </div>
 
       <IncidentReplay replay={replay} />

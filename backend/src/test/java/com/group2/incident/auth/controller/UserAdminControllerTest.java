@@ -14,15 +14,19 @@ import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.List;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,6 +34,9 @@ import org.springframework.test.web.servlet.MockMvc;
 class UserAdminControllerTest {
 
 	private static final String DEFAULT_PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -45,6 +52,9 @@ class UserAdminControllerTest {
 
 	@Autowired
 	private Clock clock;
+
+	@Autowired
+	private JdbcTemplate jdbc;
 
 	private AppUser admin;
 
@@ -79,7 +89,7 @@ class UserAdminControllerTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.username").value("user8"))
+				.andExpect(jsonPath("$.email").value("user8@test.local"))
 				.andExpect(jsonPath("$.role").value("ENGINEER"))
 				.andExpect(jsonPath("$.passwordHash").doesNotExist());
 	}
@@ -95,7 +105,7 @@ class UserAdminControllerTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.username").value("user72"))
+				.andExpect(jsonPath("$.email").value("user72@test.local"))
 				.andExpect(jsonPath("$.role").value("VIEWER"));
 	}
 
@@ -127,8 +137,8 @@ class UserAdminControllerTest {
 	}
 
 	@Test
-	void duplicateUsernameReturns409RegardlessOfCase() throws Exception {
-		// TC-US-01e: Equivalence (invalid): Username that differs from an existing one only in case -> 409
+	void duplicateEmailReturns409RegardlessOfCase() throws Exception {
+		// TC-US-01e: Equivalence (invalid): an email that differs from an existing one only in case -> 409
 		createUser("asha", Role.ENGINEER);
 
 		String body = createUserBody("ASHA", "Asha Upper", "ValidPass123!", "ENGINEER");
@@ -139,7 +149,7 @@ class UserAdminControllerTest {
 						.content(body))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.status").value(409))
-				.andExpect(jsonPath("$.message").value("Username 'ASHA' is already taken"));
+				.andExpect(jsonPath("$.message").value("An account with this email already exists"));
 	}
 
 	@Test
@@ -174,9 +184,9 @@ class UserAdminControllerTest {
 		// Old token works initially
 		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + oldToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.role").value("VIEWER"));
+				.andExpect(jsonPath("$.user.role").value("VIEWER"));
 
-		AppUser member = users.findByUsername("member").orElseThrow();
+		AppUser member = users.findByEmail("member@test.local").orElseThrow();
 
 		// Admin changes member's role to ADMIN
 		mvc.perform(put("/api/users/" + member.getId() + "/role")
@@ -194,7 +204,7 @@ class UserAdminControllerTest {
 		String newToken = tokenFor("member", DEFAULT_PASSWORD);
 		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + newToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.role").value("ADMIN"));
+				.andExpect(jsonPath("$.user.role").value("ADMIN"));
 	}
 
 	@Test
@@ -219,7 +229,7 @@ class UserAdminControllerTest {
 		AuditEntry createAudit = createEntries.getFirst();
 		assertThat(createAudit.getActor().getId()).isEqualTo(admin.getId());
 		assertThat(createAudit.getItemType()).isEqualTo(AuditItemType.USER);
-		assertThat(createAudit.getDetails()).contains("username: audituser", "role: ENGINEER");
+		assertThat(createAudit.getDetails()).contains("email: audituser@test.local", "role: ENGINEER");
 		assertThat(createAudit.getDetails()).doesNotContain(rawPassword);
 		assertThat(createAudit.getDetails()).doesNotContain("$2a$");
 
@@ -251,7 +261,7 @@ class UserAdminControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$").isArray())
 				.andExpect(jsonPath("$[0].id").isNumber())
-				.andExpect(jsonPath("$[0].username").isNotEmpty())
+				.andExpect(jsonPath("$[0].email").isNotEmpty())
 				.andExpect(jsonPath("$[0].displayName").isNotEmpty())
 				.andExpect(jsonPath("$[0].role").isNotEmpty())
 				.andExpect(jsonPath("$[*].passwordHash").doesNotExist())
@@ -304,13 +314,48 @@ class UserAdminControllerTest {
 				.andExpect(jsonPath("$.status").value(404));
 	}
 
+	@Test
+	void listShowsOnlyThisOrgsMembers() throws Exception {
+		createUser("eng_here", Role.ENGINEER);
+		Long otherOrg = jdbc.queryForObject(
+				"INSERT INTO organization (name, slug, created_at) VALUES ('Other', 'other-members', now()) RETURNING id", Long.class);
+		OrgContext.runAs(otherOrg, () -> accounts.create("elsewhere@test.local", Role.ADMIN));
+
+		mvc.perform(get("/api/users").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[*].email").value(Matchers.hasItems("admin@test.local", "eng_here@test.local")))
+				.andExpect(jsonPath("$[*].email").value(Matchers.not(Matchers.hasItem("elsewhere@test.local"))));
+	}
+
+	@Test
+	void theLastAdminCannotBeDemoted() throws Exception {
+		mvc.perform(put("/api/users/{id}/role", admin.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"role\":\"ENGINEER\"}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("An org needs at least one Admin"));
+	}
+
+	@Test
+	void aUserOfAnotherOrgIsNotFound() throws Exception {
+		Long otherOrg = jdbc.queryForObject(
+				"INSERT INTO organization (name, slug, created_at) VALUES ('Other', 'other-target', now()) RETURNING id", Long.class);
+		AppUser outsider = OrgContext.runAs(otherOrg, () -> accounts.create("outsider@test.local", Role.VIEWER));
+
+		mvc.perform(put("/api/users/{id}/role", outsider.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"role\":\"ADMIN\"}"))
+				.andExpect(status().isNotFound());
+	}
+
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), role,
-				clock.instant()));
+		return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), clock.instant()), role);
 	}
 
 	private String tokenFor(String username, String password) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
@@ -320,7 +365,7 @@ class UserAdminControllerTest {
 	private String createUserBody(String username, String displayName, String password, String role) {
 		return """
 				{
-				  "username": "%s",
+				  "email": "%s@test.local",
 				  "displayName": "%s",
 				  "password": "%s",
 				  "role": "%s"

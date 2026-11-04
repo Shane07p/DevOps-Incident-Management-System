@@ -12,9 +12,15 @@ export const alertSchema = z.object({
   serviceName: z.string(),
   // Every accepted alert belongs to an incident: an existing one it was grouped into, or a new one.
   incidentId: z.number(),
+  // The org numbers its incidents from INC-1, so the reference is not the id.
+  incidentReference: z.string(),
+  // Whoever the incident is assigned to: set at creation from on-call, or the fallback contact; null when neither exists.
+  assigneeId: z.number().nullable(),
   status: alertStatusSchema,
   correlationKey: z.string().nullable(),
   createdAt: z.iso.datetime({ offset: true }),
+  // Alerts grouped into the same incident, this one included.
+  count: z.number(),
 })
 
 export type Alert = z.infer<typeof alertSchema>
@@ -23,6 +29,3 @@ export type Alert = z.infer<typeof alertSchema>
 export function listAlerts() {
   return apiFetch('/alerts', z.array(alertSchema))
 }
-
-/** The server builds references as INC-{id}, so the inbox can name the incident without fetching it. */
-export const incidentReference = (incidentId: number) => `INC-${incidentId}`

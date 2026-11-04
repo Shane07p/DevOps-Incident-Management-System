@@ -7,10 +7,10 @@ flowchart TD
   Browser[Settle UI: React on Vercel] -->|/api with JWT| Backend[Spring Boot backend on Render]
   Tools[Monitoring tools and Grafana alert rules] -->|/webhooks/alerts| Backend
   CI[CI pipelines] -->|/webhooks/deploys| Backend
-  Probes[Probe agents in 2-3 regions] -->|check results| Backend
+  Probes[Grafana checks from 2-3 locations] -->|alerts through Grafana alert rules| Backend
   Jobs[Scheduled jobs] -->|heartbeat pings| Backend
   Backend --> Database[(PostgreSQL on Supabase)]
-  Backend -->|outbox| Queue[RabbitMQ workers: notify, escalate, AI jobs]
+  Backend -->|outbox| Queue[RabbitMQ: email; AI jobs later]
   Backend -->|queries with a server-side token| Grafana[Grafana Cloud: Prometheus and Loki]
   Backend -. optional .-> AI[ai-service: AI features, AI SRE, MCP server]
   AI -->|REST API with the caller's token| Backend
@@ -18,16 +18,26 @@ flowchart TD
   Shop -->|deploy events| CI
 ```
 
+Settle is multi-tenant: anyone signs up and creates an org, and every org-owned row carries `org_id`,
+filtered by Hibernate (D48, [design](plans/2026-11-02-organizations-design.md)).
+
 The backend is the authority for status changes, timing, and permissions. Browser validation helps the user, but the backend checks every request again. The AI service never writes to the database: its tools call the same REST API as a person, with that person's permissions. The parts arrive sprint by sprint (see [sprint-plan.md](sprint-plan.md)); the first version was one backend instance, one database, and a scheduled escalation task.
 
-The detailed HLD (v3, 17 October) is [diagrams/hld.png](diagrams/hld.png). It shows the same system as the chart above, with the backend split into its parts, plus RabbitMQ and the AI service. Its Eraser source is [diagrams/hld.eraser](diagrams/hld.eraser), so changes to it show up in a diff. When the architecture changes, update the source, then export the image again.
+What runs where, and why it stays small (D24, D33, D46):
+- **One backend instance, one database.** Escalation polls the database for due deadlines; it does not need a queue.
+- **In-app notifications** (the bell) are saved in the same transaction as the change that causes them, so they roll back together.
+- **RabbitMQ** carries work that is slow or may fail and must not hold up a request: email first, AI jobs later. The outbox relay publishes each event to the `settle.events` topic exchange once the database has committed it; a worker inside the backend consumes each queue, and a message that keeps failing goes to the failed-messages queue.
+- **Live updates** come from the backend itself: pages refresh every few seconds, and later the backend pushes changes with server-sent events.
+- **No Redis** while there is one backend instance: in-memory caches (Caffeine) cover rate limits. Redis is for sharing state between several instances.
 
-![HLD v3](diagrams/hld.png)
+The detailed HLD (v4, 2 November) is [diagrams/hld.png](diagrams/hld.png). It shows the same system as the chart above, with the backend split into its parts, plus RabbitMQ and the AI service. Grey parts are not built yet. Its Eraser source is [diagrams/hld.eraser](diagrams/hld.eraser), so changes to it show up in a diff. When the architecture changes, update the source, then export the image again with its background on: a transparent image loses its lines and labels in GitHub's dark theme.
+
+![HLD v4](diagrams/hld.png)
 
 ## 2. Code layout
 
 Folders are listed in the [README](../README.md#layout). Inside the backend, each feature (`auth`,
-`audit`, `catalog`, `incident`, `alert`; `notification` and `postmortem` arrive with their sprints)
+`audit`, `catalog`, `incident`, `alert`, `notification`; `postmortem` arrives in Sprint 5)
 has one folder per layer, and shared code lives in `common/`. See the Layout section of
 [backend/AGENTS.md](../backend/AGENTS.md#layout). Controllers receive requests, services apply rules, and repositories read
 and write records. Do not return JPA entities directly as API responses, and don't add an interface
@@ -80,10 +90,11 @@ Store timestamps in UTC. `@Version` on Incident detects competing changes. Use a
 | `AlertService` | Check duplicates, then link the alert to an active incident or create one (D06, D07) |
 | `OnCallService` | Select the responder for a service and time |
 | `EscalationService`, `EscalationWorker` | Check persisted deadlines and advance unanswered incidents; the worker runs each step in its own transaction |
+| `OutboxRelay` | Publish committed outbox events to RabbitMQ, and mark each one sent once the broker confirms it (D24) |
 | `NotificationService` | Create and read in-app notifications |
 | `PostmortemService` | Save postmortems and action items |
 
-`TransitionPolicy` arrives with status changes (#84), `NotificationService` with notifications (#70), and `PostmortemService` with postmortems (Sprint 5). Inject a `Clock` into timing code so tests can control time. Keep the transition and timing rules as ordinary Java methods that can be unit-tested and mutation-tested.
+`TransitionPolicy` arrives with status changes (#84), and `PostmortemService` with postmortems (Sprint 5). Inject a `Clock` into timing code so tests can control time. Keep the transition and timing rules as ordinary Java methods that can be unit-tested and mutation-tested.
 
 ## 6. Create and group incidents
 
@@ -130,7 +141,7 @@ RESOLVED requires a recovery note. CLOSED requires the basic postmortem to be sa
 
 ## 9. Access and history
 
-For this single-organization prototype, authenticated users can read shared incident records. Viewers cannot change them. Engineers and Admins can respond to incidents and edit postmortems. Only Admins change users, service settings, on-call slots, and escalation policies. Personal notifications are visible only to their recipient.
+Within an org, authenticated users can read shared incident records; nobody sees another org's. Viewers cannot change them. Engineers and Admins can respond to incidents and edit postmortems. Only Admins change users, service settings, on-call slots, and escalation policies. Personal notifications are visible only to their recipient.
 
 Use stateless JWT bearer tokens with a per-user token version for revocation (D21), and hashed passwords. CSRF protection is not needed because the browser never sends a bearer token on its own. The alert endpoint uses separate source authentication. Keep secrets out of Git and logs.
 

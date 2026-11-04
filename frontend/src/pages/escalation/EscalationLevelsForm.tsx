@@ -101,7 +101,7 @@ export function EscalationLevelsForm({
                         <SelectContent>
                           {users.map((user) => (
                             <SelectItem key={user.id} value={String(user.id)}>
-                              {user.displayName} ({user.username})
+                              {user.displayName} ({user.email})
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -6,7 +6,7 @@ const timestamp = z.iso.datetime({ offset: true })
 export const shiftSchema = z.object({
   id: z.number(),
   responderId: z.number(),
-  responderUsername: z.string(),
+  responderName: z.string(),
   startTime: timestamp,
   endTime: timestamp,
 })
@@ -17,7 +17,7 @@ export const onCallScheduleSchema = z.object({
   serviceId: z.number(),
   // Null until an Admin saves the schedule for the first time.
   fallbackContactId: z.number().nullable(),
-  fallbackContactUsername: z.string().nullable(),
+  fallbackContactName: z.string().nullable(),
   shifts: z.array(shiftSchema),
 })
 

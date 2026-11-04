@@ -17,10 +17,12 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -54,6 +56,9 @@ class AlertGroupingTest {
 	private static final String PASSWORD = "DevPassw0rd!";
 	private static final String PAYMENTS = "Grouping Payments";
 	private static final String ORDERS = "Grouping Orders";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private AlertService alertService;
@@ -93,8 +98,7 @@ class AlertGroupingTest {
 
 	@BeforeEach
 	void setUp() {
-		owner = users.saveAndFlush(new AppUser("grouping_owner", "Grouping Owner", passwordEncoder.encode(PASSWORD), Role.ENGINEER,
-				clock.instant()));
+		owner = accounts.save(new AppUser("grouping_owner@test.local", "Grouping Owner", passwordEncoder.encode(PASSWORD), clock.instant()), Role.ENGINEER);
 		payments = createService(PAYMENTS);
 		orders = createService(ORDERS);
 	}
@@ -161,7 +165,7 @@ class AlertGroupingTest {
 		alertService.processAlert(null, alert("evt-2", PAYMENTS, Severity.SEV2, "pay-5xx"));
 		alertService.processAlert(null, alert("evt-3", ORDERS, Severity.SEV2, null));
 
-		mvc.perform(get("/api/alerts").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor(owner.getUsername())))
+		mvc.perform(get("/api/alerts").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor(owner.getEmail())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(3))
 				.andExpect(jsonPath("$[0].serviceName").value(ORDERS))
@@ -171,6 +175,7 @@ class AlertGroupingTest {
 				.andExpect(jsonPath("$[1].count").value(2))
 				.andExpect(jsonPath("$[1].assigneeId").value(owner.getId()))
 				.andExpect(jsonPath("$[1].incidentId").value(incidentOf("evt-1")))
+				.andExpect(jsonPath("$[1].incidentReference").value(referenceOf("evt-1")))
 				.andExpect(jsonPath("$[2].status").value("NEW"))
 				.andExpect(jsonPath("$[2].count").value(2));
 	}
@@ -222,7 +227,9 @@ class AlertGroupingTest {
 	private Future<AlertAcceptedResponse> whileTheFirstIsOpen(AlertRequest first, AlertRequest second) {
 		return new TransactionTemplate(transactionManager).execute(status -> {
 			alertService.processAlert(null, first);
-			Future<AlertAcceptedResponse> started = otherTool.submit(() -> alertService.processAlert(null, second));
+			// The other thread works for the same org as the test (D48).
+			long org = OrgContext.current();
+			Future<AlertAcceptedResponse> started = otherTool.submit(() -> OrgContext.runAs(org, () -> alertService.processAlert(null, second)));
 			waitForASessionBlockedOnALock();
 			return started;
 		});
@@ -259,6 +266,12 @@ class AlertGroupingTest {
 		return services.saveAndFlush(service);
 	}
 
+	// The org's number for the incident, which is not its id (D48).
+	private String referenceOf(String eventId) {
+		return jdbc.queryForObject("select 'INC-' || i.number from alert a join incident i on i.id = a.incident_id where a.event_id = ?",
+				String.class, eventId);
+	}
+
 	private Long incidentOf(String eventId) {
 		return jdbc.queryForObject("select incident_id from alert where event_id = ?", Long.class, eventId);
 	}
@@ -278,10 +291,10 @@ class AlertGroupingTest {
 		entityManager.clear();
 	}
 
-	private String tokenFor(String username) throws Exception {
+	private String tokenFor(String email) throws Exception {
 		String response = mvc.perform(post("/api/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD)))
+						.content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD)))
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(response, "$.token");

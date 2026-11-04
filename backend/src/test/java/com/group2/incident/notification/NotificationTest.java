@@ -27,6 +27,7 @@ import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,6 +51,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class NotificationTest {
 
 	private static final String PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -85,12 +89,8 @@ class NotificationTest {
 	@BeforeEach
 	void setUp() {
 		Instant now = clock.instant();
-		responder = userRepository.saveAndFlush(
-				new AppUser("responder", "OnCall Responder", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
-		);
-		otherEngineer = userRepository.saveAndFlush(
-				new AppUser("other_eng", "Other Engineer", passwordEncoder.encode(PASSWORD), Role.ENGINEER, now)
-		);
+		responder = accounts.save(new AppUser("responder@test.local", "OnCall Responder", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
+		otherEngineer = accounts.save(new AppUser("other_eng@test.local", "Other Engineer", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
 
 		// No shifts, so every new incident goes to the fallback contact, the responder.
 		ServiceEntity service = new ServiceEntity("NotificationService_Test", "Test Service", responder, Criticality.HIGH, now);
@@ -230,7 +230,7 @@ class NotificationTest {
 	}
 
 	private String tokenFor(String username) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", PASSWORD);
 		String response = mvc.perform(post("/api/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))

@@ -9,12 +9,12 @@ import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
-import { mockFetch, payments, users } from '@/test/fetchMock'
+import { devOrg, mockFetch, payments, users } from '@/test/fetchMock'
 
 const signedIn: Record<Role, unknown> = {
   ADMIN: users[0],
   ENGINEER: users[1],
-  VIEWER: { id: 3, username: 'viewer', displayName: 'Dev Viewer', role: 'VIEWER' },
+  VIEWER: { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' },
 }
 
 // Out of order on purpose: the page pages level 1 first whatever order the server lists them in.
@@ -27,7 +27,7 @@ const policy = {
   ],
   updatedAt: '2026-10-29T10:00:00Z',
 }
-const schedule = { serviceId: 1, fallbackContactId: 1, fallbackContactUsername: 'admin', shifts: [] }
+const schedule = { serviceId: 1, fallbackContactId: 1, fallbackContactName: 'admin', shifts: [] }
 const saved = { ...policy, updatedAt: '2026-10-30T10:00:00Z' }
 
 type Routes = Parameters<typeof mockFetch>[0]
@@ -35,7 +35,7 @@ type Routes = Parameters<typeof mockFetch>[0]
 function renderEscalation(role: Role, extraRoutes: Routes = {}) {
   writeToken('test-token')
   const fetchMock = mockFetch({
-    'GET /api/auth/me': { body: signedIn[role] },
+    'GET /api/auth/me': { body: { user: signedIn[role], org: devOrg } },
     'GET /api/services': { body: [payments] },
     'GET /api/services/1/escalation-policy': { body: policy },
     'GET /api/services/1/on-call': { body: schedule },
@@ -100,7 +100,7 @@ describe('EscalationPage', () => {
     })
 
     expect(await screen.findByText('No escalation levels yet, so incidents on this service are not escalated.')).toBeInTheDocument()
-    await chooseContact(1, 'Dev Engineer (engineer)')
+    await chooseContact(1, 'Dev Engineer (engineer@settle.local)')
     await setWait(1, '10')
     await userEvent.click(screen.getByRole('button', { name: 'Save levels' }))
 
@@ -118,7 +118,7 @@ describe('EscalationPage', () => {
     expect(screen.getByRole('button', { name: 'Remove level 1' })).toBeDisabled()
 
     await userEvent.click(screen.getByRole('button', { name: 'Add level' }))
-    await chooseContact(2, 'Dev Engineer (engineer)')
+    await chooseContact(2, 'Dev Engineer (engineer@settle.local)')
     await setWait(2, '5')
     await userEvent.click(screen.getByRole('button', { name: 'Save levels' }))
 

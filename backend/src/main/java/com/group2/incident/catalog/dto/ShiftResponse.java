@@ -6,7 +6,7 @@ import java.time.Instant;
 public record ShiftResponse(
         Long id,
         Long responderId,
-        String responderUsername,
+        String responderName,
         Instant startTime,
         Instant endTime
 ) {
@@ -14,7 +14,7 @@ public record ShiftResponse(
         return new ShiftResponse(
                 shift.getId(),
                 shift.getResponder().getId(),
-                shift.getResponder().getUsername(),
+                shift.getResponder().getDisplayName(),
                 shift.getStartTime(),
                 shift.getEndTime()
         );

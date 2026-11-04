@@ -48,7 +48,7 @@ export function AddShiftForm({
     const clash = findOverlap(schedule.shifts, Date.parse(shift.startTime), Date.parse(shift.endTime))
     if (clash) {
       form.setError('root', {
-        message: `This overlaps ${clash.responderUsername}'s shift, ${formatIst(clash.startTime)} to ${formatIst(clash.endTime)}.`,
+        message: `This overlaps ${clash.responderName}'s shift, ${formatIst(clash.startTime)} to ${formatIst(clash.endTime)}.`,
       })
       return
     }
@@ -83,8 +83,8 @@ export function AddShiftForm({
                   <SelectContent>
                     {users.map((user) => (
                       <SelectItem key={user.id} value={String(user.id)}>
-                        {/* The schedule shows usernames, so name both. */}
-                        {user.displayName} ({user.username})
+                        {/* Two people can share a name, so show the email too. */}
+                        {user.displayName} ({user.email})
                       </SelectItem>
                     ))}
                   </SelectContent>

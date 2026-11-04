@@ -31,6 +31,21 @@ def isolate_environment(monkeypatch):
     monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     monkeypatch.setenv("OLLAMA_TIMEOUT", "10")
+    yield
+    # Safely clear shared Starlette State attributes after each test to prevent mock leakage.
+    # Starlette's State delegates to an internal _state dict. Direct manipulation avoids
+    # State.__delattr__ KeyError while ensuring clean isolation between tests.
+    state_dict = getattr(app.state, "_state", None)
+    if isinstance(state_dict, dict):
+        state_dict.pop("http_client", None)
+        state_dict.pop("agent_provider", None)
+        state_dict.pop("tool_registry", None)
+    else:
+        for attr in ("http_client", "agent_provider", "tool_registry"):
+            try:
+                delattr(app.state, attr)
+            except (AttributeError, KeyError):
+                pass
 
 
 client = TestClient(app)
@@ -99,9 +114,9 @@ def test_ready_reports_not_ready_when_model_not_pulled():
     assert data["ollama"]["model_pulled"] is False
 
 
-def test_ready_reports_not_ready_when_ollama_unavailable():
+def test_ready_reports_not_ready_when_ollama_connection_fails():
     mock_client = AsyncMock()
-    mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+    mock_client.get.side_effect = httpx.ConnectError("Failed to connect to Ollama")
 
     with patch("main._get_client", return_value=mock_client):
         response = client.get("/ready")
@@ -111,6 +126,52 @@ def test_ready_reports_not_ready_when_ollama_unavailable():
     assert data["status"] == "not_ready"
     assert data["ollama"]["reachable"] is False
     assert data["ollama"]["model_pulled"] is False
+
+
+
+
+def test_get_investigation_provider_reuses_lifespan_client(monkeypatch):
+    """Ensure the provider reuses the FastAPI lifespan‑managed http client.
+    The test injects a mock AsyncClient into ``app.state.http_client`` and
+    verifies that ``OllamaProvider`` is constructed with that same instance.
+    """
+    from main import get_investigation_provider, app, OllamaProvider
+    # Prepare a mock AsyncClient that reports not closed.
+    mock_client = AsyncMock()
+    mock_client.is_closed = False
+    # Set state directly; the autouse isolate_environment fixture cleans up
+    # app.state after each test, so no manual teardown is needed here.
+    app.state.http_client = mock_client
+    # Ensure no injected deterministic provider interferes.
+    if hasattr(app.state, "agent_provider"):
+        try:
+            delattr(app.state, "agent_provider")
+        except (AttributeError, KeyError):
+            pass
+    provider = get_investigation_provider()
+    assert isinstance(provider, OllamaProvider)
+    # The provider should reuse the injected client.
+    assert getattr(provider, "_client", None) is mock_client
+
+
+
+
+def test_get_investigation_provider_uses_injected_provider(monkeypatch):
+    """When ``app.state.agent_provider`` is set, it must be returned unchanged.
+    This mirrors the existing deterministic testing path.
+    """
+    from main import get_investigation_provider, app
+    # Import the real MockProvider from providers module.
+    from providers import MockProvider
+    mock_provider = MockProvider()
+    # Set state directly; the autouse isolate_environment fixture cleans up
+    # app.state after each test, so no manual teardown is needed here.
+    app.state.agent_provider = mock_provider
+    mock_client = AsyncMock()
+    app.state.http_client = mock_client
+    result = get_investigation_provider()
+    assert result is mock_provider
+
 
 
 # ---------------------------------------------------------------------------

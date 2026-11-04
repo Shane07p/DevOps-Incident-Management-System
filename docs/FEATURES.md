@@ -20,7 +20,7 @@ The product takes the best of two tools:
 | Login with three roles | Admin, Engineer, and Viewer. Viewers read; Engineers respond; Admins configure | FR-01 | 1 |
 | User administration | An Admin creates users, changes roles, and disables accounts. A role change logs the user out everywhere | FR-01 | 1 (disabling an account has no screen or endpoint yet) |
 | Audit log | Every configuration change, with before → after values. Read-only | FR-13 | 1–4 |
-| Personal access tokens | A user creates a token to connect an AI tool through MCP. Hashed and revocable | *New* | 4 |
+| Personal access tokens | A user creates a token to connect an AI tool through MCP. Hashed, revocable, and valid for 90 days (D38) | FR-23 | 4 |
 
 ## Services and ownership
 
@@ -28,8 +28,8 @@ The product takes the best of two tools:
 | --- | --- | --- | --- |
 | Service catalog | Each service has an owner, criticality, fallback contact, and response and resolution targets per severity | FR-14, FR-16 | 1 |
 | Service health | Each service shows Operational, Degraded, or Down, from its monitors | FR-22 | 2 |
-| Service map | A graph of services, databases, and external providers. Each node shows live health; each link shows traffic, errors, and latency. **Blast radius:** what breaks if this service fails | *New* | 4 (links entered by hand), 5 (links from traces) |
-| Runbooks | Step lists per service. The incident page offers the matching runbook | *New* | 4 |
+| Service map | A graph of services, databases, and external providers. Each node shows live health; each link shows traffic, errors, and latency. **Blast radius:** what breaks if this service fails | FR-14.2, FR-24 | 4 (links entered by hand), 5 (links from traces) |
+| Runbooks | Step lists per service. The incident page offers the matching runbook | FR-25 | 4 |
 | Deploy tracking | CI reports each deploy (service, version, commit, author). Deploys appear on the timeline of incidents in the same time window | FR-20 | 4 |
 
 ## On-call and alerts
@@ -42,6 +42,7 @@ The product takes the best of two tools:
 | Deduplication and grouping | A repeated event counts once. Related alerts join an open incident by an explicit correlation key, within one service | FR-03 | 2 |
 | Alert inbox | New alerts (each opened an incident) and attached ones (each joined an incident), with how many alerts share the incident and a "routed to me" view | FR-03 | 2–3 |
 | Notifications | An in-app bell for assignments, escalations, and mentions | FR-07 | 2 |
+| Email notifications | The same events also send an email, through RabbitMQ, retried when the provider fails | FR-07.2 | Once the provider is chosen (D47) |
 
 ## Incident response
 
@@ -53,6 +54,7 @@ The product takes the best of two tools:
 | Incident roles | Lead, Comms, and Ops. See [Incident roles](#incident-roles) | FR-05 | 3 |
 | SLA clocks | Response and resolution clocks, each running, at risk, breached, or met | FR-16 | 1–3 |
 | Timeline | Append-only: alerts, status changes, comments, corrections, deploys, and AI findings | FR-08, FR-09 | 1–3 |
+| Live updates | The incident list and incident page show other people's changes without a reload: refreshed every few seconds first, then pushed by the backend (D46) | FR-12.3, NFR-14 | 4–5 |
 | Evidence links | Links to logs, charts, and deploys attached to the incident | FR-09 | 4 |
 | Customer updates | Comms posts status page updates from inside the incident | FR-21 | 4 |
 | Closure gate | SEV1 and SEV2 incidents need a reviewed postmortem before they can close | DR-06 | 5 |
@@ -71,7 +73,7 @@ The product takes the best of two tools:
 | Feature | How it is used | Req. | Sprint |
 | --- | --- | --- | --- |
 | Uptime monitors | HTTP status, a keyword on a page, ping or TCP, and SSL expiry. Each monitor has an interval and a linked service | FR-22 | 2 |
-| Checks from several regions | Probes check from 2–3 regions. A monitor is **down only when at least 2 regions agree**, so one bad network path doesn't wake anyone | *New* | 3 |
+| Checks from several locations | Grafana Cloud checks each URL from 2–3 locations (D35). **Down** when at least 2 locations fail twice in a row; **Degraded** when at least 2 are slower than the monitor's limit three times in a row (D36). One bad network path never wakes anyone | *New* | 3 |
 | Monitor detail | Response-time chart, results per region, check log, and uptime % | FR-22 | 2–3 |
 | Heartbeats | A scheduled job pings its URL; a late or missing ping raises an alert | *New* | 2 |
 | Public status page | Components mapped to services, 90-day uptime, the active incident with its updates, and history | FR-21 | 4 |
@@ -81,8 +83,8 @@ The product takes the best of two tools:
 | Feature | How it is used | Req. | Sprint |
 | --- | --- | --- | --- |
 | Ingestion | Apps send logs and metrics with OpenTelemetry to Grafana Cloud (Loki for logs, Prometheus for metrics) | *New* | 2 |
-| Logs explorer | Search by service, level, and text; live tail; click a JSON field to filter; similar lines grouped into patterns; saved views | *New* | 4 |
-| Metrics dashboards | Per service: request rate, error rate, and latency (p50 and p95) | *New* | 4 |
+| Logs explorer | Search by service, level, and text; live tail; click a JSON field to filter; similar lines grouped into patterns; saved views | FR-26 | 4 |
+| Metrics dashboards | Per service: request rate, error rate, and latency (p50 and p95) | FR-27 | 4 |
 | Logs and charts on the incident | The incident page shows the logs and charts for **that service and that time window** | FR-09 | 4 |
 | Log and metric alerts | Grafana alert rules post into our alert intake | FR-03 | 3 |
 
@@ -90,7 +92,7 @@ The backend runs every telemetry query, so the Grafana token never reaches the b
 
 ## Incident roles
 
-Proposed; decision D39 is still open.
+Decided in D39.
 
 | Role | Who | Responsible for | Can |
 | --- | --- | --- | --- |

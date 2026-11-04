@@ -4,15 +4,15 @@ import type { OnCallSchedule, Shift, ShiftRequest } from '@/api/onCall'
 const covers = (shift: Shift, at: number) => Date.parse(shift.startTime) <= at && at < Date.parse(shift.endTime)
 
 export type OnCallNow =
-  | { kind: 'shift'; username: string; until: string }
-  | { kind: 'fallback'; username: string }
+  | { kind: 'shift'; name: string; until: string }
+  | { kind: 'fallback'; name: string }
   | { kind: 'nobody' }
 
 /** Who a new incident on this service would go to at `at`: the shift covering it, else the fallback contact. */
 export function onCallAt(schedule: OnCallSchedule, at: number): OnCallNow {
   const shift = schedule.shifts.find((candidate) => covers(candidate, at))
-  if (shift) return { kind: 'shift', username: shift.responderUsername, until: shift.endTime }
-  if (schedule.fallbackContactUsername) return { kind: 'fallback', username: schedule.fallbackContactUsername }
+  if (shift) return { kind: 'shift', name: shift.responderName, until: shift.endTime }
+  if (schedule.fallbackContactName) return { kind: 'fallback', name: schedule.fallbackContactName }
   return { kind: 'nobody' }
 }
 

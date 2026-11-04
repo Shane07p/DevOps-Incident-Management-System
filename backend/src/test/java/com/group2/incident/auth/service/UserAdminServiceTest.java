@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,15 +19,22 @@ import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.NotFoundException;
+import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.org.entity.Membership;
+import com.group2.incident.org.repository.MembershipRepository;
+import com.group2.incident.org.repository.OrganizationRepository;
+import com.group2.incident.support.Members;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,8 +45,16 @@ class UserAdminServiceTest {
 
 	private static final Instant FIXED_NOW = Instant.parse("2026-10-20T12:00:00Z");
 
+	private static final long ORG = 7L;
+
 	@Mock
 	private AppUserRepository users;
+
+	@Mock
+	private MembershipRepository memberships;
+
+	@Mock
+	private OrganizationRepository orgs;
 
 	@Mock
 	private PasswordEncoder passwordEncoder;
@@ -46,142 +62,160 @@ class UserAdminServiceTest {
 	@Mock
 	private AuditService auditService;
 
-	private Clock clock;
-
 	private UserAdminService userAdminService;
 
 	private AppUser admin;
 
+	private Membership adminMembership;
+
 	@BeforeEach
 	void setUp() {
-		clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-		userAdminService = new UserAdminService(users, passwordEncoder, auditService, clock);
+		OrgContext.set(ORG);
+		userAdminService = new UserAdminService(users, memberships, orgs, passwordEncoder, auditService, Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 
-		admin = new AppUser("admin", "Dev Admin", "{bcrypt}hash", Role.ADMIN, FIXED_NOW);
-		ReflectionTestUtils.setField(admin, "id", 1L);
+		admin = user(1L, "admin@test.local", "Dev Admin");
+		adminMembership = Members.of(admin, Role.ADMIN);
+	}
+
+	@AfterEach
+	void clearOrg() {
+		OrgContext.clear();
 	}
 
 	@Test
-	void listUsersReturnsAllUsersWithoutSensitiveFields() {
-		AppUser user1 = new AppUser("user1", "User One", "{bcrypt}hash1", Role.ENGINEER, FIXED_NOW);
-		ReflectionTestUtils.setField(user1, "id", 10L);
-		AppUser user2 = new AppUser("user2", "User Two", "{bcrypt}hash2", Role.VIEWER, FIXED_NOW);
-		ReflectionTestUtils.setField(user2, "id", 20L);
-
-		when(users.findAll()).thenReturn(List.of(user1, user2));
+	void listUsersReturnsThisOrgsMembersWithTheirRoles() {
+		AppUser user1 = user(10L, "user1@test.local", "User One");
+		AppUser user2 = user(20L, "user2@test.local", "User Two");
+		when(memberships.findAllByOrgIdOrderByIdAsc(ORG))
+				.thenReturn(List.of(Members.of(user1, Role.ENGINEER), Members.of(user2, Role.VIEWER)));
 
 		List<UserResponse> result = userAdminService.listUsers();
 
-		assertThat(result).hasSize(2);
-		assertThat(result.get(0)).isEqualTo(new UserResponse(10L, "user1", "User One", Role.ENGINEER));
-		assertThat(result.get(1)).isEqualTo(new UserResponse(20L, "user2", "User Two", Role.VIEWER));
+		assertThat(result).containsExactly(
+				new UserResponse(10L, "user1@test.local", "User One", Role.ENGINEER),
+				new UserResponse(20L, "user2@test.local", "User Two", Role.VIEWER));
 	}
 
 	@Test
-	void createUserSuccessfullySavesAndAudits() {
-		CreateUserRequest request = new CreateUserRequest("asha", "Asha Patel", "ValidPassw0rd!", Role.ENGINEER);
-
-		when(users.findByUsername("asha")).thenReturn(Optional.empty());
-		when(users.findById(1L)).thenReturn(Optional.of(admin));
+	void createUserSavesThePersonAndAMembershipInTheAdminsOrgAndAudits() {
+		CreateUserRequest request = new CreateUserRequest("Asha@Example.com", "Asha Patel", "ValidPassw0rd!", Role.ENGINEER);
+		when(users.findByEmail("Asha@Example.com")).thenReturn(Optional.empty());
+		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
 		when(passwordEncoder.encode("ValidPassw0rd!")).thenReturn("{bcrypt}encoded");
 		when(users.save(any(AppUser.class))).thenAnswer(inv -> {
 			AppUser u = inv.getArgument(0);
 			ReflectionTestUtils.setField(u, "id", 42L);
 			return u;
 		});
+		when(memberships.save(any(Membership.class))).thenAnswer(inv -> inv.getArgument(0));
 
 		UserResponse response = userAdminService.createUser(request, 1L);
 
-		assertThat(response.id()).isEqualTo(42L);
-		assertThat(response.username()).isEqualTo("asha");
-		assertThat(response.displayName()).isEqualTo("Asha Patel");
-		assertThat(response.role()).isEqualTo(Role.ENGINEER);
-
-		ArgumentCaptor<AppUser> userCaptor = ArgumentCaptor.forClass(AppUser.class);
-		verify(users).save(userCaptor.capture());
-		AppUser saved = userCaptor.getValue();
-		assertThat(saved.getPasswordHash()).isEqualTo("{bcrypt}encoded");
-		assertThat(saved.getCreatedAt()).isEqualTo(FIXED_NOW);
-
-		verify(auditService).record(
-				eq(admin),
-				eq(AuditAction.USER_CREATED),
-				eq(AuditItemType.USER),
-				eq(42L),
-				eq("username: asha, role: ENGINEER")
-		);
+		assertThat(response).isEqualTo(new UserResponse(42L, "asha@example.com", "Asha Patel", Role.ENGINEER));
+		ArgumentCaptor<Membership> membership = ArgumentCaptor.forClass(Membership.class);
+		verify(memberships).save(membership.capture());
+		assertThat(membership.getValue().getOrg()).isSameAs(adminMembership.getOrg());
+		assertThat(membership.getValue().getUser().getPasswordHash()).isEqualTo("{bcrypt}encoded");
+		verify(auditService).record(eq(admin), eq(AuditAction.USER_CREATED), eq(AuditItemType.USER), eq(42L),
+				eq("email: asha@example.com, role: ENGINEER"));
 	}
 
 	@Test
-	void createUserThrowsConflictExceptionWhenUsernameAlreadyExists() {
-		CreateUserRequest request = new CreateUserRequest("ASHA", "Asha Upper", "ValidPassw0rd!", Role.ENGINEER);
-		AppUser existing = new AppUser("asha", "Asha Patel", "{bcrypt}hash", Role.ENGINEER, FIXED_NOW);
-
-		when(users.findByUsername("ASHA")).thenReturn(Optional.of(existing));
+	void aTakenEmailIsAConflict() {
+		CreateUserRequest request = new CreateUserRequest("ASHA@example.com", "Asha Upper", "ValidPassw0rd!", Role.ENGINEER);
+		when(users.findByEmail("ASHA@example.com")).thenReturn(Optional.of(user(5L, "asha@example.com", "Asha")));
 
 		assertThatThrownBy(() -> userAdminService.createUser(request, 1L))
 				.isInstanceOf(ConflictException.class)
-				.hasMessage("Username 'ASHA' is already taken");
+				.hasMessage("An account with this email already exists");
 	}
 
 	@Test
-	void createUserThrowsNotFoundExceptionWhenAdminActorDoesNotExist() {
-		CreateUserRequest request = new CreateUserRequest("asha", "Asha", "ValidPassw0rd!", Role.ENGINEER);
-
-		when(users.findByUsername("asha")).thenReturn(Optional.empty());
-		when(users.findById(99L)).thenReturn(Optional.empty());
+	void anAdminOutsideThisOrgIsNotFound() {
+		CreateUserRequest request = new CreateUserRequest("asha@example.com", "Asha", "ValidPassw0rd!", Role.ENGINEER);
+		when(users.findByEmail("asha@example.com")).thenReturn(Optional.empty());
+		when(memberships.findByUserIdAndOrgId(99L, ORG)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> userAdminService.createUser(request, 99L))
 				.isInstanceOf(NotFoundException.class)
-				.hasMessage("Admin user 99 not found");
+				.hasMessage("User 99 not found");
 	}
 
 	@Test
-	void changeRoleUpdatesRoleIncrementsTokenVersionAndAudits() {
-		AppUser target = new AppUser("target", "Target User", "{bcrypt}hash", Role.VIEWER, FIXED_NOW);
-		ReflectionTestUtils.setField(target, "id", 50L);
-		int initialTokenVersion = target.getTokenVersion();
+	void changeRoleUpdatesTheMembershipRevokesTokensAndAudits() {
+		lockableOrg();
+		AppUser target = user(50L, "target@test.local", "Target User");
+		Membership targetMembership = Members.of(target, Role.VIEWER);
+		when(memberships.findByUserIdAndOrgId(50L, ORG)).thenReturn(Optional.of(targetMembership));
+		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
 
-		when(users.findById(50L)).thenReturn(Optional.of(target));
-		when(users.findById(1L)).thenReturn(Optional.of(admin));
-
-		ChangeRoleRequest request = new ChangeRoleRequest(Role.ADMIN);
-		UserResponse response = userAdminService.changeRole(50L, request, 1L);
+		UserResponse response = userAdminService.changeRole(50L, new ChangeRoleRequest(Role.ADMIN), 1L);
 
 		assertThat(response.role()).isEqualTo(Role.ADMIN);
-		assertThat(target.getRole()).isEqualTo(Role.ADMIN);
-		assertThat(target.getTokenVersion()).isEqualTo(initialTokenVersion + 1);
-
-		verify(auditService).record(
-				eq(admin),
-				eq(AuditAction.USER_ROLE_CHANGED),
-				eq(AuditItemType.USER),
-				eq(50L),
-				eq("role: VIEWER → ADMIN")
-		);
+		assertThat(targetMembership.getRole()).isEqualTo(Role.ADMIN);
+		assertThat(target.getTokenVersion()).isEqualTo(1);
+		verify(auditService).record(eq(admin), eq(AuditAction.USER_ROLE_CHANGED), eq(AuditItemType.USER), eq(50L),
+				eq("role: VIEWER → ADMIN"));
 	}
 
 	@Test
-	void changeRoleThrowsNotFoundExceptionWhenTargetUserNotFound() {
-		when(users.findById(999L)).thenReturn(Optional.empty());
+	void theLastAdminCannotBeDemoted() {
+		lockableOrg();
+		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
+		when(memberships.countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN)).thenReturn(1L);
 
-		ChangeRoleRequest request = new ChangeRoleRequest(Role.ADMIN);
+		assertThatThrownBy(() -> userAdminService.changeRole(1L, new ChangeRoleRequest(Role.ENGINEER), 1L))
+				.isInstanceOf(ConflictException.class)
+				.hasMessage("An org needs at least one Admin");
+		assertThat(adminMembership.getRole()).isEqualTo(Role.ADMIN);
+	}
 
-		assertThatThrownBy(() -> userAdminService.changeRole(999L, request, 1L))
+	@Test
+	void anAdminMayBeDemotedWhileAnotherAdminRemains() {
+		lockableOrg();
+		AppUser other = user(2L, "other@test.local", "Other Admin");
+		Membership otherMembership = Members.of(other, Role.ADMIN);
+		when(memberships.findByUserIdAndOrgId(2L, ORG)).thenReturn(Optional.of(otherMembership));
+		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
+		when(memberships.countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN)).thenReturn(2L);
+
+		userAdminService.changeRole(2L, new ChangeRoleRequest(Role.ENGINEER), 1L);
+
+		assertThat(otherMembership.getRole()).isEqualTo(Role.ENGINEER);
+	}
+
+	@Test
+	void aTargetOutsideThisOrgIsNotFound() {
+		lockableOrg();
+		when(memberships.findByUserIdAndOrgId(999L, ORG)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userAdminService.changeRole(999L, new ChangeRoleRequest(Role.ADMIN), 1L))
 				.isInstanceOf(NotFoundException.class)
 				.hasMessage("User 999 not found");
 	}
 
 	@Test
-	void changeRoleThrowsNotFoundExceptionWhenAdminNotFound() {
-		AppUser target = new AppUser("target", "Target User", "{bcrypt}hash", Role.VIEWER, FIXED_NOW);
-		when(users.findById(50L)).thenReturn(Optional.of(target));
-		when(users.findById(99L)).thenReturn(Optional.empty());
+	void aRoleChangeTakesTheOrgsLockBeforeCountingAdmins() {
+		when(memberships.findByUserIdAndOrgId(1L, ORG)).thenReturn(Optional.of(adminMembership));
+		when(memberships.countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN)).thenReturn(1L);
+		lockableOrg();
 
-		ChangeRoleRequest request = new ChangeRoleRequest(Role.ADMIN);
+		assertThatThrownBy(() -> userAdminService.changeRole(1L, new ChangeRoleRequest(Role.VIEWER), 1L))
+				.isInstanceOf(ConflictException.class);
 
-		assertThatThrownBy(() -> userAdminService.changeRole(50L, request, 99L))
-				.isInstanceOf(NotFoundException.class)
-				.hasMessage("Admin user 99 not found");
+		InOrder order = inOrder(orgs, memberships);
+		order.verify(orgs).findLockedById(ORG);
+		order.verify(memberships).countByOrgIdAndRoleAndEnabledTrue(ORG, Role.ADMIN);
 	}
+
+	private void lockableOrg() {
+		when(orgs.findLockedById(ORG)).thenReturn(Optional.of(adminMembership.getOrg()));
+	}
+
+	private static AppUser user(long id, String email, String name) {
+		AppUser user = new AppUser(email, name, "{bcrypt}hash", FIXED_NOW);
+		ReflectionTestUtils.setField(user, "id", id);
+		return user;
+	}
+
 }

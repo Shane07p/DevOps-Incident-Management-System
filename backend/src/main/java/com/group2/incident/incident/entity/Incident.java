@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "incident")
@@ -30,6 +31,14 @@ public class Incident {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	// Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
+
+	@Column(nullable = false, updatable = false)
+	private Long number;
 
 	@Column(nullable = false, length = 200)
 	private String title;
@@ -104,8 +113,16 @@ public class Incident {
 		this.assignee = assignee;
 	}
 
+	/** Called once, right after construction, with the org's next number (IncidentService). */
+	public void assignNumber(long number) {
+		if (this.number != null) {
+			throw new IllegalStateException("Incident " + this.number + " already has a number");
+		}
+		this.number = number;
+	}
+
 	public String getReference() {
-		return "INC-" + id;
+		return "INC-" + number;
 	}
 
 	public Instant getResponseDueAt() {

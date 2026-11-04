@@ -1,11 +1,16 @@
 package com.group2.incident.catalog.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.audit.entity.AuditAction;
+import com.group2.incident.audit.entity.AuditEntry;
+import com.group2.incident.audit.entity.AuditItemType;
+import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
@@ -42,6 +47,9 @@ class ServiceOnCallControllerTest {
 
     @Autowired
     private ServiceRepository services;
+
+    @Autowired
+    private AuditEntryRepository auditEntries;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -108,6 +116,36 @@ class ServiceOnCallControllerTest {
                                 shift(responder.getId(), "09:00", "17:00") + "," + shift(admin.getId(), "16:00", "20:00"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.shifts").value("Shifts cannot overlap for the same service"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/services/{id}/on-call records an audit entry with the authenticated admin")
+    void updateScheduleRecordsAuditEntry() throws Exception {
+        mvc.perform(put("/api/services/" + service.getId() + "/on-call")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(schedule(admin.getId(), shift(responder.getId(), "09:00", "17:00"))))
+                .andExpect(status().isOk());
+
+        List<AuditEntry> entries = auditEntries.findByItemTypeAndItemIdOrderByRecordedAtDesc(
+                AuditItemType.SERVICE, service.getId()
+        );
+        assertThat(entries).hasSize(1);
+        AuditEntry entry = entries.get(0);
+        assertThat(entry.getActor().getId()).isEqualTo(admin.getId());
+        assertThat(entry.getAction()).isEqualTo(AuditAction.ON_CALL_SCHEDULE_UPDATED);
+        assertThat(entry.getItemType()).isEqualTo(AuditItemType.SERVICE);
+
+        // Submitting identical schedule produces no additional audit entry
+        mvc.perform(put("/api/services/" + service.getId() + "/on-call")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(schedule(admin.getId(), shift(responder.getId(), "09:00", "17:00"))))
+                .andExpect(status().isOk());
+
+        assertThat(auditEntries.findByItemTypeAndItemIdOrderByRecordedAtDesc(
+                AuditItemType.SERVICE, service.getId()
+        )).hasSize(1);
     }
 
     private static String schedule(long fallbackContactId, String shifts) {

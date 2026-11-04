@@ -125,6 +125,9 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 | TC-FR-08.3b | Negative | Truncate the timeline or the audit log | Rejected | `DatabaseSchemaTest.timelineCannotBeTruncated`, `auditLogCannotBeTruncated` | Automated |
 | TC-FR-13a | Negative | Update or delete an audit entry | Rejected | `DatabaseSchemaTest.auditEntryCannotBeUpdated`, `auditEntryCannotBeDeleted` | Automated |
 | TC-FR-13b | Integration | `AuditService.record` inside a transaction that rolls back | The audit entry is rolled back too; outside a transaction it throws | `AuditServiceTest` | Automated |
+| TC-FR-13c | Integration | Save an on-call schedule that adds or removes a shift, or changes the fallback contact | One `ON_CALL_SCHEDULE_UPDATED` entry naming the actor, the service, and each change | `OnCallServiceTest` (four cases), `ServiceOnCallControllerTest.updateScheduleRecordsAuditEntry` | Automated |
+| TC-FR-13d | Equivalence | Save the same schedule again, its shifts in another order | No audit entry | `OnCallServiceTest.unchangedScheduleProducesZeroAuditEntries`, `ServiceOnCallControllerTest.updateScheduleRecordsAuditEntry` | Automated |
+| TC-FR-13e | Integration | The save is rejected, or its audit entry fails | Nothing changes: no entry, and the old schedule stays | `OnCallServiceTest.scheduleValidationFailureLeavesNoAuditEntry`, `auditFailureRollsBackScheduleChanges` | Automated |
 
 ---
 

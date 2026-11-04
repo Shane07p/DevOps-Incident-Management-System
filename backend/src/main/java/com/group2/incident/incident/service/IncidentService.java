@@ -280,6 +280,11 @@ public class IncidentService {
 		}
 
 		AppUser newAssignee = assigneeMember.getUser();
+
+		if (incident.getAssignee() != null && incident.getAssignee().getId().equals(newAssignee.getId())) {
+			throw new FieldValidationException("assigneeId", "Already assigned to this person");
+		}
+
 		AppUser actor = requireActor(actorId);
 
 		String previousName = incident.getAssignee() != null ? incident.getAssignee().getDisplayName() : "unassigned";
@@ -290,7 +295,7 @@ public class IncidentService {
 			incident = incidentRepository.saveAndFlush(incident);
 		}
 		catch (OptimisticLockingFailureException ex) {
-			throw new ConflictException("Incident was updated by another request");
+			throw new ConflictException("This record was changed by another request; reload and try again");
 		}
 
 		Instant now = clock.instant();

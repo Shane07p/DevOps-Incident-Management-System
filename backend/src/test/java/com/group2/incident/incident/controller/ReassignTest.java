@@ -1,7 +1,6 @@
 package com.group2.incident.incident.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,11 +35,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @IntegrationTest
 class ReassignTest {
@@ -319,23 +316,28 @@ class ReassignTest {
 	}
 
 	@Test
-	@DisplayName("OptimisticLockingFailureException maps to 409 Conflict using existing ApiError handling")
-	void concurrentUpdateConflictReturns409() throws Exception {
+	@DisplayName("Reassign to same assignee returns 400 Bad Request and does not create timeline event or notification")
+	void reassignToSameAssigneeReturns400() throws Exception {
 		Incident incident = createIncident(IncidentStatus.OPEN, engineer1);
+		int initialTimelineCount = timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId()).size();
+		int initialNotificationCount = notifications.findAll().size();
 
-		// Increment version directly in database to simulate concurrent modification
-		entityManager.createNativeQuery("UPDATE incident.incident SET version = version + 1 WHERE id = :id")
-				.setParameter("id", incident.getId())
-				.executeUpdate();
-		entityManager.flush();
-		entityManager.clear();
+		String body = "{\"assigneeId\": %d}".formatted(engineer1.getId());
 
-		// Now simulate updating from a detached/stale entity
-		incident.assignTo(engineer2);
+		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.message").value("Validation failed"))
+				.andExpect(jsonPath("$.errors.assigneeId").value("Already assigned to this person"));
 
-		// Spring Data / Hibernate throws OptimisticLockingFailureException on save
-		org.assertj.core.api.Assertions.assertThatThrownBy(() -> incidents.saveAndFlush(incident))
-				.isInstanceOf(OptimisticLockingFailureException.class);
+		List<TimelineEntry> timeline = timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId());
+		assertThat(timeline).hasSize(initialTimelineCount);
+		assertThat(timeline).noneMatch(entry -> entry.getEventType() == TimelineEventType.REASSIGNED);
+
+		assertThat(notifications.findAll()).hasSize(initialNotificationCount);
 	}
 
 	private Incident createIncident(IncidentStatus status, AppUser assignee) {

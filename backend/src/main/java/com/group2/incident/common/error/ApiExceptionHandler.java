@@ -52,7 +52,7 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(OptimisticLockingFailureException.class)
 	ResponseEntity<ApiError> optimisticLock(OptimisticLockingFailureException ex) {
-		return respond(HttpStatus.CONFLICT, "Incident was updated by another request", Map.of());
+		return respond(HttpStatus.CONFLICT, "This record was changed by another request; reload and try again", Map.of());
 	}
 
 	@ExceptionHandler(UnauthorizedException.class)

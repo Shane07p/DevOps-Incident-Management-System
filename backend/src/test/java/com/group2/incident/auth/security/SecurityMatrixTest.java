@@ -100,6 +100,8 @@ public class SecurityMatrixTest {
 
 	private Long adminUserId;
 
+	private Long engineerUserId;
+
 	private Long targetServiceId;
 	private Long targetToolId;
 	private Long targetIncidentId;
@@ -284,7 +286,7 @@ public class SecurityMatrixTest {
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
-						"{\"assigneeId\":${OWNER_ID}}",
+						"{\"assigneeId\":${ASSIGNEE_ID}}",
 						200, 200, 403, 401
 				),
 				new MatrixRow(
@@ -326,6 +328,7 @@ public class SecurityMatrixTest {
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
 		adminUserId = admin.getId();
+		engineerUserId = engineer.getId();
 
 		var tool = tools.saveAndFlush(new MonitoringTool("Matrix Tool " + UUID.randomUUID(), "dummy_hash_" + UUID.randomUUID(), clock.instant()));
 		targetToolId = tool.getId();
@@ -419,8 +422,10 @@ public class SecurityMatrixTest {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}
 		if (bodyTemplate != null) {
+			Long assigneeId = (token != null && token.equals(adminToken)) ? engineerUserId : adminUserId;
 			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
 					.replace("${OWNER_ID}", adminUserId.toString())
+					.replace("${ASSIGNEE_ID}", assigneeId != null ? assigneeId.toString() : "")
 					.replace("${SERVICE_ID}", targetServiceId.toString());
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}

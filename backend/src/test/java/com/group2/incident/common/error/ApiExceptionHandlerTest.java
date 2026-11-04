@@ -69,7 +69,7 @@ class ApiExceptionHandlerTest {
 		mvc.perform(get("/probe/optimistic-lock"))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.status").value(409))
-				.andExpect(jsonPath("$.message").value("Incident was updated by another request"));
+				.andExpect(jsonPath("$.message").value("This record was changed by another request; reload and try again"));
 	}
 
 	@Test

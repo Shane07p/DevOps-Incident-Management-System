@@ -94,6 +94,8 @@ class OrgIsolationTest {
 		idsOfB.put("toolId", toolOfB);
 		idsOfB.put("incidentId", incidentOfB);
 		idsOfB.put("notificationId", notificationOfB);
+		// Sign-up and the service each wrote an audit entry in B.
+		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
 	}
 
 	@AfterAll
@@ -121,6 +123,10 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/services/{id}/escalation-policy", HttpMethod.PUT, "/api/services/{serviceId}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
+				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
+						"{\"assigneeId\": {adminOfA}}"),
+				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",
+						"{\"role\":\"COMMS\",\"userId\": {adminOfA}}"),
 				Arguments.of("POST /api/incidents/{id}/comments", HttpMethod.POST, "/api/incidents/{incidentId}/comments",
 						"{\"comment\":\"x\"}"),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
@@ -179,7 +185,8 @@ class OrgIsolationTest {
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
 				Arguments.of("GET /api/users", "/api/users", "$[*].id", "userId"),
-				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"));
+				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"),
+				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"));
 	}
 
 	/** Every list, read as A, holds none of B's rows. */

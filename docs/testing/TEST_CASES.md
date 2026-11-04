@@ -330,8 +330,7 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 
 ## Sprint 4
 
-The audit log API (#153) and the service map API (#154) bring their own cases in their pull
-requests (#179, #180).
+The service map API (#154) brings its own cases in its pull request (#180).
 
 ### Orgs and sign-up (FR-01.4 to FR-01.6, D48)
 
@@ -345,7 +344,7 @@ requests (#179, #180).
 | TC-FR-01.4f | Negative | Unknown email, wrong password, disabled membership | The same 401 "Invalid email or password" | `AuthControllerTest` | Automated |
 | TC-FR-01.5a | Negative | Every endpoint with an id, called with another org's ids | 404, never 403, never the other org's data | `OrgIsolationTest` | Automated |
 | TC-FR-01.5b | Negative | A body naming another org's service or people (owner, responder, fallback contact) | 400 or 404; nothing saved | `OrgIsolationTest` | Automated |
-| TC-FR-01.5c | Equivalence | Every list | Only the caller's org's rows | `OrgIsolationTest`, `UserAdminControllerTest` | Automated |
+| TC-FR-01.5c | Equivalence | Every list, the audit log included | Only the caller's org's rows | `OrgIsolationTest`, `UserAdminControllerTest` | Automated |
 | TC-FR-01.5d | Equivalence | Queries and `findById` in two orgs | Each org sees only its rows | `TenantFilteringTest` | Automated |
 | TC-FR-01.5e | Equivalence | An alert sent with another org's tool token; overdue escalations in two orgs | Each lands in, and escalates in, its own org | `AlertWebhookOrgTest`, `EscalationWorkerOrgTest` | Automated |
 | TC-FR-01.5f | Equivalence | Two orgs declare incidents | Each numbers from INC-1 | `IncidentNumberingTest` | Automated |
@@ -459,11 +458,7 @@ requests (#179, #180).
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
 
----
-
-## Sprint 4
-
-### Audit Log API (FR-13, Issue #153)
+### Audit log API (FR-13, #153)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -478,13 +473,12 @@ requests (#179, #180).
 | TC-FR-13.2i | Decision table | Combined itemType and actorId filters | Returns only records matching every supplied filter (AND semantics) | `AuditControllerTest.combinesFiltersUsingAndSemantics` | Automated |
 | TC-FR-13.2j | Equivalence | Filter with no matching records | 200 with empty content and totalElements = 0 | `AuditControllerTest.emptyResultsReturnAnEmptyPage` | Automated |
 | TC-FR-13.2k | Equivalence (invalid) | Negative page, invalid timestamp, from >= to, unknown itemType | 400 Bad Request with field errors | `AuditControllerTest.invalidPageAndTimeRangeReturn400` | Automated |
-| TC-FR-01.2f | Decision table | Engineer calls `GET /api/audit` | 403 Forbidden | `AuditControllerTest.engineerReceives403`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
-| TC-FR-01.2g | Decision table | Viewer calls `GET /api/audit` | 403 Forbidden | `AuditControllerTest.viewerReceives403`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
-| TC-FR-01.2h | Decision table | Unauthenticated call to `GET /api/audit` | 401 Unauthorized | `AuditControllerTest.unauthenticatedReceives401`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
-| TC-FR-01.1n | Equivalence (invalid) | Invalid token header to `GET /api/audit` | 401 Unauthorized | `AuditControllerTest.invalidTokenReceives401` | Automated |
+| TC-FR-01.2f | Decision table | Engineer calls `GET /api/audit` | 403 Forbidden | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-01.2g | Decision table | Viewer calls `GET /api/audit` | 403 Forbidden | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-01.2h | Decision table | Unauthenticated call to `GET /api/audit` | 401 Unauthorized | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
 | TC-FR-13.3b | Negative | Repeated reads to `GET /api/audit` | Audit log row count and entry contents remain completely unchanged | `AuditControllerTest.readingAuditLogDoesNotChangeExistingEntries` | Automated |
 | TC-FR-13.2l | Equivalence | System-generated audit record with null actor | 200 with null actorDisplayName, entry successfully returned | `AuditControllerTest.systemGeneratedEntryWithNullActorIsHandledCorrectly` | Automated |
-| TC-FR-13.2m | Ordering | Entries with identical recordedAt timestamps | Secondary sort by id DESC produces deterministic ordering | `AuditControllerTest.equalTimestampsDeterminiticOrdering` | Automated |
+| TC-FR-13.2m | Ordering | Entries with identical recordedAt timestamps | Secondary sort by id DESC produces deterministic ordering | `AuditControllerTest.equalTimestampsDeterministicOrdering` | Automated |
 | TC-FR-13.3c | Negative | POST, PUT, DELETE requests to `/api/audit` | 405 Method Not Allowed; endpoint is strictly read-only | `AuditControllerTest.mutationMethodsAreNotExposed` | Automated |
 
 ---

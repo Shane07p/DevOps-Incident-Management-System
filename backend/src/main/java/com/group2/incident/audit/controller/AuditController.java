@@ -12,6 +12,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
+import java.util.stream.Collectors;
+import java.util.Locale;
+import java.util.Arrays;
 import java.time.format.DateTimeParseException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Audit", description = "Audit log — Admin access only. Read-only; no entry is created, edited, or deleted by this endpoint.")
 @RequiredArgsConstructor
 public class AuditController {
+
+    // Built from the enum, so a new item type shows up here without an edit.
+    private static final String VALID_ITEM_TYPES = Arrays.stream(AuditItemType.values())
+            .map(Enum::name)
+            .collect(Collectors.joining(", "));
 
     private final AuditQueryService auditQueryService;
 
@@ -89,10 +97,10 @@ public class AuditController {
             return null;
         }
         try {
-            return AuditItemType.valueOf(raw.toUpperCase());
+            return AuditItemType.valueOf(raw.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new FieldValidationException("itemType",
-                    "Unknown item type '" + raw + "'. Valid values: USER, SERVICE, INCIDENT, TOOL");
+                    "Unknown item type '" + raw + "'. Valid values: " + VALID_ITEM_TYPES);
         }
     }
 

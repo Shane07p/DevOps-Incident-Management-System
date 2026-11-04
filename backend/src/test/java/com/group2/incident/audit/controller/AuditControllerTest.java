@@ -1,7 +1,10 @@
 package com.group2.incident.audit.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -12,8 +15,8 @@ import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.audit.service.AuditQueryService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
-import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,9 +25,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -34,7 +34,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @IntegrationTest
 class AuditControllerTest {
 
-    private static final String PASSWORD = "DevPassw0rd!";
     // Fixed UTC instants so ordering tests are deterministic.
     private static final Instant T1 = Instant.parse("2026-01-01T10:00:00Z");
     private static final Instant T2 = Instant.parse("2026-01-02T10:00:00Z");
@@ -45,69 +44,33 @@ class AuditControllerTest {
     private MockMvc mvc;
 
     @Autowired
-    private AppUserRepository users;
+    private TestAccounts accounts;
 
     @Autowired
     private AuditEntryRepository auditEntries;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
     private String adminToken;
-    private String engineerToken;
-    private String viewerToken;
     private AppUser admin;
     private AppUser engineer;
 
     @BeforeEach
     void setUp() throws Exception {
-        admin = users.saveAndFlush(new AppUser("audit_admin", "Audit Admin",
-                passwordEncoder.encode(PASSWORD), Role.ADMIN, Instant.now()));
-        engineer = users.saveAndFlush(new AppUser("audit_eng", "Audit Engineer",
-                passwordEncoder.encode(PASSWORD), Role.ENGINEER, Instant.now()));
-        AppUser viewer = users.saveAndFlush(new AppUser("audit_viewer", "Audit Viewer",
-                passwordEncoder.encode(PASSWORD), Role.VIEWER, Instant.now()));
-
-        adminToken = login("audit_admin");
-        engineerToken = login("audit_eng");
-        viewerToken = login("audit_viewer");
+        admin = accounts.create("audit_admin@test.local", Role.ADMIN);
+        engineer = accounts.create("audit_eng@test.local", Role.ENGINEER);
+        adminToken = accounts.token("audit_admin@test.local");
     }
 
-    // ── Security ─────────────────────────────────────────────────────────────
-
-    @Test
-    void engineerReceives403() throws Exception {
-        mvc.perform(get("/api/audit").header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void viewerReceives403() throws Exception {
-        mvc.perform(get("/api/audit").header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void unauthenticatedReceives401() throws Exception {
-        mvc.perform(get("/api/audit"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void invalidTokenReceives401() throws Exception {
-        mvc.perform(get("/api/audit").header(HttpHeaders.AUTHORIZATION, "Bearer invalid.token.here"))
-                .andExpect(status().isUnauthorized());
-    }
+    // Who may call GET /api/audit is checked once, in SecurityMatrixTest.
 
     @Test
     void mutationMethodsAreNotExposed() throws Exception {
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/audit")
+        mvc.perform(post("/api/audit")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isMethodNotAllowed());
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/audit")
+        mvc.perform(put("/api/audit")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isMethodNotAllowed());
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/audit")
+        mvc.perform(delete("/api/audit")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isMethodNotAllowed());
     }
@@ -138,7 +101,7 @@ class AuditControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").isNumber())
-                .andExpect(jsonPath("$.content[0].actorDisplayName").value("Audit Admin"))
+                .andExpect(jsonPath("$.content[0].actorDisplayName").value("audit_admin"))
                 .andExpect(jsonPath("$.content[0].action").value("SERVICE_CREATED"))
                 .andExpect(jsonPath("$.content[0].itemType").value("SERVICE"))
                 .andExpect(jsonPath("$.content[0].itemId").value(99))
@@ -255,7 +218,7 @@ class AuditControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].actorDisplayName").value("Audit Admin"));
+                .andExpect(jsonPath("$.content[0].actorDisplayName").value("audit_admin"));
     }
 
     @Test
@@ -328,7 +291,7 @@ class AuditControllerTest {
     // ── Ordering stability ────────────────────────────────────────────────────
 
     @Test
-    void equalTimestampsDeterminiticOrdering() throws Exception {
+    void equalTimestampsDeterministicOrdering() throws Exception {
         // Two entries with the same recordedAt — ordering falls back to id DESC.
         AuditEntry first = saveEntry(admin, AuditAction.USER_CREATED, AuditItemType.USER, 1L, "first by id", T1);
         AuditEntry second = saveEntry(admin, AuditAction.SERVICE_CREATED, AuditItemType.SERVICE, 2L, "second by id", T1);
@@ -369,17 +332,5 @@ class AuditControllerTest {
     private AuditEntry saveEntry(AppUser actor, AuditAction action, AuditItemType itemType,
                                  long itemId, String details, Instant recordedAt) {
         return auditEntries.saveAndFlush(new AuditEntry(actor, action, itemType, itemId, details, recordedAt));
-    }
-
-    private String login(String username) throws Exception {
-        String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
-        String response = mvc.perform(
-                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                                .request(HttpMethod.POST, "/api/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(response, "$.token");
     }
 }

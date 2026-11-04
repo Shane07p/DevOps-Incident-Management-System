@@ -290,6 +290,13 @@ public class SecurityMatrixTest {
 						200, 200, 403, 401
 				),
 				new MatrixRow(
+						"PUT /api/incidents/{id}/roles",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/roles",
+						"{\"role\":\"COMMS\",\"userId\":${ASSIGNEE_ID}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"POST /api/incidents/{id}/comments",
 						HttpMethod.POST,
 						"/api/incidents/{id}/comments",

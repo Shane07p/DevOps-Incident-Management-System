@@ -6,6 +6,7 @@ import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.ServiceEntity;
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.service.OnCallService;
 import com.group2.incident.catalog.service.ServiceCatalogService;
@@ -13,14 +14,17 @@ import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
+import com.group2.incident.incident.dto.IncidentRolesDto;
 import com.group2.incident.incident.dto.IncidentServiceDto;
 import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.IncidentUserDto;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.entity.Incident;
+import com.group2.incident.incident.entity.IncidentRole;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
@@ -183,16 +187,26 @@ public class IncidentService {
 
 	/** Maps an incident and its append-only timeline, including correction links, to API data. */
 	private static IncidentResponse toResponse(Incident incident, List<TimelineEntry> timeline) {
+		return toResponse(incident, timeline, null, null, null);
+	}
+
+	private static IncidentResponse toResponse(
+			Incident incident,
+			List<TimelineEntry> timeline,
+			IncidentRole assignedRole,
+			IncidentUserDto assignedUser,
+			String warning
+	) {
 		IncidentServiceDto serviceDto = new IncidentServiceDto(
 				incident.getService().getId(),
 				incident.getService().getName()
 		);
-		IncidentUserDto reporterDto = incident.getReporter() != null
-				? new IncidentUserDto(incident.getReporter().getId(), incident.getReporter().getDisplayName())
-				: null;
-		IncidentUserDto assigneeDto = incident.getAssignee() != null
-				? new IncidentUserDto(incident.getAssignee().getId(), incident.getAssignee().getDisplayName())
-				: null;
+		IncidentUserDto reporterDto = toUserDto(incident.getReporter());
+		IncidentUserDto assigneeDto = toUserDto(incident.getAssignee());
+		IncidentUserDto leadDto = toUserDto(incident.getLead());
+		IncidentUserDto commsDto = toUserDto(incident.getComms());
+		IncidentUserDto opsDto = toUserDto(incident.getOps());
+		IncidentRolesDto rolesDto = new IncidentRolesDto(leadDto, commsDto, opsDto);
 
 		List<TimelineEntryResponse> timelineResponses = timeline.stream()
 				.map(t -> new TimelineEntryResponse(
@@ -215,6 +229,13 @@ public class IncidentService {
 				incident.getStatus(),
 				reporterDto,
 				assigneeDto,
+				leadDto,
+				commsDto,
+				opsDto,
+				rolesDto,
+				assignedRole,
+				assignedUser,
+				warning,
 				incident.getCreatedAt(),
 				incident.getResponseTargetMinutes(),
 				incident.getResolutionTargetMinutes(),
@@ -222,6 +243,10 @@ public class IncidentService {
 				incident.getResolutionDueAt(),
 				timelineResponses
 		);
+	}
+
+	private static IncidentUserDto toUserDto(AppUser user) {
+		return user != null ? new IncidentUserDto(user.getId(), user.getDisplayName()) : null;
 	}
 
 	/** Persists a comment as an independent timeline insert, including for closed incidents. */
@@ -317,6 +342,95 @@ public class IncidentService {
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		return toResponse(incident, timeline);
+	}
+
+	/**
+	 * Assigns an incident role (LEAD, COMMS, OPS) to an eligible user (D39, FR-05.4).
+	 * Role assignments are independent of the incident's assignee and never restart clocks.
+	 * If one user holds multiple roles on a SEV1 or SEV2 incident, a warning is returned (FR-05.5).
+	 */
+	@Transactional
+	public IncidentResponse assignRole(Long incidentId, AssignRoleRequest request, Long actorId) {
+		if (request == null || request.role() == null) {
+			throw new FieldValidationException("role", "Role is required");
+		}
+		if (request.userId() != null && request.assigneeId() != null
+				&& !request.userId().equals(request.assigneeId())) {
+			throw new FieldValidationException("userId", "Conflicting userId and assigneeId provided");
+		}
+		if (request.targetUserId() == null) {
+			throw new FieldValidationException("userId", "User is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+
+		if (incident.getStatus() == IncidentStatus.CLOSED) {
+			throw new ConflictException("Cannot change roles on a closed incident");
+		}
+
+		Membership targetMember = orgMembers.find(request.targetUserId())
+				.orElseThrow(() -> new FieldValidationException("userId", "User not found"));
+
+		if (!targetMember.isEnabled()) {
+			throw new FieldValidationException("userId", "User must be an enabled member");
+		}
+
+		AppUser newRoleUser = targetMember.getUser();
+		AppUser actor = requireActor(actorId);
+
+		AppUser previousUser = incident.getRoleUser(request.role());
+		if (previousUser != null && previousUser.getId().equals(newRoleUser.getId())) {
+			String field = request.userId() != null ? "userId" : "assigneeId";
+			throw new FieldValidationException(field, "Already assigned to this role");
+		}
+
+		String previousName = previousUser != null ? previousUser.getDisplayName() : null;
+
+		incident.assignRole(request.role(), newRoleUser);
+
+		// Check for multiple roles on the incident (FR-05.5, D39)
+		int roleCount = 0;
+		if (incident.getLead() != null && incident.getLead().getId().equals(newRoleUser.getId())) roleCount++;
+		if (incident.getComms() != null && incident.getComms().getId().equals(newRoleUser.getId())) roleCount++;
+		if (incident.getOps() != null && incident.getOps().getId().equals(newRoleUser.getId())) roleCount++;
+
+		boolean hasMultipleRoles = roleCount > 1;
+
+		String warning = null;
+		if (hasMultipleRoles && (incident.getSeverity() == Severity.SEV1 || incident.getSeverity() == Severity.SEV2)) {
+			warning = "User " + newRoleUser.getDisplayName() + " holds multiple incident roles on a "
+					+ incident.getSeverity() + " incident";
+		}
+
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		}
+		catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException("This record was changed by another request; reload and try again");
+		}
+
+		Instant now = clock.instant();
+		String details = previousUser == null
+				? "Assigned " + request.role() + " to " + newRoleUser.getDisplayName()
+				: "Assigned " + request.role() + " from " + previousName + " to " + newRoleUser.getDisplayName();
+
+		TimelineEntry timelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.ROLE_ASSIGNED,
+				details,
+				now
+		);
+		timelineEntryRepository.save(timelineEntry);
+
+		notificationService.createNotification(
+				newRoleUser,
+				incident,
+				"You have been assigned the role " + request.role() + " on incident " + incident.getReference() + ": " + incident.getTitle()
+		);
+
+		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, timeline, request.role(), toUserDto(newRoleUser), warning);
 	}
 
 	private Incident requireIncident(Long incidentId) {

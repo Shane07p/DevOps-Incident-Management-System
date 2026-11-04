@@ -1,6 +1,7 @@
 package com.group2.incident.incident.dto;
 
 import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.incident.entity.IncidentRole;
 import com.group2.incident.incident.entity.IncidentStatus;
 import java.time.Instant;
 import java.util.List;
@@ -15,6 +16,13 @@ public record IncidentResponse(
 		IncidentStatus status,
 		IncidentUserDto reporter,
 		IncidentUserDto assignee,
+		IncidentUserDto lead,
+		IncidentUserDto comms,
+		IncidentUserDto ops,
+		IncidentRolesDto roles,
+		IncidentRole role,
+		IncidentUserDto user,
+		String warning,
 		Instant createdAt,
 		int responseTargetMinutes,
 		int resolutionTargetMinutes,
@@ -22,4 +30,25 @@ public record IncidentResponse(
 		Instant resolutionDueAt,
 		List<TimelineEntryResponse> timeline
 ) {
+	public IncidentResponse(
+			long id,
+			String reference,
+			String title,
+			String description,
+			IncidentServiceDto service,
+			Severity severity,
+			IncidentStatus status,
+			IncidentUserDto reporter,
+			IncidentUserDto assignee,
+			Instant createdAt,
+			int responseTargetMinutes,
+			int resolutionTargetMinutes,
+			Instant responseDueAt,
+			Instant resolutionDueAt,
+			List<TimelineEntryResponse> timeline
+	) {
+		this(id, reference, title, description, service, severity, status, reporter, assignee,
+				null, null, null, null, null, null, null,
+				createdAt, responseTargetMinutes, resolutionTargetMinutes, responseDueAt, resolutionDueAt, timeline);
+	}
 }

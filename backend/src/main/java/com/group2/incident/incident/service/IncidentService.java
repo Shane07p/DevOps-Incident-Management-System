@@ -264,6 +264,37 @@ public class IncidentService {
 		return toTimelineEntryResponse(entry);
 	}
 
+	/** Adds an evidence link without changing incident version or status. */
+	@Transactional
+	public TimelineEntryResponse addEvidence(Long incidentId, String url, String label, Long actorId) {
+		if (url == null || url.isBlank()) {
+			throw new FieldValidationException("url", "URL is required");
+		}
+		String normalizedUrl = url.trim();
+		java.net.URI uri;
+		try {
+			uri = java.net.URI.create(normalizedUrl);
+		} catch (IllegalArgumentException ex) {
+			throw new FieldValidationException("url", "Invalid URL");
+		}
+		String scheme = uri.getScheme();
+		if (scheme == null
+				|| !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))
+				|| uri.getHost() == null || uri.getHost().isBlank()
+				|| uri.getUserInfo() != null) {
+			throw new FieldValidationException("url", "Only valid http and https links are allowed");
+		}
+		if (label == null || label.isBlank()) {
+			throw new FieldValidationException("label", "Label is required");
+		}
+		Incident incident = requireIncident(incidentId);
+		AppUser actor = requireActor(actorId);
+		String details = label.trim() + ": " + normalizedUrl;
+		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
+				incident, actor, TimelineEventType.EVIDENCE_ADDED, details, clock.instant()));
+		return toTimelineEntryResponse(entry);
+	}
+
 	/** Appends an attributed correction while preserving the original timeline entry. */
 	@Transactional
 	public TimelineEntryResponse correctTimelineEntry(

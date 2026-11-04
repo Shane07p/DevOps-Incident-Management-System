@@ -94,6 +94,8 @@ class OrgIsolationTest {
 		idsOfB.put("toolId", toolOfB);
 		idsOfB.put("incidentId", incidentOfB);
 		idsOfB.put("notificationId", notificationOfB);
+		// Sign-up and the service each wrote an audit entry in B.
+		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
 	}
 
 	@AfterAll
@@ -183,7 +185,8 @@ class OrgIsolationTest {
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
 				Arguments.of("GET /api/users", "/api/users", "$[*].id", "userId"),
-				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"));
+				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"),
+				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"));
 	}
 
 	/** Every list, read as A, holds none of B's rows. */

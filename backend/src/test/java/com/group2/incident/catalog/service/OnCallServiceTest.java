@@ -190,7 +190,7 @@ class OnCallServiceTest {
         onCallService.updateSchedule(service.getId(), new UpdateOnCallScheduleRequest(
                 owner.getId(),
                 List.of(new ShiftRequest(responderA.getId(), T_18_00, T_22_00))
-        ));
+        ), owner.getId());
 
         OnCallScheduleResponse schedule = onCallService.getSchedule(service.getId());
         assertThat(schedule.fallbackContactId()).isEqualTo(owner.getId());
@@ -200,7 +200,7 @@ class OnCallServiceTest {
     }
 
     @Test
-    @DisplayName("TC-FR-13.1-OC1: Adding a shift produces exactly one audit entry with actor, service, and shift details")
+    @DisplayName("TC-FR-13c: Adding a shift produces exactly one audit entry with actor, service, and shift details")
     void addingShiftProducesOneAuditEntry() {
         Instant t20_start = Instant.parse("2026-10-20T09:00:00Z");
         Instant t20_end = Instant.parse("2026-10-20T17:00:00Z");
@@ -232,7 +232,7 @@ class OnCallServiceTest {
     }
 
     @Test
-    @DisplayName("TC-FR-13.1-OC2: Removing a shift produces exactly one audit entry with removed shift details")
+    @DisplayName("TC-FR-13c: Removing a shift produces exactly one audit entry with removed shift details")
     void removingShiftProducesOneAuditEntry() {
         // Remove shift B, keep shift A and same fallback contact
         UpdateOnCallScheduleRequest request = new UpdateOnCallScheduleRequest(
@@ -258,7 +258,7 @@ class OnCallServiceTest {
     }
 
     @Test
-    @DisplayName("TC-FR-13.1-OC3: Changing fallback contact produces exactly one audit entry with before and after")
+    @DisplayName("TC-FR-13c: Changing fallback contact produces exactly one audit entry with before and after")
     void changingFallbackContactProducesOneAuditEntry() {
         // Keep both shifts identical, only change fallback from fallbackContact to owner
         UpdateOnCallScheduleRequest request = new UpdateOnCallScheduleRequest(
@@ -287,7 +287,7 @@ class OnCallServiceTest {
     }
 
     @Test
-    @DisplayName("TC-FR-13.1-OC4: Changing shifts and fallback contact together produces exactly one audit entry with all changes")
+    @DisplayName("TC-FR-13c: Changing shifts and fallback contact together produces exactly one audit entry with all changes")
     void changingShiftsAndFallbackTogetherProducesOneAuditEntry() {
         Instant t20_start = Instant.parse("2026-10-20T09:00:00Z");
         Instant t20_end = Instant.parse("2026-10-20T17:00:00Z");
@@ -319,7 +319,7 @@ class OnCallServiceTest {
     }
 
     @Test
-    @DisplayName("TC-FR-13.1-OC5: Unchanged schedule produces zero audit entries")
+    @DisplayName("TC-FR-13d: Unchanged schedule produces zero audit entries")
     void unchangedScheduleProducesZeroAuditEntries() {
         // Send the exact same shifts (even in reverse order) with the same fallback contact
         UpdateOnCallScheduleRequest request = new UpdateOnCallScheduleRequest(
@@ -339,7 +339,7 @@ class OnCallServiceTest {
     }
 
     @Test
-    @DisplayName("TC-FR-13.1-OC6: Schedule validation failure leaves no audit entry")
+    @DisplayName("TC-FR-13e: Schedule validation failure leaves no audit entry")
     void scheduleValidationFailureLeavesNoAuditEntry() {
         // Overlapping shifts
         UpdateOnCallScheduleRequest request = new UpdateOnCallScheduleRequest(
@@ -359,62 +359,38 @@ class OnCallServiceTest {
         assertThat(entries).isEmpty();
     }
 
+    // Outside the test transaction, so the save really commits or rolls back; setUp's rows are
+    // committed too and deleted at the end.
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("TC-FR-13.1-OC7: Audit failure rolls back schedule changes and leaves no audit entry")
+    @DisplayName("TC-FR-13e: When the audit entry fails, the schedule change rolls back with it")
     void auditFailureRollsBackScheduleChanges() {
-        long org = OrgContext.current();
-        AppUser isoOwner = OrgContext.runAs(org, () -> createUser("iso_owner", "Iso Owner"));
-        AppUser isoFallback = OrgContext.runAs(org, () -> createUser("iso_fb", "Iso Fallback"));
-        AppUser isoNewFb = OrgContext.runAs(org, () -> createUser("iso_new_fb", "Iso New Fallback"));
-        AppUser isoResponder = OrgContext.runAs(org, () -> createUser("iso_resp", "Iso Responder"));
-
-        ServiceEntity isoService = OrgContext.runAs(org, () -> {
-            ServiceEntity s = new ServiceEntity("IsoOnCallService", "Iso Service", isoOwner, Criticality.HIGH, clock.instant());
-            for (Severity severity : Severity.values()) {
-                s.putTarget(severity, 15, 240);
-            }
-            s.changeFallbackContact(isoFallback);
-            ServiceEntity saved = services.saveAndFlush(s);
-            shifts.saveAndFlush(new OnCallShift(saved, isoResponder, T_09_00, T_17_00));
-            return saved;
-        });
-
         try {
-            AuditService spy = AopTestUtils.getUltimateTargetObject(auditService);
+            AuditService target = AopTestUtils.getUltimateTargetObject(auditService);
             doThrow(new RuntimeException("Simulated audit database error"))
-                    .when(spy)
+                    .when(target)
                     .record(any(), eq(AuditAction.ON_CALL_SCHEDULE_UPDATED), any(), anyLong(), anyString());
 
             UpdateOnCallScheduleRequest request = new UpdateOnCallScheduleRequest(
-                    isoNewFb.getId(),
-                    List.of(new ShiftRequest(isoResponder.getId(), T_18_00, T_22_00))
+                    owner.getId(),
+                    List.of(new ShiftRequest(responderA.getId(), T_18_00, T_22_00))
             );
 
-            assertThatThrownBy(() -> OrgContext.runAs(org, () -> onCallService.updateSchedule(isoService.getId(), request, isoOwner.getId())))
-                    .isInstanceOf(RuntimeException.class)
+            assertThatThrownBy(() -> onCallService.updateSchedule(service.getId(), request, owner.getId()))
                     .hasMessage("Simulated audit database error");
 
-            // Verify rollback: fallback contact is still isoFallback, not isoNewFb
-            ServiceEntity current = services.findWithDetailsById(isoService.getId()).orElseThrow();
-            assertThat(current.getFallbackContact().getId()).isEqualTo(isoFallback.getId());
-
-            // Shifts are still the original shifts (T_09_00 to T_17_00), not the updated shift
-            List<OnCallShift> currentShifts = shifts.findByServiceIdOrderByStartTimeAsc(isoService.getId());
-            assertThat(currentShifts).hasSize(1);
-            assertThat(currentShifts.get(0).getStartTime()).isEqualTo(T_09_00);
-            assertThat(currentShifts.get(0).getEndTime()).isEqualTo(T_17_00);
-
-            // No audit entry persisted
-            List<AuditEntry> entries = auditEntries.findByItemTypeAndItemIdOrderByRecordedAtDesc(
-                    AuditItemType.SERVICE, isoService.getId()
-            );
-            assertThat(entries).isEmpty();
+            assertThat(services.findWithDetailsById(service.getId()).orElseThrow().getFallbackContact().getId())
+                    .isEqualTo(fallbackContact.getId());
+            assertThat(shifts.findByServiceIdOrderByStartTimeAsc(service.getId()))
+                    .extracting(OnCallShift::getStartTime)
+                    .containsExactly(T_09_00, T_18_00);
+            assertThat(auditEntries.findByItemTypeAndItemIdOrderByRecordedAtDesc(AuditItemType.SERVICE, service.getId()))
+                    .isEmpty();
         }
         finally {
-            shifts.deleteByServiceId(isoService.getId());
-            services.deleteById(isoService.getId());
-            users.deleteAll(List.of(isoOwner, isoFallback, isoNewFb, isoResponder));
+            shifts.deleteAllInBatch();
+            services.deleteById(service.getId());
+            users.deleteAll(List.of(owner, fallbackContact, responderA, responderB));
         }
     }
 
@@ -434,8 +410,8 @@ class OnCallServiceTest {
         ExecutorService otherAdmin = Executors.newSingleThreadExecutor();
         try {
             Future<OnCallScheduleResponse> secondSave = new TransactionTemplate(transactionManager).execute(status -> {
-                onCallService.updateSchedule(service.getId(), first);
-                Future<OnCallScheduleResponse> started = otherAdmin.submit(() -> OrgContext.runAs(org, () -> onCallService.updateSchedule(service.getId(), second)));
+                onCallService.updateSchedule(service.getId(), first, owner.getId());
+                Future<OnCallScheduleResponse> started = otherAdmin.submit(() -> OrgContext.runAs(org, () -> onCallService.updateSchedule(service.getId(), second, owner.getId())));
                 waitForASessionBlockedOnALock();
                 return started;
             });
@@ -447,10 +423,21 @@ class OnCallServiceTest {
         }
         finally {
             otherAdmin.shutdownNow();
+            deleteAuditEntriesOf(service.getId());
             shifts.deleteAllInBatch();
             services.deleteById(service.getId());
             users.deleteAll(List.of(owner, fallbackContact, responderA, responderB));
         }
+    }
+
+    // Both saves commit an audit entry naming the owner, which would block deleting the owner. The
+    // log is append-only, so replica mode skips its trigger for this one delete (see AlertGroupingTest).
+    private void deleteAuditEntriesOf(Long serviceId) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role = 'replica'");
+            jdbc.update("DELETE FROM audit_entry WHERE item_type = 'SERVICE' AND item_id = ?", serviceId);
+            jdbc.execute("SET LOCAL session_replication_role = 'origin'");
+        });
     }
 
     // Up to two seconds for the second save to reach the lock, so every run sees the same order.

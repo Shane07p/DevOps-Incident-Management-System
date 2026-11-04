@@ -25,9 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,8 +39,17 @@ public class OnCallService {
     private final AuditService auditService;
     private final Clock clock;
 
+    // A shift as compared between saves. PostgreSQL keeps microseconds, so a saved shift is compared
+    // at that precision; otherwise sending the same schedule again would look like a change.
     private record ShiftKey(Long responderId, Instant startTime, Instant endTime) {
+
+        static ShiftKey of(Long responderId, Instant startTime, Instant endTime) {
+            return new ShiftKey(responderId, startTime.truncatedTo(ChronoUnit.MICROS), endTime.truncatedTo(ChronoUnit.MICROS));
+        }
     }
+
+    private static final Comparator<ShiftKey> BY_START = Comparator.comparing(ShiftKey::startTime)
+            .thenComparing(ShiftKey::responderId);
 
     @Transactional(readOnly = true)
     public OnCallScheduleResponse getSchedule(Long serviceId) {
@@ -51,11 +57,6 @@ public class OnCallService {
                 .orElseThrow(() -> new NotFoundException("Service " + serviceId + " not found"));
         List<OnCallShift> shifts = onCallShiftRepository.findByServiceIdOrderByStartTimeAsc(serviceId);
         return OnCallScheduleResponse.from(service, shifts);
-    }
-
-    @Transactional
-    public OnCallScheduleResponse updateSchedule(Long serviceId, UpdateOnCallScheduleRequest request) {
-        return updateSchedule(serviceId, request, null);
     }
 
     @Transactional
@@ -75,20 +76,15 @@ public class OnCallService {
         List<ShiftRequest> shiftRequests = request.shifts() != null ? request.shifts() : List.of();
         validateShifts(shiftRequests);
 
+        // Request order is kept: the response lists the shifts as they were sent.
         Map<ShiftKey, AppUser> newMap = new LinkedHashMap<>();
-        List<ShiftRequest> sortedRequests = shiftRequests.stream()
-                .sorted(Comparator.comparing(ShiftRequest::startTime))
-                .toList();
-        for (ShiftRequest sr : sortedRequests) {
+        for (ShiftRequest sr : shiftRequests) {
             Membership responderMember = orgMembers.find(sr.responderId())
                     .orElseThrow(() -> new FieldValidationException("shifts", "Responder user " + sr.responderId() + " not found"));
             if (!responderMember.isEnabled()) {
                 throw new FieldValidationException("shifts", "Responder must be an enabled user");
             }
-            AppUser responder = responderMember.getUser();
-            Instant start = sr.startTime().truncatedTo(ChronoUnit.MICROS);
-            Instant end = sr.endTime().truncatedTo(ChronoUnit.MICROS);
-            newMap.put(new ShiftKey(sr.responderId(), start, end), responder);
+            newMap.put(ShiftKey.of(sr.responderId(), sr.startTime(), sr.endTime()), responderMember.getUser());
         }
 
         AppUser previousFallback = service.getFallbackContact();
@@ -96,9 +92,7 @@ public class OnCallService {
 
         Map<ShiftKey, OnCallShift> existingMap = new LinkedHashMap<>();
         for (OnCallShift s : existingShifts) {
-            Instant start = s.getStartTime().truncatedTo(ChronoUnit.MICROS);
-            Instant end = s.getEndTime().truncatedTo(ChronoUnit.MICROS);
-            existingMap.put(new ShiftKey(s.getResponder().getId(), start, end), s);
+            existingMap.put(ShiftKey.of(s.getResponder().getId(), s.getStartTime(), s.getEndTime()), s);
         }
 
         boolean fallbackChanged = (previousFallback == null)
@@ -106,12 +100,12 @@ public class OnCallService {
 
         List<ShiftKey> addedKeys = newMap.keySet().stream()
                 .filter(k -> !existingMap.containsKey(k))
-                .sorted(Comparator.comparing(ShiftKey::startTime).thenComparing(ShiftKey::responderId))
+                .sorted(BY_START)
                 .toList();
 
         List<ShiftKey> removedKeys = existingMap.keySet().stream()
                 .filter(k -> !newMap.containsKey(k))
-                .sorted(Comparator.comparing(ShiftKey::startTime).thenComparing(ShiftKey::responderId))
+                .sorted(BY_START)
                 .toList();
 
         boolean shiftsChanged = !addedKeys.isEmpty() || !removedKeys.isEmpty();
@@ -139,16 +133,14 @@ public class OnCallService {
 
         onCallShiftRepository.deleteByServiceId(serviceId);
 
+        // Saved as compared, so the stored times are the ones the next save is compared against.
         List<OnCallShift> savedShifts = new ArrayList<>();
-        for (ShiftRequest sr : shiftRequests) {
-            AppUser responder = newMap.get(new ShiftKey(sr.responderId(),
-                    sr.startTime().truncatedTo(ChronoUnit.MICROS),
-                    sr.endTime().truncatedTo(ChronoUnit.MICROS)));
-            OnCallShift shift = new OnCallShift(service, responder, sr.startTime(), sr.endTime());
-            savedShifts.add(onCallShiftRepository.save(shift));
+        for (Map.Entry<ShiftKey, AppUser> entry : newMap.entrySet()) {
+            ShiftKey key = entry.getKey();
+            savedShifts.add(onCallShiftRepository.save(new OnCallShift(service, entry.getValue(), key.startTime(), key.endTime())));
         }
 
-        AppUser actor = resolveActor(actorId);
+        AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
         auditService.record(
                 actor,
                 AuditAction.ON_CALL_SCHEDULE_UPDATED,
@@ -158,20 +150,6 @@ public class OnCallService {
         );
 
         return OnCallScheduleResponse.from(service, savedShifts);
-    }
-
-    private AppUser resolveActor(Long actorId) {
-        if (actorId != null) {
-            return appUserRepository.findById(actorId).orElse(null);
-        }
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            try {
-                return appUserRepository.findById(Long.parseLong(jwt.getSubject())).orElse(null);
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
     }
 
     public AppUser resolveAssignee(ServiceEntity service, Instant at) {

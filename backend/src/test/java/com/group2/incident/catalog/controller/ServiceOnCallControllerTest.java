@@ -22,6 +22,7 @@ import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

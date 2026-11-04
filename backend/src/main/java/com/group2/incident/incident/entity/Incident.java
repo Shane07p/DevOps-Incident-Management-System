@@ -66,6 +66,18 @@ public class Incident {
 	@JoinColumn(name = "assignee_id")
 	private AppUser assignee;
 
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "lead_id")
+	private AppUser lead;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "comms_id")
+	private AppUser comms;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "ops_id")
+	private AppUser ops;
+
 	@Column(name = "correlation_source", length = 100)
 	private String correlationSource;
 
@@ -111,6 +123,22 @@ public class Incident {
 
 	public void assignTo(AppUser assignee) {
 		this.assignee = assignee;
+	}
+
+	public void assignRole(IncidentRole role, AppUser user) {
+		switch (role) {
+			case LEAD -> this.lead = user;
+			case COMMS -> this.comms = user;
+			case OPS -> this.ops = user;
+		}
+	}
+
+	public AppUser getRoleUser(IncidentRole role) {
+		return switch (role) {
+			case LEAD -> this.lead;
+			case COMMS -> this.comms;
+			case OPS -> this.ops;
+		};
 	}
 
 	/** Called once, right after construction, with the org's next number (IncidentService). */

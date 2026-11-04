@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -64,6 +65,14 @@ class ApiExceptionHandlerTest {
 	}
 
 	@Test
+	void optimisticLockingFailureExceptionReturns409() throws Exception {
+		mvc.perform(get("/probe/optimistic-lock"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409))
+				.andExpect(jsonPath("$.message").value("This record was changed by another request; reload and try again"));
+	}
+
+	@Test
 	void failedLoginReturns401WithoutSayingWhichPartWasWrong() throws Exception {
 		mvc.perform(get("/probe/login"))
 				.andExpect(status().isUnauthorized())
@@ -103,6 +112,11 @@ class ApiExceptionHandlerTest {
 		@GetMapping("/duplicate")
 		void duplicate() {
 			throw new ConflictException("Username already taken");
+		}
+
+		@GetMapping("/optimistic-lock")
+		void optimisticLock() {
+			throw new OptimisticLockingFailureException("stale version");
 		}
 
 		@GetMapping("/login")

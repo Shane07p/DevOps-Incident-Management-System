@@ -18,10 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, TestAccounts.class, TestOrgs.class })
 @Transactional
 @TestExecutionListeners(
-		listeners = RateLimitResetTestExecutionListener.class,
+		listeners = { RateLimitResetTestExecutionListener.class, TestOrgExecutionListener.class },
 		mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
 )
 public @interface IntegrationTest {

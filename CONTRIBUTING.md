@@ -45,7 +45,13 @@ version. To run the app, see the [README](README.md).
    cd backend && ./mvnw verify
    cd frontend && npm run lint && npm run typecheck && npm test
    ```
-7. **Mark the PR ready.** CI must be green. Shane reviews, usually the same day.
+7. **Check CI, then mark the PR ready.** Wait for the checks with `gh pr checks <n> --watch`. If one
+   fails, read its log, fix the cause, and push again:
+   ```
+   gh run list --branch <your-branch>
+   gh run view <run-id> --log-failed
+   ```
+   Mark the PR ready only when every check is green. Shane reviews, usually the same day.
 8. **Fix review comments on the same branch.** If `main` moved on, rebase and push:
    ```
    git fetch origin && git rebase origin/main

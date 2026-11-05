@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.group2.incident.common.ratelimit.RateLimitExceededException;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 /**
  * Turns our exceptions into {@link ApiError} responses. There is deliberately no catch-all
@@ -49,6 +50,11 @@ public class ApiExceptionHandler {
 		return respond(HttpStatus.CONFLICT, ex.getMessage(), Map.of());
 	}
 
+	@ExceptionHandler(OptimisticLockingFailureException.class)
+	ResponseEntity<ApiError> optimisticLock(OptimisticLockingFailureException ex) {
+		return respond(HttpStatus.CONFLICT, "This record was changed by another request; reload and try again", Map.of());
+	}
+
 	@ExceptionHandler(UnauthorizedException.class)
 	ResponseEntity<ApiError> unauthorized(UnauthorizedException ex) {
 		return respond(HttpStatus.UNAUTHORIZED, ex.getMessage(), Map.of());
@@ -57,7 +63,7 @@ public class ApiExceptionHandler {
 	// Same message for an unknown user and a wrong password, so login can't be used to find usernames.
 	@ExceptionHandler(AuthenticationException.class)
 	ResponseEntity<ApiError> failedLogin(AuthenticationException ex) {
-		return respond(HttpStatus.UNAUTHORIZED, "Invalid username or password", Map.of());
+		return respond(HttpStatus.UNAUTHORIZED, "Invalid email or password", Map.of());
 	}
 
 	@ExceptionHandler(RateLimitExceededException.class)

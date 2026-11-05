@@ -26,7 +26,7 @@ export function ShiftTimeline({ shifts, now }: { shifts: Shift[]; now: number })
         {visible.map((shift) => {
           const start = Math.max(Date.parse(shift.startTime), windowStart)
           const end = Math.min(Date.parse(shift.endTime), windowEnd)
-          const label = `${shift.responderUsername}, ${formatIst(shift.startTime)} to ${formatIst(shift.endTime)}`
+          const label = `${shift.responderName}, ${formatIst(shift.startTime)} to ${formatIst(shift.endTime)}`
           return (
             <div
               key={shift.id}
@@ -35,7 +35,7 @@ export function ShiftTimeline({ shifts, now }: { shifts: Shift[]; now: number })
               style={{ left: percent((start - windowStart) / span), width: percent((end - start) / span) }}
             >
               <span className="sr-only">{label}</span>
-              <span aria-hidden="true">{shift.responderUsername}</span>
+              <span aria-hidden="true">{shift.responderName}</span>
             </div>
           )
         })}

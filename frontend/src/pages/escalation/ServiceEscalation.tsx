@@ -83,7 +83,7 @@ export function ServiceEscalation({ serviceId }: { serviceId: number }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <PagingOrder levels={levels} fallback={onCall.data?.fallbackContactUsername ?? null} />
+      <PagingOrder levels={levels} fallback={onCall.data?.fallbackContactName ?? null} />
       {isAdmin && (
         <EscalationLevelsForm
           // A save gives the policy a new time, which starts the form again from what was saved.

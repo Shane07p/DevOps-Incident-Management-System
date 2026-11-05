@@ -3,13 +3,13 @@ import { apiFetch } from './client'
 import { userSchema, type Role } from './schemas'
 
 export interface NewUser {
-  username: string
+  email: string
   displayName: string
   password: string
   role: Role
 }
 
-/** Admins only. Passwords never come back from the server. */
+/** Admins only, and only the Admin's own org. Passwords never come back from the server. */
 export function listUsers() {
   return apiFetch('/users', z.array(userSchema))
 }

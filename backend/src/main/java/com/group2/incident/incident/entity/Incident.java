@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "incident")
@@ -30,6 +31,14 @@ public class Incident {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	// Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
+
+	@Column(nullable = false, updatable = false)
+	private Long number;
 
 	@Column(nullable = false, length = 200)
 	private String title;
@@ -56,6 +65,18 @@ public class Incident {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "assignee_id")
 	private AppUser assignee;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "lead_id")
+	private AppUser lead;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "comms_id")
+	private AppUser comms;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "ops_id")
+	private AppUser ops;
 
 	@Column(name = "correlation_source", length = 100)
 	private String correlationSource;
@@ -104,8 +125,32 @@ public class Incident {
 		this.assignee = assignee;
 	}
 
+	public void assignRole(IncidentRole role, AppUser user) {
+		switch (role) {
+			case LEAD -> this.lead = user;
+			case COMMS -> this.comms = user;
+			case OPS -> this.ops = user;
+		}
+	}
+
+	public AppUser getRoleUser(IncidentRole role) {
+		return switch (role) {
+			case LEAD -> this.lead;
+			case COMMS -> this.comms;
+			case OPS -> this.ops;
+		};
+	}
+
+	/** Called once, right after construction, with the org's next number (IncidentService). */
+	public void assignNumber(long number) {
+		if (this.number != null) {
+			throw new IllegalStateException("Incident " + this.number + " already has a number");
+		}
+		this.number = number;
+	}
+
 	public String getReference() {
-		return "INC-" + id;
+		return "INC-" + number;
 	}
 
 	public Instant getResponseDueAt() {

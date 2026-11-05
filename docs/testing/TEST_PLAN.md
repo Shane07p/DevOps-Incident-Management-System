@@ -20,7 +20,7 @@ Sprint 6.
 
 | Level | What it checks | Tools | Where it runs |
 | --- | --- | --- | --- |
-| Unit | Rules with no database: status transitions, SLA arithmetic, on-call slot choice, the 2-region verdict | JUnit 5, a controlled `Clock` | Every build |
+| Unit | Rules with no database: status transitions, SLA arithmetic, on-call slot choice | JUnit 5, a controlled `Clock` | Every build |
 | Integration | Saving and reading data, transactions and rollback, concurrency, migrations, append-only tables | Spring Boot tests with Testcontainers PostgreSQL 16 (`@IntegrationTest`) | Every build |
 | API and security | Status codes, validation errors, and permissions for every endpoint and role | MockMvc, `SecurityMatrixTest` | Every build |
 | Frontend component | Forms, field errors, role-based screens, the API client | Vitest, Testing Library, jsdom | Every build |

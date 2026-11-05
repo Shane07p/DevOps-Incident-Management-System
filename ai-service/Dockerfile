@@ -6,8 +6,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Copy all required Python source modules
 COPY main.py .
+COPY agent_loop.py .
+COPY agent_tools.py .
+COPY providers.py .
+COPY log_patterns.py .
+
+# Copy runtime data (recorded Demo Shop fixtures used by evidence tools)
+COPY data/ ./data/
 
 EXPOSE 8000
 

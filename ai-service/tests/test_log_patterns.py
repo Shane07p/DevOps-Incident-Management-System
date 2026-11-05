@@ -109,7 +109,8 @@ def test_demo_shop_payment_slowdown():
 
 def test_recorded_demo_shop_slow_gateway():
     fixture = (
-        Path(__file__).parent
+        Path(__file__).resolve().parent.parent
+        / "data"
         / "fixtures"
         / "demo_shop_slow_gateway.jsonl"
     )

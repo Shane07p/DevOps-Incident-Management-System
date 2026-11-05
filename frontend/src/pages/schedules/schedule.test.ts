@@ -6,10 +6,10 @@ import { findOverlap, nextShift, onCallAt } from './schedule'
 const schedule: OnCallSchedule = {
   serviceId: 1,
   fallbackContactId: 1,
-  fallbackContactUsername: 'admin',
+  fallbackContactName: 'admin',
   shifts: [
-    { id: 11, responderId: 2, responderUsername: 'engineer', startTime: '2026-10-28T03:30:00Z', endTime: '2026-10-28T11:30:00Z' },
-    { id: 12, responderId: 1, responderUsername: 'admin', startTime: '2026-10-28T11:30:00Z', endTime: '2026-10-28T15:30:00Z' },
+    { id: 11, responderId: 2, responderName: 'engineer', startTime: '2026-10-28T03:30:00Z', endTime: '2026-10-28T11:30:00Z' },
+    { id: 12, responderId: 1, responderName: 'admin', startTime: '2026-10-28T11:30:00Z', endTime: '2026-10-28T15:30:00Z' },
   ],
 }
 
@@ -18,23 +18,23 @@ const at = (iso: string) => Date.parse(iso)
 // TC-FR-15.2e: the page shows the same person the server would assign, at each boundary.
 describe('onCallAt', () => {
   it('counts the first moment of a shift as inside it', () => {
-    expect(onCallAt(schedule, at('2026-10-28T03:30:00Z'))).toEqual({ kind: 'shift', username: 'engineer', until: '2026-10-28T11:30:00Z' })
+    expect(onCallAt(schedule, at('2026-10-28T03:30:00Z'))).toEqual({ kind: 'shift', name: 'engineer', until: '2026-10-28T11:30:00Z' })
   })
 
   it('counts one second before the end as inside it', () => {
-    expect(onCallAt(schedule, at('2026-10-28T11:29:59Z'))).toMatchObject({ kind: 'shift', username: 'engineer' })
+    expect(onCallAt(schedule, at('2026-10-28T11:29:59Z'))).toMatchObject({ kind: 'shift', name: 'engineer' })
   })
 
   it('hands over at the exact end time', () => {
-    expect(onCallAt(schedule, at('2026-10-28T11:30:00Z'))).toMatchObject({ kind: 'shift', username: 'admin' })
+    expect(onCallAt(schedule, at('2026-10-28T11:30:00Z'))).toMatchObject({ kind: 'shift', name: 'admin' })
   })
 
   it('falls back to the fallback contact in a gap', () => {
-    expect(onCallAt(schedule, at('2026-10-28T16:00:00Z'))).toEqual({ kind: 'fallback', username: 'admin' })
+    expect(onCallAt(schedule, at('2026-10-28T16:00:00Z'))).toEqual({ kind: 'fallback', name: 'admin' })
   })
 
   it('says nobody when there is no shift and no fallback contact', () => {
-    const empty = { ...schedule, fallbackContactId: null, fallbackContactUsername: null }
+    const empty = { ...schedule, fallbackContactId: null, fallbackContactName: null }
     expect(onCallAt(empty, at('2026-10-28T16:00:00Z'))).toEqual({ kind: 'nobody' })
   })
 })

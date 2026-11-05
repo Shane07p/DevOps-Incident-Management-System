@@ -21,6 +21,7 @@ import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import java.time.Clock;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @IntegrationTest
 class IncidentCreationRollbackTest {
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private IncidentService incidentService;
@@ -61,7 +65,7 @@ class IncidentCreationRollbackTest {
 	@DisplayName("TC-FR-02.1c: When audit write fails during incident creation, no incident and no timeline entry are saved")
 	void auditFailureRollsBackIncidentAndTimeline() {
 		Instant now = clock.instant();
-		AppUser user = userRepository.saveAndFlush(new AppUser("rollback_engineer", "Rollback Engineer", "hash", Role.ENGINEER, now));
+		AppUser user = accounts.save(new AppUser("rollback_engineer@test.local", "Rollback Engineer", "hash", now), Role.ENGINEER);
 		ServiceEntity service = new ServiceEntity("RollbackService", "Auth and login", user, Criticality.HIGH, now);
 		for (Severity severity : Severity.values()) {
 			service.putTarget(severity, 60, 480);

@@ -1,110 +1,136 @@
-
 package com.group2.incident.monitor.entity;
 
 import com.group2.incident.catalog.entity.ServiceEntity;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import java.time.Instant;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
-import java.time.Instant;
-
+/** An HTTP check of one service (FR-22). Admins change its settings; the checker records its results. */
 @Entity
 @Table(name = "uptime_monitor")
 @Getter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UptimeMonitor {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
-    @Column(nullable = false, length = 100)
-    private String name;
+	// Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
 
-    @Column(nullable = false, length = 2048)
-    private String url;
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "service_id", nullable = false)
+	private ServiceEntity service;
 
-    @Column(name = "expected_status", nullable = false)
-    private Integer expectedStatus = 200;
+	@Column(nullable = false, length = 100)
+	private String name;
 
-    @Column(name = "interval_seconds", nullable = false)
-    private Integer intervalSeconds = 60;
+	@Column(nullable = false, length = 2048)
+	private String url;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "service_id", nullable = false)
-    private ServiceEntity service;
+	@Column(name = "expected_status", nullable = false)
+	private int expectedStatus;
 
-    @Column(name = "failure_threshold", nullable = false)
-    private Integer failureThreshold = 3;
+	@Column(name = "interval_seconds", nullable = false)
+	private int intervalSeconds;
 
-    @Column(nullable = false)
-    private boolean enabled = true;
+	@Column(name = "failure_threshold", nullable = false)
+	private int failureThreshold;
 
-    @Column(name = "consecutive_failures", nullable = false)
-    private Integer consecutiveFailures = 0;
+	@Column(nullable = false)
+	private boolean enabled;
 
-    @Column(name = "outage_started_at")
-    private Instant outageStartedAt;
+	@Column(name = "next_check_at", nullable = false)
+	private Instant nextCheckAt;
 
-    @Column(name = "active_alert_id")
-    private Long activeAlertId;
+	@Column(name = "consecutive_failures", nullable = false)
+	private int consecutiveFailures;
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+	@Column(name = "outage_started_at")
+	private Instant outageStartedAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+	// The alert raised for the current outage; cleared when the monitor passes again.
+	@Column(name = "active_alert_id")
+	private Long activeAlertId;
 
-    public void configure(
-            String name,
-            String url,
-            Integer expectedStatus,
-            Integer intervalSeconds,
-            ServiceEntity service,
-            Integer failureThreshold,
-            boolean enabled,
-            Instant now) {
+	// An edit saved while a check is in flight changes this, so that check's result is dropped.
+	@Version
+	@Column(nullable = false)
+	private long version;
 
-        this.name = name;
-        this.url = url;
-        this.expectedStatus = expectedStatus;
-        this.intervalSeconds = intervalSeconds;
-        this.service = service;
-        this.failureThreshold = failureThreshold;
-        this.enabled = enabled;
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private Instant createdAt;
 
-        if (this.createdAt == null) {
-            this.createdAt = now;
-        }
+	@Column(name = "updated_at", nullable = false)
+	private Instant updatedAt;
 
-        this.updatedAt = now;
-    }
+	public UptimeMonitor(ServiceEntity service, String name, String url, int expectedStatus, int intervalSeconds,
+			int failureThreshold, boolean enabled, Instant now) {
+		apply(service, name, url, expectedStatus, intervalSeconds, failureThreshold, enabled, now);
+		this.createdAt = now;
+	}
 
-    public void recordFailure(Instant checkedAt) {
-        if (consecutiveFailures == null || consecutiveFailures == 0) {
-            outageStartedAt = checkedAt;
-        }
+	/** An Admin's edit. The next check runs at once, against the new settings. */
+	public void change(ServiceEntity service, String name, String url, int expectedStatus, int intervalSeconds,
+			int failureThreshold, boolean enabled, Instant now) {
+		apply(service, name, url, expectedStatus, intervalSeconds, failureThreshold, enabled, now);
+	}
 
-        consecutiveFailures =
-                (consecutiveFailures == null ? 0 : consecutiveFailures) + 1;
+	/**
+	 * A failed check. Returns true when this failure reaches the threshold and the outage has no alert
+	 * yet, so the caller raises exactly one (FR-22.1).
+	 */
+	public boolean recordFailure(Instant checkedAt) {
+		if (consecutiveFailures == 0) {
+			outageStartedAt = checkedAt;
+		}
+		consecutiveFailures++;
+		nextCheckAt = checkedAt.plusSeconds(intervalSeconds);
+		return consecutiveFailures >= failureThreshold && activeAlertId == null;
+	}
 
-        updatedAt = checkedAt;
-    }
+	public void alertRaised(Long alertId) {
+		this.activeAlertId = alertId;
+	}
 
-    public void recordSuccess(Instant checkedAt) {
-        consecutiveFailures = 0;
-        updatedAt = checkedAt;
-    }
+	/**
+	 * A passing check: the count of failures starts again. Returns the id of the alert this ends, or null
+	 * when there was no alert to recover (FR-22.2).
+	 */
+	public Long recordSuccess(Instant checkedAt) {
+		Long recovered = activeAlertId;
+		consecutiveFailures = 0;
+		outageStartedAt = null;
+		activeAlertId = null;
+		nextCheckAt = checkedAt.plusSeconds(intervalSeconds);
+		return recovered;
+	}
 
-    public void attachAlert(Long alertId, Instant now) {
-        activeAlertId = alertId;
-        updatedAt = now;
-    }
-
-    public void markRecovered(Instant recoveredAt) {
-        consecutiveFailures = 0;
-        activeAlertId = null;
-        outageStartedAt = null;
-        updatedAt = recoveredAt;
-    }
+	private void apply(ServiceEntity service, String name, String url, int expectedStatus, int intervalSeconds,
+			int failureThreshold, boolean enabled, Instant now) {
+		this.service = service;
+		this.name = name;
+		this.url = url;
+		this.expectedStatus = expectedStatus;
+		this.intervalSeconds = intervalSeconds;
+		this.failureThreshold = failureThreshold;
+		this.enabled = enabled;
+		this.nextCheckAt = now;
+		this.updatedAt = now;
+	}
 }

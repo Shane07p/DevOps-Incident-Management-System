@@ -422,7 +422,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Planned (Manan) |
 | TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Planned (Manan) |
 | TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
 
 ### AI-1 Find similar (FR-18, D44)
 

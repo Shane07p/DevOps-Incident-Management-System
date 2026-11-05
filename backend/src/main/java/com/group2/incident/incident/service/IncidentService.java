@@ -192,6 +192,16 @@ public class IncidentService {
 				.toList();
 	}
 
+	/**
+	 * Searches the current organization's incident text and applies the optional filters.
+	 *
+	 * @param query keyword or PostgreSQL web-search query
+	 * @param serviceId optional service filter
+	 * @param severity optional severity filter
+	 * @param status optional incident-status filter
+	 * @param page zero-based page number
+	 * @return the matching incidents and pagination metadata
+	 */
 	@Transactional(readOnly = true)
 	public IncidentSearchPageResponse searchIncidents(
 			String query,
@@ -223,6 +233,7 @@ public class IncidentService {
 				result.getTotalPages());
 	}
 
+	/** Maps a database search row to a response and identifies every matching field. */
 	private static IncidentSearchResult toSearchResult(IncidentSearchRow row) {
 		List<String> matchedIn = new ArrayList<>(3);
 		if (Boolean.TRUE.equals(row.getTitleMatch())) {

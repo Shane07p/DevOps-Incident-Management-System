@@ -56,6 +56,7 @@ class IncidentSearchTest {
 	private String token;
 	private long nextIncidentNumber;
 
+	/** Creates an engineer, services, and an authenticated search token for each test. */
 	@BeforeEach
 	void setUp() throws Exception {
 		engineer = accounts.create("search-engineer@test.local", Role.ENGINEER);
@@ -65,6 +66,7 @@ class IncidentSearchTest {
 		nextIncidentNumber = clock.millis() * 1000;
 	}
 
+	/** Finds text independently in each searchable field and reports the matched field. */
 	@Test
 	void findsMatchesInTitleDescriptionAndTimelineAndReportsMatchLocation() throws Exception {
 		Incident titleMatch = createIncident("titlequartz failure", "No special details", payments,
@@ -95,6 +97,7 @@ class IncidentSearchTest {
 				.andExpect(jsonPath("$.content[0].matchedIn[0]").value("timeline"));
 	}
 
+	/** Applies service, severity, and status filters individually and in combination. */
 	@Test
 	void appliesServiceSeverityAndStatusFiltersTogether() throws Exception {
 		Incident target = createIncident("filtermarker target", "shared words", payments,
@@ -128,6 +131,7 @@ class IncidentSearchTest {
 				.andExpect(jsonPath("$.content[0].id").value(target.getId().intValue()));
 	}
 
+	/** Enforces 20-result pages and validates empty results and invalid query parameters. */
 	@Test
 	void returnsTwentyResultsPerPageAndHandlesEmptyOrInvalidQueries() throws Exception {
 		List<Long> ids = new ArrayList<>();
@@ -164,6 +168,7 @@ class IncidentSearchTest {
 				.andExpect(jsonPath("$.errors.page").value("must not be negative"));
 	}
 
+	/** Saves a service with all severity targets required by incident creation. */
 	private ServiceEntity createService(String name) {
 		ServiceEntity service = new ServiceEntity(name, "Search test service", engineer,
 				Criticality.CRITICAL, clock.instant());
@@ -174,6 +179,7 @@ class IncidentSearchTest {
 		return services.saveAndFlush(service);
 	}
 
+	/** Persists an incident fixture with the given searchable text and filters. */
 	private Incident createIncident(
 			String title,
 			String description,
@@ -187,10 +193,12 @@ class IncidentSearchTest {
 		return incidents.saveAndFlush(incident);
 	}
 
+	/** Searches the first page without optional filters. */
 	private org.springframework.test.web.servlet.ResultActions search(String query) throws Exception {
 		return search(query, null, null, null, 0);
 	}
 
+	/** Calls the search endpoint with the supplied keyword, filters, and page. */
 	private org.springframework.test.web.servlet.ResultActions search(
 			String query,
 			Long serviceId,

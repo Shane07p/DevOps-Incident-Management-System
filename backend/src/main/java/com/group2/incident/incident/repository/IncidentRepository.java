@@ -22,6 +22,17 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
 	@EntityGraph(attributePaths = { "service", "reporter", "assignee" })
 	Optional<Incident> findWithDetailsById(Long id);
 
+	/**
+	 * Searches incident and timeline text within one organization, newest first.
+	 *
+	 * @param query PostgreSQL web-search query
+	 * @param orgId organization whose incidents may be returned
+	 * @param serviceId optional service filter
+	 * @param severity optional severity filter
+	 * @param status optional incident-status filter
+	 * @param pageable page request, limited by the caller to the search page size
+	 * @return matching incidents and their matched-field flags
+	 */
 	@Query(
 			value = """
 					select i.id as "incidentId",

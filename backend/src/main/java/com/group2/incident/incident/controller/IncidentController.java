@@ -55,6 +55,7 @@ public class IncidentController {
 		return incidentService.listIncidents();
 	}
 
+	/** Returns matching incidents with pagination metadata and matched text fields. */
 	@GetMapping("/search")
 	@Operation(summary = "Search incidents by keyword, service, severity, and status")
 	public IncidentSearchPageResponse searchIncidents(

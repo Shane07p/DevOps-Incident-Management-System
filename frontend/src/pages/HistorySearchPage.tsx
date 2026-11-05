@@ -70,21 +70,20 @@ function MatchBadges({ matched }: { matched: MatchLocation[] }) {
 
 function PaginationBar({
   page,
-  total,
-  pageSize,
+  totalElements,
+  totalPages,
   onPage,
 }: {
   page: number
-  total: number
-  pageSize: number
+  totalElements: number
+  totalPages: number
   onPage: (p: number) => void
 }) {
-  const totalPages = Math.ceil(total / pageSize)
   if (totalPages <= 1) return null
   return (
     <nav aria-label="Pagination" className="flex items-center justify-between gap-4 pt-2">
       <span className="text-sm text-muted-foreground">
-        Page {page} of {totalPages} ({total} results)
+        Page {page} of {totalPages} ({totalElements} results)
       </span>
       <div className="flex gap-2">
         <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
@@ -173,12 +172,14 @@ export function HistorySearchPage() {
   })
 
   // ---- build query params object -----------------------------------------------
+  // UI page is 1-based; backend PR #209 expects 0-based page number (Shane's review fix 2)
+  const backendPage = Math.max(0, page - 1)
   const searchParams: HistorySearchParams = {
     q: q || undefined,
     serviceId: serviceId || undefined,
     severity: severity || undefined,
     status: status || undefined,
-    page,
+    page: backendPage,
   }
 
   // ---- main data query  -------------------------------------------------------
@@ -328,7 +329,7 @@ export function HistorySearchPage() {
           message={results.error.message}
           onRetry={() => results.refetch()}
         />
-      ) : results.data?.results.length === 0 ? (
+      ) : results.data?.content.length === 0 ? (
         /* Empty state */
         <div className="flex flex-col items-center gap-4 rounded-lg border bg-card py-20 text-center">
           <span className="grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
@@ -353,7 +354,7 @@ export function HistorySearchPage() {
           {/* Result count */}
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground" aria-live="polite">
-              {results.data?.total ?? 0} incident{(results.data?.total ?? 0) !== 1 ? 's' : ''} found
+              {results.data?.totalElements ?? 0} incident{(results.data?.totalElements ?? 0) !== 1 ? 's' : ''} found
               {results.isFetching && !results.isPending && (
                 <span className="ml-2 text-xs opacity-60">(updating…)</span>
               )}
@@ -379,7 +380,7 @@ export function HistorySearchPage() {
                 </tr>
               </thead>
               <tbody>
-                {results.data?.results.map((incident) => (
+                {results.data?.content.map((incident) => (
                   <tr
                     key={incident.id}
                     className="border-b last:border-0 hover:bg-muted/40 transition-colors"
@@ -423,8 +424,8 @@ export function HistorySearchPage() {
           {/* Pagination */}
           <PaginationBar
             page={page}
-            total={results.data?.total ?? 0}
-            pageSize={results.data?.pageSize ?? PAGE_SIZE}
+            totalElements={results.data?.totalElements ?? 0}
+            totalPages={results.data?.totalPages ?? Math.ceil((results.data?.totalElements ?? 0) / PAGE_SIZE)}
             onPage={(p) => setFilters({ page: String(p) })}
           />
         </>

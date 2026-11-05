@@ -6,7 +6,7 @@
  * API responses are mocked with the same mockFetch helper used across the project.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -41,11 +41,12 @@ const makeResult = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const pageOf = (results: unknown[], total?: number) => ({
-  results,
-  total: total ?? results.length,
-  page: 1,
-  pageSize: 20,
+const pageOf = (content: unknown[], total?: number, page = 0, size = 20) => ({
+  content,
+  page,
+  size,
+  totalElements: total ?? content.length,
+  totalPages: Math.ceil((total ?? content.length) / size),
 })
 
 const emptyPage = pageOf([])
@@ -59,12 +60,31 @@ type ExtraRoutes = Parameters<typeof mockFetch>[0]
 function renderHistory(path = '/history', extraRoutes: ExtraRoutes = {}) {
   writeToken('test-token')
 
-  const fetchMock = mockFetch({
+  const defaultRoutes: Record<string, any> = {
     'GET /api/auth/me': { body: { user: viewer, org: devOrg } },
     'GET /api/services': { body: servicesBody },
-    // Default: empty results (each test overrides as needed)
+    'GET /api/incidents/search': { body: emptyPage },
     ...extraRoutes,
+  }
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const fullKey = `${method} ${String(input)}`
+    const unencodedKey = `${method} ${decodeURIComponent(String(input))}`
+    const withoutPageKey = `${method} ${String(input).replace(/[?&]page=\d+/, '').replace(/\?$/, '')}`
+    const pathOnly = String(input).split('?')[0]
+    const pathKey = `${method} ${pathOnly}`
+
+    const handler = defaultRoutes[fullKey] ?? defaultRoutes[unencodedKey] ?? defaultRoutes[withoutPageKey] ?? defaultRoutes[pathKey]
+    if (!handler) return new Response(JSON.stringify({ status: 404, message: `No mock for ${fullKey}` }), { status: 404 })
+    const route = typeof handler === 'function' ? handler(init) : handler
+    if (route.status === 204) return new Response(null, { status: 204 })
+    return new Response(JSON.stringify(route.body), {
+      status: route.status ?? 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
   })
+  vi.stubGlobal('fetch', fetchMock)
 
   const router = createMemoryRouter(routes, { initialEntries: [path] })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -252,7 +272,9 @@ describe('HistorySearchPage — back/forward navigation', () => {
     await waitFor(() => expect(router.state.location.search).toContain('severity=SEV2'))
 
     // Navigate back
-    router.navigate(-1)
+    await act(async () => {
+      router.navigate(-1)
+    })
     await waitFor(() => expect(router.state.location.search).not.toContain('severity=SEV2'))
     expect(router.state.location.search).toBe('')
   })
@@ -429,8 +451,8 @@ describe('HistorySearchPage — pagination', () => {
       55, // total > 20 so pagination appears
     )
     const { router } = renderHistory('/history?severity=SEV2', {
-      'GET /api/incidents/search?severity=SEV2': { body: bigPage },
-      'GET /api/incidents/search?severity=SEV2&page=2': { body: pageOf([], 55) },
+      'GET /api/incidents/search?severity=SEV2&page=0': { body: bigPage },
+      'GET /api/incidents/search?severity=SEV2&page=1': { body: pageOf([], 55, 1) },
     })
 
     expect(await screen.findByText('55 incidents found')).toBeInTheDocument()
@@ -442,6 +464,74 @@ describe('HistorySearchPage — pagination', () => {
       expect(router.state.location.search).toContain('severity=SEV2')
       expect(router.state.location.search).toContain('page=2')
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 15. Shane review fixes validation (Issue #210)
+// ---------------------------------------------------------------------------
+describe('HistorySearchPage — Shane review feedback fixes', () => {
+  it('Fix 2: converts 1-based UI pages to 0-based backend pages in API queries', async () => {
+    // UI page 1 -> backend page 0
+    const { fetchMock } = renderHistory('/history?page=1')
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.map(([req]) => String(req))
+      expect(calls.some((url) => url.includes('/api/incidents/search') && url.includes('page=0'))).toBe(true)
+    })
+
+    // UI page 2 -> backend page 1
+    const { fetchMock: mock2 } = renderHistory('/history?page=2')
+    await waitFor(() => {
+      const calls = mock2.mock.calls.map(([req]) => String(req))
+      expect(calls.some((url) => url.includes('/api/incidents/search') && url.includes('page=1'))).toBe(true)
+    })
+
+    // UI page 3 -> backend page 2
+    const { fetchMock: mock3 } = renderHistory('/history?page=3')
+    await waitFor(() => {
+      const calls = mock3.mock.calls.map(([req]) => String(req))
+      expect(calls.some((url) => url.includes('/api/incidents/search') && url.includes('page=2'))).toBe(true)
+    })
+  })
+
+  it('Fix 3: omits q entirely when search query is empty while sending other filters', async () => {
+    const { fetchMock } = renderHistory('/history?serviceId=1&severity=SEV1&status=OPEN')
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.map(([req]) => String(req))
+      const searchCall = calls.find((url) => url.includes('/api/incidents/search'))
+      expect(searchCall).toBeDefined()
+      expect(searchCall).not.toContain('q=')
+      expect(searchCall).toContain('serviceId=1')
+      expect(searchCall).toContain('severity=SEV1')
+      expect(searchCall).toContain('status=OPEN')
+      expect(searchCall).toContain('page=0')
+    })
+  })
+
+  it('Fix 4: accepts results with or without serviceId (PR #209 backend contract)', async () => {
+    // Result without serviceId (PR #209 current state)
+    const resultWithoutServiceId = {
+      id: 8,
+      reference: 'INC-8',
+      title: 'Checkout timeout',
+      serviceName: 'Checkout',
+      severity: 'SEV1',
+      status: 'OPEN',
+      createdAt: '2026-10-20T08:30:00Z',
+    }
+
+    // Result with serviceId (PR #209 agreed future contract)
+    const resultWithServiceId = makeResult({ id: 9, reference: 'INC-9', title: 'Payment latency', serviceId: 1 })
+
+    renderHistory('/history', {
+      'GET /api/incidents/search': {
+        body: pageOf([resultWithoutServiceId, resultWithServiceId]),
+      },
+    })
+
+    expect(await screen.findByRole('link', { name: 'Checkout timeout' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Payment latency' })).toBeInTheDocument()
+    expect(screen.getByText('2 incidents found')).toBeInTheDocument()
   })
 })
 

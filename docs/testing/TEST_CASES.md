@@ -432,7 +432,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-D44a | Equivalence | Store and read back a 768-dimension vector | The same values | `DatabaseSchemaTest` | Planned (Manan) |
 | TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
-| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
+| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Automated |
 | TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |
 
 ### Public status page (FR-21, D45): decision table on who may publish

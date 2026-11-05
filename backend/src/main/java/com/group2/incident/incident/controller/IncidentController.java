@@ -5,10 +5,13 @@ import com.group2.incident.incident.dto.CommentRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.CorrectionRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
+import com.group2.incident.incident.dto.IncidentSearchPageResponse;
 import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.service.IncidentService;
+import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.incident.entity.IncidentStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,6 +53,17 @@ public class IncidentController {
 	@Operation(summary = "List all incidents, newest first")
 	public List<IncidentSummaryResponse> listIncidents() {
 		return incidentService.listIncidents();
+	}
+
+	@GetMapping("/search")
+	@Operation(summary = "Search incidents by keyword, service, severity, and status")
+	public IncidentSearchPageResponse searchIncidents(
+			@RequestParam("q") String query,
+			@RequestParam(value = "serviceId", required = false) Long serviceId,
+			@RequestParam(value = "severity", required = false) Severity severity,
+			@RequestParam(value = "status", required = false) IncidentStatus status,
+			@RequestParam(value = "page", defaultValue = "0") int page) {
+		return incidentService.searchIncidents(query, serviceId, severity, status, page);
 	}
 
 	@GetMapping("/{id}")

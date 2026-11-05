@@ -54,7 +54,7 @@ for every service class.
 | History and postmortem | Search older incidents; read fixes; edit postmortems and action items |
 | Notifications | View and mark personal notifications as read |
 
-Use REST endpoints under `/api`. Examples are `GET/POST /api/incidents`, `POST /api/incidents/{id}/acknowledge`, and `POST /api/incidents/{id}/transitions`. Monitoring tools post alerts to `POST /webhooks/alerts`, outside `/api` and outside JWT login (D32). Define exact fields in OpenAPI as each feature is built. Use separate endpoints for status, assignment, and severity changes so their rules stay clear.
+Use REST endpoints under `/api`. Examples are `GET/POST /api/incidents`, `GET /api/incidents/search?q=...` (with optional service, severity, status, and page filters), `POST /api/incidents/{id}/acknowledge`, and `POST /api/incidents/{id}/transitions`. Search covers incident titles, descriptions, and timeline text with PostgreSQL full-text indexes, and reports which fields matched. Monitoring tools post alerts to `POST /webhooks/alerts`, outside `/api` and outside JWT login (D32). Define exact fields in OpenAPI as each feature is built. Use separate endpoints for status, assignment, and severity changes so their rules stay clear.
 
 ## 4. Low-level design: main records
 
@@ -141,7 +141,7 @@ RESOLVED requires a recovery note. CLOSED requires the basic postmortem to be sa
 
 ## 9. Access and history
 
-Within an org, authenticated users can read shared incident records; nobody sees another org's. Viewers cannot change them. Engineers and Admins can respond to incidents and edit postmortems. Only Admins change users, service settings, on-call slots, and escalation policies. Personal notifications are visible only to their recipient.
+Within an org, authenticated users can read shared incident records, including search results; nobody sees another org's. Viewers cannot change them. Engineers and Admins can respond to incidents and edit postmortems. Only Admins change users, service settings, on-call slots, and escalation policies. Personal notifications are visible only to their recipient.
 
 Use stateless JWT bearer tokens with a per-user token version for revocation (D21), and hashed passwords. CSRF protection is not needed because the browser never sends a bearer token on its own. The alert endpoint uses separate source authentication. Keep secrets out of Git and logs.
 

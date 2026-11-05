@@ -448,9 +448,9 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Planned (Himanshu) |
-| TC-FR-28.1b | Negative | The API answers 401 or 403 | A readable tool error | `test_mcp_server.py` | Planned (Himanshu) |
-| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Planned (Himanshu) |
+| TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Automated |
+| TC-FR-28.1b | Negative | The API answers 401 or 403 | A readable tool error | `test_mcp_server.py` | Automated |
+| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Automated |
 
 ### Pages: audit log, service map, SLA clocks
 

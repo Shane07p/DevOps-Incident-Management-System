@@ -54,6 +54,7 @@ from agent_loop import (
     RankedHypothesis,
 )
 from agent_tools import EvidenceItem, ToolRegistry, build_default_tool_registry
+from mcp_server import get_mcp_app
 from providers import LlmProvider, OllamaProvider
 
 logger = logging.getLogger("ai-service")
@@ -119,6 +120,9 @@ app = FastAPI(
     version=_VERSION,
     lifespan=lifespan,
 )
+
+# Mount FastMCP Streamable HTTP server (Sprint 4, Issue #162)
+app.mount("/mcp", get_mcp_app())
 
 
 async def _get_client() -> httpx.AsyncClient:

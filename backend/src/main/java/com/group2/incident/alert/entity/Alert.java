@@ -82,6 +82,10 @@ public class Alert {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	// Set when the uptime monitor that raised this alert passes again (FR-22.2).
+	@Column(name = "recovered_at")
+	private Instant recoveredAt;
+
 	public Alert(
 			String source,
 			String eventId,
@@ -109,5 +113,9 @@ public class Alert {
 		this.status = status;
 		this.receivedAt = receivedAt;
 		this.createdAt = receivedAt;
+	}
+
+	public void recordRecovery(Instant at) {
+		this.recoveredAt = at;
 	}
 }

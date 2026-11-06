@@ -1,6 +1,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -162,6 +162,7 @@ describe('Incident detail Sprint 4', () => {
         {
           'POST /api/incidents/7/deploys/12': {
             status: 204,
+            body: null,
           },
         },
       )
@@ -186,6 +187,7 @@ describe('Incident detail Sprint 4', () => {
     const fetchMock = renderPage('ENGINEER', {}, {
       'POST /api/incidents/7/evidence': {
         status: 204,
+        body: null,
       },
     })
 
@@ -235,8 +237,14 @@ describe('Incident detail Sprint 4', () => {
 
   it('shows telemetry errors without breaking the incident page', async () => {
     renderPage('VIEWER', {}, {
-      'GET /api/telemetry/logs': { status: 503 },
-      'GET /api/telemetry/metrics': { status: 503 },
+      'GET /api/telemetry/logs': {
+        status: 503,
+        body: { message: 'Telemetry unavailable' },
+      },
+      'GET /api/telemetry/metrics': {
+        status: 503,
+        body: { message: 'Telemetry unavailable' },
+      },
     })
 
     expect(

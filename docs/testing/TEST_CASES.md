@@ -91,6 +91,29 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 | TC-FR-14.1h | Negative | Update a service's targets | One audit entry showing before and after | `ServiceControllerTest.adminUpdatesService` | Automated |
 | TC-FR-14.1i | Equivalence | The services form with a resolution target below its response target | A field error; nothing sent | `ServicesPage.test.tsx` | Automated |
 
+### Service dependencies and blast radius (FR-14.2, Issue #154)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-14.2a | Equivalence | Admin replaces dependencies with valid service IDs | 200 with replaced dependency list; database updated | `ServiceDependencyControllerTest.adminSuccessfullyReplacesDependencies` | Automated |
+| TC-FR-14.2b | State transition | Replace dependency set with a subset of existing links | Previously linked services removed; only submitted IDs remain | `ServiceDependencyControllerTest.replacingDependenciesRemovesPreviousLinks` | Automated |
+| TC-FR-14.2c | Negative | Service set to depend on itself | 400 Bad Request naming field `dependsOn` | `ServiceDependencyControllerTest.selfDependencyReturns400`, `DatabaseSchemaTest.serviceDependencyRejectsSelfDependency` | Automated |
+| TC-FR-14.2d | Equivalence (invalid) | Referencing a nonexistent service ID | 400 Bad Request naming field `dependsOn` | `ServiceDependencyControllerTest.nonexistentReferencedServiceIdReturns400` | Automated |
+| TC-FR-14.2e | Negative | Target service ID does not exist | 404 Not Found | `ServiceDependencyControllerTest.nonexistentTargetServiceReturns404` | Automated |
+| TC-FR-14.2f | State transition | Update dependency set; then re-submit identical dependency set | 1 audit entry for actual change; no-op update produces 0 additional audit entries | `ServiceDependencyControllerTest.dependencyChangesAreAuditedAndNoopSkipped` | Automated |
+| TC-FR-14.2g | Equivalence | Service map requested | 200 with `nodes` (id, name, criticality, health) and `edges` (from, to) | `ServiceDependencyControllerTest.serviceMapReturnsNodesWithExpectedFields` | Automated |
+| TC-FR-14.2h | Equivalence | Service map dependency direction | Directed edge from dependent service to dependency service (`from` dependent `to` dependency) | `ServiceDependencyControllerTest.serviceMapReturnsEdgesWithCorrectDirection` | Automated |
+| TC-FR-14.2i | Equivalence | A service with no monitor, a passing one, one failed once of three, and one failed three of three; plus a passing second monitor on the last | `UNKNOWN`, `OPERATIONAL`, `DEGRADED`, `DOWN`: the worst monitor wins | `ServiceDependencyControllerTest.healthComesFromTheMonitors` | Automated |
+| TC-FR-14.2j | Equivalence | Blast radius for service with direct dependents | 200 returning direct dependents | `ServiceDependencyControllerTest.blastRadiusDirectDependents` | Automated |
+| TC-FR-14.2k | Equivalence | Blast radius for service with transitive dependents (2+ levels) | 200 returning all direct and transitive dependents | `ServiceDependencyControllerTest.blastRadiusTransitiveDependents` | Automated |
+| TC-FR-14.2l | State transition | Graph with dependency cycle (A -> B -> C -> A) queried for blast radius | Traversal terminates safely without infinite loop; target service excluded | `ServiceDependencyControllerTest.blastRadiusHandlesCyclesSafely` | Automated |
+| TC-FR-14.2m | Boundary value | Multiple dependency paths to the same dependent (diamond graph) | Affected service returned at most once (no duplicates) | `ServiceDependencyControllerTest.blastRadiusReturnsEachAffectedServiceAtMostOnce` | Automated |
+| TC-FR-14.2n | Negative | Blast radius for nonexistent service ID | 404 Not Found | `ServiceDependencyControllerTest.blastRadiusNonexistentServiceReturns404` | Automated |
+| TC-FR-14.2o | Boundary value | Blast radius for service with zero dependents | 200 with empty list `[]` | `ServiceDependencyControllerTest.blastRadiusReturnsEmptyListWhenNoDependents` | Automated |
+| TC-FR-14.2p | Decision table | Every role calls the three endpoints | Only an Admin may change dependencies; every role reads the map and the blast radius; no token gives 401 | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-14.2q | Equivalence (invalid) | A body of `{}`, a misspelt field, or `dependsOn: null` | 400 naming `dependsOn`; the links stay as they were; `[]` still removes them all | `ServiceDependencyControllerTest.missingDependsOnIsRefused`, `emptyListRemovesEveryDependency` | Automated |
+| TC-FR-14.2r | Equivalence | Another org's service, as the target or in `dependsOn`; the map | 404 or a field error; the map holds only the caller's services | `OrgIsolationTest` | Automated |
+
 ### Incidents (FR-02, FR-04.1)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -320,6 +343,12 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
 | TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
 
+### Demo-shop scenario table (Issue #64)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-64a | Equivalence | Load `scenarios.yaml` | File exists, has `schema_version: 1`, a `scenarios` list, all 5 switches, every required field, and machine-readable `log_patterns` and nullable `deploy_event` | `test_scenarios.py` | Automated |
+
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -412,19 +441,19 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `EvidenceLinkTest` | Planned (Bhakti) |
-| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceLinkTest` | Planned (Bhakti) |
-| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `EvidenceLinkTest` | Planned (Bhakti) |
+| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `IncidentControllerTest.invalidEvidenceUrlReturns400` (Testcontainers) | Automated |
+| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceConcurrencyTest.twoConcurrentEvidenceLinksAreSavedWithoutChangingVersion` (Testcontainers) | Automated |
+| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest.evidenceAllowedOnClosedIncident` (Testcontainers) | Automated |
 
 ### History search (FR-17)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Automated |
+| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Automated |
+| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Automated |
+| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Automated |
+| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
 
 ### AI-1 Find similar (FR-18, D44)
 

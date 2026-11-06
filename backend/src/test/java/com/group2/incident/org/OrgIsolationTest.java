@@ -123,6 +123,9 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/services/{id}/on-call", HttpMethod.PUT, "/api/services/{serviceId}/on-call",
 						"{\"fallbackContactId\": {userId}, \"shifts\": []}"),
 				Arguments.of("GET /api/services/{id}/escalation-policy", HttpMethod.GET, "/api/services/{serviceId}/escalation-policy", null),
+				Arguments.of("PUT /api/services/{id}/dependencies", HttpMethod.PUT, "/api/services/{serviceId}/dependencies",
+						"{\"dependsOn\": []}"),
+				Arguments.of("GET /api/services/{id}/blast-radius", HttpMethod.GET, "/api/services/{serviceId}/blast-radius", null),
 				Arguments.of("PUT /api/services/{id}/escalation-policy", HttpMethod.PUT, "/api/services/{serviceId}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
@@ -132,6 +135,8 @@ class OrgIsolationTest {
 						"{\"role\":\"COMMS\",\"userId\": {adminOfA}}"),
 				Arguments.of("POST /api/incidents/{id}/comments", HttpMethod.POST, "/api/incidents/{incidentId}/comments",
 						"{\"comment\":\"x\"}"),
+				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
+						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
 						"/api/incidents/{incidentId}/timeline/{incidentId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
@@ -168,6 +173,8 @@ class OrgIsolationTest {
 								+ "\"startTime\": \"2026-11-04T00:00:00Z\", \"endTime\": \"2026-11-05T00:00:00Z\"}]}"),
 				Arguments.of("PUT escalation policy with B's Admin", HttpMethod.PUT, "/api/services/{serviceOfA}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
+				Arguments.of("PUT dependencies on B's service", HttpMethod.PUT, "/api/services/{serviceOfA}/dependencies",
+						"{\"dependsOn\": [{serviceId}]}"),
 				Arguments.of("POST /api/monitors on B's service", HttpMethod.POST, "/api/monitors", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""));
 	}
@@ -188,7 +195,9 @@ class OrgIsolationTest {
 	Stream<Arguments> listEndpoints() {
 		return Stream.of(
 				Arguments.of("GET /api/services", "/api/services", "$[*].id", "serviceId"),
+				Arguments.of("GET /api/service-map", "/api/service-map", "$.nodes[*].id", "serviceId"),
 				Arguments.of("GET /api/incidents", "/api/incidents", "$[*].id", "incidentId"),
+				Arguments.of("GET /api/incidents/search", "/api/incidents/search?q=Checkout", "$.content[*].id", "incidentId"),
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
 				Arguments.of("GET /api/monitors", "/api/monitors", "$[*].id", "monitorId"),

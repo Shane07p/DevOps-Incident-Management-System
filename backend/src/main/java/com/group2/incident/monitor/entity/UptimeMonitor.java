@@ -58,6 +58,9 @@ public class UptimeMonitor {
 	@Column(name = "next_check_at", nullable = false)
 	private Instant nextCheckAt;
 
+	@Column(name = "last_checked_at")
+	private Instant lastCheckedAt;
+
 	@Column(name = "consecutive_failures", nullable = false)
 	private int consecutiveFailures;
 
@@ -100,6 +103,7 @@ public class UptimeMonitor {
 			outageStartedAt = checkedAt;
 		}
 		consecutiveFailures++;
+		lastCheckedAt = checkedAt;
 		nextCheckAt = checkedAt.plusSeconds(intervalSeconds);
 		return consecutiveFailures >= failureThreshold && activeAlertId == null;
 	}
@@ -117,6 +121,7 @@ public class UptimeMonitor {
 		consecutiveFailures = 0;
 		outageStartedAt = null;
 		activeAlertId = null;
+		lastCheckedAt = checkedAt;
 		nextCheckAt = checkedAt.plusSeconds(intervalSeconds);
 		return recovered;
 	}

@@ -7,6 +7,7 @@ import { getIncident, type TimelineEntry } from '@/api/incidents'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import { formatIst, formatMinutes } from '@/lib/time'
 
 // "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
@@ -109,6 +110,8 @@ export function IncidentDetailPage() {
               />
             </div>
           </section>
+
+          <SimilarIncidentsPanel incidentId={incident.data.id} />
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">

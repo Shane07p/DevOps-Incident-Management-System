@@ -497,7 +497,8 @@ void evidenceLinkIsAddedToTimeline() throws Exception {
     mvc.perform(get("/api/incidents/" + incident.getId())
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.timeline[0].eventType").value("EVIDENCE_ADDED"));
+        .andExpect(jsonPath("$.timeline[0].eventType").value("EVIDENCE_ADDED"))
+        .andExpect(jsonPath("$.timeline[0].details").value("Grafana logs: https://grafana.example.com/logs"));
 }
 
 @Test
@@ -515,7 +516,15 @@ void invalidEvidenceUrlReturns400() throws Exception {
                     "label": "Unsafe link"
                 }
                 """))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.url").exists());
+    mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"url\":\"ftp://example.com/logs\",\"label\":\"FTP logs\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.url").exists());
+
 }
 
 @Test

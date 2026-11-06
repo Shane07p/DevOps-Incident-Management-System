@@ -25,7 +25,7 @@ class DatabaseSchemaTest {
 	private static final List<String> TABLES =
 			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
-					"alert", "notification");
+					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -386,6 +386,56 @@ class DatabaseSchemaTest {
 				.hasMessageContaining("service_sla_target_service_id_fkey");
 	}
 
+	// service_dependency
+
+	@Test
+	void serviceDependencyAllowsValidLink() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+		long s2 = insertService("Database", user, "CRITICAL");
+
+		insertDependency(s1, s2);
+
+		assertThat(jdbc.queryForObject(
+				"select count(*) from service_dependency where service_id = ? and depends_on_id = ?",
+				Integer.class, s1, s2)).isEqualTo(1);
+	}
+
+	@Test
+	void serviceDependencyRejectsSelfDependency() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+
+		assertThatThrownBy(() -> insertDependency(s1, s1))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("service_dependency_no_self_dep");
+	}
+
+	@Test
+	void serviceDependencyRejectsDuplicateLink() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+		long s2 = insertService("Database", user, "CRITICAL");
+		insertDependency(s1, s2);
+
+		assertThatThrownBy(() -> insertDependency(s1, s2))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("service_dependency_link_key");
+	}
+
+	@Test
+	void serviceDependencyCascadesOnServiceDelete() {
+		long user = insertUser("asha");
+		long s1 = insertService("Payments", user, "HIGH");
+		long s2 = insertService("Database", user, "CRITICAL");
+		insertDependency(s1, s2);
+
+		jdbc.update("delete from service where id = ?", s1);
+
+		assertThat(jdbc.queryForObject(
+				"select count(*) from service_dependency where service_id = ?", Integer.class, s1)).isZero();
+	}
+
 	// incident
 
 	@ParameterizedTest
@@ -733,6 +783,12 @@ class DatabaseSchemaTest {
 		return jdbc.queryForObject("""
 				insert into service (org_id, name, owner_id, criticality, created_at, updated_at)
 				values ((select id from organization where slug = 'test-org'), ?, ?, ?, now(), now()) returning id""", Long.class, name, ownerId, criticality);
+	}
+
+	private void insertDependency(long serviceId, long dependsOnId) {
+		jdbc.update("""
+				insert into service_dependency (org_id, service_id, depends_on_id)
+				values ((select id from organization where slug = 'test-org'), ?, ?)""", serviceId, dependsOnId);
 	}
 
 	private void insertTarget(long serviceId, String severity, int responseMinutes, Integer resolutionMinutes) {

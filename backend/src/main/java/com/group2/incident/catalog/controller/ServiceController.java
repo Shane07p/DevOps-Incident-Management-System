@@ -5,6 +5,7 @@ import com.group2.incident.catalog.dto.ServiceDependenciesResponse;
 import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.UpdateDependenciesRequest;
 import com.group2.incident.catalog.service.ServiceCatalogService;
+import com.group2.incident.catalog.service.ServiceMapService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ServiceController {
 
     private final ServiceCatalogService serviceCatalogService;
+    private final ServiceMapService serviceMapService;
 
     @GetMapping
     @Operation(summary = "List services, by name")
@@ -63,18 +65,18 @@ public class ServiceController {
     }
 
     @PutMapping("/{id}/dependencies")
-    @Operation(summary = "Replace service dependencies (Admin)")
+    @Operation(summary = "Replace the services this service depends on (Admin)")
     public ServiceDependenciesResponse replaceDependencies(
             @PathVariable Long id,
             @Valid @RequestBody UpdateDependenciesRequest request,
             @AuthenticationPrincipal Jwt jwt) {
         Long actorId = jwt != null ? Long.parseLong(jwt.getSubject()) : null;
-        return serviceCatalogService.replaceDependencies(id, request, actorId);
+        return serviceMapService.replaceDependencies(id, request, actorId);
     }
 
     @GetMapping("/{id}/blast-radius")
-    @Operation(summary = "Get blast radius for service (Admin)")
+    @Operation(summary = "What breaks if this service fails: every service that depends on it, directly or through others")
     public List<ServiceResponse> getBlastRadius(@PathVariable Long id) {
-        return serviceCatalogService.getBlastRadius(id);
+        return serviceMapService.getBlastRadius(id);
     }
 }

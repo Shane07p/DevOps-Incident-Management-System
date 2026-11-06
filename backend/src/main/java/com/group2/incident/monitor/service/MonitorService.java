@@ -14,7 +14,9 @@ import com.group2.incident.monitor.dto.MonitorResponse;
 import com.group2.incident.monitor.entity.UptimeMonitor;
 import com.group2.incident.monitor.repository.UptimeMonitorRepository;
 import java.time.Clock;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,16 @@ public class MonitorService {
 	private final MonitorTargetGuard targetGuard;
 	private final AuditService auditService;
 	private final Clock clock;
+
+	/** Each service's health from its enabled, checked monitors; a service missing here is UNKNOWN. */
+	@Transactional(readOnly = true)
+	public Map<Long, ServiceHealth> healthByService() {
+		Map<Long, ServiceHealth> health = new HashMap<>();
+		for (UptimeMonitor monitor : monitorRepository.findAllByEnabledTrueAndLastCheckedAtIsNotNull()) {
+			health.merge(monitor.getService().getId(), ServiceHealth.of(monitor), ServiceHealth::worse);
+		}
+		return health;
+	}
 
 	@Transactional(readOnly = true)
 	public List<MonitorResponse> list() {

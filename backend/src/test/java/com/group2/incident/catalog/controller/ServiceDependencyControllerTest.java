@@ -1,9 +1,10 @@
 package com.group2.incident.catalog.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,15 +15,17 @@ import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.repository.AuditEntryRepository;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
-import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceDependencyRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.monitor.entity.UptimeMonitor;
+import com.group2.incident.monitor.repository.UptimeMonitorRepository;
 import com.group2.incident.support.IntegrationTest;
-import com.jayway.jsonpath.JsonPath;
+import com.group2.incident.support.TestAccounts;
 import java.time.Clock;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,418 +33,277 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
+/**
+ * Dependencies, the service map, and the blast radius against PostgreSQL (FR-14.2, #154). Who may call
+ * what is in SecurityMatrixTest; other orgs in OrgIsolationTest.
+ */
 @IntegrationTest
 class ServiceDependencyControllerTest {
 
-    private static final String PASSWORD = "DevPassw0rd!";
+	@Autowired
+	private MockMvc mvc;
 
-    @Autowired
-    private MockMvc mvc;
+	@Autowired
+	private TestAccounts accounts;
 
-    @Autowired
-    private AppUserRepository users;
+	@Autowired
+	private ServiceRepository services;
 
-    @Autowired
-    private ServiceRepository services;
+	@Autowired
+	private ServiceDependencyRepository dependencies;
 
-    @Autowired
-    private ServiceDependencyRepository dependencies;
+	@Autowired
+	private UptimeMonitorRepository monitors;
 
-    @Autowired
-    private AuditEntryRepository auditEntries;
+	@Autowired
+	private AuditEntryRepository auditEntries;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+	@Autowired
+	private Clock clock;
 
-    @Autowired
-    private Clock clock;
+	private AppUser admin;
 
-    private AppUser admin;
-    private AppUser engineer;
-    private AppUser viewer;
-    private String adminToken;
-    private String engineerToken;
-    private String viewerToken;
+	private String adminToken;
 
-    private Long serviceAId;
-    private Long serviceBId;
-    private Long serviceCId;
-    private Long serviceDId;
+	private Long serviceAId;
+	private Long serviceBId;
+	private Long serviceCId;
+	private Long serviceDId;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        dependencies.deleteAll();
-        auditEntries.deleteAll();
-        services.deleteAll();
-        users.deleteAll();
+	@BeforeEach
+	void setUp() throws Exception {
+		admin = accounts.create("deps_admin@test.local", Role.ADMIN);
+		adminToken = accounts.token("deps_admin@test.local");
 
-        admin = users.saveAndFlush(new AppUser("admin", "Admin User", passwordEncoder.encode(PASSWORD), Role.ADMIN, clock.instant()));
-        engineer = users.saveAndFlush(new AppUser("engineer", "Engineer User", passwordEncoder.encode(PASSWORD), Role.ENGINEER, clock.instant()));
-        viewer = users.saveAndFlush(new AppUser("viewer", "Viewer User", passwordEncoder.encode(PASSWORD), Role.VIEWER, clock.instant()));
+		serviceAId = createService("Auth Service", Criticality.CRITICAL);
+		serviceBId = createService("Billing Service", Criticality.HIGH);
+		serviceCId = createService("Cart Service", Criticality.MEDIUM);
+		serviceDId = createService("Delivery Service", Criticality.LOW);
+	}
 
-        adminToken = tokenFor("admin");
-        engineerToken = tokenFor("engineer");
-        viewerToken = tokenFor("viewer");
+	@Test
+	@DisplayName("Admin successfully replaces dependencies")
+	void adminSuccessfullyReplacesDependencies() throws Exception {
+		setDependencies(serviceBId, serviceAId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.serviceId").value(serviceBId))
+				.andExpect(jsonPath("$.dependsOn", contains(serviceAId.intValue())));
 
-        serviceAId = createService("Auth Service", Criticality.CRITICAL);
-        serviceBId = createService("Billing Service", Criticality.HIGH);
-        serviceCId = createService("Cart Service", Criticality.MEDIUM);
-        serviceDId = createService("Delivery Service", Criticality.LOW);
-    }
+		assertThat(dependencies.findDependsOnIdsByServiceId(serviceBId)).containsExactly(serviceAId);
+	}
 
-    private Long createService(String name, Criticality criticality) {
-        ServiceEntity entity = new ServiceEntity(name, name + " description", admin, criticality, clock.instant());
-        entity.putTarget(Severity.SEV1, 15, 240);
-        entity.putTarget(Severity.SEV2, 60, 480);
-        entity.putTarget(Severity.SEV3, 240, 2880);
-        entity.putTarget(Severity.SEV4, 1440, 10080);
-        return services.saveAndFlush(entity).getId();
-    }
+	@Test
+	@DisplayName("Replacing dependencies removes previous links that are no longer submitted")
+	void replacingDependenciesRemovesPreviousLinks() throws Exception {
+		setDependencies(serviceBId, serviceAId, serviceCId).andExpect(status().isOk());
+		setDependencies(serviceBId, serviceCId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.dependsOn", contains(serviceCId.intValue())));
 
-    private String tokenFor(String username) throws Exception {
-        String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD);
-        String response = mvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(response, "$.token");
-    }
+		assertThat(dependencies.findDependsOnIdsByServiceId(serviceBId)).containsExactly(serviceCId);
+	}
 
-    @Test
-    @DisplayName("Admin successfully replaces dependencies")
-    void adminSuccessfullyReplacesDependencies() throws Exception {
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.serviceId").value(serviceBId))
-                .andExpect(jsonPath("$.dependsOn", hasSize(1)))
-                .andExpect(jsonPath("$.dependsOn[0]").value(serviceAId));
+	@Test
+	@DisplayName("A body without dependsOn is refused and leaves the links in place")
+	void missingDependsOnIsRefused() throws Exception {
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
 
-        List<Long> deps = dependencies.findDependsOnIdsByServiceId(serviceBId);
-        assertThat(deps).containsExactly(serviceAId);
-    }
+		for (String body : List.of("{}", "{\"dependOn\": []}", "{\"dependsOn\": null}")) {
+			send(serviceBId, body)
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.errors.dependsOn").exists());
+		}
+		assertThat(dependencies.findDependsOnIdsByServiceId(serviceBId)).containsExactly(serviceAId);
+	}
 
-    @Test
-    @DisplayName("Replacing dependencies removes previous links that are no longer submitted")
-    void replacingDependenciesRemovesPreviousLinks() throws Exception {
-        // Initial setup: B depends on A and C
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + ", " + serviceCId + "]}"))
-                .andExpect(status().isOk());
+	@Test
+	@DisplayName("An empty list removes every dependency")
+	void emptyListRemovesEveryDependency() throws Exception {
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
+		send(serviceBId, "{\"dependsOn\": []}").andExpect(status().isOk());
 
-        assertThat(dependencies.findDependsOnIdsByServiceId(serviceBId)).containsExactly(serviceAId, serviceCId);
+		assertThat(dependencies.findDependsOnIdsByServiceId(serviceBId)).isEmpty();
+	}
 
-        // Replace: B depends only on C
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceCId + "]}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.dependsOn", hasSize(1)))
-                .andExpect(jsonPath("$.dependsOn[0]").value(serviceCId));
+	@Test
+	@DisplayName("Self-dependency returns HTTP 400")
+	void selfDependencyReturns400() throws Exception {
+		setDependencies(serviceAId, serviceAId)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.dependsOn").value("A service cannot depend on itself"));
+	}
 
-        assertThat(dependencies.findDependsOnIdsByServiceId(serviceBId)).containsExactly(serviceCId);
-    }
+	@Test
+	@DisplayName("Referenced nonexistent service ID returns HTTP 400")
+	void nonexistentReferencedServiceIdReturns400() throws Exception {
+		setDependencies(serviceAId, 999_999_999L)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.dependsOn").value("Service 999999999 not found"));
+	}
 
-    @Test
-    @DisplayName("Self-dependency returns HTTP 400")
-    void selfDependencyReturns400() throws Exception {
-        mvc.perform(put("/api/services/" + serviceAId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.dependsOn").exists());
-    }
+	@Test
+	@DisplayName("Nonexistent target service returns HTTP 404")
+	void nonexistentTargetServiceReturns404() throws Exception {
+		setDependencies(999_999_999L, serviceAId).andExpect(status().isNotFound());
+	}
 
-    @Test
-    @DisplayName("Referenced nonexistent service ID returns HTTP 400")
-    void nonexistentReferencedServiceIdReturns400() throws Exception {
-        mvc.perform(put("/api/services/" + serviceAId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [999999]}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.dependsOn").exists());
-    }
+	@Test
+	@DisplayName("Successful dependency changes are audited; no-op update is not audited")
+	void dependencyChangesAreAuditedAndNoopSkipped() throws Exception {
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
 
-    @Test
-    @DisplayName("Nonexistent target service returns HTTP 404")
-    void nonexistentTargetServiceReturns404() throws Exception {
-        mvc.perform(put("/api/services/999999/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isNotFound());
-    }
+		List<AuditEntry> entries = auditEntries.findByItemTypeAndItemIdOrderByRecordedAtDesc(AuditItemType.SERVICE, serviceBId);
+		assertThat(entries).singleElement().satisfies(entry -> {
+			assertThat(entry.getAction()).isEqualTo(AuditAction.SERVICE_DEPENDENCIES_UPDATED);
+			assertThat(entry.getActor().getId()).isEqualTo(admin.getId());
+			assertThat(entry.getDetails()).isEqualTo("Billing Service depends on: [] -> [Auth Service]");
+		});
+	}
 
-    @Test
-    @DisplayName("Successful dependency changes are audited; no-op update is not audited")
-    void dependencyChangesAreAuditedAndNoopSkipped() throws Exception {
-        assertThat(auditEntries.count()).isZero();
+	@Test
+	@DisplayName("Duplicates in requested dependencies are deduplicated")
+	void duplicateDependenciesAreDeduplicated() throws Exception {
+		setDependencies(serviceBId, serviceAId, serviceAId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.dependsOn", contains(serviceAId.intValue())));
+	}
 
-        // 1. Change dependencies: B -> A
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
+	@Test
+	@DisplayName("Service map returns nodes with id, name, criticality, and health")
+	void serviceMapReturnsNodesWithExpectedFields() throws Exception {
+		mvc.perform(get("/api/service-map").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].name".formatted(serviceAId)).value("Auth Service"))
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].criticality".formatted(serviceAId)).value("CRITICAL"))
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].health".formatted(serviceAId)).value("UNKNOWN"));
+	}
 
-        List<AuditEntry> entries = auditEntries.findAll();
-        assertThat(entries).hasSize(1);
-        AuditEntry entry = entries.get(0);
-        assertThat(entry.getAction()).isEqualTo(AuditAction.SERVICE_DEPENDENCIES_UPDATED);
-        assertThat(entry.getItemType()).isEqualTo(AuditItemType.SERVICE);
-        assertThat(entry.getItemId()).isEqualTo(serviceBId);
-        assertThat(entry.getActor().getId()).isEqualTo(admin.getId());
-        assertThat(entry.getDetails()).contains("dependencies:");
+	@Test
+	@DisplayName("Service map returns edges with direction from dependent to dependency")
+	void serviceMapReturnsEdgesWithCorrectDirection() throws Exception {
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
+		setDependencies(serviceCId, serviceBId).andExpect(status().isOk());
 
-        // 2. Submit the same dependencies: no new audit record
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
+		mvc.perform(get("/api/service-map").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.edges", hasSize(2)))
+				.andExpect(jsonPath("$.edges[0].from").value(serviceBId))
+				.andExpect(jsonPath("$.edges[0].to").value(serviceAId))
+				.andExpect(jsonPath("$.edges[1].from").value(serviceCId))
+				.andExpect(jsonPath("$.edges[1].to").value(serviceBId));
+	}
 
-        assertThat(auditEntries.count()).isEqualTo(1);
-    }
+	@Test
+	@DisplayName("Health comes from the monitors: unknown, operational, degraded, down, and the worst one wins")
+	void healthComesFromTheMonitors() throws Exception {
+		// A: no monitor. B: passing. C: failed once of three. D: failed three of three.
+		monitor(serviceBId).recordSuccess(clock.instant());
+		monitor(serviceCId).recordFailure(clock.instant());
+		UptimeMonitor down = monitor(serviceDId);
+		for (int i = 0; i < 3; i++) {
+			down.recordFailure(clock.instant());
+		}
+		// A second, passing monitor on D does not hide the failing one.
+		monitor(serviceDId).recordSuccess(clock.instant());
+		monitors.flush();
 
-    @Test
-    @DisplayName("Duplicates in requested dependencies are deduplicated")
-    void duplicateDependenciesAreDeduplicated() throws Exception {
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + ", " + serviceAId + "]}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.dependsOn", hasSize(1)))
-                .andExpect(jsonPath("$.dependsOn[0]").value(serviceAId));
+		mvc.perform(get("/api/service-map").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].health".formatted(serviceAId)).value("UNKNOWN"))
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].health".formatted(serviceBId)).value("OPERATIONAL"))
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].health".formatted(serviceCId)).value("DEGRADED"))
+				.andExpect(jsonPath("$.nodes[?(@.id == %d)].health".formatted(serviceDId)).value("DOWN"));
+	}
 
-        List<Long> deps = dependencies.findDependsOnIdsByServiceId(serviceBId);
-        assertThat(deps).containsExactly(serviceAId);
-    }
+	@Test
+	@DisplayName("Blast radius returns direct dependents")
+	void blastRadiusDirectDependents() throws Exception {
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
 
-    @Test
-    @DisplayName("Service map returns nodes with id, name, criticality, and health UNKNOWN")
-    void serviceMapReturnsNodesWithExpectedFields() throws Exception {
-        mvc.perform(get("/api/service-map")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nodes", hasSize(4)))
-                .andExpect(jsonPath("$.nodes[0].id").exists())
-                .andExpect(jsonPath("$.nodes[0].name").exists())
-                .andExpect(jsonPath("$.nodes[0].criticality").exists())
-                .andExpect(jsonPath("$.nodes[0].health").value("UNKNOWN"))
-                .andExpect(jsonPath("$.nodes[1].health").value("UNKNOWN"))
-                .andExpect(jsonPath("$.nodes[2].health").value("UNKNOWN"))
-                .andExpect(jsonPath("$.nodes[3].health").value("UNKNOWN"));
-    }
+		blastRadius(serviceAId)
+				.andExpect(jsonPath("$[*].id", contains(serviceBId.intValue())));
+	}
 
-    @Test
-    @DisplayName("Service map returns edges with direction from dependent to dependency")
-    void serviceMapReturnsEdgesWithCorrectDirection() throws Exception {
-        // B depends on A: from = B, to = A
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
+	@Test
+	@DisplayName("Blast radius returns transitive dependents across multiple levels")
+	void blastRadiusTransitiveDependents() throws Exception {
+		// C depends on B, which depends on A: A failing breaks both.
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
+		setDependencies(serviceCId, serviceBId).andExpect(status().isOk());
 
-        // C depends on B: from = C, to = B
-        mvc.perform(put("/api/services/" + serviceCId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceBId + "]}"))
-                .andExpect(status().isOk());
+		blastRadius(serviceAId)
+				.andExpect(jsonPath("$[*].id", containsInAnyOrder(serviceBId.intValue(), serviceCId.intValue())));
+	}
 
-        mvc.perform(get("/api/service-map")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.edges", hasSize(2)))
-                .andExpect(jsonPath("$.edges[0].from").value(serviceBId))
-                .andExpect(jsonPath("$.edges[0].to").value(serviceAId))
-                .andExpect(jsonPath("$.edges[1].from").value(serviceCId))
-                .andExpect(jsonPath("$.edges[1].to").value(serviceBId));
-    }
+	@Test
+	@DisplayName("Blast radius terminates on a dependency cycle and leaves out the service itself")
+	void blastRadiusHandlesCyclesSafely() throws Exception {
+		// A -> B -> C -> A
+		setDependencies(serviceAId, serviceBId).andExpect(status().isOk());
+		setDependencies(serviceBId, serviceCId).andExpect(status().isOk());
+		setDependencies(serviceCId, serviceAId).andExpect(status().isOk());
 
-    @Test
-    @DisplayName("Blast radius returns direct dependents")
-    void blastRadiusDirectDependents() throws Exception {
-        // B depends on A
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
+		blastRadius(serviceAId)
+				.andExpect(jsonPath("$[*].id", containsInAnyOrder(serviceBId.intValue(), serviceCId.intValue())));
+	}
 
-        // Blast radius for A should return B
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id").value(serviceBId))
-                .andExpect(jsonPath("$[0].name").value("Billing Service"));
-    }
+	@Test
+	@DisplayName("Blast radius returns each affected service at most once on multiple dependency paths")
+	void blastRadiusReturnsEachAffectedServiceAtMostOnce() throws Exception {
+		// Diamond: D depends on B and C; B and C both depend on A.
+		setDependencies(serviceBId, serviceAId).andExpect(status().isOk());
+		setDependencies(serviceCId, serviceAId).andExpect(status().isOk());
+		setDependencies(serviceDId, serviceBId, serviceCId).andExpect(status().isOk());
 
-    @Test
-    @DisplayName("Blast radius returns transitive dependents across multiple levels")
-    void blastRadiusTransitiveDependents() throws Exception {
-        // C depends on B, B depends on A
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
+		blastRadius(serviceAId)
+				.andExpect(jsonPath("$[*].id", containsInAnyOrder(serviceBId.intValue(), serviceCId.intValue(), serviceDId.intValue())));
+	}
 
-        mvc.perform(put("/api/services/" + serviceCId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceBId + "]}"))
-                .andExpect(status().isOk());
+	@Test
+	@DisplayName("Blast radius returns empty list when service has no dependents")
+	void blastRadiusReturnsEmptyListWhenNoDependents() throws Exception {
+		blastRadius(serviceDId).andExpect(jsonPath("$", hasSize(0)));
+	}
 
-        // Blast radius for A should return B and C
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[?(@.id == " + serviceBId + ")]").exists())
-                .andExpect(jsonPath("$[?(@.id == " + serviceCId + ")]").exists());
-    }
+	@Test
+	@DisplayName("Blast radius returns HTTP 404 for nonexistent service")
+	void blastRadiusNonexistentServiceReturns404() throws Exception {
+		mvc.perform(get("/api/services/999999999/blast-radius").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isNotFound());
+	}
 
-    @Test
-    @DisplayName("Blast radius handles cycles safely without infinite loop and excludes target")
-    void blastRadiusHandlesCyclesSafely() throws Exception {
-        // Cycle: A depends on B, B depends on C, C depends on A
-        mvc.perform(put("/api/services/" + serviceAId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceBId + "]}"))
-                .andExpect(status().isOk());
+	private Long createService(String name, Criticality criticality) {
+		ServiceEntity entity = new ServiceEntity(name, name + " description", admin, criticality, clock.instant());
+		for (Severity severity : Severity.values()) {
+			entity.putTarget(severity, 15, 240);
+		}
+		return services.saveAndFlush(entity).getId();
+	}
 
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceCId + "]}"))
-                .andExpect(status().isOk());
+	// A documentation-only address (RFC 5737); the worker is off in tests, so nothing is contacted.
+	private UptimeMonitor monitor(Long serviceId) {
+		ServiceEntity service = services.findById(serviceId).orElseThrow();
+		return monitors.save(new UptimeMonitor(service, "Health", "https://203.0.113.10/health", 200, 60, 3, true, clock.instant()));
+	}
 
-        mvc.perform(put("/api/services/" + serviceCId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
+	private ResultActions setDependencies(Long serviceId, Long... dependsOn) throws Exception {
+		List<String> ids = Arrays.stream(dependsOn).map(String::valueOf).toList();
+		return send(serviceId, "{\"dependsOn\": [" + String.join(", ", ids) + "]}");
+	}
 
-        // Target A: who depends on A? C depends on A. Who depends on C? B depends on C.
-        // Who depends on B? A depends on B (cycle back to target).
-        // Must return B and C, terminate, and NOT include target A.
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[?(@.id == " + serviceBId + ")]").exists())
-                .andExpect(jsonPath("$[?(@.id == " + serviceCId + ")]").exists())
-                .andExpect(jsonPath("$[?(@.id == " + serviceAId + ")]").doesNotExist());
-    }
+	private ResultActions send(Long serviceId, String body) throws Exception {
+		return mvc.perform(put("/api/services/{id}/dependencies", serviceId)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body));
+	}
 
-    @Test
-    @DisplayName("Blast radius returns each affected service at most once on multiple dependency paths")
-    void blastRadiusReturnsEachAffectedServiceAtMostOnce() throws Exception {
-        // Diamond: D depends on B and C; B and C both depend on A
-        mvc.perform(put("/api/services/" + serviceBId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
-
-        mvc.perform(put("/api/services/" + serviceCId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceAId + "]}"))
-                .andExpect(status().isOk());
-
-        mvc.perform(put("/api/services/" + serviceDId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": [" + serviceBId + ", " + serviceCId + "]}"))
-                .andExpect(status().isOk());
-
-        // Blast radius for A should return B, C, D (each exactly once, total 3)
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(3)))
-                .andExpect(jsonPath("$[?(@.id == " + serviceBId + ")]").exists())
-                .andExpect(jsonPath("$[?(@.id == " + serviceCId + ")]").exists())
-                .andExpect(jsonPath("$[?(@.id == " + serviceDId + ")]").exists());
-    }
-
-    @Test
-    @DisplayName("Blast radius returns empty list when service has no dependents")
-    void blastRadiusReturnsEmptyListWhenNoDependents() throws Exception {
-        mvc.perform(get("/api/services/" + serviceDId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
-    }
-
-    @Test
-    @DisplayName("Blast radius returns HTTP 404 for nonexistent service")
-    void blastRadiusNonexistentServiceReturns404() throws Exception {
-        mvc.perform(get("/api/services/999999/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    @DisplayName("Engineer and Viewer are forbidden (403), unauthenticated receives 401")
-    void rolePermissionsVerification() throws Exception {
-        // PUT /api/services/{id}/dependencies
-        mvc.perform(put("/api/services/" + serviceAId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": []}"))
-                .andExpect(status().isForbidden());
-
-        mvc.perform(put("/api/services/" + serviceAId + "/dependencies")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": []}"))
-                .andExpect(status().isForbidden());
-
-        mvc.perform(put("/api/services/" + serviceAId + "/dependencies")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"dependsOn\": []}"))
-                .andExpect(status().isUnauthorized());
-
-        // GET /api/service-map
-        mvc.perform(get("/api/service-map")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken))
-                .andExpect(status().isForbidden());
-
-        mvc.perform(get("/api/service-map")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
-                .andExpect(status().isForbidden());
-
-        mvc.perform(get("/api/service-map"))
-                .andExpect(status().isUnauthorized());
-
-        // GET /api/services/{id}/blast-radius
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken))
-                .andExpect(status().isForbidden());
-
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
-                .andExpect(status().isForbidden());
-
-        mvc.perform(get("/api/services/" + serviceAId + "/blast-radius"))
-                .andExpect(status().isUnauthorized());
-    }
+	private ResultActions blastRadius(Long serviceId) throws Exception {
+		return mvc.perform(get("/api/services/{id}/blast-radius", serviceId).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk());
+	}
 }

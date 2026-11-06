@@ -4,15 +4,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
-@Schema(description = "Request to replace the full set of dependencies for a service")
+@Schema(description = "Replaces the full set of services a service depends on")
 public record UpdateDependenciesRequest(
-        @Schema(description = "List of service IDs that this service depends on", example = "[2, 3]")
-        @NotNull(message = "dependsOn must not be null")
-        List<Long> dependsOn
+		// Required, so a body of {} or a misspelt field is refused rather than read as "no dependencies".
+		@Schema(description = "Ids of the services this service depends on; [] removes them all", example = "[2, 3]")
+		@NotNull(message = "dependsOn is required; send [] to remove every dependency")
+		List<@NotNull(message = "dependsOn must not contain null") Long> dependsOn
 ) {
-    public UpdateDependenciesRequest {
-        if (dependsOn == null) {
-            dependsOn = List.of();
-        }
-    }
 }

@@ -251,14 +251,14 @@ public class SecurityMatrixTest {
 						HttpMethod.GET,
 						"/api/services/{id}/blast-radius",
 						null,
-						200, 403, 403, 401
+						200, 200, 200, 401
 				),
 				new MatrixRow(
 						"GET /api/service-map",
 						HttpMethod.GET,
 						"/api/service-map",
 						null,
-						200, 403, 403, 401
+						200, 200, 200, 401
 				),
 				new MatrixRow(
 						"GET /api/tools",

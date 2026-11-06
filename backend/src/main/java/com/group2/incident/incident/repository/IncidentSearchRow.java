@@ -10,6 +10,9 @@ public interface IncidentSearchRow {
 	/** Returns the organization's incident number. */
 	Long getIncidentNumber();
 
+	/** Returns the service ID associated with the incident. */
+	Long getServiceId();
+
 	/** Returns the incident title. */
 	String getTitle();
 

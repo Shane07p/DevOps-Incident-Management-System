@@ -8,6 +8,7 @@ import java.util.List;
 public record IncidentSearchResult(
 		long id,
 		String reference,
+		long serviceId,
 		String title,
 		String serviceName,
 		Severity severity,

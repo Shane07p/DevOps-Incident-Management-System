@@ -210,20 +210,18 @@ public class IncidentService {
 			IncidentStatus status,
 			int page
 	) {
-		if (query == null || query.isBlank()) {
-			throw new FieldValidationException("q", "Search query must not be blank");
-		}
 		if (page < 0) {
 			throw new FieldValidationException("page", "must not be negative");
 		}
 
-		Page<IncidentSearchRow> result = incidentRepository.search(
-				query.trim(),
-				OrgContext.current(),
-				serviceId,
-				severity != null ? severity.name() : null,
-				status != null ? status.name() : null,
-				PageRequest.of(page, SEARCH_PAGE_SIZE));
+		String severityName = severity != null ? severity.name() : null;
+		String statusName = status != null ? status.name() : null;
+		PageRequest pageRequest = PageRequest.of(page, SEARCH_PAGE_SIZE);
+		Page<IncidentSearchRow> result = query == null || query.isBlank()
+				? incidentRepository.searchWithoutKeyword(
+						OrgContext.current(), serviceId, severityName, statusName, pageRequest)
+				: incidentRepository.search(
+						query.trim(), OrgContext.current(), serviceId, severityName, statusName, pageRequest);
 
 		return new IncidentSearchPageResponse(
 				result.getContent().stream().map(IncidentService::toSearchResult).toList(),
@@ -248,6 +246,7 @@ public class IncidentService {
 		return new IncidentSearchResult(
 				row.getIncidentId(),
 				"INC-" + row.getIncidentNumber(),
+				row.getServiceId(),
 				row.getTitle(),
 				row.getServiceName(),
 				Severity.valueOf(row.getSeverity()),

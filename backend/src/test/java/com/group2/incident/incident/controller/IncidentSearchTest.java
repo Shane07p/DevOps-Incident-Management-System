@@ -82,6 +82,7 @@ class IncidentSearchTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.content", hasSize(1)))
 				.andExpect(jsonPath("$.content[0].id").value(titleMatch.getId().intValue()))
+				.andExpect(jsonPath("$.content[0].serviceId").value(payments.getId().intValue()))
 				.andExpect(jsonPath("$.content[0].matchedIn[0]").value("title"));
 
 		search("descriptionzircon")
@@ -159,9 +160,28 @@ class IncidentSearchTest {
 				.andExpect(jsonPath("$.content", hasSize(0)))
 				.andExpect(jsonPath("$.totalElements").value(0));
 
-		search("")
+		search(null, payments.getId(), null, null, 0)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.content", hasSize(20)))
+				.andExpect(jsonPath("$.content[0].serviceId").value(payments.getId().intValue()))
+				.andExpect(jsonPath("$.content[0].matchedIn", hasSize(0)))
+				.andExpect(jsonPath("$.totalElements").value(21));
+
+		mvc.perform(get("/api/incidents/search")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.queryParam("q", "pagemarker")
+						.queryParam("severity", "SEV9"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errors.q").value("Search query must not be blank"));
+				.andExpect(jsonPath("$.message").value("Validation failed"))
+				.andExpect(jsonPath("$.errors.severity").value("has an invalid value"));
+
+		mvc.perform(get("/api/incidents/search")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.queryParam("q", "pagemarker")
+						.queryParam("status", "UNKNOWN"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Validation failed"))
+				.andExpect(jsonPath("$.errors.status").value("has an invalid value"));
 
 		search("pagemarker", null, null, null, -1)
 				.andExpect(status().isBadRequest())
@@ -208,8 +228,10 @@ class IncidentSearchTest {
 	) throws Exception {
 		MockHttpServletRequestBuilder request = get("/api/incidents/search")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-				.queryParam("q", query)
 				.queryParam("page", Integer.toString(page));
+		if (query != null) {
+			request.queryParam("q", query);
+		}
 		if (serviceId != null) {
 			request.queryParam("serviceId", serviceId.toString());
 		}

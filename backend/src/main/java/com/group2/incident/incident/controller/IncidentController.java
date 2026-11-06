@@ -59,7 +59,7 @@ public class IncidentController {
 	@GetMapping("/search")
 	@Operation(summary = "Search incidents by keyword, service, severity, and status")
 	public IncidentSearchPageResponse searchIncidents(
-			@RequestParam("q") String query,
+			@RequestParam(value = "q", required = false) String query,
 			@RequestParam(value = "serviceId", required = false) Long serviceId,
 			@RequestParam(value = "severity", required = false) Severity severity,
 			@RequestParam(value = "status", required = false) IncidentStatus status,

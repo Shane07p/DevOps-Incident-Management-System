@@ -4,23 +4,22 @@ mcp_server.py - Sprint 4 (Issue #162)
 FastMCP Streamable HTTP MCP server with authenticated read tools for Settle.
 
 Architecture:
-  - FastMCP using Streamable HTTP transport.
+  - FastMCP using Streamable HTTP transport (runs as standalone process on port 8001).
   - Every tool calls Settle's backend REST API using the caller's personal access token (PAT).
+  - Authentication is passed exclusively via connection headers (Authorization: Bearer <token>).
+  - Personal access tokens NEVER appear as tool arguments (prevents model leakage in logs/transcripts).
   - Backend performs authentication and permission enforcement (D38).
   - The MCP server never touches the database directly.
   - Strict read-only tools: no write tools (write tools deferred to Sprint 5).
-  - Caller tokens are isolated per request / task (via ContextVar and HTTP headers).
-  - Personal access tokens are never logged, persisted, or returned in error messages.
+  - Tokens are never logged, persisted, or returned in error messages.
 
-Read tools:
+Read tools (active):
   - `list_incidents`: List all incidents, newest first (`GET /api/incidents`).
   - `get_incident`: Incident details with timeline (`GET /api/incidents/{id}`).
   - `search_incidents`: Search incidents by keyword & filters (`GET /api/incidents/search`).
   - `get_service`: Service owner, criticality, and SLA targets (`GET /api/services/{id}`).
   - `who_is_on_call`: Current on-call schedule and fallback (`GET /api/services/{id}/on-call`).
   - `list_alerts`: Alerts inbox (`GET /api/alerts`).
-  - `service_map`: Dependency graph and health (`GET /api/service-map`).
-  - `get_runbook`: Service runbooks or runbook by ID (`GET /api/services/{id}/runbooks`).
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ from contextvars import ContextVar
 import logging
 import math
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -37,24 +36,23 @@ import httpx
 
 logger = logging.getLogger("ai-service.mcp")
 
-# Per-request context variable for caller's personal access token
+# Per-request context variable for caller's personal access token (used by tests / middleware)
 _current_token_var: ContextVar[Optional[str]] = ContextVar("caller_token", default=None)
 
 
 def set_request_token(token: Optional[str]) -> None:
-    """Set the caller's token in the current async task context (for testing or middleware)."""
+    """Set the caller's token in the current async task context (for testing or request binding)."""
     _current_token_var.set(token)
 
 
 def get_backend_api_url() -> str:
-    """Resolve backend REST API base URL from environment."""
-    url = os.getenv("SETTLE_API_URL") or os.getenv("BACKEND_API_URL") or "http://localhost:8080"
-    return url.rstrip("/")
+    """Resolve backend REST API base URL from environment (standardized to SETTLE_API_URL)."""
+    return os.getenv("SETTLE_API_URL", "http://localhost:8080").rstrip("/")
 
 
 def get_backend_timeout() -> float:
-    """Resolve backend request timeout in seconds."""
-    raw = os.getenv("SETTLE_API_TIMEOUT") or os.getenv("BACKEND_TIMEOUT") or "10"
+    """Resolve backend request timeout in seconds (standardized to SETTLE_API_TIMEOUT)."""
+    raw = os.getenv("SETTLE_API_TIMEOUT", "10")
     try:
         val = float(raw)
         if not math.isfinite(val) or val <= 0:
@@ -64,25 +62,21 @@ def get_backend_timeout() -> float:
         return 10.0
 
 
-def get_caller_token(token: Optional[str] = None) -> str:
+def get_caller_token() -> str:
     """
-    Extract caller's personal access token.
+    Extract caller's personal access token from incoming HTTP request Authorization header
+    or active task context variable (for tests / middleware).
 
-    Priority:
-      1. Explicit tool argument `token`
-      2. Per-task context variable `_current_token_var`
-      3. Incoming FastMCP HTTP request header `Authorization: Bearer <token>`
-    
+    Tokens are NEVER accepted as tool arguments (avoids leaking credentials through the model).
     Raises ToolError if no token is found.
     Never exposes or logs the token.
     """
-    if token and isinstance(token, str) and token.strip():
-        return token.strip()
-
+    # 1. Per-task context variable (testing or middleware binding)
     ctx_token = _current_token_var.get(None)
     if ctx_token and isinstance(ctx_token, str) and ctx_token.strip():
         return ctx_token.strip()
 
+    # 2. FastMCP incoming HTTP request header (Authorization: Bearer <token>)
     try:
         from fastmcp.server.dependencies import get_http_request
         req = get_http_request()
@@ -95,10 +89,13 @@ def get_caller_token(token: Optional[str] = None) -> str:
             elif auth_header.strip():
                 return auth_header.strip()
     except Exception:
-        # No active HTTP request context (e.g., direct call or stdio)
+        # No active HTTP request context (e.g. direct call without header)
         pass
 
-    raise ToolError("Missing personal access token. Please provide your personal access token via Authorization: Bearer <token> header or token argument.")
+    raise ToolError(
+        "Missing personal access token. Please provide your personal access token via "
+        "Authorization: Bearer <token> header."
+    )
 
 
 async def _call_backend_api(
@@ -106,7 +103,6 @@ async def _call_backend_api(
     method: str = "GET",
     params: Optional[Dict[str, Any]] = None,
     json_data: Optional[Dict[str, Any]] = None,
-    token: Optional[str] = None,
 ) -> Any:
     """
     Execute an authenticated HTTP request against Settle backend REST API.
@@ -114,7 +110,7 @@ async def _call_backend_api(
     Enforces caller token forwarding, timeouts, and safe error translation.
     Never includes tokens in logged output, exceptions, or error details.
     """
-    resolved_token = get_caller_token(token)
+    resolved_token = get_caller_token()
 
     headers = {
         "Authorization": f"Bearer {resolved_token}",
@@ -180,31 +176,27 @@ mcp = FastMCP(
 
 # ---------------------------------------------------------------------------
 # Read Tools (Sprint 4, Issue #162)
+# Notice: Zero tool functions accept `token` parameter (Shane Review Fix 1)
 # ---------------------------------------------------------------------------
 
-async def list_incidents(
-    token: Optional[str] = None,
-) -> Any:
+async def list_incidents() -> Any:
     """
     List all incidents in Settle, newest first.
 
-    Calls backend GET /api/incidents with the caller's personal access token.
+    Calls backend GET /api/incidents with the caller's personal access token from headers.
     """
-    return await _call_backend_api("api/incidents", method="GET", token=token)
+    return await _call_backend_api("api/incidents", method="GET")
 
 
-async def get_incident(
-    incident_id: int,
-    token: Optional[str] = None,
-) -> Any:
+async def get_incident(incident_id: int) -> Any:
     """
     Get incident details including its full timeline (status updates, comments, and role assignments).
 
-    Calls backend GET /api/incidents/{incident_id} with the caller's personal access token.
+    Calls backend GET /api/incidents/{incident_id} with the caller's personal access token from headers.
     """
     if not isinstance(incident_id, int) or incident_id <= 0:
         raise ToolError("incident_id must be a positive integer")
-    return await _call_backend_api(f"api/incidents/{incident_id}", method="GET", token=token)
+    return await _call_backend_api(f"api/incidents/{incident_id}", method="GET")
 
 
 async def search_incidents(
@@ -213,13 +205,12 @@ async def search_incidents(
     severity: Optional[str] = None,
     status: Optional[str] = None,
     page: Optional[int] = 0,
-    size: Optional[int] = 20,
-    token: Optional[str] = None,
 ) -> Any:
     """
     Search past incidents by keyword with optional filters for service, severity, status, and pagination.
 
-    Calls backend GET /api/incidents/search with the caller's personal access token.
+    Calls backend GET /api/incidents/search with the caller's personal access token from headers.
+    Note: Page size is fixed at 20 by the backend contract (no size parameter).
     """
     params: Dict[str, Any] = {}
     if query and query.strip():
@@ -232,95 +223,48 @@ async def search_incidents(
         params["status"] = status.strip()
     if page is not None:
         params["page"] = page
-    if size is not None:
-        params["size"] = size
 
-    return await _call_backend_api("api/incidents/search", method="GET", params=params, token=token)
+    return await _call_backend_api("api/incidents/search", method="GET", params=params)
 
 
-async def get_service(
-    service_id: int,
-    token: Optional[str] = None,
-) -> Any:
+async def get_service(service_id: int) -> Any:
     """
     Get service details (name, owner, criticality, SLA targets) for a registered service.
 
-    Calls backend GET /api/services/{service_id} with the caller's personal access token.
+    Calls backend GET /api/services/{service_id} with the caller's personal access token from headers.
     """
     if not isinstance(service_id, int) or service_id <= 0:
         raise ToolError("service_id must be a positive integer")
-    return await _call_backend_api(f"api/services/{service_id}", method="GET", token=token)
+    return await _call_backend_api(f"api/services/{service_id}", method="GET")
 
 
-async def who_is_on_call(
-    service_id: int,
-    token: Optional[str] = None,
-) -> Any:
+async def who_is_on_call(service_id: int) -> Any:
     """
     Get the on-call schedule, primary shift engineer, and fallback contact for a service.
 
-    Calls backend GET /api/services/{service_id}/on-call with the caller's personal access token.
+    Calls backend GET /api/services/{service_id}/on-call with the caller's personal access token from headers.
     """
     if not isinstance(service_id, int) or service_id <= 0:
         raise ToolError("service_id must be a positive integer")
-    return await _call_backend_api(f"api/services/{service_id}/on-call", method="GET", token=token)
+    return await _call_backend_api(f"api/services/{service_id}/on-call", method="GET")
 
 
-async def list_alerts(
-    token: Optional[str] = None,
-) -> Any:
+async def list_alerts() -> Any:
     """
     List inbox alerts received from monitoring integrations.
 
-    Calls backend GET /api/alerts with the caller's personal access token.
+    Calls backend GET /api/alerts with the caller's personal access token from headers.
     """
-    return await _call_backend_api("api/alerts", method="GET", token=token)
+    return await _call_backend_api("api/alerts", method="GET")
 
 
-# ---------------------------------------------------------------------------
-# Optional Roadmap Read Tools (Sprint 4)
-# ---------------------------------------------------------------------------
-
-async def service_map(
-    token: Optional[str] = None,
-) -> Any:
-    """
-    Get the service dependency map showing nodes (services and health) and dependency edges.
-
-    Calls backend GET /api/service-map once available (#154).
-    Returns an error if the backend endpoint is not yet implemented.
-    """
-    return await _call_backend_api("api/service-map", method="GET", token=token)
-
-
-async def get_runbook(
-    service_id: Optional[int] = None,
-    runbook_id: Optional[int] = None,
-    token: Optional[str] = None,
-) -> Any:
-    """
-    Get troubleshooting runbook steps for a service or by runbook ID.
-
-    Calls backend GET /api/services/{service_id}/runbooks or /api/runbooks/{runbook_id} once available (#155, #172).
-    Returns an error if the backend endpoint is not yet implemented.
-    """
-    if runbook_id is not None:
-        return await _call_backend_api(f"api/runbooks/{runbook_id}", method="GET", token=token)
-    elif service_id is not None:
-        return await _call_backend_api(f"api/services/{service_id}/runbooks", method="GET", token=token)
-    else:
-        raise ToolError("Either service_id or runbook_id must be provided")
-
-
-# Register all read tools on the FastMCP instance
+# Register active read tools on the FastMCP instance
 mcp.tool(name="list_incidents")(list_incidents)
 mcp.tool(name="get_incident")(get_incident)
 mcp.tool(name="search_incidents")(search_incidents)
 mcp.tool(name="get_service")(get_service)
 mcp.tool(name="who_is_on_call")(who_is_on_call)
 mcp.tool(name="list_alerts")(list_alerts)
-mcp.tool(name="service_map")(service_map)
-mcp.tool(name="get_runbook")(get_runbook)
 
 
 def get_mcp_app() -> Any:
@@ -329,4 +273,5 @@ def get_mcp_app() -> Any:
 
 
 if __name__ == "__main__":
+    # Run as standalone MCP server process on port 8001
     mcp.run(transport="streamable-http", port=8001)

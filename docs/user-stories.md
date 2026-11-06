@@ -35,8 +35,16 @@ Each story follows this structure:
 | US-18 | On-Call Engineer | AI investigation help | Should | FR-18, FR-19, DR-10.2 |
 | US-19 | Engineering Manager | Deployment tracking and DORA | Should | FR-20 |
 | US-20 | Communications Lead | Publish customer updates | Could | FR-21 |
+| US-25 | On-Call Engineer | Personal access tokens for AI tools | Should | FR-23, NFR-04 |
+| US-26 | On-Call Engineer | Service map and blast radius | Should | FR-14.2, FR-24 |
+| US-27 | On-Call Engineer | Runbooks on the incident | Should | FR-25 |
+| US-28 | On-Call Engineer | Search a service's logs | Should | FR-26 |
+| US-29 | Service Owner | Metrics dashboards | Should | FR-27, FR-09.3 |
+| US-30 | On-Call Engineer | Ask an AI assistant through MCP | Should | FR-28, FR-18, DR-10.2 |
+| US-31 | New user | Sign up and create an org | Must | FR-01.4 to FR-01.6, D48 |
 
-**Totals:** 17 Must, 2 Should, 1 Could
+**Totals:** 18 Must, 8 Should, 1 Could. US-21 to US-24 are proposals in
+[epics-and-conflicts.md](epics-and-conflicts.md) and are not stories yet.
 
 ---
 
@@ -321,3 +329,110 @@ Each story follows this structure:
 **Acceptance criteria:**
 - Then public updates are stored separately from internal notes.
 - Then only authorized users can approve and publish.
+
+---
+
+## US-25: Personal access tokens for AI tools
+
+**Story:** As an **On-Call Engineer**, I want a personal access token for my AI assistant, so that it can read incidents as me without my password.
+
+**Priority:** Should
+**Traces to:** FR-23, NFR-04
+
+**Acceptance criteria:**
+- Given I create a token with a name, then it is shown once, and only its hash is stored.
+- Then the token acts as me, with my current role: a Viewer's token cannot do what an Engineer does.
+- Given I revoke a token, or an Admin disables my account, then it stops working at once.
+- Given a token is 90 days old, then it stops working (D38).
+- Then a token cannot create or list tokens; that needs a normal login.
+- Then creating and revoking are audited, and a token never appears in a log.
+
+---
+
+## US-26: Service map and blast radius
+
+**Story:** As an **On-Call Engineer**, I want to see which services depend on the one that is failing, so that I know what else may break.
+
+**Priority:** Should
+**Traces to:** FR-14.2, FR-24
+
+**Acceptance criteria:**
+- Given an Admin records that service A depends on service B, then the map shows the link from A to B.
+- Then each service on the map shows its health: Operational, Degraded, Down, or Unknown.
+- Given B fails, then its blast radius lists every service that depends on it, directly or through others, each once, even when the links form a cycle.
+- Then a link is shown as a possible relationship, never as proof of a shared cause.
+- Then every change to the links is audited.
+
+---
+
+## US-27: Runbooks on the incident
+
+**Story:** As an **On-Call Engineer**, I want the service's runbook on the incident page, so that I can follow known steps instead of starting from scratch.
+
+**Priority:** Should
+**Traces to:** FR-25
+
+**Acceptance criteria:**
+- Given a service has runbooks, then its incidents' pages offer them.
+- Then the steps keep the order they were written in.
+- Then Engineers and Admins write runbooks, everyone can read them, and every change is audited.
+
+---
+
+## US-28: Search a service's logs
+
+**Story:** As an **On-Call Engineer**, I want to search a service's logs from inside Settle, so that I can find errors without opening another tool.
+
+**Priority:** Should
+**Traces to:** FR-26, D34
+
+**Acceptance criteria:**
+- Given a service, a level, some text, and a time range, then the matching log lines are shown, newest first.
+- Then clicking a field in a JSON log line filters by it, and live tail shows new lines while it is on.
+- Given Grafana is slow or down, then the page says so, and the rest of Settle keeps working.
+- Then the read token stays on the server; the browser never sees it.
+
+---
+
+## US-29: Metrics dashboards
+
+**Story:** As a **Service Owner**, I want request rate, error rate, and latency for my service, so that I can see when it is unhealthy and whether a fix worked.
+
+**Priority:** Should
+**Traces to:** FR-27, FR-09.3
+
+**Acceptance criteria:**
+- Given a service and a time range, then charts show request rate, error rate, and latency (p50 and p95).
+- Then an incident's page shows the same charts for its service and time window.
+- Given Grafana is down, then the charts say so, and nothing else breaks.
+
+---
+
+## US-30: Ask an AI assistant through MCP
+
+**Story:** As an **On-Call Engineer**, I want to ask my AI assistant (Claude or Cursor) about incidents, so that I can investigate from the tool I already use.
+
+**Priority:** Should
+**Traces to:** FR-28, FR-18, DR-10.2
+
+**Acceptance criteria:**
+- Given I connect with my personal access token, then the assistant sees only what I may see.
+- Then in Sprint 4 the tools only read: incidents and their timelines, search, services, on-call, alerts, the service map, and runbooks.
+- Then later write tools (comment, acknowledge) act as me and are audited as via MCP.
+- Then no tool changes status, or declares or closes an incident (D38).
+- Given the API refuses a call, then the assistant gets a readable error.
+
+---
+
+## US-31: Sign up and create an org
+
+**Story:** As a **new user**, I want to sign up and create an org for my team, so that we can use Settle without anyone setting it up for us.
+
+**Priority:** Must
+**Traces to:** FR-01.4 to FR-01.6, D48
+
+**Acceptance criteria:**
+- Given I sign up with an email, password, my name, and an org name, then the org exists, I am its Admin, and I am signed in.
+- Given the email is already used, then sign-up is refused and nothing is created.
+- Then I see only my org's services, incidents, and alerts, and other orgs never see mine.
+- Then I add people to my org with a role, and the org always keeps at least one Admin.

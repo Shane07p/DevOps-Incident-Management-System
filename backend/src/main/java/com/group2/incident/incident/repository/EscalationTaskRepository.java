@@ -19,6 +19,9 @@ public interface EscalationTaskRepository extends JpaRepository<EscalationTask, 
 	@EntityGraph(attributePaths = {"incident", "steps", "steps.responder", "incident.service"})
 	Optional<EscalationTask> findByIncidentId(Long incidentId);
 
-	@Query("SELECT t.id FROM EscalationTask t WHERE t.state = :state AND t.nextDueAt <= :now AND t.incident.status = com.group2.incident.incident.entity.IncidentStatus.OPEN ORDER BY t.nextDueAt ASC")
-	List<Long> findOverdueTaskIds(@Param("state") EscalationTaskState state, @Param("now") Instant now);
+	// Read across every org by the worker, as root; each task then runs in its own org (D48).
+	@Query("SELECT new com.group2.incident.incident.repository.OverdueTask(t.id, t.orgId) FROM EscalationTask t "
+			+ "WHERE t.state = :state AND t.nextDueAt <= :now AND t.incident.status = com.group2.incident.incident.entity.IncidentStatus.OPEN "
+			+ "ORDER BY t.nextDueAt ASC, t.id ASC")
+	List<OverdueTask> findOverdueTasks(@Param("state") EscalationTaskState state, @Param("now") Instant now);
 }

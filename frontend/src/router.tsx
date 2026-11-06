@@ -5,10 +5,12 @@ import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
 import { AlertsPage } from '@/pages/AlertsPage'
 import { EscalationPage } from '@/pages/EscalationPage'
+import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { SignupPage } from '@/pages/SignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -31,6 +33,7 @@ const ADMIN_SCREENS: Record<string, ReactNode> = { '/tools': <ToolsPage />, '/us
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.
 const RESPONSE_SCREENS: Record<string, ReactNode> = {
   '/alerts': <AlertsPage />,
+  '/history': <HistorySearchPage />,
   '/incidents': <IncidentsPage />,
   '/incidents/:id': <IncidentDetailPage />,
 }
@@ -46,6 +49,7 @@ export const routes: RouteObject[] = [
   // Public pages load on demand, so logged-in users never download the landing animations.
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
   { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
   {
     element: <RequireAuth />,

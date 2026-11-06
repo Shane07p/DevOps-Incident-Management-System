@@ -172,7 +172,7 @@ not a product dependency.
 | --- | --- |
 | 1 | `ai-service` skeleton, `/health`, stub `/suggest`, pytest, CI job **(done, #21)** |
 | 2 | Incident collection and labels; demo-shop scenario table; Ollama with the embedding model |
-| 3 | Evidence functions: PromQL baselines, Loki patterns, deploy window; agent tool loop on demo data |
+| 3 | Evidence functions: PromQL baselines, Loki patterns, deploy window; agent tool loop on demo data (#91: Done, PR #181) |
 | 4 | AI-1 Find similar; MCP server with the read tools; personal access tokens (with backend) |
 | 5 | AI-2 AI SRE with Accept/Reject; AI-3 Drafting; AI-4 Triage hint; MCP write tools |
 | 6 | Evaluation runs, the report, and the optional ML experiment |

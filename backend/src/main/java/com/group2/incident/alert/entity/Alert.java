@@ -19,6 +19,7 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(
@@ -32,6 +33,11 @@ public class Alert {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
+
+	// Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
 
 	@Column(nullable = false, length = 100)
 	private String source;
@@ -76,6 +82,10 @@ public class Alert {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	// Set when the uptime monitor that raised this alert passes again (FR-22.2).
+	@Column(name = "recovered_at")
+	private Instant recoveredAt;
+
 	public Alert(
 			String source,
 			String eventId,
@@ -103,5 +113,9 @@ public class Alert {
 		this.status = status;
 		this.receivedAt = receivedAt;
 		this.createdAt = receivedAt;
+	}
+
+	public void recordRecovery(Instant at) {
+		this.recoveredAt = at;
 	}
 }

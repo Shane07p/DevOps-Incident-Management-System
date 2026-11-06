@@ -23,6 +23,8 @@ import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
+import com.group2.incident.org.entity.Membership;
+import com.group2.incident.org.service.OrgMembers;
 import java.time.Clock;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -57,6 +59,7 @@ public class ServiceCatalogService {
     private final ServiceRepository serviceRepository;
     private final ServiceDependencyRepository serviceDependencyRepository;
     private final AppUserRepository appUserRepository;
+    private final OrgMembers orgMembers;
     private final AuditService auditService;
     private final Clock clock;
 
@@ -258,8 +261,10 @@ public class ServiceCatalogService {
     }
 
     private AppUser resolveOwner(Long ownerId) {
-        return appUserRepository.findById(ownerId)
-                .filter(AppUser::isEnabled)
+        // Only an enabled member of this org (D48).
+        return orgMembers.find(ownerId)
+                .filter(Membership::isEnabled)
+                .map(Membership::getUser)
                 .orElseThrow(() -> new FieldValidationException("ownerId", "Owner not found"));
     }
 

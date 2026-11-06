@@ -7,13 +7,13 @@ import type { Role } from '@/api/schemas'
 import { clearToken, writeToken } from '@/api/token'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
-import { mockFetch, payments, users } from '@/test/fetchMock'
+import { devOrg, mockFetch, payments, users } from '@/test/fetchMock'
 import { ServicesPage } from './ServicesPage'
 
 const signedIn: Record<Role, unknown> = {
   ADMIN: users[0],
   ENGINEER: users[1],
-  VIEWER: { id: 3, username: 'viewer', displayName: 'Dev Viewer', role: 'VIEWER' },
+  VIEWER: { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' },
 }
 
 type Routes = Parameters<typeof mockFetch>[0]
@@ -22,7 +22,7 @@ type Routes = Parameters<typeof mockFetch>[0]
 function renderServices(role: Role, routes: Routes = {}) {
   writeToken('test-token')
   const fetchMock = mockFetch({
-    'GET /api/auth/me': { body: signedIn[role] },
+    'GET /api/auth/me': { body: { user: signedIn[role], org: devOrg } },
     'GET /api/services': { body: [payments] },
     'GET /api/users': { body: users },
     ...routes,

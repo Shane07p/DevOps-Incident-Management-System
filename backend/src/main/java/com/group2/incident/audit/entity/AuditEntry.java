@@ -16,6 +16,7 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "audit_entry")
@@ -26,6 +27,11 @@ public class AuditEntry {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+    @TenantId
+    @Column(name = "org_id", nullable = false, updatable = false)
+    private Long orgId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "actor_id")

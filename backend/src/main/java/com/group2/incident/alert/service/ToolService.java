@@ -74,7 +74,7 @@ public class ToolService {
 				"name: " + savedTool.getName()
 		);
 
-		log.info("Admin {} registered tool {} (id: {})", admin.getUsername(), savedTool.getName(), savedTool.getId());
+		log.info("Admin {} registered tool {} (id: {})", admin.getId(), savedTool.getName(), savedTool.getId());
 		return new CreateToolResponse(savedTool.getId(), savedTool.getName(), rawToken, savedTool.getCreatedAt());
 	}
 
@@ -95,7 +95,7 @@ public class ToolService {
 					tool.getId(),
 					"name: " + tool.getName()
 			);
-			log.info("Admin {} revoked tool {} (id: {})", admin.getUsername(), tool.getName(), tool.getId());
+			log.info("Admin {} revoked tool {} (id: {})", admin.getId(), tool.getName(), tool.getId());
 		}
 	}
 

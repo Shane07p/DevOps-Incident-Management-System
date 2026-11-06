@@ -5,10 +5,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.catalog.entity.Severity;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,6 +18,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -48,6 +51,22 @@ class ApiExceptionHandlerTest {
 	}
 
 	@Test
+	void missingRequestParameterReturns400NamingTheField() throws Exception {
+		mvc.perform(get("/probe/required-parameter"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Validation failed"))
+				.andExpect(jsonPath("$.errors.q").value("is required"));
+	}
+
+	@Test
+	void invalidRequestParameterTypeReturns400NamingTheField() throws Exception {
+		mvc.perform(get("/probe/enum-parameter").queryParam("severity", "SEV9"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.message").value("Validation failed"))
+				.andExpect(jsonPath("$.errors.severity").value("has an invalid value"));
+	}
+
+	@Test
 	void notFoundExceptionReturns404() throws Exception {
 		mvc.perform(get("/probe/missing"))
 				.andExpect(status().isNotFound())
@@ -64,10 +83,18 @@ class ApiExceptionHandlerTest {
 	}
 
 	@Test
+	void optimisticLockingFailureExceptionReturns409() throws Exception {
+		mvc.perform(get("/probe/optimistic-lock"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409))
+				.andExpect(jsonPath("$.message").value("This record was changed by another request; reload and try again"));
+	}
+
+	@Test
 	void failedLoginReturns401WithoutSayingWhichPartWasWrong() throws Exception {
 		mvc.perform(get("/probe/login"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.message").value("Invalid username or password"));
+				.andExpect(jsonPath("$.message").value("Invalid email or password"));
 	}
 
 	@Test
@@ -95,6 +122,14 @@ class ApiExceptionHandlerTest {
 			throw new FieldValidationException("serviceId", "Service not found");
 		}
 
+		@GetMapping("/required-parameter")
+		void requiredParameter(@RequestParam("q") String query) {
+		}
+
+		@GetMapping("/enum-parameter")
+		void enumParameter(@RequestParam("severity") Severity severity) {
+		}
+
 		@GetMapping("/missing")
 		void missing() {
 			throw new NotFoundException("Incident 7 not found");
@@ -103,6 +138,11 @@ class ApiExceptionHandlerTest {
 		@GetMapping("/duplicate")
 		void duplicate() {
 			throw new ConflictException("Username already taken");
+		}
+
+		@GetMapping("/optimistic-lock")
+		void optimisticLock() {
+			throw new OptimisticLockingFailureException("stale version");
 		}
 
 		@GetMapping("/login")

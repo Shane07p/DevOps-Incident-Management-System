@@ -1,7 +1,7 @@
 """
-ai-service - Sprint 1 (health, suggest) + Sprint 2 (Ollama embeddings)
------------------------------------------------------------------------------
-FastAPI service providing AI-assisted incident recommendations.
+ai-service - Sprint 1 (health, suggest) + Sprint 2 (Ollama embeddings) + Sprint 3 (Agent tool loop)
+---------------------------------------------------------------------------------------------------
+FastAPI service providing AI-assisted incident recommendations and autonomous SRE investigation.
 
 Sprint 1 Scope:
   - GET  /health   -> Instant service liveness check
@@ -12,17 +12,25 @@ Sprint 2 additions (Issue #62):
   - POST /embed    -> Returns a numeric embedding vector via Ollama.
   - GET  /ready    -> Reports whether Ollama is reachable and the model is pulled.
 
+Sprint 3 additions (Issue #91):
+  - POST /investigate -> Autonomous AI SRE tool loop on recorded Demo Shop evidence with step,
+                         deadline, and token budgets, enforcing real evidence attribution.
+
 Rules enforced by contract:
   - AI only suggests; never mutates incident state or SLA (DR-10.2).
   - Every response is labelled with `aiGenerated: True` (FR-18.2).
-  - Suggestions cite specific past incident IDs in `basedOn` derived from `pastIncidents`.
+  - Suggestions and hypotheses cite specific evidence or past incident IDs.
   - Backend records Accept/Reject; AI service returns suggestions without status or IDs.
   - The app keeps working when Ollama is down or slow (FR-18.4, NFR-12).
 
-Environment variables (Sprint 2):
-  - OLLAMA_URL         : Base URL of the Ollama server  (default: http://localhost:11434)
-  - OLLAMA_EMBED_MODEL : Embedding model name           (default: nomic-embed-text)
-  - OLLAMA_TIMEOUT     : Request timeout in seconds     (default: 10)
+Environment variables:
+  - OLLAMA_URL          : Base URL of the Ollama server      (default: http://localhost:11434)
+  - OLLAMA_EMBED_MODEL  : Embedding model name               (default: nomic-embed-text)
+  - OLLAMA_TIMEOUT      : Request timeout in seconds         (default: 10)
+  - AGENT_MODEL         : LLM model for agent investigation  (default: qwen2.5:0.5b)
+  - AGENT_MAX_STEPS     : Maximum tool-call steps            (default: 5)
+  - AGENT_TIMEOUT_SECONDS: Total investigation deadline (s)  (default: 15.0)
+  - AGENT_MAX_TOKENS    : Maximum cumulative token budget    (default: 4000)
 """
 
 from __future__ import annotations
@@ -36,6 +44,17 @@ from typing import List, Literal
 import httpx
 from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
+
+from agent_loop import (
+    AgentInvestigationLoop,
+    AgentLimits,
+    EvidenceVault,
+    InvestigationRequest,
+    InvestigationResult,
+    RankedHypothesis,
+)
+from agent_tools import EvidenceItem, ToolRegistry, build_default_tool_registry
+from providers import LlmProvider, OllamaProvider
 
 logger = logging.getLogger("ai-service")
 
@@ -57,6 +76,27 @@ def get_ollama_timeout() -> float:
         return value
     except (ValueError, TypeError):
         return 10.0
+
+
+def get_agent_model() -> str:
+    return os.getenv("AGENT_MODEL", "qwen2.5:0.5b")
+
+
+def get_agent_limits() -> AgentLimits:
+    """Return validated AgentLimits from environment variables."""
+    return AgentLimits.from_env()
+
+
+def get_agent_max_steps() -> int:
+    return get_agent_limits().max_steps
+
+
+def get_agent_timeout() -> float:
+    return get_agent_limits().timeout_seconds
+
+
+def get_agent_max_tokens() -> int:
+    return get_agent_limits().max_tokens
 
 
 _VERSION = "0.2.0"
@@ -396,3 +436,60 @@ async def embed(request: EmbedRequest) -> EmbedResponse:
         )
 
     return EmbedResponse(embedding=vector, model=model)
+
+
+# ---------------------------------------------------------------------------
+# Investigation Endpoint (Sprint 3 — Issue #91)
+# ---------------------------------------------------------------------------
+
+def get_investigation_provider() -> LlmProvider:
+    """
+    Return active model provider for agent investigations. Prefers injected app.state.agent_provider if set (e.g. for deterministic testing),
+    otherwise defaults to OllamaProvider using configured AGENT_MODEL and OLLAMA_URL.
+    Reuses the FastAPI lifespan-managed http client when available to avoid creating a separate client.
+    """
+    provider = getattr(app.state, "agent_provider", None)
+    if provider is not None:
+        return provider
+    # Reuse the lifespan-managed HTTP client if present and not closed.
+    http_client = getattr(app.state, "http_client", None)
+    if http_client is not None and not getattr(http_client, "is_closed", True):
+        return OllamaProvider(base_url=get_ollama_url(), model=get_agent_model(), http_client=http_client)
+    return OllamaProvider(
+        base_url=get_ollama_url(),
+        model=get_agent_model(),
+    )
+
+
+@app.post("/investigate", response_model=InvestigationResult)
+async def investigate(request: InvestigationRequest) -> InvestigationResult:
+    """
+    Autonomous AI SRE investigation tool loop on recorded Demo Shop evidence.
+
+    Accepts incident details (service, timestamps, description).
+    Resource limits (max steps, timeout, token budget) are enforced exclusively from
+    environment variables (AGENT_MAX_STEPS, AGENT_TIMEOUT_SECONDS, AGENT_MAX_TOKENS)
+    and cannot be overridden by API callers.
+
+    Executes a bounded multi-turn tool-calling loop:
+      - Validates and dispatches registered evidence tools (logs, metrics, deploys, health).
+      - Collects structured evidence into an Evidence Vault.
+      - Enforces step limits (AGENT_MAX_STEPS), total deadline (AGENT_TIMEOUT_SECONDS),
+        and token budget (AGENT_MAX_TOKENS).
+      - Strictly validates all model hypotheses against collected evidence.
+      - Discards any hypotheses with missing, unknown, or fabricated citations.
+      - Returns ranked hypotheses with citations, summary, and execution metrics.
+    """
+    provider = get_investigation_provider()
+    tool_registry = getattr(app.state, "tool_registry", None) or build_default_tool_registry()
+
+    limits = get_agent_limits()
+
+    loop = AgentInvestigationLoop(
+        provider=provider,
+        tool_registry=tool_registry,
+        default_limits=limits,
+    )
+
+    result = await loop.run(request=request, limits_override=limits)
+    return result

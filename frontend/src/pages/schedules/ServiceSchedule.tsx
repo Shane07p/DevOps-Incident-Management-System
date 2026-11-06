@@ -91,7 +91,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
         fallbackContactId: data.fallbackContactId!,
         shifts: data.shifts.filter((other) => other.id !== shift.id).map(toShiftRequest),
       })
-      toast.success(`Removed ${shift.responderUsername}'s shift.`)
+      toast.success(`Removed ${shift.responderName}'s shift.`)
     } catch (error) {
       toast.error(errorMessage(error))
     }
@@ -104,12 +104,12 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
         <Fact label="On call now">
           {current.kind === 'shift' ? (
             <>
-              <span className="text-lg font-semibold">{current.username}</span>
+              <span className="text-lg font-semibold">{current.name}</span>
               <span className="text-xs text-muted-foreground">Until {formatIst(current.until)}</span>
             </>
           ) : current.kind === 'fallback' ? (
             <>
-              <span className="text-lg font-semibold">{current.username}</span>
+              <span className="text-lg font-semibold">{current.name}</span>
               <span className="text-xs text-muted-foreground">Fallback contact: no shift right now</span>
             </>
           ) : (
@@ -119,7 +119,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
         <Fact label="Next shift">
           {next ? (
             <>
-              <span className="text-lg font-semibold">{next.responderUsername}</span>
+              <span className="text-lg font-semibold">{next.responderName}</span>
               <span className="text-xs text-muted-foreground">From {formatIst(next.startTime)}</span>
             </>
           ) : (
@@ -127,7 +127,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
           )}
         </Fact>
         <Fact label="Fallback contact">
-          <span className="text-lg font-semibold">{data.fallbackContactUsername ?? 'Not set'}</span>
+          <span className="text-lg font-semibold">{data.fallbackContactName ?? 'Not set'}</span>
           <span className="text-xs text-muted-foreground">Gets new incidents when no shift covers the time</span>
         </Fact>
       </div>
@@ -152,7 +152,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
                 const past = Date.parse(shift.endTime) <= now
                 return (
                   <TableRow key={shift.id} className={cn(past && 'text-muted-foreground')}>
-                    <TableCell className="font-semibold">{shift.responderUsername}</TableCell>
+                    <TableCell className="font-semibold">{shift.responderName}</TableCell>
                     <TableCell className="font-mono text-xs tnum">{formatIst(shift.startTime)}</TableCell>
                     <TableCell className="font-mono text-xs tnum">{formatIst(shift.endTime)}</TableCell>
                     {isAdmin && (
@@ -160,7 +160,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`Remove ${shift.responderUsername}'s shift from ${formatIst(shift.startTime)}`}
+                          aria-label={`Remove ${shift.responderName}'s shift from ${formatIst(shift.startTime)}`}
                           onClick={() => setRemoving(shift)}
                         >
                           <Trash2 aria-hidden="true" />
@@ -184,12 +184,12 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
               <Label htmlFor="fallbackContactId">Contact</Label>
               <Select value={fallbackChoice} onValueChange={setFallbackChoice} disabled={!users.data}>
                 <SelectTrigger id="fallbackContactId" className="w-full" aria-describedby="fallbackContactId-message">
-                  <SelectValue placeholder={data.fallbackContactUsername ?? 'Choose a contact'} />
+                  <SelectValue placeholder={data.fallbackContactName ?? 'Choose a contact'} />
                 </SelectTrigger>
                 <SelectContent>
                   {users.data?.map((option) => (
                     <SelectItem key={option.id} value={String(option.id)}>
-                      {option.displayName} ({option.username})
+                      {option.displayName} ({option.email})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -231,7 +231,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
             <DialogTitle>Remove this shift?</DialogTitle>
             <DialogDescription>
               {removing &&
-                `${removing.responderUsername}, ${formatIst(removing.startTime)} to ${formatIst(removing.endTime)}. Incidents already assigned keep their assignee.`}
+                `${removing.responderName}, ${formatIst(removing.startTime)} to ${formatIst(removing.endTime)}. Incidents already assigned keep their assignee.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

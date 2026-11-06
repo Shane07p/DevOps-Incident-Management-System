@@ -1,9 +1,12 @@
 package com.group2.incident.incident.service;
 
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.entity.EscalationTaskState;
 import com.group2.incident.incident.repository.EscalationTaskRepository;
+import com.group2.incident.incident.repository.OverdueTask;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -34,17 +37,19 @@ public class EscalationWorker {
 	 */
 	public int runOnce(Instant now) {
 		int processed = 0;
-		for (Long taskId : escalationTaskRepository.findOverdueTaskIds(EscalationTaskState.PENDING, now)) {
+		List<OverdueTask> overdue = OrgContext.runAsRoot(() -> escalationTaskRepository.findOverdueTasks(EscalationTaskState.PENDING, now));
+		for (OverdueTask task : overdue) {
 			try {
-				if (escalationService.escalateTaskInNewTransaction(taskId, now)) {
+				// Each step opens its own transaction, inside the task's org (D48).
+				if (OrgContext.runAs(task.orgId(), () -> escalationService.escalateTaskInNewTransaction(task.id(), now))) {
 					processed++;
 				}
 			}
 			catch (OptimisticLockingFailureException e) {
-				log.info("Escalation task {} lost a race with another change to its incident; rolled back", taskId);
+				log.info("Escalation task {} lost a race with another change to its incident; rolled back", task.id());
 			}
 			catch (RuntimeException e) {
-				log.error("Failed to escalate task {}", taskId, e);
+				log.error("Failed to escalate task {}", task.id(), e);
 			}
 		}
 		return processed;

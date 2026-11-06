@@ -3,6 +3,7 @@ package com.group2.incident.alert.security;
 import com.group2.incident.alert.entity.MonitoringTool;
 import com.group2.incident.alert.service.AlertIntakeService;
 import com.group2.incident.common.ratelimit.RateLimitService;
+import com.group2.incident.common.tenancy.OrgContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -24,11 +25,25 @@ public class ToolTokenInterceptor implements HandlerInterceptor {
 	private final AlertIntakeService alertIntakeService;
 	private final RateLimitService rateLimitService;
 
+	private static final String PREVIOUS_ORG = ToolTokenInterceptor.class.getName() + ".previousOrg";
+
 	@Override
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-		MonitoringTool tool = alertIntakeService.authenticate(request.getHeader(HttpHeaders.AUTHORIZATION));
+		// The token is checked before any org is known, so this one lookup sees every org (D48). Token
+		// hashes are unique across orgs.
+		MonitoringTool tool = OrgContext.runAsRoot(() -> alertIntakeService.authenticate(request.getHeader(HttpHeaders.AUTHORIZATION)));
 		rateLimitService.checkWebhook(tool.getId());
+		// The alert, and any incident it opens, belong to the tool's org.
+		request.setAttribute(PREVIOUS_ORG, OrgContext.current());
+		OrgContext.set(tool.getOrgId());
 		request.setAttribute(TOOL_ATTRIBUTE, tool);
 		return true;
+	}
+
+	@Override
+	public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+		if (request.getAttribute(PREVIOUS_ORG) instanceof Long previous) {
+			OrgContext.set(previous);
+		}
 	}
 }

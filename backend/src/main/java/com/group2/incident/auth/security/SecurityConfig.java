@@ -1,5 +1,6 @@
 package com.group2.incident.auth.security;
 
+import com.group2.incident.common.tenancy.OrgContextFilter;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.Base64;
@@ -26,6 +27,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -54,18 +56,28 @@ class SecurityConfig {
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers("/error", "/actuator/health/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
-						.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
 						// The permissions table in the Sprint 1 plan; anything not listed needs any logged-in user.
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
-						.requestMatchers("/api/service-map", "/api/service-map/**").hasRole("ADMIN")
+						.requestMatchers("/api/audit/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
-						.requestMatchers(HttpMethod.GET, "/api/services/*/blast-radius").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/timeline/*/corrections")
+						.hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/evidence")
+						.hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtUserConverter)));
+		// After the token is checked, the request works for the org in the token (D48).
+		http.addFilterAfter(new OrgContextFilter(), BearerTokenAuthenticationFilter.class);
 		return http.build();
 	}
 

@@ -18,12 +18,15 @@ import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.Incident;
+import com.group2.incident.monitor.entity.UptimeMonitor;
+import com.group2.incident.monitor.repository.UptimeMonitorRepository;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.HashSet;
@@ -51,6 +54,12 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 public class SecurityMatrixTest {
 
 	private static final String DEFAULT_PASSWORD = "DevPassw0rd!";
+
+	@Autowired
+	private UptimeMonitorRepository monitors;
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -96,9 +105,12 @@ public class SecurityMatrixTest {
 
 	private Long adminUserId;
 
+	private Long engineerUserId;
+
 	private Long targetServiceId;
 	private Long targetToolId;
 	private Long targetIncidentId;
+	private Long targetMonitorId;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
@@ -125,8 +137,16 @@ public class SecurityMatrixTest {
 						"POST /api/auth/login",
 						HttpMethod.POST,
 						"/api/auth/login",
-						"{\"username\":\"admin\",\"password\":\"" + DEFAULT_PASSWORD + "\"}",
+						"{\"email\":\"admin@test.local\",\"password\":\"" + DEFAULT_PASSWORD + "\"}",
 						200, 200, 200, 200
+				),
+				// The matrix sends no body, so every caller gets 400: the endpoint is reachable without login.
+				new MatrixRow(
+						"POST /api/auth/signup",
+						HttpMethod.POST,
+						"/api/auth/signup",
+						null,
+						400, 400, 400, 400
 				),
 				new MatrixRow(
 						"GET /api/auth/me",
@@ -153,7 +173,7 @@ public class SecurityMatrixTest {
 						"POST /api/users",
 						HttpMethod.POST,
 						"/api/users",
-						"{\"username\":\"sec_${RANDOM}\",\"displayName\":\"Sec User\",\"password\":\"ValidPass123!\",\"role\":\"ENGINEER\"}",
+						"{\"email\":\"sec_${RANDOM}@test.local\",\"displayName\":\"Sec User\",\"password\":\"ValidPass123!\",\"role\":\"ENGINEER\"}",
 						201, 403, 403, 401
 				),
 				new MatrixRow(
@@ -262,9 +282,37 @@ public class SecurityMatrixTest {
 						204, 403, 403, 401
 				),
 				new MatrixRow(
+						"GET /api/monitors",
+						HttpMethod.GET,
+						"/api/monitors",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/monitors",
+						HttpMethod.POST,
+						"/api/monitors",
+						"{\"name\":\"Mon_${RANDOM}\",\"url\":\"https://203.0.113.10/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/monitors/{id}",
+						HttpMethod.PUT,
+						"/api/monitors/{id}",
+						"{\"name\":\"Mon_${RANDOM}\",\"url\":\"https://203.0.113.10/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/incidents",
 						HttpMethod.GET,
 						"/api/incidents",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/search",
+						HttpMethod.GET,
+						"/api/incidents/search",
 						null,
 						200, 200, 200, 401
 				),
@@ -290,6 +338,41 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"PUT /api/incidents/{id}/assignee",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/assignee",
+						"{\"assigneeId\":${ASSIGNEE_ID}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/roles",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/roles",
+						"{\"role\":\"COMMS\",\"userId\":${ASSIGNEE_ID}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/comments",
+						HttpMethod.POST,
+						"/api/incidents/{id}/comments",
+						"{\"comment\":\"Security matrix comment\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/evidence",
+						HttpMethod.POST,
+						"/api/incidents/{id}/evidence",
+						"{\"url\":\"https://grafana.example.com/logs\",\"label\":\"Grafana logs\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/timeline/{entryId}/corrections",
+						HttpMethod.POST,
+						"/api/incidents/{id}/timeline/{entryId}/corrections",
+						"{\"details\":\"Security matrix correction\"}",
+						404, 404, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/notifications",
 						HttpMethod.GET,
 						"/api/notifications",
@@ -302,6 +385,13 @@ public class SecurityMatrixTest {
 						"/api/notifications/{id}/read",
 						null,
 						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/audit",
+						HttpMethod.GET,
+						"/api/audit",
+						null,
+						200, 403, 403, 401
 				)
 		);
 	}
@@ -314,6 +404,7 @@ public class SecurityMatrixTest {
 		AppUser target = createUser("target", Role.VIEWER);
 		targetUserId = target.getId();
 		adminUserId = admin.getId();
+		engineerUserId = engineer.getId();
 
 		var tool = tools.saveAndFlush(new MonitoringTool("Matrix Tool " + UUID.randomUUID(), "dummy_hash_" + UUID.randomUUID(), clock.instant()));
 		targetToolId = tool.getId();
@@ -334,9 +425,16 @@ public class SecurityMatrixTest {
 		policy.replaceSteps(List.of(new EscalationStep(1, admin, 15)), clock.instant());
 		escalationPolicies.saveAndFlush(policy);
 
-		Incident incident = incidents.saveAndFlush(new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
-				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480));
+		Incident unsaved = new Incident("SecurityMatrixBaseIncident", "Initial", savedService,
+				Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480);
+		// Far above the numbers the incident API hands out in the test org.
+		unsaved.assignNumber(990_001L);
+		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
+
+		// A documentation-only address (RFC 5737): nothing is ever contacted, since the worker is off in tests.
+		targetMonitorId = monitors.saveAndFlush(new UptimeMonitor(savedService, "Matrix monitor", "https://203.0.113.10/health",
+				200, 60, 3, true, clock.instant())).getId();
 
 		adminNotificationId = notifications.saveAndFlush(
 				new Notification(admin, incident, "Admin notification", clock.instant())).getId();
@@ -394,18 +492,24 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/services/") ? targetServiceId.toString()
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
+				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
 				: targetUserId.toString();
-		return pathTemplate.replace("{id}", id);
+		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {
 		MockHttpServletRequestBuilder req = request(method, path);
+		if (path.equals("/api/incidents/search")) {
+			req.queryParam("q", "SecurityMatrix");
+		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}
 		if (bodyTemplate != null) {
+			Long assigneeId = (token != null && token.equals(adminToken)) ? engineerUserId : adminUserId;
 			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
 					.replace("${OWNER_ID}", adminUserId.toString())
+					.replace("${ASSIGNEE_ID}", assigneeId != null ? assigneeId.toString() : "")
 					.replace("${SERVICE_ID}", targetServiceId.toString());
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
@@ -413,12 +517,11 @@ public class SecurityMatrixTest {
 	}
 
 	private AppUser createUser(String username, Role role) {
-		return users.saveAndFlush(new AppUser(username, "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), role,
-				clock.instant()));
+		return accounts.save(new AppUser(username + "@test.local", "Test " + username, passwordEncoder.encode(DEFAULT_PASSWORD), clock.instant()), role);
 	}
 
 	private String tokenFor(String username) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, DEFAULT_PASSWORD);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", DEFAULT_PASSWORD);
 		String response = mvc.perform(
 						request(HttpMethod.POST, "/api/auth/login")
 								.contentType(MediaType.APPLICATION_JSON)

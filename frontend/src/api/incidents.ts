@@ -25,6 +25,7 @@ export const timelineEntrySchema = z.object({
   actor: z.string().nullable(),
   details: z.string().nullable(),
   recordedAt: timestamp,
+  correctsEntryId: z.number().nullable(),
 })
 
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>

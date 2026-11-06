@@ -85,6 +85,9 @@ git checkout <branch> && git rebase origin/main      # or: continue an existing 
   `ai-ml`, `devops`, or `documentation`); add `bug` for a fix, `test` for mostly tests, and
   `dependencies` for version bumps (`gh pr create --label backend …`).
 - The description says `Closes #<issue>` and pastes the test output.
+- Use the GitHub CLI (`gh`) for GitHub work: `gh issue view <n>` for the issue, `gh pr create` to
+  open the pull request, `gh pr view <n> --comments` for review comments, and `gh pr checks <n>`
+  for CI.
 
 ## Before you finish a change
 
@@ -93,3 +96,7 @@ git checkout <branch> && git rebase origin/main      # or: continue an existing 
    something works, run it.
 3. Affected documents in `docs/` are updated. A row in `docs/testing/TEST_CASES.md` or
    `docs/TRACEABILITY.csv` says Passed only after its check has run, with the date and commit.
+4. CI passes on the pull request. After every push, wait for it with `gh pr checks <n> --watch`.
+   If a check fails, read its log before changing anything: `gh run list --branch <branch>` gives
+   the run id, and `gh run view <run-id> --log-failed` shows the failing steps. Fix the cause, push,
+   and check again. Never call a pull request ready while a check is red.

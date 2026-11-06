@@ -22,6 +22,7 @@ import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "service")
@@ -32,6 +33,11 @@ public class ServiceEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
+    @TenantId
+    @Column(name = "org_id", nullable = false, updatable = false)
+    private Long orgId;
 
     @Column(nullable = false, unique = true, length = 100)
     private String name;

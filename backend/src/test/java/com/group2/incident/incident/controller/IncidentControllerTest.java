@@ -19,11 +19,16 @@ import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
+import com.group2.incident.incident.entity.TimelineEntry;
+import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
+import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +45,9 @@ class IncidentControllerTest {
 	private static final String PASSWORD = "DevPassw0rd!";
 
 	@Autowired
+	private TestAccounts accounts;
+
+	@Autowired
 	private MockMvc mvc;
 
 	@Autowired
@@ -50,6 +58,9 @@ class IncidentControllerTest {
 
 	@Autowired
 	private IncidentRepository incidents;
+
+	@Autowired
+	private TimelineEntryRepository timelineEntries;
 
 	@Autowired
 	private AuditEntryRepository auditEntries;
@@ -63,14 +74,14 @@ class IncidentControllerTest {
 	private AppUser engineer;
 	private AppUser viewer;
 	private ServiceEntity paymentsService;
+	private long nextIncidentNumber;
 
 	@BeforeEach
 	void setUp() {
 		Instant now = clock.instant();
-		engineer = users.saveAndFlush(new AppUser("engineer", "Dev Engineer", passwordEncoder.encode(PASSWORD),
-				Role.ENGINEER, now));
-		viewer = users.saveAndFlush(new AppUser("viewer", "Dev Viewer", passwordEncoder.encode(PASSWORD),
-				Role.VIEWER, now));
+		nextIncidentNumber = 1L;
+		engineer = accounts.save(new AppUser("engineer@test.local", "Dev Engineer", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER);
+		viewer = accounts.save(new AppUser("viewer@test.local", "Dev Viewer", passwordEncoder.encode(PASSWORD), now), Role.VIEWER);
 
 		ServiceEntity payments = new ServiceEntity("Payments", "Card payments", engineer, Criticality.CRITICAL, now);
 		payments.putTarget(Severity.SEV1, 15, 240);
@@ -193,8 +204,9 @@ class IncidentControllerTest {
 		String ref2 = JsonPath.read(res2, "$.reference");
 
 		assertThat(id1).isNotEqualTo(id2);
-		assertThat(ref1).isEqualTo("INC-" + id1);
-		assertThat(ref2).isEqualTo("INC-" + id2);
+		// The org numbers its incidents in order (D48), so the second takes the next number.
+		assertThat(ref1).matches("INC-\\d+");
+		assertThat(ref2).isEqualTo("INC-" + (Long.parseLong(ref1.substring(4)) + 1));
 	}
 
 	@Test
@@ -203,18 +215,22 @@ class IncidentControllerTest {
 		String token = tokenFor("engineer");
 
 		Instant now = clock.instant();
-		Incident first = incidents.saveAndFlush(new Incident("First Incident", "Desc 1", paymentsService,
-				Severity.SEV3, IncidentStatus.OPEN, engineer, now.minusSeconds(100), 240, 2880));
-		Incident second = incidents.saveAndFlush(new Incident("Second Incident", "Desc 2", paymentsService,
-				Severity.SEV2, IncidentStatus.OPEN, engineer, now, 60, 480));
+		Incident firstUnsaved = new Incident("First Incident", "Desc 1", paymentsService,
+				Severity.SEV3, IncidentStatus.OPEN, engineer, now.minusSeconds(100), 240, 2880);
+		firstUnsaved.assignNumber(901L);
+		Incident first = incidents.saveAndFlush(firstUnsaved);
+		Incident secondUnsaved = new Incident("Second Incident", "Desc 2", paymentsService,
+				Severity.SEV2, IncidentStatus.OPEN, engineer, now, 60, 480);
+		secondUnsaved.assignNumber(902L);
+		Incident second = incidents.saveAndFlush(secondUnsaved);
 
 		mvc.perform(get("/api/incidents").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].id").value(second.getId()))
-				.andExpect(jsonPath("$[0].reference").value("INC-" + second.getId()))
+				.andExpect(jsonPath("$[0].reference").value("INC-902"))
 				.andExpect(jsonPath("$[0].serviceName").value("Payments"))
 				.andExpect(jsonPath("$[1].id").value(first.getId()))
-				.andExpect(jsonPath("$[1].reference").value("INC-" + first.getId()));
+				.andExpect(jsonPath("$[1].reference").value("INC-901"));
 	}
 
 	@Test
@@ -273,7 +289,7 @@ class IncidentControllerTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.id").value(id))
-				.andExpect(jsonPath("$.reference").value("INC-" + id))
+				.andExpect(jsonPath("$.reference").value(JsonPath.<String>read(res, "$.reference")))
 				.andExpect(jsonPath("$.title").value("Payment gateway down"))
 				.andExpect(jsonPath("$.timeline[0].eventType").value("INCIDENT_CREATED"));
 	}
@@ -287,6 +303,154 @@ class IncidentControllerTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.status").value(404));
+	}
+
+	/** Confirms comments persist on the timeline without changing the incident version. */
+	@Test
+	@DisplayName("TC-FR-09.1a: Comments are separate timeline inserts and do not change the incident version")
+	void commentsDoNotChangeIncidentVersion() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		Long version = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		for (String comment : List.of("First note", "Second note")) {
+			mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+							.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+							.contentType(MediaType.APPLICATION_JSON)
+							.content("{\"comment\":\"" + comment + "\"}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.eventType").value("COMMENT"))
+					.andExpect(jsonPath("$.actor").value("Dev Engineer"))
+					.andExpect(jsonPath("$.details").value(comment))
+					.andExpect(jsonPath("$.correctsEntryId").value(org.hamcrest.Matchers.nullValue()));
+		}
+
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getVersion()).isEqualTo(version);
+		assertThat(timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId()))
+				.extracting(TimelineEntry::getDetails)
+				.containsExactly("First note", "Second note");
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.timeline[0].details").value("First note"))
+				.andExpect(jsonPath("$.timeline[1].details").value("Second note"));
+	}
+
+	/** Confirms a follow-up comment leaves a closed incident closed. */
+	@Test
+	@DisplayName("TC-FR-09.2a: A comment on a CLOSED incident does not reopen it")
+	void commentsAreAllowedOnClosedIncidents() throws Exception {
+		Incident incident = createIncident(IncidentStatus.CLOSED);
+		Long version = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"comment\":\"Follow-up after closure\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.details").value("Follow-up after closure"));
+
+		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
+		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.CLOSED);
+		assertThat(unchanged.getVersion()).isEqualTo(version);
+	}
+
+	/** Confirms corrections append a linked entry and preserve the original details. */
+	@Test
+	@DisplayName("TC-FR-08.3c: A correction is linked to its original timeline entry")
+	void correctionAddsLinkedEntryAndLeavesOriginalUnchanged() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		TimelineEntry original = timelineEntries.saveAndFlush(new TimelineEntry(
+				incident, engineer, TimelineEventType.STATUS_CHANGED, "Status changed to IDENTIFIED", clock.instant()));
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + original.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"Corrected status: INVESTIGATING\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.eventType").value("CORRECTION"))
+				.andExpect(jsonPath("$.details").value("Corrected status: INVESTIGATING"))
+				.andExpect(jsonPath("$.correctsEntryId").value(original.getId()));
+
+		assertThat(timelineEntries.findById(original.getId()).orElseThrow().getDetails())
+				.isEqualTo("Status changed to IDENTIFIED");
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.timeline[1].correctsEntryId").value(original.getId()));
+	}
+
+	/** Rejects corrections that try to reference another incident's timeline. */
+	@Test
+	void correctionCannotTargetAnEntryFromAnotherIncident() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		Incident otherIncident = createIncident(IncidentStatus.OPEN);
+		TimelineEntry otherEntry = timelineEntries.saveAndFlush(new TimelineEntry(
+				otherIncident, engineer, TimelineEventType.COMMENT, "Other incident", clock.instant()));
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + otherEntry.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"Invalid cross-incident correction\"}"))
+				.andExpect(status().isNotFound());
+	}
+
+	/** Accepts exactly 5,000 characters and rejects longer comments and corrections. */
+	@Test
+	void commentAndCorrectionEnforce5000CharacterLimit() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		TimelineEntry original = timelineEntries.saveAndFlush(new TimelineEntry(
+				incident, engineer, TimelineEventType.COMMENT, "Original note", clock.instant()));
+		String token = tokenFor("engineer");
+		String maxLengthText = "x".repeat(5000);
+		String oversizedText = "x".repeat(5001);
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"comment\":\"" + maxLengthText + "\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.details").value(maxLengthText));
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + original.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"" + maxLengthText + "\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.details").value(maxLengthText));
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/comments")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"comment\":\"" + oversizedText + "\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.comment").value("Comment must not exceed 5000 characters"));
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/timeline/" + original.getId() + "/corrections")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"details\":\"" + oversizedText + "\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.details").value("Correction details must not exceed 5000 characters"));
+	}
+
+	private Incident createIncident(IncidentStatus status) {
+		Incident incident = new Incident(
+				"Comment test incident",
+				"Incident for timeline tests",
+				paymentsService,
+				Severity.SEV2,
+				status,
+				engineer,
+				clock.instant(),
+				60,
+				480
+		);
+		incident.assignNumber(nextIncidentNumber++);
+		return incidents.saveAndFlush(incident);
 	}
 
 	@Test
@@ -308,8 +472,86 @@ class IncidentControllerTest {
 				.andExpect(status().isOk());
 	}
 
+	@Test
+	@DisplayName("Evidence links are added to the timeline without changing incident version")
+	void evidenceLinkIsAddedToTimeline() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		Long originalVersion = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+						"url": "https://grafana.example.com/logs",
+						"label": "Grafana logs"
+					}
+					"""))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.eventType").value("EVIDENCE_ADDED"));
+
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getVersion())
+				.isEqualTo(originalVersion);
+
+		mvc.perform(get("/api/incidents/" + incident.getId())
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.timeline[0].eventType").value("EVIDENCE_ADDED"))
+			.andExpect(jsonPath("$.timeline[0].details").value("Grafana logs: https://grafana.example.com/logs"));
+	}
+
+	@Test
+	@DisplayName("Invalid evidence URL is rejected")
+	void invalidEvidenceUrlReturns400() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+						"url": "javascript:alert(1)",
+						"label": "Unsafe link"
+					}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.errors.url").exists());
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"url\":\"ftp://example.com/logs\",\"label\":\"FTP logs\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.errors.url").exists());
+
+	}
+
+	@Test
+	@DisplayName("Evidence can be added to a closed incident")
+	void evidenceAllowedOnClosedIncident() throws Exception {
+		Incident incident = createIncident(IncidentStatus.CLOSED);
+		Long originalVersion = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+						"url": "https://example.com/report",
+						"label": "Incident report"
+					}
+					"""))
+			.andExpect(status().isCreated());
+
+		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
+		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.CLOSED);
+		assertThat(unchanged.getVersion()).isEqualTo(originalVersion);
+	}
+
 	private ResultActions login(String username, String password) throws Exception {
-		String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password);
+		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 

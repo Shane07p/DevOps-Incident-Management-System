@@ -1,6 +1,10 @@
 /**
  * SimilarIncidents.test.tsx
  * Tests for Issue #170 — Similar incidents and duplicate warning (US-18 / TC-FR-18.2a).
+ *
+ * Review fix: scores are 0–1 only, single `fix` field (no `resolution`),
+ * flat array response (no union), and errors propagate instead of being
+ * silently swallowed.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
@@ -15,7 +19,7 @@ import { routes } from '@/router'
 import { devOrg, mockFetch, payments, users } from '@/test/fetchMock'
 
 // ---------------------------------------------------------------------------
-// Shared Fixtures
+// Shared Fixtures — single shape, score 0–1, one `fix` field
 // ---------------------------------------------------------------------------
 
 const engineer = users[1]
@@ -38,6 +42,7 @@ const baseIncident = {
   timeline: [],
 }
 
+/** Flat array of similar incidents — score always 0.0–1.0, single `fix` field */
 const mockSimilarIncidents = [
   {
     id: 1,
@@ -216,7 +221,7 @@ describe('Similar Incidents on Incident Detail Page (AI-1 / Issue #170)', () => 
     expect(screen.queryByTestId('similar-incident-card')).not.toBeInTheDocument()
   })
 
-  it('disappears quietly without crashing the page when the similar incidents API fails or returns 503', async () => {
+  it('hides quietly when the similar incidents API returns 503 (error propagates to query)', async () => {
     renderApp('/incidents/7', {
       'GET /api/incidents/7/similar': { status: 503, body: { message: 'AI service unavailable' } },
     })
@@ -225,8 +230,26 @@ describe('Similar Incidents on Incident Detail Page (AI-1 / Issue #170)', () => 
     expect(await screen.findByRole('heading', { name: 'Checkout failing for card payments' })).toBeInTheDocument()
     expect(screen.getByText('INC-7')).toBeInTheDocument()
 
-    // Similar incidents section quietly absent
-    expect(screen.queryByRole('heading', { name: 'Similar past incidents' })).not.toBeInTheDocument()
+    // Similar incidents section quietly absent (query isError hides it)
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Similar past incidents' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('a malformed response is NOT silently converted to empty success — Zod rejects it', async () => {
+    // Score > 1 violates the 0–1 schema constraint
+    const malformed = [{ id: 1, reference: 'INC-1', title: 'Bad', score: 150 }]
+    renderApp('/incidents/7', {
+      'GET /api/incidents/7/similar': { body: malformed },
+    })
+
+    // Incident detail still loads
+    expect(await screen.findByRole('heading', { name: 'Checkout failing for card payments' })).toBeInTheDocument()
+
+    // Panel hidden because Zod validation error propagates to query's error state
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Similar past incidents' })).not.toBeInTheDocument()
+    })
   })
 })
 
@@ -343,10 +366,10 @@ describe('Duplicate Incident Warning on Declare Form (AI-1 / Issue #170)', () =>
     })
   })
 
-  it('does not show warning when AI returns no duplicate or is unavailable', async () => {
+  it('does not show warning when AI returns no duplicate', async () => {
     renderApp('/incidents/new', {
       'GET /api/incidents/duplicate-check?title=Unique+issue': {
-        body: null,
+        body: { duplicate: false, incident: null },
       },
     })
 
@@ -357,7 +380,7 @@ describe('Duplicate Incident Warning on Declare Form (AI-1 / Issue #170)', () =>
     expect(screen.queryByTestId('duplicate-warning')).not.toBeInTheDocument()
   })
 
-  it('does not crash or show warning when duplicate check API fails with 500 or network error', async () => {
+  it('hides warning when duplicate check API fails — never blocks declaration', async () => {
     renderApp('/incidents/new', {
       'GET /api/incidents/duplicate-check?title=Error+flow': {
         status: 500,
@@ -369,6 +392,7 @@ describe('Duplicate Incident Warning on Declare Form (AI-1 / Issue #170)', () =>
     await userEvent.type(screen.getByLabelText('Title'), 'Error flow')
 
     await screen.findByDisplayValue('Error flow')
+    // Warning absent — error propagated to query's isError state, component hides
     expect(screen.queryByTestId('duplicate-warning')).not.toBeInTheDocument()
     // Normal declaration button is ready
     expect(screen.getByRole('button', { name: 'Declare incident' })).toBeEnabled()

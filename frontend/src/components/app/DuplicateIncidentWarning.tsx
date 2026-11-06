@@ -29,11 +29,14 @@ export function DuplicateIncidentWarning({
     }
   }, [title])
 
-  const { data: duplicate } = useQuery<DuplicateIncident | null>({
+  const { data: duplicate, isError } = useQuery<DuplicateIncident | null>({
     queryKey: ['duplicate-check', debouncedTitle, serviceId],
     queryFn: () => checkDuplicateIncident({ title: debouncedTitle, serviceId }),
     enabled: debouncedTitle.trim().length >= 3,
   })
+
+  // On error, hide warning — never block declaration (error still in console / devtools)
+  if (isError) return null
 
   // When AI is off, unavailable, no duplicate found, or user dismissed this incident
   if (!duplicate || duplicate.id === dismissedId) {
@@ -93,4 +96,3 @@ export function DuplicateIncidentWarning({
     </div>
   )
 }
-

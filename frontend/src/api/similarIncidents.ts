@@ -3,12 +3,15 @@ import { apiFetch } from './client'
 import { incidentStatusSchema, severitySchema } from './schemas'
 
 // ---------------------------------------------------------------------------
-// Schemas
+// Schemas — aligned with Issue #159 contract (draft, not yet merged)
 // ---------------------------------------------------------------------------
 
 /**
  * Similar incident returned by the backend (AI-1 / Issue #159 / #170).
  * Displays up to 3 similar past incidents with match percentage and how each was fixed.
+ *
+ * Contract: score is always 0.0–1.0, fix is always `fix` (single field).
+ * Shape will be finalised when #159 merges; until then, keep this draft.
  */
 export const similarIncidentSchema = z.object({
   id: z.number(),
@@ -17,43 +20,42 @@ export const similarIncidentSchema = z.object({
   serviceName: z.string().optional(),
   severity: severitySchema.optional(),
   status: incidentStatusSchema.optional(),
-  /** Similarity score (0.0 to 1.0, or 0 to 100 percentage) */
-  score: z.number(),
-  /** How the similar incident was resolved or fixed */
+  /** Similarity score — always 0.0 to 1.0 */
+  score: z.number().min(0).max(1),
+  /** How the similar incident was resolved */
   fix: z.string().optional(),
-  resolution: z.string().optional(),
 })
 
 export type SimilarIncident = z.infer<typeof similarIncidentSchema>
 
-export const similarIncidentsResponseSchema = z.union([
-  z.array(similarIncidentSchema),
-  z.object({
-    incidents: z.array(similarIncidentSchema),
-  }).transform((val) => val.incidents),
-])
+/** GET /api/incidents/{id}/similar always returns a flat array. */
+export const similarIncidentsResponseSchema = z.array(similarIncidentSchema)
 
 /**
  * Open duplicate candidate detected during incident declaration.
+ * Returned by GET /api/incidents/{id}/similar with status filter
+ * or a dedicated endpoint — exact path TBD in #159.
  */
 export const duplicateIncidentSchema = z.object({
   id: z.number(),
   reference: z.string(),
   title: z.string(),
   status: incidentStatusSchema.optional(),
-  score: z.number().optional(),
+  score: z.number().min(0).max(1).optional(),
 })
 
 export type DuplicateIncident = z.infer<typeof duplicateIncidentSchema>
 
-export const duplicateCheckResponseSchema = z.union([
-  z.object({
-    duplicate: z.boolean(),
-    incident: duplicateIncidentSchema.nullable().optional(),
-    message: z.string().optional(),
-  }).transform((val) => (val.duplicate && val.incident ? val.incident : null)),
-  duplicateIncidentSchema.nullable(),
-])
+/**
+ * Duplicate check response: returns a single candidate or null.
+ * Exact endpoint path TBD in #159 — currently drafted as
+ * GET /api/incidents/duplicate-check?title=...&serviceId=...
+ */
+export const duplicateCheckResponseSchema = z.object({
+  duplicate: z.boolean(),
+  incident: duplicateIncidentSchema.nullable().optional(),
+  message: z.string().optional(),
+}).transform((val) => (val.duplicate && val.incident ? val.incident : null))
 
 // ---------------------------------------------------------------------------
 // API Functions
@@ -62,21 +64,20 @@ export const duplicateCheckResponseSchema = z.union([
 /**
  * GET /api/incidents/{id}/similar
  * Returns up to 3 similar past incidents above the similarity threshold.
- * If AI is disabled, unavailable, or encounters an error, fails silently returning empty array.
+ *
+ * Does NOT catch errors — let TanStack Query record the error state so
+ * SimilarIncidentsPanel can hide via isError, and tests / console still see
+ * genuine failures (e.g. 401, wrong path, schema mismatch).
  */
 export async function fetchSimilarIncidents(incidentId: number): Promise<SimilarIncident[]> {
-  try {
-    return await apiFetch(`/incidents/${incidentId}/similar`, similarIncidentsResponseSchema)
-  } catch {
-    // When AI service is down or AI is disabled, fail quietly without disrupting the page (FR-18.4)
-    return []
-  }
+  return apiFetch(`/incidents/${incidentId}/similar`, similarIncidentsResponseSchema)
 }
 
 /**
  * GET /api/incidents/duplicate-check?title=...&serviceId=...
  * Checks for a likely open duplicate when declaring an incident.
- * Non-blocking check only. Fails quietly if unavailable.
+ * Non-blocking check only. Errors propagate so the component can decide
+ * how to handle them (hide warning without blocking declaration).
  */
 export async function checkDuplicateIncident(params: {
   title: string
@@ -91,10 +92,5 @@ export async function checkDuplicateIncident(params: {
     sp.set('serviceId', String(params.serviceId))
   }
 
-  try {
-    return await apiFetch(`/incidents/duplicate-check?${sp.toString()}`, duplicateCheckResponseSchema)
-  } catch {
-    return null
-  }
+  return apiFetch(`/incidents/duplicate-check?${sp.toString()}`, duplicateCheckResponseSchema)
 }
-

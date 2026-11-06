@@ -5,16 +5,18 @@ import { fetchSimilarIncidents, type SimilarIncident } from '@/api/similarIncide
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 
 function formatMatchPercent(score: number): string {
-  const pct = score > 1 ? Math.round(score) : Math.round(score * 100)
-  return `${pct}% match`
+  return `${Math.round(score * 100)}% match`
 }
 
 export function SimilarIncidentsPanel({ incidentId }: { incidentId: number }) {
-  const { data: similar = [] } = useQuery({
+  const { data: similar = [], isError } = useQuery({
     queryKey: ['incident', incidentId, 'similar'],
     queryFn: () => fetchSimilarIncidents(incidentId),
     enabled: Boolean(incidentId && incidentId > 0),
   })
+
+  // Hide on error (API down, wrong path, 401, etc.) — don't crash the detail page
+  if (isError) return null
 
   // When AI is off, unavailable, or returns no matches, hide quietly (FR-18.4)
   if (!similar || similar.length === 0) {
@@ -44,7 +46,7 @@ export function SimilarIncidentsPanel({ incidentId }: { incidentId: number }) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         {displayed.map((item: SimilarIncident) => {
-          const fixText = item.fix || item.resolution || 'No fix details recorded'
+          const fixText = item.fix || 'No fix details recorded'
           return (
             <div
               key={item.id}
@@ -94,4 +96,3 @@ export function SimilarIncidentsPanel({ incidentId }: { incidentId: number }) {
     </section>
   )
 }
-

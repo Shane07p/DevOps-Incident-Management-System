@@ -80,3 +80,20 @@ export function getIncident(id: number) {
 export function createIncident(incident: NewIncident) {
   return apiFetch('/incidents', incidentSchema, { method: 'POST', body: incident })
 }
+
+/** Publish a customer-facing incident update. Admins and Engineers only. */
+export interface PublicIncidentUpdateRequest {
+  status: string
+  message: string
+}
+
+export function postPublicIncidentUpdate(
+  incidentId: number,
+  update: PublicIncidentUpdateRequest,
+) {
+  return apiFetch(
+    `/incidents/${incidentId}/public-updates`,
+    z.unknown(),
+    { method: 'POST', body: update },
+  )
+}

@@ -189,6 +189,34 @@ describe('Declare incident form', () => {
 })
 
 describe('Incident detail', () => {
+  it('hides the public update form from Viewers', async () => {
+    renderApp('VIEWER', '/incidents/7')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Checkout failing' }),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.queryByRole('heading', { name: 'Post a public update' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the public update form to Engineers', async () => {
+    renderApp('ENGINEER', '/incidents/7')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Post a public update' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the public update form to Admins', async () => {
+    renderApp('ADMIN', '/incidents/7')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Post a public update' }),
+    ).toBeInTheDocument()
+  })
+
   it('shows the incident, both SLA due times in IST, and its timeline', async () => {
     renderApp('VIEWER', '/incidents/7')
 

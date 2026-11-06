@@ -1,15 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
-import { getIncident, type TimelineEntry } from '@/api/incidents'
+import { useAuth } from '@/auth/AuthProvider'
+import { getIncident, postPublicIncidentUpdate, type TimelineEntry } from '@/api/incidents'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { formatIst, formatMinutes } from '@/lib/time'
 
-// "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
+// "INCIDENT_CREATED" â†’ "Incident created"; unknown types from later sprints still read sensibly.
 const eventLabel = (eventType: string) => {
   const words = eventType.toLowerCase().replaceAll('_', ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
@@ -43,7 +44,7 @@ function Timeline({ entries }: { entries: TimelineEntry[] }) {
           <span aria-hidden="true" className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-foreground" />
           <span className="text-sm">
             <span className="font-semibold">{eventLabel(entry.eventType)}</span>
-            <span className="text-muted-foreground"> · {entry.actor ?? 'System'}</span>
+            <span className="text-muted-foreground"> Â· {entry.actor ?? 'System'}</span>
           </span>
           {entry.details && <span className="text-sm">{entry.details}</span>}
           <span className="font-mono text-xs text-muted-foreground tnum">{formatIst(entry.recordedAt)}</span>
@@ -53,8 +54,96 @@ function Timeline({ entries }: { entries: TimelineEntry[] }) {
   )
 }
 
+function PublicUpdateForm({ incidentId }: { incidentId: number }) {
+  const [status, setStatus] = useState('INVESTIGATING')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const queryClient = useQueryClient()
+
+  const publish = useMutation({
+    mutationFn: () => postPublicIncidentUpdate(incidentId, {
+      status,
+      message: message.trim(),
+    }),
+    onSuccess: async () => {
+      setMessage('')
+      setError('')
+      setSuccess(true)
+      await queryClient.invalidateQueries({ queryKey: ['incident', incidentId] })
+    },
+    onError: (err) => {
+      setSuccess(false)
+      setError(err instanceof Error ? err.message : 'Could not publish update')
+    },
+  })
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSuccess(false)
+    setError('')
+    if (!message.trim()) {
+      setError('Enter a public update message')
+      return
+    }
+    publish.mutate()
+  }
+
+  return (
+    <section aria-labelledby="public-update-heading" className="rounded-lg border bg-card p-4">
+      <h2 id="public-update-heading" className="mb-2 text-lg font-semibold">
+        Post a public update
+      </h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        This message is visible to customers, separate from internal comments.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <label htmlFor="public-update-status" className="text-sm font-medium">
+          Status
+        </label>
+        <select
+          id="public-update-status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          className="rounded-md border bg-background p-2 text-sm"
+        >
+          <option value="INVESTIGATING">Investigating</option>
+          <option value="IDENTIFIED">Identified</option>
+          <option value="MONITORING">Monitoring</option>
+          <option value="RESOLVED">Resolved</option>
+        </select>
+
+        <label htmlFor="public-update-message" className="text-sm font-medium">
+          Public message
+        </label>
+        <textarea
+          id="public-update-message"
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          rows={4}
+          maxLength={2000}
+          placeholder="Tell customers what is happening..."
+          className="rounded-md border bg-background p-3 text-sm"
+        />
+
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {success && <p role="status" className="text-sm">Public update posted successfully.</p>}
+
+        <button
+          type="submit"
+          disabled={publish.isPending || !message.trim()}
+          className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {publish.isPending ? 'Publishing...' : 'Post public update'}
+        </button>
+      </form>
+    </section>
+  )
+}
 /** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
 export function IncidentDetailPage() {
+  const { user, org } = useAuth()
+  const canPostPublicUpdate = user?.role === 'ADMIN' || user?.role === 'ENGINEER'
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
   const incident = useQuery({ queryKey: ['incident', id], queryFn: () => getIncident(id), enabled: valid })
@@ -109,6 +198,17 @@ export function IncidentDetailPage() {
               />
             </div>
           </section>
+
+          {org?.slug && (
+            <Link
+              to={`/status/${org.slug}`}
+              className="w-fit text-sm font-medium text-primary underline"
+            >
+              View public status page
+            </Link>
+          )}
+
+          {canPostPublicUpdate && <PublicUpdateForm incidentId={incident.data.id} />}
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">

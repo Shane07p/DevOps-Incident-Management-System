@@ -31,6 +31,7 @@ export const AREAS: NavArea[] = [
     pages: [
       { path: '/incidents', label: 'Incidents', description: 'Active and past incidents' },
       { path: '/alerts', label: 'Alerts', description: 'Grouped alerts waiting for triage' },
+      { path: '/history', label: 'History', description: 'Search historical incidents by keyword, service, severity, or status' },
       { path: '/follow-ups', label: 'Follow-ups', description: 'Actions from every incident' },
     ],
   },

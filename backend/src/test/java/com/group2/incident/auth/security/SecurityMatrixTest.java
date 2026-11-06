@@ -240,6 +240,27 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"PUT /api/services/{id}/dependencies",
+						HttpMethod.PUT,
+						"/api/services/{id}/dependencies",
+						"{\"dependsOn\":[]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}/blast-radius",
+						HttpMethod.GET,
+						"/api/services/{id}/blast-radius",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/service-map",
+						HttpMethod.GET,
+						"/api/service-map",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/tools",
 						HttpMethod.GET,
 						"/api/tools",
@@ -289,6 +310,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/incidents/search",
+						HttpMethod.GET,
+						"/api/incidents/search",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/incidents/{id}",
 						HttpMethod.GET,
 						"/api/incidents/{id}",
@@ -328,6 +356,13 @@ public class SecurityMatrixTest {
 						HttpMethod.POST,
 						"/api/incidents/{id}/comments",
 						"{\"comment\":\"Security matrix comment\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/evidence",
+						HttpMethod.POST,
+						"/api/incidents/{id}/evidence",
+						"{\"url\":\"https://grafana.example.com/logs\",\"label\":\"Grafana logs\"}",
 						201, 201, 403, 401
 				),
 				new MatrixRow(
@@ -464,6 +499,9 @@ public class SecurityMatrixTest {
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {
 		MockHttpServletRequestBuilder req = request(method, path);
+		if (path.equals("/api/incidents/search")) {
+			req.queryParam("q", "SecurityMatrix");
+		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}

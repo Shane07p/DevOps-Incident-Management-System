@@ -472,6 +472,84 @@ class IncidentControllerTest {
 				.andExpect(status().isOk());
 	}
 
+	@Test
+	@DisplayName("Evidence links are added to the timeline without changing incident version")
+	void evidenceLinkIsAddedToTimeline() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		Long originalVersion = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+						"url": "https://grafana.example.com/logs",
+						"label": "Grafana logs"
+					}
+					"""))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.eventType").value("EVIDENCE_ADDED"));
+
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getVersion())
+				.isEqualTo(originalVersion);
+
+		mvc.perform(get("/api/incidents/" + incident.getId())
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.timeline[0].eventType").value("EVIDENCE_ADDED"))
+			.andExpect(jsonPath("$.timeline[0].details").value("Grafana logs: https://grafana.example.com/logs"));
+	}
+
+	@Test
+	@DisplayName("Invalid evidence URL is rejected")
+	void invalidEvidenceUrlReturns400() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN);
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+						"url": "javascript:alert(1)",
+						"label": "Unsafe link"
+					}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.errors.url").exists());
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"url\":\"ftp://example.com/logs\",\"label\":\"FTP logs\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.errors.url").exists());
+
+	}
+
+	@Test
+	@DisplayName("Evidence can be added to a closed incident")
+	void evidenceAllowedOnClosedIncident() throws Exception {
+		Incident incident = createIncident(IncidentStatus.CLOSED);
+		Long originalVersion = incident.getVersion();
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/evidence")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+						"url": "https://example.com/report",
+						"label": "Incident report"
+					}
+					"""))
+			.andExpect(status().isCreated());
+
+		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
+		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.CLOSED);
+		assertThat(unchanged.getVersion()).isEqualTo(originalVersion);
+	}
+
 	private ResultActions login(String username, String password) throws Exception {
 		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));

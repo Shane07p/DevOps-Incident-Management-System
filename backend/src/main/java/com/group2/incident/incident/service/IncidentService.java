@@ -18,6 +18,8 @@ import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.dto.IncidentRolesDto;
+import com.group2.incident.incident.dto.IncidentSearchPageResponse;
+import com.group2.incident.incident.dto.IncidentSearchResult;
 import com.group2.incident.incident.dto.IncidentServiceDto;
 import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.IncidentUserDto;
@@ -29,23 +31,29 @@ import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
+import com.group2.incident.incident.repository.IncidentSearchRow;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.notification.service.NotificationService;
 import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.org.service.OrgMembers;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class IncidentService {
+
+	private static final int SEARCH_PAGE_SIZE = 20;
 
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
@@ -185,6 +193,69 @@ public class IncidentService {
 				.toList();
 	}
 
+	/**
+	 * Searches the current organization's incident text and applies the optional filters.
+	 *
+	 * @param query keyword or PostgreSQL web-search query
+	 * @param serviceId optional service filter
+	 * @param severity optional severity filter
+	 * @param status optional incident-status filter
+	 * @param page zero-based page number
+	 * @return the matching incidents and pagination metadata
+	 */
+	@Transactional(readOnly = true)
+	public IncidentSearchPageResponse searchIncidents(
+			String query,
+			Long serviceId,
+			Severity severity,
+			IncidentStatus status,
+			int page
+	) {
+		if (page < 0) {
+			throw new FieldValidationException("page", "must not be negative");
+		}
+
+		String severityName = severity != null ? severity.name() : null;
+		String statusName = status != null ? status.name() : null;
+		PageRequest pageRequest = PageRequest.of(page, SEARCH_PAGE_SIZE);
+		Page<IncidentSearchRow> result = query == null || query.isBlank()
+				? incidentRepository.searchWithoutKeyword(
+						OrgContext.current(), serviceId, severityName, statusName, pageRequest)
+				: incidentRepository.search(
+						query.trim(), OrgContext.current(), serviceId, severityName, statusName, pageRequest);
+
+		return new IncidentSearchPageResponse(
+				result.getContent().stream().map(IncidentService::toSearchResult).toList(),
+				result.getNumber(),
+				result.getSize(),
+				result.getTotalElements(),
+				result.getTotalPages());
+	}
+
+	/** Maps a database search row to a response and identifies every matching field. */
+	private static IncidentSearchResult toSearchResult(IncidentSearchRow row) {
+		List<String> matchedIn = new ArrayList<>(3);
+		if (Boolean.TRUE.equals(row.getTitleMatch())) {
+			matchedIn.add("title");
+		}
+		if (Boolean.TRUE.equals(row.getDescriptionMatch())) {
+			matchedIn.add("description");
+		}
+		if (Boolean.TRUE.equals(row.getTimelineMatch())) {
+			matchedIn.add("timeline");
+		}
+		return new IncidentSearchResult(
+				row.getIncidentId(),
+				"INC-" + row.getIncidentNumber(),
+				row.getServiceId(),
+				row.getTitle(),
+				row.getServiceName(),
+				Severity.valueOf(row.getSeverity()),
+				IncidentStatus.valueOf(row.getStatus()),
+				row.getCreatedAt(),
+				List.copyOf(matchedIn));
+	}
+
 	/** Maps an incident and its append-only timeline, including correction links, to API data. */
 	private static IncidentResponse toResponse(Incident incident, List<TimelineEntry> timeline) {
 		return toResponse(incident, timeline, null, null, null);
@@ -261,6 +332,32 @@ public class IncidentService {
 				comment,
 				clock.instant()
 		));
+		return toTimelineEntryResponse(entry);
+	}
+
+	/** Adds an evidence link without changing incident version or status. */
+	@Transactional
+	public TimelineEntryResponse addEvidence(Long incidentId, String url, String label, Long actorId) {
+		// EvidenceRequest already refuses a blank URL or label.
+		String normalizedUrl = url.trim();
+		URI uri;
+		try {
+			uri = URI.create(normalizedUrl);
+		} catch (IllegalArgumentException ex) {
+			throw new FieldValidationException("url", "Invalid URL");
+		}
+		String scheme = uri.getScheme();
+		if (scheme == null
+				|| !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))
+				|| uri.getHost() == null || uri.getHost().isBlank()
+				|| uri.getUserInfo() != null) {
+			throw new FieldValidationException("url", "Only valid http and https links are allowed");
+		}
+		Incident incident = requireIncident(incidentId);
+		AppUser actor = requireActor(actorId);
+		String details = label.trim() + ": " + normalizedUrl;
+		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
+				incident, actor, TimelineEventType.EVIDENCE_ADDED, details, clock.instant()));
 		return toTimelineEntryResponse(entry);
 	}
 

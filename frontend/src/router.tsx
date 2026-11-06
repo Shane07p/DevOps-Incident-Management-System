@@ -5,6 +5,7 @@ import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
 import { AlertsPage } from '@/pages/AlertsPage'
 import { EscalationPage } from '@/pages/EscalationPage'
+import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
@@ -32,6 +33,7 @@ const ADMIN_SCREENS: Record<string, ReactNode> = { '/tools': <ToolsPage />, '/us
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.
 const RESPONSE_SCREENS: Record<string, ReactNode> = {
   '/alerts': <AlertsPage />,
+  '/history': <HistorySearchPage />,
   '/incidents': <IncidentsPage />,
   '/incidents/:id': <IncidentDetailPage />,
 }

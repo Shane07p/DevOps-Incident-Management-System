@@ -1,0 +1,10 @@
+{
+  "baseline": {
+    "demo_certificate_days_until_expiry": 90,
+    "demo_ssl_errors_total": 0
+  },
+  "fault": {
+    "demo_certificate_days_until_expiry": 0,
+    "demo_ssl_errors_total": 12
+  }
+}

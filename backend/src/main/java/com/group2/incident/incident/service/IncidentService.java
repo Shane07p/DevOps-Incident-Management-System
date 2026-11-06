@@ -37,6 +37,7 @@ import com.group2.incident.notification.service.NotificationService;
 import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.org.service.OrgMembers;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -331,6 +332,32 @@ public class IncidentService {
 				comment,
 				clock.instant()
 		));
+		return toTimelineEntryResponse(entry);
+	}
+
+	/** Adds an evidence link without changing incident version or status. */
+	@Transactional
+	public TimelineEntryResponse addEvidence(Long incidentId, String url, String label, Long actorId) {
+		// EvidenceRequest already refuses a blank URL or label.
+		String normalizedUrl = url.trim();
+		URI uri;
+		try {
+			uri = URI.create(normalizedUrl);
+		} catch (IllegalArgumentException ex) {
+			throw new FieldValidationException("url", "Invalid URL");
+		}
+		String scheme = uri.getScheme();
+		if (scheme == null
+				|| !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))
+				|| uri.getHost() == null || uri.getHost().isBlank()
+				|| uri.getUserInfo() != null) {
+			throw new FieldValidationException("url", "Only valid http and https links are allowed");
+		}
+		Incident incident = requireIncident(incidentId);
+		AppUser actor = requireActor(actorId);
+		String details = label.trim() + ": " + normalizedUrl;
+		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
+				incident, actor, TimelineEventType.EVIDENCE_ADDED, details, clock.instant()));
 		return toTimelineEntryResponse(entry);
 	}
 

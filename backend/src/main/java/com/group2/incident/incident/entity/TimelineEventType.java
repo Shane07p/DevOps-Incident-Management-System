@@ -15,5 +15,6 @@ public enum TimelineEventType {
 	COMMENT,
 	CORRECTION,
 	ESCALATED,
+        EVIDENCE_ADDED,
 	MONITOR_RECOVERED
 }

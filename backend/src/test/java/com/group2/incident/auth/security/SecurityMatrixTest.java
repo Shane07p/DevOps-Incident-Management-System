@@ -338,6 +338,13 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/evidence",
+						HttpMethod.POST,
+						"/api/incidents/{id}/evidence",
+						"{\"url\":\"https://grafana.example.com/logs\",\"label\":\"Grafana logs\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
 						"POST /api/incidents/{id}/timeline/{entryId}/corrections",
 						HttpMethod.POST,
 						"/api/incidents/{id}/timeline/{entryId}/corrections",

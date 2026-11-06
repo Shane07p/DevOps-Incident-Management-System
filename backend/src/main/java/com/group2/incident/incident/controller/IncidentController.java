@@ -2,6 +2,7 @@ package com.group2.incident.incident.controller;
 
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CommentRequest;
+import com.group2.incident.incident.dto.EvidenceRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.CorrectionRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
@@ -107,6 +108,18 @@ public class IncidentController {
 			@Valid @RequestBody CommentRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
 		return incidentService.addComment(id, request.comment(), Long.parseLong(jwt.getSubject()));
+	}
+
+	/** Attach an evidence link to an incident. */
+	@PostMapping("/{id}/evidence")
+	@ResponseStatus(HttpStatus.CREATED)
+	@Operation(summary = "Attach an evidence link to an incident")
+	public TimelineEntryResponse addEvidence(
+			@PathVariable Long id,
+			@Valid @RequestBody EvidenceRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.addEvidence(
+				id, request.url(), request.label(), Long.parseLong(jwt.getSubject()));
 	}
 
 	/** Appends a correction linked to an entry on this incident's timeline. */

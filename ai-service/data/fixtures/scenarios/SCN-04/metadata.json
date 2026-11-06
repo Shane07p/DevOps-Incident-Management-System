@@ -1,0 +1,10 @@
+{
+  "scenario_id": "SCN-04",
+  "switch": "queue_backlog",
+  "service": "order-fulfillment",
+  "fault_started_at": "2026-11-04T10:00:10+00:00",
+  "baseline_seconds": 10,
+  "fault_seconds": 15,
+  "rate": 3.0,
+  "recorded_at": "2026-11-04T10:00:10+00:00"
+}

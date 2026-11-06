@@ -108,12 +108,21 @@ def test_demo_shop_payment_slowdown():
 
 
 def test_recorded_demo_shop_slow_gateway():
-    fixture = (
+    scenarios_dir = (
         Path(__file__).resolve().parent.parent
         / "data"
         / "fixtures"
-        / "demo_shop_slow_gateway.jsonl"
+        / "scenarios"
+        / "SCN-01"
     )
+    fixture = scenarios_dir / "logs.jsonl"
+    if not fixture.exists():
+        fixture = (
+            Path(__file__).resolve().parent.parent
+            / "data"
+            / "fixtures"
+            / "demo_shop_slow_gateway.jsonl"
+        )
 
     logs = load_recorded_logs(fixture)
 

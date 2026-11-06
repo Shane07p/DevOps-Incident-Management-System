@@ -1,0 +1,14 @@
+{
+  "baseline": {
+    "demo_http_requests_total": {
+      "success_rate": 1.0,
+      "error_rate": 0.0
+    }
+  },
+  "fault": {
+    "demo_http_requests_total": {
+      "success_rate": 0.2,
+      "error_rate": 0.8
+    }
+  }
+}

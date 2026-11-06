@@ -412,9 +412,9 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `IncidentControllerTest` | Automated (17 controller tests passed) |
-| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceConcurrencyTest` | Automated |
-| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest` | Automated (17 controller tests passed) |
+| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `IncidentControllerTest.invalidEvidenceUrlReturns400` (Testcontainers) | Automated |
+| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceConcurrencyTest.twoConcurrentEvidenceLinksAreSavedWithoutChangingVersion` (Testcontainers) | Automated |
+| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest.evidenceAllowedOnClosedIncident` (Testcontainers) | Automated |
 
 ### History search (FR-17)
 

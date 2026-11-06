@@ -343,6 +343,12 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
 | TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
 
+### Demo-shop scenario table (Issue #64)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-64a | Equivalence | Load `scenarios.yaml` | File exists, has `schema_version: 1`, a `scenarios` list, all 5 switches, every required field, and machine-readable `log_patterns` and nullable `deploy_event` | `test_scenarios.py` | Automated |
+
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |

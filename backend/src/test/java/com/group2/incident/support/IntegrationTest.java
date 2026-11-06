@@ -16,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@SpringBootTest
+// The monitor worker would run checks on its own; tests call MonitorWorker.runOnce at times they choose.
+@SpringBootTest(properties = "app.monitors.worker-enabled=false")
 @AutoConfigureMockMvc
 @Import({ TestcontainersConfiguration.class, TestAccounts.class, TestOrgs.class })
 @Transactional

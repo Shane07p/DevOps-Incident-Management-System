@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import yaml
@@ -23,7 +22,7 @@ REQUIRED_SCENARIO_FIELDS = {
 REQUIRED_SIGNAL_FIELDS = {
     "monitor",
     "metric",
-    "log_pattern",
+    "log_patterns",
     "deploy_event",
 }
 
@@ -87,6 +86,20 @@ def test_every_scenario_has_all_expected_signals():
         assert isinstance(signals, dict)
         assert REQUIRED_SIGNAL_FIELDS.issubset(signals.keys())
 
-        for field in REQUIRED_SIGNAL_FIELDS:
+        # monitor and metric are non-empty strings
+        for field in ("monitor", "metric"):
             assert isinstance(signals[field], str)
             assert signals[field].strip()
+
+        # log_patterns is a non-empty list of non-empty strings
+        assert isinstance(signals["log_patterns"], list)
+        assert len(signals["log_patterns"]) > 0
+        for pattern in signals["log_patterns"]:
+            assert isinstance(pattern, str)
+            assert pattern.strip()
+
+        # deploy_event is either null or a non-empty string
+        deploy = signals["deploy_event"]
+        if deploy is not None:
+            assert isinstance(deploy, str)
+            assert deploy.strip()

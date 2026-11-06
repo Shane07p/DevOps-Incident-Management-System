@@ -1,4 +1,3 @@
-
 schema_version: 1
 
 scenarios:
@@ -9,8 +8,9 @@ scenarios:
     expected_signals:
       monitor: "HTTP response-time monitor for /payments/authorize reports elevated latency."
       metric: "demo_http_request_duration_seconds increases for the payments authorization endpoint."
-      log_pattern: "payment.gateway.slow"
-      deploy_event: "No deploy event is expected for this scenario."
+      log_patterns:
+        - "payment.gateway.slow"
+      deploy_event: null
     real_cause: "Artificially injected 2-second delay in the payment gateway."
     ai_first_hypothesis: "Payment gateway latency degradation."
 
@@ -21,8 +21,9 @@ scenarios:
     expected_signals:
       monitor: "Checkout HTTP monitor observes increased HTTP 500 responses."
       metric: "demo_http_requests_total reflects increased failed checkout requests."
-      log_pattern: "checkout.transaction_failed"
-      deploy_event: "No deploy event is expected for this scenario."
+      log_patterns:
+        - "checkout.transaction_failed"
+      deploy_event: null
     real_cause: "Simulated database deadlocks during checkout transactions."
     ai_first_hypothesis: "Database transaction deadlocks are causing checkout failures."
 
@@ -33,8 +34,10 @@ scenarios:
     expected_signals:
       monitor: "Checkout HTTP monitor observes HTTP 500 responses after the deployment."
       metric: "demo_http_requests_total reflects failed checkout requests."
-      log_pattern: "checkout.null_pointer_exception and deploy.event"
-      deploy_event: "A completed deployment event for v1.0.1-broken is emitted for checkout."
+      log_patterns:
+        - "checkout.null_pointer_exception"
+        - "deploy.event"
+      deploy_event: "v1.0.1-broken"
     real_cause: "A faulty deployment of checkout version v1.0.1-broken."
     ai_first_hypothesis: "A recent checkout deployment introduced a regression."
 
@@ -45,8 +48,10 @@ scenarios:
     expected_signals:
       monitor: "Queue depth and processing lag monitoring indicate a growing backlog."
       metric: "demo_queue_depth and demo_queue_lag_seconds increase."
-      log_pattern: "queue.paused and queue.backlog_warning"
-      deploy_event: "No deploy event is expected for this scenario."
+      log_patterns:
+        - "queue.paused"
+        - "queue.backlog_warning"
+      deploy_event: null
     real_cause: "The background order fulfillment worker is paused."
     ai_first_hypothesis: "The order fulfillment worker is stalled or paused."
 
@@ -57,7 +62,9 @@ scenarios:
     expected_signals:
       monitor: "SSL certificate monitoring reports an expired or zero-day certificate."
       metric: "demo_ssl_errors_total increases and demo_certificate_days_until_expiry reaches zero."
-      log_pattern: "ssl.cert_expiring and ssl.handshake_warning"
-      deploy_event: "No deploy event is expected for this scenario."
+      log_patterns:
+        - "ssl.cert_expiring"
+        - "ssl.handshake_warning"
+      deploy_event: null
     real_cause: "The simulated payment gateway TLS certificate has expired."
     ai_first_hypothesis: "Payment gateway TLS certificate expiry."

@@ -189,6 +189,7 @@ class OrgIsolationTest {
 		return Stream.of(
 				Arguments.of("GET /api/services", "/api/services", "$[*].id", "serviceId"),
 				Arguments.of("GET /api/incidents", "/api/incidents", "$[*].id", "incidentId"),
+				Arguments.of("GET /api/incidents/search", "/api/incidents/search?q=Checkout", "$.content[*].id", "incidentId"),
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
 				Arguments.of("GET /api/monitors", "/api/monitors", "$[*].id", "monitorId"),

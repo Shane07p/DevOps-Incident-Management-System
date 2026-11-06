@@ -72,13 +72,6 @@ function renderApp(role: Role, path: string, extraRoutes: Routes = {}) {
   return { fetchMock, router }
 }
 
-const postsTo = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
-
-async function choose(label: string, option: RegExp | string) {
-  await userEvent.click(screen.getByLabelText(label))
-  await userEvent.click(await screen.findByRole('option', { name: option }))
-}
-
 afterEach(() => {
   clearToken()
   vi.unstubAllGlobals()

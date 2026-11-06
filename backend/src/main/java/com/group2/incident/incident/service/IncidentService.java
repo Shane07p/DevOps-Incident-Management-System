@@ -37,6 +37,7 @@ import com.group2.incident.notification.service.NotificationService;
 import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.org.service.OrgMembers;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -337,13 +338,11 @@ public class IncidentService {
 	/** Adds an evidence link without changing incident version or status. */
 	@Transactional
 	public TimelineEntryResponse addEvidence(Long incidentId, String url, String label, Long actorId) {
-		if (url == null || url.isBlank()) {
-			throw new FieldValidationException("url", "URL is required");
-		}
+		// EvidenceRequest already refuses a blank URL or label.
 		String normalizedUrl = url.trim();
-		java.net.URI uri;
+		URI uri;
 		try {
-			uri = java.net.URI.create(normalizedUrl);
+			uri = URI.create(normalizedUrl);
 		} catch (IllegalArgumentException ex) {
 			throw new FieldValidationException("url", "Invalid URL");
 		}
@@ -353,9 +352,6 @@ public class IncidentService {
 				|| uri.getHost() == null || uri.getHost().isBlank()
 				|| uri.getUserInfo() != null) {
 			throw new FieldValidationException("url", "Only valid http and https links are allowed");
-		}
-		if (label == null || label.isBlank()) {
-			throw new FieldValidationException("label", "Label is required");
 		}
 		Incident incident = requireIncident(incidentId);
 		AppUser actor = requireActor(actorId);

@@ -132,10 +132,8 @@ class OrgIsolationTest {
 						"{\"role\":\"COMMS\",\"userId\": {adminOfA}}"),
 				Arguments.of("POST /api/incidents/{id}/comments", HttpMethod.POST, "/api/incidents/{incidentId}/comments",
 						"{\"comment\":\"x\"}"),
-
-                Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
-                        "{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
-
+				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
+						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
 						"/api/incidents/{incidentId}/timeline/{incidentId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),

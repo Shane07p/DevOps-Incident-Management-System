@@ -84,6 +84,8 @@ class OrgIsolationTest {
 		send(b, put("/api/services/{id}/escalation-policy", serviceOfB),
 				"{\"steps\": [{\"stepNumber\": 1, \"responderId\": %d, \"waitMinutes\": 15}]}".formatted(b.adminId()));
 		long toolOfB = TestOrgs.id(send(b, post("/api/tools"), "{\"name\":\"Prometheus\"}"));
+		long monitorOfB = TestOrgs.id(send(b, post("/api/monitors"), """
+				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": %d, "failureThreshold": 3, "enabled": true}""".formatted(serviceOfB)));
 		// The fallback contact becomes the assignee and gets a notification.
 		long incidentOfB = TestOrgs.id(orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing"));
 		String notifications = send(b, get("/api/notifications"), null);
@@ -92,6 +94,7 @@ class OrgIsolationTest {
 		idsOfB.put("serviceId", serviceOfB);
 		idsOfB.put("userId", b.adminId());
 		idsOfB.put("toolId", toolOfB);
+		idsOfB.put("monitorId", monitorOfB);
 		idsOfB.put("incidentId", incidentOfB);
 		idsOfB.put("notificationId", notificationOfB);
 		// Sign-up and the service each wrote an audit entry in B.
@@ -132,6 +135,8 @@ class OrgIsolationTest {
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
 						"/api/incidents/{incidentId}/timeline/{incidentId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
+				Arguments.of("PUT /api/monitors/{id}", HttpMethod.PUT, "/api/monitors/{monitorId}", """
+						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),
 				Arguments.of("POST /api/notifications/{id}/read", HttpMethod.POST, "/api/notifications/{notificationId}/read", null),
 				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"));
 	}
@@ -162,7 +167,9 @@ class OrgIsolationTest {
 						"{\"fallbackContactId\": {adminOfA}, \"shifts\": [{\"responderId\": {userId}, "
 								+ "\"startTime\": \"2026-11-04T00:00:00Z\", \"endTime\": \"2026-11-05T00:00:00Z\"}]}"),
 				Arguments.of("PUT escalation policy with B's Admin", HttpMethod.PUT, "/api/services/{serviceOfA}/escalation-policy",
-						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"));
+						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
+				Arguments.of("POST /api/monitors on B's service", HttpMethod.POST, "/api/monitors", """
+						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""));
 	}
 
 	/**
@@ -182,8 +189,10 @@ class OrgIsolationTest {
 		return Stream.of(
 				Arguments.of("GET /api/services", "/api/services", "$[*].id", "serviceId"),
 				Arguments.of("GET /api/incidents", "/api/incidents", "$[*].id", "incidentId"),
+				Arguments.of("GET /api/incidents/search", "/api/incidents/search?q=Checkout", "$.content[*].id", "incidentId"),
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
+				Arguments.of("GET /api/monitors", "/api/monitors", "$[*].id", "monitorId"),
 				Arguments.of("GET /api/users", "/api/users", "$[*].id", "userId"),
 				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"),
 				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"));

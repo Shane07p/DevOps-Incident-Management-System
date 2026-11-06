@@ -208,12 +208,14 @@ The monitor raises an alert after N = 3 consecutive failures.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-22.1a | Boundary value | 2 failures in a row | Nothing raised | `MonitorCheckTest` | Planned (Manush) |
-| TC-FR-22.1b | Boundary value | 3 failures in a row | One alert and one incident | `MonitorCheckTest` | Planned (Manush) |
-| TC-FR-22.1c | Boundary value | A 4th failure | No second alert | `MonitorCheckTest` | Planned (Manush) |
-| TC-FR-22.1d | Equivalence | Fail, fail, pass, fail | Nothing raised: the count restarts | `MonitorCheckTest` | Planned (Manush) |
-| TC-FR-22.2a | State transition | The service recovers | The alert is updated and a timeline entry added | `MonitorCheckTest` | Planned (Manush) |
-| TC-FR-22.3a | State transition | After recovery | The incident stays open until a person resolves it | `MonitorCheckTest` | Planned (Manush) |
+| TC-FR-22.1a | Boundary value | 2 failures in a row | Nothing raised | `MonitorCheckTest.twoFailuresRaiseNothing` (Testcontainers) | Automated |
+| TC-FR-22.1b | Boundary value | 3 failures in a row | One alert and one incident | `MonitorCheckTest.thirdFailureRaisesOneAlertAndOneIncident` (Testcontainers) | Automated |
+| TC-FR-22.1c | Boundary value | A 4th failure | No second alert | `MonitorCheckTest.fourthFailureAddsNoSecondAlert` (Testcontainers) | Automated |
+| TC-FR-22.1d | Equivalence | Fail, fail, pass, fail | Nothing raised: the count restarts | `MonitorCheckTest.passingCheckRestartsTheCount` (Testcontainers) | Automated |
+| TC-FR-22.2a | State transition | The service recovers | The alert is updated and a timeline entry added | `MonitorCheckTest.recoveryUpdatesTheAlertAndTheTimeline` (Testcontainers) | Automated |
+| TC-FR-22.3a | State transition | After recovery | The incident stays open until a person resolves it | `MonitorCheckTest.recoveryLeavesTheIncidentOpen` (Testcontainers) | Automated |
+| TC-FR-22.1e | Boundary value | A monitor interval of 29 seconds, and of 30 | 29 is refused with a field error; 30 is accepted | `MonitorControllerTest.intervalBoundary` | Automated |
+| TC-FR-22.1f | Negative | A monitor URL on our own network: loopback, private ranges, `169.254.169.254`, IPv6 local | Refused on save with a field error, and never contacted by a check | `MonitorTargetGuardTest`, `HttpProbeTest.refusedTargetIsNotContacted`, `MonitorControllerTest.internalUrlIsRefused` | Automated |
 | TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Planned (Manush) |
 | TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Planned (Manush) |
 
@@ -418,10 +420,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Planned (Manan) |
+| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Automated |
+| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Automated |
+| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Automated |
+| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Automated |
 | TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
 
 ### AI-1 Find similar (FR-18, D44)

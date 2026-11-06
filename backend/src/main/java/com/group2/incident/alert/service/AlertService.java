@@ -48,13 +48,26 @@ public class AlertService {
 
 	@Transactional
 	public AlertAcceptedResponse processAlert(MonitoringTool tool, AlertRequest request) {
+		receive(request);
+		return AlertAcceptedResponse.of(request.eventId(), request.source());
+	}
+
+	/** Our own uptime monitors raise alerts through the same intake as the tools (FR-22.1). */
+	@Transactional
+	public Alert raiseMonitorAlert(AlertRequest request) {
+		return receive(request);
+	}
+
+	/** Saves the alert, or returns the one already saved for this source and event id. */
+	private Alert receive(AlertRequest request) {
 		ServiceEntity service = serviceRepository.findByNameIgnoreCaseForUpdate(request.service())
 				.orElseThrow(() -> new FieldValidationException("service", "Service not found"));
 
 		String canonicalPayload = PayloadFingerprintUtil.canonicalPayload(request, service.getId());
 		String fingerprint = PayloadFingerprintUtil.fingerprint(canonicalPayload);
-		if (alertDeduplicationService.findExisting(request.source(), request.eventId(), fingerprint).isPresent()) {
-			return AlertAcceptedResponse.of(request.eventId(), request.source());
+		Optional<Alert> existing = alertDeduplicationService.findExisting(request.source(), request.eventId(), fingerprint);
+		if (existing.isPresent()) {
+			return existing.get();
 		}
 
 		Optional<Incident> match = alertCorrelationService
@@ -91,7 +104,7 @@ public class AlertService {
 				"Alert from " + request.source() + " attached to incident " + incident.getReference(),
 				now
 		));
-		return AlertAcceptedResponse.of(request.eventId(), request.source());
+		return alert;
 	}
 
 	@Transactional(readOnly = true)

@@ -18,6 +18,7 @@ import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { formatIst, formatMinutes } from '@/lib/time'
 
+// "INCIDENT_CREATED" ? "Incident created"; unknown types from later sprints still read sensibly.
 const eventLabel = (eventType: string) => {
   const words = eventType.toLowerCase().replaceAll('_', ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)

@@ -19,7 +19,7 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
 	@EntityGraph(attributePaths = "service")
 	List<Incident> findAllByOrderByCreatedAtDescIdDesc();
 
-	@EntityGraph(attributePaths = { "service", "reporter", "assignee" })
+	@EntityGraph(attributePaths = { "service", "reporter", "assignee", "comms", "ops" })
 	Optional<Incident> findWithDetailsById(Long id);
 
 	/**

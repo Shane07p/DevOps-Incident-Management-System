@@ -105,7 +105,7 @@ class IncidentRoleRaceTest {
 				MvcResult firstResult = mvc.perform(put("/api/incidents/" + incidentId + "/roles")
 								.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 								.contentType(MediaType.APPLICATION_JSON)
-								.content("{\"role\": \"LEAD\", \"userId\": " + firstAssignee + "}"))
+								.content("{\"role\": \"COMMS\", \"userId\": " + firstAssignee + "}"))
 						.andExpect(status().isOk())
 						.andReturn();
 				assertThat(firstResult.getResponse().getStatus()).isEqualTo(200);
@@ -115,7 +115,7 @@ class IncidentRoleRaceTest {
 					return mvc.perform(put("/api/incidents/" + incidentId + "/roles")
 									.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 									.contentType(MediaType.APPLICATION_JSON)
-									.content("{\"role\": \"LEAD\", \"userId\": " + secondAssignee + "}"))
+									.content("{\"role\": \"COMMS\", \"userId\": " + secondAssignee + "}"))
 							.andReturn();
 				});
 
@@ -134,9 +134,9 @@ class IncidentRoleRaceTest {
 		assertThat(secondResult.getResponse().getContentAsString())
 				.contains("This record was changed by another request; reload and try again");
 
-		// Verify database consistency: Incident lead is firstAssignee and version incremented once
+		// Verify database consistency: Comms is firstAssignee and version incremented once
 		Incident persistedIncident = OrgContext.runAs(org.orgId(), () -> incidentRepository.findById(incidentId).orElseThrow());
-		assertThat(persistedIncident.getLead().getId()).isEqualTo(firstAssignee);
+		assertThat(persistedIncident.getComms().getId()).isEqualTo(firstAssignee);
 		assertThat(persistedIncident.getVersion()).isEqualTo(1L);
 
 		// Only the winning role assignment's timeline entry is persisted

@@ -8,9 +8,11 @@ import com.group2.incident.alert.dto.CreateToolRequest;
 import com.group2.incident.alert.entity.MonitoringTool;
 import com.group2.incident.alert.repository.MonitoringToolRepository;
 import com.group2.incident.alert.service.ToolService;
+import com.group2.incident.auth.dto.CreatePersonalAccessTokenRequest;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.auth.service.PersonalAccessTokenService;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
@@ -99,6 +101,9 @@ public class SecurityMatrixTest {
 	@Autowired
 	private EscalationPolicyRepository escalationPolicies;
 
+	@Autowired
+	private PersonalAccessTokenService patService;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -118,6 +123,9 @@ public class SecurityMatrixTest {
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
+	private Long adminPatId;
+	private Long engineerPatId;
+	private Long viewerPatId;
 
 	public record MatrixRow(
 			String name,
@@ -396,6 +404,27 @@ public class SecurityMatrixTest {
 						"/api/audit",
 						null,
 						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/me/tokens",
+						HttpMethod.GET,
+						"/api/me/tokens",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/me/tokens",
+						HttpMethod.POST,
+						"/api/me/tokens",
+						"{\"name\":\"MatrixToken-${RANDOM}\"}",
+						201, 201, 201, 401
+				),
+				new MatrixRow(
+						"DELETE /api/me/tokens/{id}",
+						HttpMethod.DELETE,
+						"/api/me/tokens/{id}",
+						null,
+						204, 204, 204, 401
 				)
 		);
 	}
@@ -446,6 +475,10 @@ public class SecurityMatrixTest {
 				new Notification(engineer, incident, "Engineer notification", clock.instant())).getId();
 		viewerNotificationId = notifications.saveAndFlush(
 				new Notification(viewer, incident, "Viewer notification", clock.instant())).getId();
+
+		adminPatId = patService.createToken(new CreatePersonalAccessTokenRequest("admin-matrix-token"), adminUserId).id();
+		engineerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("engineer-matrix-token"), engineerUserId).id();
+		viewerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("viewer-matrix-token"), viewer.getId()).id();
 	}
 
 	@Test
@@ -479,24 +512,25 @@ public class SecurityMatrixTest {
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
 		// Admin
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId), row.bodyTemplate(), adminToken, row.adminStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId), row.bodyTemplate(), adminToken, row.adminStatus());
 
 		// Engineer
-		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId), row.bodyTemplate(), engineerToken, row.engineerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId, engineerPatId), row.bodyTemplate(), engineerToken, row.engineerStatus());
 
 		// Viewer
-		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId), row.bodyTemplate(), viewerToken, row.viewerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId, viewerPatId), row.bodyTemplate(), viewerToken, row.viewerStatus());
 
 		// Unauthenticated
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId), row.bodyTemplate(), null, row.unauthenticatedStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId), row.bodyTemplate(), null, row.unauthenticatedStatus());
 	}
 
-	private String resolvePath(String pathTemplate, Long notificationId) {
+	private String resolvePath(String pathTemplate, Long notificationId, Long patId) {
 		String id = pathTemplate.startsWith("/api/tools/") ? targetToolId.toString()
 				: pathTemplate.startsWith("/api/services/") ? targetServiceId.toString()
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
+				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
 	}
@@ -601,5 +635,44 @@ public class SecurityMatrixTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(validPayload))
 				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void personalAccessTokenInheritsOwnerRole() throws Exception {
+		var viewerPat = patService.createToken(new CreatePersonalAccessTokenRequest("viewer-pat-action"), targetUserId);
+		var engineerPat = patService.createToken(new CreatePersonalAccessTokenRequest("eng-pat-action"), engineerUserId);
+
+		// Viewer's PAT can read incidents (200)
+		mvc.perform(request(HttpMethod.GET, "/api/incidents")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerPat.token()))
+				.andExpect(status().isOk());
+
+		// Viewer's PAT is refused on Engineer-only incident creation (403) - TC-FR-23.2b
+		mvc.perform(request(HttpMethod.POST, "/api/incidents")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerPat.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+									"title": "Unauthorized incident",
+									"description": "Viewer cannot create",
+									"serviceId": %d,
+									"severity": "SEV3"
+								}
+								""".formatted(targetServiceId)))
+				.andExpect(status().isForbidden());
+
+		// Engineer's PAT can create incident (201)
+		mvc.perform(request(HttpMethod.POST, "/api/incidents")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerPat.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+									"title": "Authorized incident",
+									"description": "Engineer can create",
+									"serviceId": %d,
+									"severity": "SEV3"
+								}
+								""".formatted(targetServiceId)))
+				.andExpect(status().isCreated());
 	}
 }

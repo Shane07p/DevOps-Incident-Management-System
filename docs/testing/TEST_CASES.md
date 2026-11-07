@@ -411,15 +411,15 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Automated |
 | TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Planned (Het) |
-| TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.2b | Decision table | A Viewer's token calls an Engineer action | 403 | `SecurityMatrixTest` | Planned (Het) |
-| TC-FR-23.2c | State transition | Revoke the token, or disable its owner, then use it | 401 | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.2d | Boundary value | Use the token one second before, and exactly at, 90 days after creation (controlled `Clock`) | 200, then 401 | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.2e | Boundary value | The 60th and the 61st request in one minute | 200, then 429 with `Retry-After` | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.3a | Negative | A token calls `POST /api/me/tokens` or `GET /api/me/tokens` | Refused; nothing is created | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.4a | Negative | Create and revoke a token, then read the captured logs | Two audit entries; the token is in no log line | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2b | Decision table | A Viewer's token calls an Engineer action | 403 | `SecurityMatrixTest` | Automated |
+| TC-FR-23.2c | State transition | Revoke the token, or disable its owner, then use it | 401 | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2d | Boundary value | Use the token one second before, and exactly at, 90 days after creation (controlled `Clock`) | 200, then 401 | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2e | Boundary value | The 60th and the 61st request in one minute | 200, then 429 with `Retry-After` | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.3a | Negative | A token calls `POST /api/me/tokens` or `GET /api/me/tokens` | Refused; nothing is created | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.4a | Negative | Create and revoke a token, then read the captured logs | Two audit entries; the token is in no log line | `PersonalAccessTokenTest` | Automated |
 
 ### Deploy tracking (FR-20.1): boundary values on the 2-hour window
 

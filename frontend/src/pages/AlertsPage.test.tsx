@@ -41,6 +41,14 @@ function renderInbox(path = '/alerts', body: unknown = alerts) {
 
 const sources = () => screen.getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell')[1].textContent)
 
+// The cell of a row under the named column, so a column added or moved cannot point the check elsewhere.
+function cellUnder(row: HTMLElement, column: string) {
+  const headers = screen.getAllByRole('columnheader').map((header) => header.textContent)
+  const index = headers.indexOf(column)
+  expect(index).toBeGreaterThanOrEqual(0)
+  return within(row).getAllByRole('cell')[index]
+}
+
 afterEach(() => {
   clearToken()
   vi.unstubAllGlobals()
@@ -59,7 +67,7 @@ describe('AlertsPage', () => {
     // The org's own number, not the incident's id (D48).
     expect(within(newest).getByRole('link', { name: 'INC-2' })).toHaveAttribute('href', '/incidents/7')
     // Two alerts share INC-2, this one included.
-    expect(within(newest).getAllByRole('cell')[6]).toHaveTextContent('2')
+    expect(cellUnder(newest, 'Alerts')).toHaveTextContent('2')
   })
 
   it('shows only new alerts under New, and remembers the filter in the URL', async () => {

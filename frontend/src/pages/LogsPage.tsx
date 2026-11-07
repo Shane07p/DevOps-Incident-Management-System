@@ -26,6 +26,9 @@ import { cn } from '@/lib/utils'
 
 const LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'] as const
 
+/** Minimum polling interval for live tail (ms). Must not hammer Loki on free tier. */
+const LIVE_TAIL_INTERVAL_MS = 5000
+
 const LEVEL_STYLE: Record<string, string> = {
   DEBUG: 'bg-muted text-muted-foreground',
   INFO: 'bg-status-open-bg text-status-open',
@@ -120,17 +123,17 @@ export function LogsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputText])
 
-  // ---- Compute ISO timestamps for time range -------------------------------
+  // ---- Compute ISO timestamps for time range (always bounded, no "All time") -
   const { fromTimestamp, toTimestamp } = useMemo(() => {
     if (explicitFrom) {
       return { fromTimestamp: explicitFrom, toTimestamp: explicitTo || undefined }
     }
+    // Always compute a bounded from/to — "All time" is intentionally removed.
     const matchedRange = TIME_RANGES.find((r) => r.id === timeRangeParam)
-    if (matchedRange && matchedRange.minutes > 0) {
-      const from = new Date(Date.now() - matchedRange.minutes * 60 * 1000).toISOString()
-      return { fromTimestamp: from, toTimestamp: undefined }
-    }
-    return { fromTimestamp: undefined, toTimestamp: undefined }
+    // Default to 1-hour window when no match (guards against stale URLs).
+    const minutes = matchedRange ? matchedRange.minutes : 60
+    const from = new Date(Date.now() - minutes * 60 * 1000).toISOString()
+    return { fromTimestamp: from, toTimestamp: undefined }
   }, [explicitFrom, explicitTo, timeRangeParam])
 
   // ---- Service list for dropdown -------------------------------------------
@@ -140,35 +143,45 @@ export function LogsPage() {
   })
 
   // ---- Build query object --------------------------------------------------
-  // If active field filter is present, combine it into the text query
-  const combinedText = useMemo(() => {
-    const parts: string[] = []
-    if (textParam) parts.push(textParam)
-    if (fieldFilter) parts.push(fieldFilter.value)
-    return parts.join(' ').trim()
-  }, [textParam, fieldFilter])
-
+  // Field filter uses ?field=key:value (Loki label filter syntax agreed on #156).
+  // Text filter and field filter are independent query params.
   const queryParams: LogsQueryParams = useMemo(
     () => ({
       serviceId: serviceId || undefined,
       level: level || undefined,
-      text: combinedText || undefined,
+      text: textParam || undefined,
+      field: fieldFilter ? `${fieldFilter.key}:${fieldFilter.value}` : undefined,
       from: fromTimestamp,
       to: toTimestamp,
       limit: 100,
     }),
-    [serviceId, level, combinedText, fromTimestamp, toTimestamp],
+    [serviceId, level, textParam, fieldFilter, fromTimestamp, toTimestamp],
   )
 
-  // ---- Logs query with live tail polling -----------------------------------
+  // ---- Logs query with live tail polling (min 5 s to respect Loki limits) ---
+  // Polling is cancelled automatically on unmount (react-query handles this via
+  // the queryClient being torn down); we also cancel explicitly on filter change
+  // by keying off queryParams.
   const logsQuery = useQuery({
     queryKey: ['telemetry-logs', queryParams],
     queryFn: () => fetchLogs(queryParams),
-    refetchInterval: liveTail ? 2000 : false,
+    refetchInterval: liveTail ? LIVE_TAIL_INTERVAL_MS : false,
     placeholderData: (prev) => prev,
   })
 
+  // Stop live tail whenever query params change to avoid stale concurrent polls.
+  const prevQueryParamsRef = useRef(queryParams)
+  useEffect(() => {
+    if (prevQueryParamsRef.current !== queryParams) {
+      prevQueryParamsRef.current = queryParams
+      setLiveTail(false)
+    }
+  }, [queryParams])
+
   // ---- Clickable JSON field handler ----------------------------------------
+  // Recognized structural fields (level, serviceId) are routed to their
+  // dedicated filters. All other fields are sent as ?field=key:value (Loki
+  // label filter syntax agreed with Dhruva on issue #156).
   const handleJsonFieldClick = (key: string, val: string) => {
     const kLower = key.toLowerCase()
     if (kLower === 'level') {
@@ -182,14 +195,12 @@ export function LogsPage() {
       setFilters({ serviceId: val })
       return
     }
-    // For general fields, set active field filter and update query text
+    // General attribute: set field filter chip — query sends ?field=key:val
     setFieldFilter({ key, value: val })
-    setFilters({ text: val })
   }
 
   const clearFieldFilter = () => {
     setFieldFilter(null)
-    setFilters({ text: '' })
   }
 
   // ---- Clear all filters ---------------------------------------------------
@@ -209,12 +220,13 @@ export function LogsPage() {
   const timeRangeIdAttr = useId()
   const textIdAttr = useId()
 
-  // ---- Error detection (specifically 503) -----------------------------------
+  // ---- Error detection: 503 only via ApiRequestError.status ----------------
+  // Never match by error message string — that would trigger on any error whose
+  // message happens to contain "503" or "unavailable".
   const is503 =
     logsQuery.isError &&
-    ((logsQuery.error instanceof ApiRequestError && logsQuery.error.status === 503) ||
-      logsQuery.error.message.includes('503') ||
-      logsQuery.error.message.toLowerCase().includes('unavailable'))
+    logsQuery.error instanceof ApiRequestError &&
+    logsQuery.error.status === 503
 
   return (
     <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
@@ -468,9 +480,10 @@ export function LogsPage() {
                     <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
                       <span className="text-[11px] tnum">{formatIst(log.timestamp)}</span>
                       <LevelBadge level={log.level} />
-                      {log.serviceName && (
+                      {/* Backend service field (or alias serviceName) */}
+                      {(log.service || log.serviceName) && (
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-sans font-medium text-foreground">
-                          {log.serviceName}
+                          {log.service || log.serviceName}
                         </span>
                       )}
                     </div>

@@ -1,6 +1,11 @@
 /**
  * LogsPage.test.tsx
  * Tests for Issue #163 — Logs Explorer (US-28 / TC-FR-26.1b).
+ *
+ * Contract with Dhruva (Issue #156):
+ *   GET /api/telemetry/logs → { logs: LogEntry[], total?: number }
+ *   Field filter: ?field=key:value  (Loki label filter)
+ *   No "All time" — from/to always present in requests.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -16,7 +21,7 @@ import { devOrg, mockFetch } from '@/test/fetchMock'
 import { extractJsonFields } from '@/api/logs'
 
 // ---------------------------------------------------------------------------
-// Shared fixtures
+// Shared fixtures — use canonical envelope response shape from Issue #156
 // ---------------------------------------------------------------------------
 
 const viewer = { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' }
@@ -26,11 +31,12 @@ const services = [
   { id: 2, name: 'Checkout' },
 ]
 
-const sampleLogs = [
+/** Backend uses `service` field (Loki stream label). No `serviceName` from server. */
+const sampleLogEntries = [
   {
     id: 'log-1',
     timestamp: '2026-10-28T09:00:00Z',
-    serviceName: 'Payments',
+    service: 'Payments',
     serviceId: 1,
     level: 'ERROR',
     message: '{"event":"payment.failed","order_id":"ord-123","error":"gateway timeout"}',
@@ -39,7 +45,7 @@ const sampleLogs = [
   {
     id: 'log-2',
     timestamp: '2026-10-28T08:55:00Z',
-    serviceName: 'Payments',
+    service: 'Payments',
     serviceId: 1,
     level: 'INFO',
     message: 'Payment processed successfully for user 456',
@@ -47,12 +53,15 @@ const sampleLogs = [
   {
     id: 'log-3',
     timestamp: '2026-10-28T08:50:00Z',
-    serviceName: 'Checkout',
+    service: 'Checkout',
     serviceId: 2,
     level: 'WARN',
     message: '{"broken json: true',
   },
 ]
+
+/** Canonical envelope response shape agreed with Dhruva on Issue #156. */
+const sampleLogsResponse = { logs: sampleLogEntries, total: 3 }
 
 type ExtraRoutes = Parameters<typeof mockFetch>[0]
 
@@ -61,7 +70,7 @@ function renderLogs(path = '/logs', extraRoutes: ExtraRoutes = {}) {
   const defaultRoutes: Record<string, any> = {
     'GET /api/auth/me': { body: { user: viewer, org: devOrg } },
     'GET /api/services': { body: services },
-    'GET /api/telemetry/logs': { body: sampleLogs },
+    'GET /api/telemetry/logs': { body: sampleLogsResponse },
     ...extraRoutes,
   }
 
@@ -115,7 +124,7 @@ afterEach(() => {
 describe('LogsPage — rendering', () => {
   it('renders page heading, filters, and live tail button', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     expect(await screen.findByRole('heading', { name: 'Logs Explorer' })).toBeInTheDocument()
@@ -129,6 +138,16 @@ describe('LogsPage — rendering', () => {
     expect(await screen.findByText('Payment processed successfully for user 456')).toBeInTheDocument()
     expect(screen.getByText('3 log entries')).toBeInTheDocument()
   })
+
+  it('does not show "All time" option in the time range selector', async () => {
+    renderLogs('/logs')
+    await screen.findByRole('heading', { name: 'Logs Explorer' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Time range' }))
+    expect(screen.queryByRole('option', { name: 'All time' })).not.toBeInTheDocument()
+    // Max range is 24 hours
+    expect(await screen.findByRole('option', { name: 'Last 24 hours' })).toBeInTheDocument()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -137,8 +156,8 @@ describe('LogsPage — rendering', () => {
 describe('LogsPage — service filter', () => {
   it('applies service filter and queries logs for that service', async () => {
     const { router } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
-      'GET /api/telemetry/logs?serviceId=1&limit=100': { body: [sampleLogs[0], sampleLogs[1]] },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
+      'GET /api/telemetry/logs?serviceId=1&limit=100': { body: { logs: [sampleLogEntries[0], sampleLogEntries[1]], total: 2 } },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -158,8 +177,8 @@ describe('LogsPage — service filter', () => {
 describe('LogsPage — level filter', () => {
   it('applies level filter and updates query', async () => {
     const { router } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
-      'GET /api/telemetry/logs?level=ERROR&limit=100': { body: [sampleLogs[0]] },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
+      'GET /api/telemetry/logs?level=ERROR&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -179,8 +198,8 @@ describe('LogsPage — level filter', () => {
 describe('LogsPage — text search filter', () => {
   it('debounces and applies text search filter', async () => {
     const { router } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
-      'GET /api/telemetry/logs?text=timeout&limit=100': { body: [sampleLogs[0]] },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
+      'GET /api/telemetry/logs?text=timeout&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -203,7 +222,7 @@ describe('LogsPage — text search filter', () => {
 describe('LogsPage — time-range filter', () => {
   it('applies chosen time-range in URL parameters', async () => {
     const { router } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -218,7 +237,7 @@ describe('LogsPage — time-range filter', () => {
 
   it('respects explicit from and to query params', async () => {
     renderLogs('/logs?from=2026-10-28T08:00:00Z&to=2026-10-28T09:00:00Z', {
-      'GET /api/telemetry/logs?from=2026-10-28T08:00:00Z&to=2026-10-28T09:00:00Z&limit=100': { body: [sampleLogs[0]] },
+      'GET /api/telemetry/logs?from=2026-10-28T08:00:00Z&to=2026-10-28T09:00:00Z&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
     })
 
     expect(await screen.findByText('1 log entries')).toBeInTheDocument()
@@ -231,7 +250,7 @@ describe('LogsPage — time-range filter', () => {
 describe('LogsPage — combined filters', () => {
   it('combines service, level, and text filters together', async () => {
     const { router } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -250,13 +269,12 @@ describe('LogsPage — combined filters', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 7. Clickable JSON field adds filter and triggers request
+// 7. Clickable JSON field sends ?field=key:value (TC-FR-26.1b)
 // ---------------------------------------------------------------------------
 describe('LogsPage — clickable JSON fields (TC-FR-26.1b)', () => {
-  it('clicking a JSON field badge adds that filter chip and sets text query', async () => {
+  it('clicking a JSON field badge sends ?field=key:value and shows filter chip', async () => {
     const { fetchMock } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
-      'GET /api/telemetry/logs?text=ord-123&limit=100': { body: [sampleLogs[0]] },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -272,10 +290,28 @@ describe('LogsPage — clickable JSON fields (TC-FR-26.1b)', () => {
     expect(screen.getByText('order_id')).toBeInTheDocument()
     expect(screen.getAllByText('ord-123').length).toBeGreaterThanOrEqual(1)
 
-    // Query was triggered with the field value
+    // Query was triggered with the structured field filter parameter
     await waitFor(() => {
       const calls = fetchMock.mock.calls.map(([req]) => String(req))
-      expect(calls.some((url) => url.includes('text=ord-123'))).toBe(true)
+      // Must use ?field=order_id:ord-123, NOT just ?text=ord-123
+      expect(calls.some((url) => url.includes('field=order_id%3Aord-123') || url.includes('field=order_id:ord-123'))).toBe(true)
+    })
+  })
+
+  it('clicking a JSON field does NOT simply inject the value as a plain text search', async () => {
+    const { fetchMock } = renderLogs('/logs', {
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
+    })
+
+    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    const orderBtn = await screen.findByRole('button', { name: 'Filter by order_id: ord-123' })
+    await userEvent.click(orderBtn)
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.map(([req]) => String(req))
+      // text= should NOT be the only way ord-123 is passed
+      const textOnlyCalls = calls.filter((url) => url.includes('text=ord-123') && !url.includes('field='))
+      expect(textOnlyCalls.length).toBe(0)
     })
   })
 })
@@ -284,10 +320,9 @@ describe('LogsPage — clickable JSON fields (TC-FR-26.1b)', () => {
 // 8. Clearing a filter updates the request
 // ---------------------------------------------------------------------------
 describe('LogsPage — clearing filters', () => {
-  it('clearing active field filter removes it and triggers updated request', async () => {
+  it('clearing active field filter removes it and updates query', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
-      'GET /api/telemetry/logs?text=ord-123&limit=100': { body: [sampleLogs[0]] },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -306,8 +341,8 @@ describe('LogsPage — clearing filters', () => {
 
   it('clicking Clear filters button resets all parameters', async () => {
     const { router } = renderLogs('/logs?serviceId=1&level=ERROR', {
-      'GET /api/telemetry/logs?serviceId=1&level=ERROR&limit=100': { body: [sampleLogs[0]] },
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs?serviceId=1&level=ERROR&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     expect(await screen.findByRole('button', { name: 'Clear filters' })).toBeInTheDocument()
@@ -321,12 +356,12 @@ describe('LogsPage — clearing filters', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 9. Live tail starts polling
+// 9. Live tail starts polling at ≥ 5-second intervals
 // ---------------------------------------------------------------------------
 describe('LogsPage — live tail', () => {
   it('starts polling when live tail is enabled', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     const liveTailBtn = await screen.findByRole('button', { name: 'Live tail' })
@@ -341,7 +376,7 @@ describe('LogsPage — live tail', () => {
 
   it('stops polling when disabled', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     const liveTailBtn = await screen.findByRole('button', { name: 'Live tail' })
@@ -360,7 +395,7 @@ describe('LogsPage — live tail', () => {
 describe('LogsPage — empty state', () => {
   it('shows useful empty state when no logs match', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: [] },
+      'GET /api/telemetry/logs': { body: { logs: [], total: 0 } },
     })
 
     expect(await screen.findByText('No logs found')).toBeInTheDocument()
@@ -369,7 +404,7 @@ describe('LogsPage — empty state', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 12. API 503 Grafana unavailable
+// 12. API 503 Grafana unavailable — only real 503 triggers the state
 // ---------------------------------------------------------------------------
 describe('LogsPage — 503 unavailable state', () => {
   it('displays clear log store unavailable message when API returns 503', async () => {
@@ -385,6 +420,20 @@ describe('LogsPage — 503 unavailable state', () => {
       screen.getByText(/The backend could not reach Grafana Loki \(503\)/),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('does NOT show "log store unavailable" for a 500 error whose message mentions 503', async () => {
+    // Fix #5: 503 detection must use error.status === 503, not message string matching.
+    renderLogs('/logs', {
+      'GET /api/telemetry/logs': {
+        status: 500,
+        body: { status: 500, message: 'Internal error (not a real 503 / unavailable)' },
+      },
+    })
+
+    expect(await screen.findByText('Failed to load logs')).toBeInTheDocument()
+    // Must NOT show the Loki-specific unavailable message
+    expect(screen.queryByText('Log store unavailable')).not.toBeInTheDocument()
   })
 })
 
@@ -412,7 +461,7 @@ describe('LogsPage — generic error state', () => {
 describe('LogsPage — malformed JSON & plain-text handling', () => {
   it('renders plain text and malformed JSON without crashing', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogs },
+      'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
     // Plain text message
@@ -427,7 +476,7 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
       extractJsonFields({
         id: '1',
         timestamp: '2026-10-28T09:00:00Z',
-        serviceName: 'Test',
+        service: 'Test',
         level: 'INFO',
         message: 'plain text',
       }),
@@ -437,7 +486,7 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
       extractJsonFields({
         id: '2',
         timestamp: '2026-10-28T09:00:00Z',
-        serviceName: 'Test',
+        service: 'Test',
         level: 'INFO',
         message: '{ bad json',
       }),
@@ -447,7 +496,7 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
       extractJsonFields({
         id: '3',
         timestamp: '2026-10-28T09:00:00Z',
-        serviceName: 'Test',
+        service: 'Test',
         level: 'INFO',
         message: '{"valid":"json","num":42}',
       }),
@@ -457,7 +506,7 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
       extractJsonFields({
         id: '4',
         timestamp: '2026-10-28T09:00:00Z',
-        serviceName: 'Test',
+        service: 'Test',
         level: 'INFO',
         message: 'ignored',
         attributes: { explicit: 'attr' },
@@ -465,4 +514,3 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
     ).toEqual({ explicit: 'attr' })
   })
 })
-

@@ -8,10 +8,22 @@ import { apiFetch } from './client'
 export const logLevelSchema = z.enum(['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'])
 export type LogLevel = z.infer<typeof logLevelSchema>
 
+/**
+ * Agreed contract with Dhruva / Issue #156:
+ * GET /api/telemetry/logs → { logs: LogEntry[], total: number }
+ * Each LogEntry: { id: string, timestamp: ISO-8601 UTC, level: string,
+ *   message: string, service: string, attributes: Record<string, unknown> }
+ *
+ * Field filter syntax (Loki label filter): ?field=<key>:<value>
+ * e.g. ?field=orderId:42  maps to Loki: | json | orderId = "42"
+ */
 export const logEntrySchema = z.object({
-  id: z.union([z.string(), z.number()]).transform(String),
+  id: z.string(),
   timestamp: z.iso.datetime({ offset: true }),
-  serviceName: z.string().default(''),
+  /** Backend field is `service` (matches Loki stream label). */
+  service: z.string().default(''),
+  /** Convenience alias used by some adapters — optional. */
+  serviceName: z.string().optional(),
   serviceId: z.number().optional(),
   level: z.string(),
   message: z.string(),
@@ -20,13 +32,16 @@ export const logEntrySchema = z.object({
 
 export type LogEntry = z.infer<typeof logEntrySchema>
 
-/** Accepts an array of log entries or an enveloped `{ logs: [...] }` */
-export const logsResponseSchema = z.union([
-  z.array(logEntrySchema),
-  z.object({
+/**
+ * Enveloped response from GET /api/telemetry/logs.
+ * Shape agreed on Issue #156 — single canonical shape, no union fallback.
+ */
+export const logsResponseSchema = z
+  .object({
     logs: z.array(logEntrySchema),
-  }).transform((val) => val.logs),
-])
+    total: z.number().optional(),
+  })
+  .transform((val) => val.logs)
 
 // ---------------------------------------------------------------------------
 // Query Parameters
@@ -35,15 +50,24 @@ export const logsResponseSchema = z.union([
 export interface LogsQueryParams {
   serviceId?: string | number
   level?: string
+  /** Full-text search applied to log message body. */
   text?: string
+  /**
+   * Loki label / JSON field filter.
+   * Format: "key:value" (e.g. "orderId:42").
+   * Maps to Loki: | json | <key> = "<value>"
+   * Agreed on Issue #156 with Dhruva.
+   */
+  field?: string
   from?: string
   to?: string
   limit?: number
 }
 
 /**
- * Builds the query string for GET /api/telemetry/logs?serviceId=&level=&text=&from=&to=&limit=
- * Omits empty or unset parameters.
+ * Builds the query string for GET /api/telemetry/logs.
+ * Query params: serviceId, level, text, field, from (required), to (required), limit.
+ * `from` and `to` are always present — "All time" is not supported.
  */
 export function buildLogsQuery(params: LogsQueryParams): string {
   const sp = new URLSearchParams()
@@ -55,6 +79,9 @@ export function buildLogsQuery(params: LogsQueryParams): string {
   }
   if (params.text && params.text.trim()) {
     sp.set('text', params.text.trim())
+  }
+  if (params.field && params.field.trim()) {
+    sp.set('field', params.field.trim())
   }
   if (params.from) {
     sp.set('from', params.from)
@@ -91,7 +118,6 @@ export const TIME_RANGES = [
   { id: '1h', label: 'Last 1 hour', minutes: 60 },
   { id: '6h', label: 'Last 6 hours', minutes: 360 },
   { id: '24h', label: 'Last 24 hours', minutes: 1440 },
-  { id: 'all', label: 'All time', minutes: 0 },
 ] as const
 
 /**

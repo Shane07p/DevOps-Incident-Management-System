@@ -1,4 +1,4 @@
-﻿import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,9 +10,9 @@ import { mockFetch } from '@/test/fetchMock'
 const baseStatus = {
   orgName: 'Example Organization',
   services: [
-    { id: 1, name: 'Payments', health: 'OPERATIONAL', uptimePercent: 99.95 },
+    { id: 1, name: 'Payments', health: 'UNKNOWN', uptimePercent: 99.95 },
     { id: 2, name: 'Search', health: 'DEGRADED', uptimePercent: 98.5 },
-    { id: 3, name: 'Checkout', health: 'MAJOR_OUTAGE', uptimePercent: 95.1 },
+    { id: 3, name: 'Checkout', health: 'DOWN', uptimePercent: 95.1 },
   ],
   activeIncidents: [],
   resolvedIncidents: [],
@@ -52,7 +52,7 @@ describe('Public status page', () => {
     const components = await screen.findByRole('heading', { name: 'Components' })
     const section = components.closest('section')!
 
-    expect(within(section).getByText('Operational')).toBeInTheDocument()
+    expect(within(section).getByText('Unknown')).toBeInTheDocument()
     expect(within(section).getByText('Degraded')).toBeInTheDocument()
     expect(within(section).getByText('Major outage')).toBeInTheDocument()
     expect(within(section).getByText('Payments')).toBeInTheDocument()

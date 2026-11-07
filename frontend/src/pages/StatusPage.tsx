@@ -1,4 +1,4 @@
-﻿import { useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
@@ -7,16 +7,17 @@ import { ThemeToggle } from '@/components/shell/ThemeToggle'
 import { cn } from '@/lib/utils'
 
 const HEALTH_STYLE = {
+  UNKNOWN: { dot: 'bg-gray-400', text: 'text-gray-500', label: 'Unknown' },
   OPERATIONAL: { dot: 'bg-health-operational', text: 'text-health-operational-fg', label: 'Operational' },
   DEGRADED: { dot: 'bg-health-degraded', text: 'text-health-degraded-fg', label: 'Degraded' },
-  MAJOR_OUTAGE: { dot: 'bg-health-down', text: 'text-health-down-fg', label: 'Major outage' },
+  DOWN: { dot: 'bg-health-down', text: 'text-health-down-fg', label: 'Major outage' },
 } as const
 
 const sectionTitle = 'text-[20px] leading-none font-[750]'
 const condensed = { fontStretch: '75%' } as const
 
 function StatusContent({ data }: { data: PublicStatus }) {
-  const hasOutage = data.services.some((service) => service.health === 'MAJOR_OUTAGE')
+  const hasOutage = data.services.some((service) => service.health === 'DOWN')
   const hasDegradation = data.services.some((service) => service.health === 'DEGRADED')
   const summary = hasOutage
     ? 'Major outage'

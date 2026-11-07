@@ -1,4 +1,4 @@
-﻿import { z } from 'zod'
+import { z } from 'zod'
 import { apiFetch } from './client'
 
 // Temporary response structure until backend issue #160 is finalized.
@@ -8,7 +8,7 @@ export const publicStatusSchema = z.object({
     z.object({
       id: z.number(),
       name: z.string(),
-      health: z.enum(['OPERATIONAL', 'DEGRADED', 'MAJOR_OUTAGE']),
+      health: z.enum(['UNKNOWN', 'OPERATIONAL', 'DEGRADED', 'DOWN']),
       uptimePercent: z.number(),
     }),
   ),

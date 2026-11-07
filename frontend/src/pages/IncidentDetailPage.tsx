@@ -23,84 +23,38 @@ const eventLabel = (eventType: string) => {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-function Detail({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="text-xs font-medium text-muted-foreground">
-        {label}
-      </dt>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="text-sm">{children}</dd>
     </div>
   )
 }
 
-function SlaDue({
-  label,
-  dueAt,
-  targetMinutes,
-}: {
-  label: string
-  dueAt: string
-  targetMinutes: number
-}) {
+function SlaDue({ label, dueAt, targetMinutes }: { label: string; dueAt: string; targetMinutes: number }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-xs font-medium text-muted-foreground">
-        {label}
-      </span>
-      <span className="font-mono text-lg font-semibold tnum">
-        {formatIst(dueAt)}
-      </span>
-      <span className="text-xs text-muted-foreground">
-        Target {formatMinutes(targetMinutes)} from declaration
-      </span>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="font-mono text-lg font-semibold tnum">{formatIst(dueAt)}</span>
+      <span className="text-xs text-muted-foreground">Target {formatMinutes(targetMinutes)} from declaration</span>
     </div>
   )
 }
 
 function Timeline({ entries }: { entries: TimelineEntry[] }) {
-  if (entries.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Nothing recorded yet.
-      </p>
-    )
-  }
-
+  if (entries.length === 0) return <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
   return (
     <ol className="flex flex-col gap-4 border-l pl-5">
       {entries.map((entry) => (
-        <li
-          key={entry.id}
-          className="relative flex flex-col gap-0.5"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-foreground"
-          />
-
+        <li key={entry.id} className="relative flex flex-col gap-0.5">
+          <span aria-hidden="true" className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-foreground" />
           <span className="text-sm">
-            <span className="font-semibold">
-              {eventLabel(entry.eventType)}
-            </span>
-            <span className="text-muted-foreground">
-              {' · '}{entry.actor ?? 'System'}
-            </span>
+            <span className="font-semibold">{eventLabel(entry.eventType)}</span>
+            <span className="text-muted-foreground"> · {entry.actor ?? 'System'}</span>
           </span>
-
-          {entry.details && (
-            <span className="text-sm">{entry.details}</span>
-          )}
-
-          <span className="font-mono text-xs text-muted-foreground tnum">
-            {formatIst(entry.recordedAt)}
-          </span>
+          {entry.details && <span className="text-sm">{entry.details}</span>}
+          <span className="font-mono text-xs text-muted-foreground tnum">{formatIst(entry.recordedAt)}</span>
         </li>
       ))}
     </ol>
@@ -343,6 +297,7 @@ function EvidenceLinks({
   )
 }
 
+/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
 export function IncidentDetailPage() {
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0

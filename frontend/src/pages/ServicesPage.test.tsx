@@ -119,6 +119,8 @@ describe('ServicesPage', () => {
       name: 'Checkout',
       description: '',
       ownerId: 2,
+      publicVisible: false,
+      publicName: '',
       criticality: 'HIGH',
       targets: {
         SEV1: { responseMinutes: 15, resolutionMinutes: 240 },

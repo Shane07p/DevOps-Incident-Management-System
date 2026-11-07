@@ -50,8 +50,7 @@ export const routes: RouteObject[] = [
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
-  { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
-  {
+  { path: '/status/:slug', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },  {
     element: <RequireAuth />,
     children: [
       {

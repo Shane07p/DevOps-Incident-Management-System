@@ -148,6 +148,48 @@ export function ServiceFormDialog({
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="publicVisible"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-3 rounded-lg border p-3">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      id="publicVisible"
+                      checked={field.value}
+                      onChange={(event) => field.onChange(event.target.checked)}
+                      className="size-4"
+                    />
+                  </FormControl>
+                  <FormLabel htmlFor="publicVisible">
+                    Show on public status page
+                  </FormLabel>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="publicName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Public name</FormLabel>
+                  <FormControl>
+                    <Input
+                      id="publicName"
+                      placeholder="Name customers will see"
+                      disabled={!form.watch('publicVisible')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    This name is shown to customers instead of the internal service name.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <SlaTargetGrid control={form.control} />
             {form.formState.errors.root && (
               <p role="alert" className="text-sm font-medium text-destructive">

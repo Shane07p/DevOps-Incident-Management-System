@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { dayLabel, type DayState } from '@/data/statusSample'
+import { dayLabel, type DayState } from '@/lib/statusTypes'
 import { cn } from '@/lib/utils'
 
 const DAY_COLOR: Record<DayState, string> = {

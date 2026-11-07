@@ -48,6 +48,14 @@ export const incidentSchema = z.object({
   responseDueAt: timestamp,
   resolutionDueAt: timestamp,
   timeline: z.array(timelineEntrySchema),
+  
+deploys: z.array(z.object({
+  id: z.number(),
+  version: z.string(),
+  commit: z.string(),
+  author: z.string(),
+  deployedAt: timestamp,
+})).optional(),
 })
 
 export type Incident = z.infer<typeof incidentSchema>
@@ -79,4 +87,38 @@ export function getIncident(id: number) {
 /** Admins and Engineers only. */
 export function createIncident(incident: NewIncident) {
   return apiFetch('/incidents', incidentSchema, { method: 'POST', body: incident })
+}
+
+export const evidenceLinkSchema = z.object({
+  url: z.string().url(),
+  label: z.string(),
+})
+
+export type EvidenceLink = z.infer<typeof evidenceLinkSchema>
+
+/** Engineers and Admins can attach evidence to an incident. */
+export function addIncidentEvidence(
+  incidentId: number,
+  evidence: EvidenceLink,
+) {
+  return apiFetch(
+    `/incidents/${incidentId}/evidence`,
+    z.unknown(),
+    {
+      method: 'POST',
+      body: evidence,
+    },
+  )
+}
+
+/** Engineers and Admins can link a deployment to an incident. */
+export function linkIncidentDeploy(
+  incidentId: number,
+  deployId: number,
+) {
+  return apiFetch(
+    `/incidents/${incidentId}/deploys/${deployId}`,
+    z.unknown(),
+    { method: 'POST' },
+  )
 }

@@ -1,11 +1,11 @@
 
 import { useQuery } from '@tanstack/react-query'
 import {
-  getServiceLogs,
   getServiceMetrics,
   type MetricName,
   type MetricPoint,
 } from '@/api/telemetry'
+import { fetchLogs } from '@/api/logs'
 import { formatIst } from '@/lib/time'
 
 type Props = {
@@ -121,7 +121,7 @@ export function IncidentTelemetry({ serviceId, createdAt }: Props) {
 
   const logs = useQuery({
     queryKey: ['telemetry', 'logs', serviceId, from, to],
-    queryFn: () => getServiceLogs(serviceId, from, to),
+    queryFn: () => fetchLogs({ serviceId, from, to, limit: 50 }),
     retry: false,
   })
 

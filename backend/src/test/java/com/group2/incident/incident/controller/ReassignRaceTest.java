@@ -97,6 +97,8 @@ class ReassignRaceTest {
 		long serviceId = orgs.createService(adminToken, "Race Service", adminId);
 		long incidentId = TestOrgs.id(orgs.declareIncident(adminToken, serviceId, "Race Incident"));
 
+		// Both requests come from screens that loaded the incident at this version.
+		long seen = jdbc.queryForObject("SELECT version FROM incident WHERE id = ?", Long.class, incidentId);
 		CountDownLatch secondStarted = new CountDownLatch(1);
 
 		// The first reassignment holds its transaction open after flushing its UPDATE so the second blocks on the row lock.
@@ -105,7 +107,7 @@ class ReassignRaceTest {
 				MvcResult firstResult = mvc.perform(put("/api/incidents/" + incidentId + "/assignee")
 								.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 								.contentType(MediaType.APPLICATION_JSON)
-								.content("{\"assigneeId\": " + firstAssignee + "}"))
+								.content("{\"assigneeId\": " + firstAssignee + ", \"expectedVersion\": " + seen + "}"))
 						.andExpect(status().isOk())
 						.andReturn();
 				assertThat(firstResult.getResponse().getStatus()).isEqualTo(200);
@@ -115,7 +117,7 @@ class ReassignRaceTest {
 					return mvc.perform(put("/api/incidents/" + incidentId + "/assignee")
 									.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 									.contentType(MediaType.APPLICATION_JSON)
-									.content("{\"assigneeId\": " + secondAssignee + "}"))
+									.content("{\"assigneeId\": " + secondAssignee + ", \"expectedVersion\": " + seen + "}"))
 							.andReturn();
 				});
 

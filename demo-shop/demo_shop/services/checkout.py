@@ -86,6 +86,10 @@ class CheckoutService:
 
         order_id = f"ord-{uuid.uuid4().hex[:10]}"
 
+        # No payment is taken for an order fulfillment cannot accept (NFR-02.2: a failed write is visible).
+        if order_queue.is_full:
+            self._refuse_unqueued(order_id, request_id, current_version, payment_id=None)
+
         # Authorize payment with payment service
         payment_req = PaymentRequest(
             order_id=order_id,
@@ -105,7 +109,9 @@ class CheckoutService:
             "payment_id": payment_resp.transaction_id,
             "version": current_version,
         }
-        await order_queue.enqueue(order_payload)
+        if not await order_queue.enqueue(order_payload):
+            # The queue filled while the payment was authorized. The authorization is never captured.
+            self._refuse_unqueued(order_id, request_id, current_version, payment_id=payment_resp.transaction_id)
 
         StructuredLogger.info(
             service="checkout",
@@ -126,6 +132,26 @@ class CheckoutService:
             total_amount=round(total_amount, 2),
             payment=payment_resp,
             version=current_version,
+        )
+
+
+    @staticmethod
+    def _refuse_unqueued(order_id: str, request_id: Optional[str], version: str, payment_id: Optional[str]) -> None:
+        """The order cannot be fulfilled, so checkout fails visibly instead of reporting it completed."""
+        StructuredLogger.error(
+            service="checkout",
+            event="checkout.failed",
+            request_id=request_id,
+            details={
+                "order_id": order_id,
+                "payment_id": payment_id,
+                "version": version,
+                "error": "Order fulfillment queue is full",
+            },
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Order fulfillment is full; the order was not placed and the payment will not be taken. Try again shortly.",
         )
 
 

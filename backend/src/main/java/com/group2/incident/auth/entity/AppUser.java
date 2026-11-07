@@ -51,9 +51,4 @@ public class AppUser {
 		this.createdAt = createdAt;
 	}
 
-	/** Every token issued so far stops working. Used by logout and role changes. */
-	public void revokeTokens() {
-		tokenVersion++;
-	}
-
 }

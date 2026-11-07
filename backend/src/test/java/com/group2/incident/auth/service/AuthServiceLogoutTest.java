@@ -55,7 +55,7 @@ class AuthServiceLogoutTest {
 				demotion.executeWithoutResult(inner -> {
 					Membership membership = memberships.findByUserIdAndOrgId(id, org).orElseThrow();
 					membership.changeRole(Role.VIEWER);
-					membership.getUser().revokeTokens();
+					users.revokeTokens(id);
 				});
 				authService.logout(id);
 			});

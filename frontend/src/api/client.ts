@@ -41,8 +41,9 @@ export async function apiFetch<T>(path: string, schema: z.ZodType<T>, options: O
   })
 
   // A 401 on a request that carried a token means the token expired or was revoked. A 401
-  // without one is a wrong password on the login form, which the form shows itself.
-  if (response.status === 401 && token) onUnauthorized?.()
+  // without one is a wrong password on the login form, which the form shows itself. A late 401 for
+  // a token that has since been replaced (another sign-in) says nothing about the new one.
+  if (response.status === 401 && token && readToken() === token) onUnauthorized?.()
 
   const data: unknown = response.status === 204 ? undefined : await response.json().catch(() => null)
 

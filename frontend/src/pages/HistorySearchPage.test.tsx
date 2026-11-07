@@ -6,7 +6,7 @@
  * API responses are mocked with the same mockFetch helper used across the project.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +16,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
 import { devOrg, mockFetch } from '@/test/fetchMock'
+import { HistorySearchPage } from './HistorySearchPage'
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -153,6 +154,28 @@ describe('HistorySearchPage — keyword search URL sync', () => {
 
     // Debounce fires after 400 ms
     await waitFor(() => expect(router.state.location.search).toContain('q=payment'), { timeout: 1000 })
+  })
+})
+
+describe('HistorySearchPage — keyword and filter together (FR-17.1)', () => {
+  it('keeps a filter the URL gained while the keyword was still waiting to be searched', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
+      String(input) === '/api/services' ? [] : emptyPage,
+    ), { status: 200 })))
+    const router = createMemoryRouter([{ path: '/history', element: <HistorySearchPage /> }], { initialEntries: ['/history'] })
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    )
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search incidents' }), { target: { value: 'payment' } })
+    // Within the keyword's 400 ms wait, the severity filter is set (as the Severity select does).
+    await act(() => router.navigate('/history?severity=SEV1'))
+    expect(router.state.location.search).toBe('?severity=SEV1')
+
+    await waitFor(() => expect(router.state.location.search).toContain('q=payment'), { timeout: 1000 })
+    expect(router.state.location.search).toContain('severity=SEV1')
   })
 })
 

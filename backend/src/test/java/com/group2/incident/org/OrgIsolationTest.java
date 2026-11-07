@@ -87,7 +87,9 @@ class OrgIsolationTest {
 		long monitorOfB = TestOrgs.id(send(b, post("/api/monitors"), """
 				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": %d, "failureThreshold": 3, "enabled": true}""".formatted(serviceOfB)));
 		// The fallback contact becomes the assignee and gets a notification.
-		long incidentOfB = TestOrgs.id(orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing"));
+		String incidentJson = orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing");
+		long incidentOfB = TestOrgs.id(incidentJson);
+		long timelineEntryOfB = JsonPath.<Number>read(incidentJson, "$.timeline[0].id").longValue();
 		String notifications = send(b, get("/api/notifications"), null);
 		long notificationOfB = JsonPath.<Number>read(notifications, "$.notifications[0].id").longValue();
 
@@ -96,6 +98,7 @@ class OrgIsolationTest {
 		idsOfB.put("toolId", toolOfB);
 		idsOfB.put("monitorId", monitorOfB);
 		idsOfB.put("incidentId", incidentOfB);
+		idsOfB.put("entryId", timelineEntryOfB);
 		idsOfB.put("notificationId", notificationOfB);
 		// Sign-up and the service each wrote an audit entry in B.
 		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
@@ -138,7 +141,7 @@ class OrgIsolationTest {
 				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
 						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
-						"/api/incidents/{incidentId}/timeline/{incidentId}/corrections", "{\"details\":\"x\"}"),
+						"/api/incidents/{incidentId}/timeline/{entryId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
 				Arguments.of("PUT /api/monitors/{id}", HttpMethod.PUT, "/api/monitors/{monitorId}", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),

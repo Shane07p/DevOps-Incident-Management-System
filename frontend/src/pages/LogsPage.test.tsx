@@ -8,7 +8,7 @@
  *   No "All time" — from/to always present in requests.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -60,7 +60,7 @@ const sampleLogEntries = [
   },
 ]
 
-/** Canonical envelope response shape agreed with Dhruva on Issue #156. */
+/** Envelope response shape proposed to Dhruva on Issue #156. */
 const sampleLogsResponse = { logs: sampleLogEntries, total: 3 }
 
 type ExtraRoutes = Parameters<typeof mockFetch>[0]
@@ -512,5 +512,45 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
         attributes: { explicit: 'attr' },
       }),
     ).toEqual({ explicit: 'attr' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Filters set while the text waits, and a window that moves with live tail
+// ---------------------------------------------------------------------------
+describe('LogsPage — debounce and time window', () => {
+  it('keeps a level the URL gained while the typed text was still waiting', async () => {
+    const { router } = renderLogs('/logs')
+    await screen.findByRole('heading', { name: 'Logs Explorer' })
+
+    fireEvent.change(screen.getByLabelText('Search text'), { target: { value: 'timeout' } })
+    // Within the text's 400 ms wait, the level filter is set (as the Level select does).
+    await act(() => router.navigate('/logs?level=ERROR'))
+
+    await waitFor(() => expect(router.state.location.search).toContain('text=timeout'), { timeout: 1000 })
+    expect(router.state.location.search).toContain('level=ERROR')
+  })
+
+  it('asks for the last 15 minutes at each request, not since the range was picked', async () => {
+    const start = Date.parse('2026-11-08T10:00:00Z')
+    const now = vi.spyOn(Date, 'now').mockReturnValue(start)
+    try {
+      const { fetchMock } = renderLogs('/logs?timeRange=15m')
+      const froms = () => fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .filter((url) => url.startsWith('/api/telemetry/logs'))
+        .map((url) => new URL(url, 'http://localhost').searchParams.get('from'))
+      await waitFor(() => expect(froms()).toHaveLength(1))
+
+      // An hour later, the same view asks again.
+      now.mockReturnValue(start + 60 * 60_000)
+      await userEvent.click(screen.getByRole('button', { name: 'Refresh logs' }))
+      await waitFor(() => expect(froms()).toHaveLength(2))
+
+      expect(froms()).toEqual(['2026-11-08T09:45:00.000Z', '2026-11-08T10:45:00.000Z'])
+    }
+    finally {
+      now.mockRestore()
+    }
   })
 })

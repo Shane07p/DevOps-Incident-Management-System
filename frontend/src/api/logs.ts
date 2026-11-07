@@ -9,7 +9,7 @@ export const logLevelSchema = z.enum(['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']
 export type LogLevel = z.infer<typeof logLevelSchema>
 
 /**
- * Agreed contract with Dhruva / Issue #156:
+ * Contract proposed to Dhruva on #156 (not yet confirmed; change this if her API differs):
  * GET /api/telemetry/logs → { logs: LogEntry[], total: number }
  * Each LogEntry: { id: string, timestamp: ISO-8601 UTC, level: string,
  *   message: string, service: string, attributes: Record<string, unknown> }
@@ -22,8 +22,6 @@ export const logEntrySchema = z.object({
   timestamp: z.iso.datetime({ offset: true }),
   /** Backend field is `service` (matches Loki stream label). */
   service: z.string().default(''),
-  /** Convenience alias used by some adapters — optional. */
-  serviceName: z.string().optional(),
   serviceId: z.number().optional(),
   level: z.string(),
   message: z.string(),
@@ -34,7 +32,7 @@ export type LogEntry = z.infer<typeof logEntrySchema>
 
 /**
  * Enveloped response from GET /api/telemetry/logs.
- * Shape agreed on Issue #156 — single canonical shape, no union fallback.
+ * The shape proposed on #156: one shape, no union fallback.
  */
 export const logsResponseSchema = z
   .object({
@@ -56,7 +54,7 @@ export interface LogsQueryParams {
    * Loki label / JSON field filter.
    * Format: "key:value" (e.g. "orderId:42").
    * Maps to Loki: | json | <key> = "<value>"
-   * Agreed on Issue #156 with Dhruva.
+   * Proposed on #156; the backend must validate the key and escape the value.
    */
   field?: string
   from?: string

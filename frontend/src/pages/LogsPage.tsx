@@ -37,6 +37,11 @@ const LEVEL_STYLE: Record<string, string> = {
   FATAL: 'bg-sev-1-bg text-sev-1-fg font-bold',
 }
 
+/** A chosen range's `from` is the moment of the request, minus the range; an explicit `from` stays. */
+function withWindow(params: LogsQueryParams, rangeMinutes: number): LogsQueryParams {
+  return params.from ? params : { ...params, from: new Date(Date.now() - rangeMinutes * 60_000).toISOString() }
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -109,32 +114,19 @@ export function LogsPage() {
   )
 
   // ---- Debounce keyword input ----------------------------------------------
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Restarts whenever the URL changes too: a timer kept from an older render would write the text
+  // over the URL as it was then, and drop a level or service picked while it waited (as in #218).
   useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => {
-      if (inputText !== textParam) {
-        setFilters({ text: inputText })
-      }
-    }, 400)
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputText])
+    if (inputText === textParam) return
+    const timer = setTimeout(() => setFilters({ text: inputText }), 400)
+    return () => clearTimeout(timer)
+  }, [inputText, textParam, setFilters])
 
-  // ---- Compute ISO timestamps for time range (always bounded, no "All time") -
-  const { fromTimestamp, toTimestamp } = useMemo(() => {
-    if (explicitFrom) {
-      return { fromTimestamp: explicitFrom, toTimestamp: explicitTo || undefined }
-    }
-    // Always compute a bounded from/to — "All time" is intentionally removed.
-    const matchedRange = TIME_RANGES.find((r) => r.id === timeRangeParam)
-    // Default to 1-hour window when no match (guards against stale URLs).
-    const minutes = matchedRange ? matchedRange.minutes : 60
-    const from = new Date(Date.now() - minutes * 60 * 1000).toISOString()
-    return { fromTimestamp: from, toTimestamp: undefined }
-  }, [explicitFrom, explicitTo, timeRangeParam])
+  // ---- Time window (always bounded, no "All time") ---------------------------
+  // A chosen range becomes `from` when each request is sent, so live tail keeps asking for the
+  // last N minutes. Worked out once, the window would grow while the page stays open, and pass
+  // #156's 24-hour cap after a day. Unknown ranges (stale URLs) default to 1 hour.
+  const rangeMinutes = TIME_RANGES.find((r) => r.id === timeRangeParam)?.minutes ?? 60
 
   // ---- Service list for dropdown -------------------------------------------
   const services = useQuery({
@@ -143,45 +135,49 @@ export function LogsPage() {
   })
 
   // ---- Build query object --------------------------------------------------
-  // Field filter uses ?field=key:value (Loki label filter syntax agreed on #156).
-  // Text filter and field filter are independent query params.
-  const queryParams: LogsQueryParams = useMemo(
+  // Field filter uses ?field=key:value (Loki label filter syntax proposed on #156).
+  // Text filter and field filter are independent query params. `from` is left out for a chosen
+  // range; withWindow adds it at request time.
+  const request = useMemo(
     () => ({
-      serviceId: serviceId || undefined,
-      level: level || undefined,
-      text: textParam || undefined,
-      field: fieldFilter ? `${fieldFilter.key}:${fieldFilter.value}` : undefined,
-      from: fromTimestamp,
-      to: toTimestamp,
-      limit: 100,
+      params: {
+        serviceId: serviceId || undefined,
+        level: level || undefined,
+        text: textParam || undefined,
+        field: fieldFilter ? `${fieldFilter.key}:${fieldFilter.value}` : undefined,
+        from: explicitFrom || undefined,
+        to: explicitFrom ? explicitTo || undefined : undefined,
+        limit: 100,
+      } satisfies LogsQueryParams,
+      rangeMinutes,
     }),
-    [serviceId, level, textParam, fieldFilter, fromTimestamp, toTimestamp],
+    [serviceId, level, textParam, fieldFilter, explicitFrom, explicitTo, rangeMinutes],
   )
 
   // ---- Logs query with live tail polling (min 5 s to respect Loki limits) ---
   // Polling is cancelled automatically on unmount (react-query handles this via
   // the queryClient being torn down); we also cancel explicitly on filter change
-  // by keying off queryParams.
+  // by keying off the request.
   const logsQuery = useQuery({
-    queryKey: ['telemetry-logs', queryParams],
-    queryFn: () => fetchLogs(queryParams),
+    queryKey: ['telemetry-logs', request],
+    queryFn: () => fetchLogs(withWindow(request.params, request.rangeMinutes)),
     refetchInterval: liveTail ? LIVE_TAIL_INTERVAL_MS : false,
     placeholderData: (prev) => prev,
   })
 
   // Stop live tail whenever query params change to avoid stale concurrent polls.
-  const prevQueryParamsRef = useRef(queryParams)
+  const prevRequestRef = useRef(request)
   useEffect(() => {
-    if (prevQueryParamsRef.current !== queryParams) {
-      prevQueryParamsRef.current = queryParams
+    if (prevRequestRef.current !== request) {
+      prevRequestRef.current = request
       setLiveTail(false)
     }
-  }, [queryParams])
+  }, [request])
 
   // ---- Clickable JSON field handler ----------------------------------------
   // Recognized structural fields (level, serviceId) are routed to their
   // dedicated filters. All other fields are sent as ?field=key:value (Loki
-  // label filter syntax agreed with Dhruva on issue #156).
+  // label filter syntax proposed to Dhruva on issue #156).
   const handleJsonFieldClick = (key: string, val: string) => {
     const kLower = key.toLowerCase()
     if (kLower === 'level') {
@@ -480,10 +476,9 @@ export function LogsPage() {
                     <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
                       <span className="text-[11px] tnum">{formatIst(log.timestamp)}</span>
                       <LevelBadge level={log.level} />
-                      {/* Backend service field (or alias serviceName) */}
-                      {(log.service || log.serviceName) && (
+                      {log.service && (
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-sans font-medium text-foreground">
-                          {log.service || log.serviceName}
+                          {log.service}
                         </span>
                       )}
                     </div>

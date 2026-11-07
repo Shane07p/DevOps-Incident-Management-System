@@ -97,6 +97,8 @@ class IncidentRoleRaceTest {
 		long serviceId = orgs.createService(adminToken, "Role Race Service", adminId);
 		long incidentId = TestOrgs.id(orgs.declareIncident(adminToken, serviceId, "Role Race Incident"));
 
+		// Both requests come from screens that loaded the incident at this version.
+		long seen = jdbc.queryForObject("SELECT version FROM incident WHERE id = ?", Long.class, incidentId);
 		CountDownLatch secondStarted = new CountDownLatch(1);
 
 		// The first role assignment holds its transaction open after flushing its UPDATE so the second blocks on the row lock.
@@ -105,7 +107,7 @@ class IncidentRoleRaceTest {
 				MvcResult firstResult = mvc.perform(put("/api/incidents/" + incidentId + "/roles")
 								.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 								.contentType(MediaType.APPLICATION_JSON)
-								.content("{\"role\": \"COMMS\", \"userId\": " + firstAssignee + "}"))
+								.content("{\"role\": \"COMMS\", \"userId\": " + firstAssignee + ", \"expectedVersion\": " + seen + "}"))
 						.andExpect(status().isOk())
 						.andReturn();
 				assertThat(firstResult.getResponse().getStatus()).isEqualTo(200);
@@ -115,7 +117,7 @@ class IncidentRoleRaceTest {
 					return mvc.perform(put("/api/incidents/" + incidentId + "/roles")
 									.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 									.contentType(MediaType.APPLICATION_JSON)
-									.content("{\"role\": \"COMMS\", \"userId\": " + secondAssignee + "}"))
+									.content("{\"role\": \"COMMS\", \"userId\": " + secondAssignee + ", \"expectedVersion\": " + seen + "}"))
 							.andReturn();
 				});
 

@@ -56,6 +56,8 @@ public class IncidentService {
 
 	private static final int SEARCH_PAGE_SIZE = 20;
 
+	private static final String STALE_CHANGE = "This record was changed by another request; reload and try again";
+
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final ServiceCatalogService serviceCatalogService;
@@ -286,6 +288,7 @@ public class IncidentService {
 				serviceDto,
 				incident.getSeverity(),
 				incident.getStatus(),
+				incident.getVersion(),
 				reporterDto,
 				assigneeDto,
 				rolesDto,
@@ -406,6 +409,7 @@ public class IncidentService {
 		}
 
 		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
 
 		if (incident.getStatus() == IncidentStatus.CLOSED) {
 			throw new ConflictException("Cannot reassign a closed incident");
@@ -434,7 +438,7 @@ public class IncidentService {
 			incident = incidentRepository.saveAndFlush(incident);
 		}
 		catch (OptimisticLockingFailureException ex) {
-			throw new ConflictException("This record was changed by another request; reload and try again");
+			throw new ConflictException(STALE_CHANGE);
 		}
 
 		Instant now = clock.instant();
@@ -471,6 +475,7 @@ public class IncidentService {
 		}
 
 		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
 
 		if (incident.getStatus() == IncidentStatus.CLOSED) {
 			throw new ConflictException("Cannot change roles on a closed incident");
@@ -499,7 +504,7 @@ public class IncidentService {
 			incident = incidentRepository.saveAndFlush(incident);
 		}
 		catch (OptimisticLockingFailureException ex) {
-			throw new ConflictException("This record was changed by another request; reload and try again");
+			throw new ConflictException(STALE_CHANGE);
 		}
 
 		Instant now = clock.instant();
@@ -524,6 +529,17 @@ public class IncidentService {
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		return toResponse(incident, timeline);
+	}
+
+	/**
+	 * Refuses a change made from an older view of the incident, rather than applying it over a change
+	 * committed since (NFR-11.2, PROJECT_STRUCTURE section 7). The row's own version check still catches
+	 * two changes that overlap in time.
+	 */
+	private static void requireVersion(Incident incident, long expectedVersion) {
+		if (incident.getVersion() != expectedVersion) {
+			throw new ConflictException(STALE_CHANGE);
+		}
 	}
 
 	private Incident requireIncident(Long incidentId) {

@@ -8,7 +8,8 @@ import java.util.List;
 /**
  * One incident with its timeline. The assignee is the Lead (D39); {@code roles} holds Comms and Ops.
  * {@code roleWarning} is set while one person holds more than one role on a SEV1 or SEV2 incident
- * (FR-05.5), and null otherwise.
+ * (FR-05.5), and null otherwise. {@code version} goes back as {@code expectedVersion} on a change, so
+ * a change made from an out-of-date screen is refused (NFR-11.2).
  */
 public record IncidentResponse(
 		long id,
@@ -18,6 +19,7 @@ public record IncidentResponse(
 		IncidentServiceDto service,
 		Severity severity,
 		IncidentStatus status,
+		long version,
 		IncidentUserDto reporter,
 		IncidentUserDto assignee,
 		IncidentRolesDto roles,

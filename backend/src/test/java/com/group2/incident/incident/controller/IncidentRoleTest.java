@@ -126,6 +126,7 @@ class IncidentRoleTest {
 		giveRole(incident, "COMMS", engineer2, engineer1Token)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.id").value(incident.getId()))
+				.andExpect(jsonPath("$.version").value(initialVersion + 1))
 				.andExpect(jsonPath("$.assignee.id").value(engineer1.getId()))
 				.andExpect(jsonPath("$.roles.comms.id").value(engineer2.getId()))
 				.andExpect(jsonPath("$.roles.comms.displayName").value(engineer2.getDisplayName()))
@@ -220,7 +221,7 @@ class IncidentRoleTest {
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/roles")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content(roleBody("COMMS", engineer2)))
+						.content(roleBody("COMMS", engineer2, incident.getVersion())))
 				.andExpect(status().isUnauthorized());
 
 		assertThat(timeline(incident)).hasSize(timelineBefore);
@@ -339,7 +340,7 @@ class IncidentRoleTest {
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"assigneeId\": %d}".formatted(engineer2.getId())))
+						.content("{\"assigneeId\": %d, \"expectedVersion\": %d}".formatted(engineer2.getId(), currentVersion(incident))))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.assignee.id").value(engineer2.getId()))
 				.andExpect(jsonPath("$.roleWarning").value(engineer2.getDisplayName() + " holds Lead and Comms on this SEV2 incident"));
@@ -365,6 +366,21 @@ class IncidentRoleTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.roleWarning").doesNotExist())
 				.andExpect(jsonPath("$.roles.ops.id").value(engineer1.getId()));
+	}
+
+	@Test
+	@DisplayName("NFR-11.2: a role change made from an older view of the incident is refused with 409, not applied")
+	void staleRoleChangeIsRefused() throws Exception {
+		Incident incident = createIncident(Severity.SEV2, IncidentStatus.OPEN, engineer1);
+		long seen = currentVersion(incident);
+
+		// Another screen's change commits first.
+		giveRole(incident, "OPS", engineer1, adminToken, seen).andExpect(status().isOk());
+
+		giveRole(incident, "COMMS", engineer2, adminToken, seen)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("This record was changed by another request; reload and try again"));
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getComms()).isNull();
 	}
 
 	@Test
@@ -414,11 +430,20 @@ class IncidentRoleTest {
 		assertThat(notifications.count()).isEqualTo(notificationsBefore);
 	}
 
+	/** A role change made from the incident as it is now, as a screen that just loaded it would send. */
 	private ResultActions giveRole(Incident incident, String role, AppUser person, String token) throws Exception {
+		return giveRole(incident, role, person, token, currentVersion(incident));
+	}
+
+	private ResultActions giveRole(Incident incident, String role, AppUser person, String token, long expectedVersion) throws Exception {
 		return mvc.perform(put("/api/incidents/" + incident.getId() + "/roles")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(roleBody(role, person)));
+				.content(roleBody(role, person, expectedVersion)));
+	}
+
+	private long currentVersion(Incident incident) {
+		return incidents.findById(incident.getId()).orElseThrow().getVersion();
 	}
 
 	private ResultActions sendRoleBody(Incident incident, String body) throws Exception {
@@ -428,8 +453,8 @@ class IncidentRoleTest {
 				.content(body));
 	}
 
-	private static String roleBody(String role, AppUser person) {
-		return "{\"role\": \"%s\", \"userId\": %d}".formatted(role, person.getId());
+	private static String roleBody(String role, AppUser person, long expectedVersion) {
+		return "{\"role\": \"%s\", \"userId\": %d, \"expectedVersion\": %d}".formatted(role, person.getId(), expectedVersion);
 	}
 
 	private List<TimelineEntry> timeline(Incident incident) {

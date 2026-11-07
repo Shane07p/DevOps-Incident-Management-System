@@ -316,8 +316,10 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-05.3a | Equivalence | Reassign an incident | The new owner is notified; the timeline shows from, to, by, and when; no clock restarts | `ReassignTest`, `ReassignRaceTest` | Automated |
+| TC-FR-05.3b | Negative | Two screens load an incident; one reassigns it, then the other reassigns it with the version it loaded (NFR-11.2) | 409; the first reassignment stands. A request without `expectedVersion` gets 400 | `ReassignTest` | Automated |
 | TC-FR-05.4a | Equivalence | Assign or transfer the Comms or Ops role | On the timeline with actor and time | `IncidentRoleTest`, `IncidentRoleRaceTest` | Automated |
 | TC-FR-05.4b | Negative | Give the Lead role through `PUT /roles` | 400 naming `PUT /assignee`: the Lead is the assignee (D39); nothing saved | `IncidentRoleTest` | Automated |
+| TC-FR-05.4c | Negative | A role change sent with the version from before another change committed (NFR-11.2) | 409; nothing saved | `IncidentRoleTest` | Automated |
 | TC-FR-01.3a | Negative | A user with an incident role calls an Admin-only endpoint | 403: the role gives no admin rights | `IncidentRoleTest` | Automated |
 | TC-FR-05.5a | Equivalence | One person holds two roles on a SEV2, then on a SEV4 | A warning on the SEV2; none on the SEV4; both saved | `IncidentRoleTest` | Automated |
 | TC-FR-05.5b | Equivalence | Reassign a SEV2 incident to the person who holds Comms | The response warns that they hold Lead and Comms, and the incident's GET keeps showing it | `IncidentRoleTest` | Automated |

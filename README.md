@@ -13,22 +13,23 @@ the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md).
 
 ## Status
 
-Sprint 1 is complete; Sprints 2 and 3 are in progress. Each work item's issue and status is in the
+Sprint 1 is complete; Sprints 2 to 4 are in progress. Each work item's issue and status is in the
 [implementation plan](docs/plans/2026-10-17-implementation-plan.md#work-items).
 
 | Part | State |
 | --- | --- |
-| Foundations: Spring Boot 4.1, Flyway (migrations V1–V9), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
+| Foundations: Spring Boot 4.1, Flyway (migrations V1–V16), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
 | Login, roles, and user administration | Done |
-| Orgs: sign up, create an org, members by email (D48) | In review (#198) |
+| Orgs: sign up, create an org, members by email (D48) | Done (#200, #202) |
 | Service catalog with SLA targets; incidents (create, list, detail) | Done |
 | On-call schedules, with assignment at creation | Done |
 | Tool tokens, the alert webhook, deduplication and grouping, and the alert inbox | Done |
 | Rate limits on login and the alert webhook | Done |
 | Escalation policies and the escalation worker; outbox events published to RabbitMQ | Done |
-| Pages: login, home, users, tools, services, incidents, on-call, escalation policies, alerts | Done |
+| Pages: login, home, users, tools, services, incidents, on-call, escalation policies, alerts, history search | Done |
 | In-app notifications for assignments and escalations, and the bell | Done |
-| Monitors and heartbeats, acknowledgement, status and severity changes, reassignment, comments | Not started (Sprints 2 and 3) |
+| Uptime monitors (one alert per outage, recovery recorded); reassignment and incident roles; comments, evidence links, and corrections; incident search; service map and blast radius API | Done |
+| Heartbeats, acknowledgement, status and severity changes | Not started (Sprints 2 and 3) |
 | AI service: `/health`, `/ready`, `/embed` (Ollama embeddings), stub `/suggest`, log-pattern evidence | Done |
 | Demo shop v1 with five fault switches | Done |
 

@@ -1,6 +1,11 @@
 """Tests for core retail services: search, payments, and checkout."""
 
+import asyncio
+
 import pytest
+
+from demo_shop.queue import OrderQueue
+from demo_shop.services import checkout as checkout_module
 
 
 def test_health_endpoint(client):
@@ -147,3 +152,45 @@ def test_checkout_ignores_client_unit_price(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_amount"] == 199.99
+
+
+def _checkout_payload():
+    return {
+        "customer_email": "shopper@example.com",
+        "items": [{"product_id": "prod-101", "quantity": 1, "unit_price": 199.99}],
+        "payment_method": "credit_card",
+    }
+
+
+def test_checkout_with_fulfillment_full_fails_without_taking_payment(client, monkeypatch):
+    full = OrderQueue(maxsize=1)
+    asyncio.run(full.enqueue({"order_id": "already-waiting"}))
+    monkeypatch.setattr(checkout_module, "order_queue", full)
+    authorized = []
+    monkeypatch.setattr(checkout_module.payment_service, "authorize",
+                        lambda *args, **kwargs: authorized.append(args))
+
+    resp = client.post("/checkout", json=_checkout_payload())
+
+    assert resp.status_code == 503
+    assert "not placed" in resp.json()["detail"]
+    assert authorized == []
+    assert full.size == 1
+
+
+def test_checkout_fails_when_the_queue_fills_during_payment(client, monkeypatch):
+    class FillsDuringPayment(OrderQueue):
+        @property
+        def is_full(self):
+            return False
+
+        async def enqueue(self, order_data):
+            return False
+
+    monkeypatch.setattr(checkout_module, "order_queue", FillsDuringPayment())
+
+    resp = client.post("/checkout", json=_checkout_payload())
+
+    assert resp.status_code == 503
+    assert "payment will not be taken" in resp.json()["detail"]
+

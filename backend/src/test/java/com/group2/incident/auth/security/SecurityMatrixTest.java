@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -63,6 +64,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private MockMvc mvc;
+
+	@Autowired
+	private JdbcTemplate jdbc;
 
 	@Autowired
 	private AppUserRepository users;
@@ -341,14 +345,14 @@ public class SecurityMatrixTest {
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
-						"{\"assigneeId\":${ASSIGNEE_ID}}",
+						"{\"assigneeId\":${ASSIGNEE_ID},\"expectedVersion\":${INCIDENT_VERSION}}",
 						200, 200, 403, 401
 				),
 				new MatrixRow(
 						"PUT /api/incidents/{id}/roles",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/roles",
-						"{\"role\":\"COMMS\",\"userId\":${ASSIGNEE_ID}}",
+						"{\"role\":\"COMMS\",\"userId\":${ASSIGNEE_ID},\"expectedVersion\":${INCIDENT_VERSION}}",
 						200, 200, 403, 401
 				),
 				new MatrixRow(
@@ -510,7 +514,10 @@ public class SecurityMatrixTest {
 			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
 					.replace("${OWNER_ID}", adminUserId.toString())
 					.replace("${ASSIGNEE_ID}", assigneeId != null ? assigneeId.toString() : "")
-					.replace("${SERVICE_ID}", targetServiceId.toString());
+					.replace("${SERVICE_ID}", targetServiceId.toString())
+					// The version the incident has now, as a screen that just loaded it would send.
+					.replace("${INCIDENT_VERSION}", String.valueOf(jdbc.queryForObject(
+							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)));
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

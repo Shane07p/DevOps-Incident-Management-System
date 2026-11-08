@@ -153,7 +153,9 @@ class UserAdminServiceTest {
 
 		assertThat(response.role()).isEqualTo(Role.ADMIN);
 		assertThat(targetMembership.getRole()).isEqualTo(Role.ADMIN);
-		assertThat(target.getTokenVersion()).isEqualTo(1);
+		// One SQL increment, never a write of the loaded user (D21).
+		verify(users).revokeTokens(50L);
+		assertThat(target.getTokenVersion()).isZero();
 		verify(auditService).record(eq(admin), eq(AuditAction.USER_ROLE_CHANGED), eq(AuditItemType.USER), eq(50L),
 				eq("role: VIEWER → ADMIN"));
 	}

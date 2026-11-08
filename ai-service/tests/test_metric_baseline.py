@@ -6,10 +6,13 @@ PromQL explore query URLs, and scenario anomaly detection across all 5 Demo Shop
 """
 
 import json
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+import yaml
 
+from deploy_window import find_deploy_events
 from metric_baseline import (
     DEFAULT_RECORDED_METRICS,
     build_metric_query_url,
@@ -163,3 +166,37 @@ def test_find_metric_anomalies_rejects_reversed_time_window():
 def test_find_metric_anomalies_unknown_service():
     results = find_metric_anomalies("unknown-service")
     assert results == []
+
+
+def test_every_scenario_finds_expected_metric_and_deploy_evidence():
+    """Validates that for all #64 scenarios, metric and deploy evidence matches expected signals."""
+    scenarios_file = Path(__file__).resolve().parents[1] / "data" / "scenarios.yaml"
+    with scenarios_file.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    for scn in data["scenarios"]:
+        service = scn["service"]
+        expected_signals = scn["expected_signals"]
+
+        # 1. Metric evidence
+        anomalies = find_metric_anomalies(service=service)
+        assert len(anomalies) > 0, f"Expected metric anomalies for {scn['scenario_id']} on {service}"
+
+        expected_metric_text = expected_signals["metric"]
+        matching_anomaly = any(
+            anomaly["metric"] in expected_metric_text
+            or any(token in expected_metric_text for token in [anomaly["metric"], anomaly["metric"].rsplit("_", 1)[0]])
+            for anomaly in anomalies
+        )
+        assert matching_anomaly, (
+            f"Scenario {scn['scenario_id']} expected metric '{expected_metric_text}', "
+            f"found {[a['metric'] for a in anomalies]}"
+        )
+
+        # 2. Deploy event evidence
+        expected_deploy = expected_signals.get("deploy_event")
+        if expected_deploy:
+            deploys = find_deploy_events(service=service)
+            assert any(d["version"] == expected_deploy for d in deploys), (
+                f"Scenario {scn['scenario_id']} expected deploy '{expected_deploy}'"
+            )

@@ -15,7 +15,11 @@ CREATE TABLE personal_access_token (
 
 -- Token lookup across all orgs is by SHA-256 hash.
 CREATE UNIQUE INDEX pat_token_hash_idx ON personal_access_token (token_hash);
-CREATE UNIQUE INDEX uq_personal_access_token_user_name ON personal_access_token (user_id, lower(name));
+-- A name is unique among a person's active tokens in one org: a revoked name can be used again,
+-- and the same person may use one name in two orgs.
+CREATE UNIQUE INDEX uq_personal_access_token_user_name
+    ON personal_access_token (org_id, user_id, lower(name))
+    WHERE revoked_at IS NULL;
 CREATE INDEX pat_user_idx ON personal_access_token (user_id);
 CREATE INDEX pat_org_idx ON personal_access_token (org_id);
 CREATE INDEX pat_expires_at_idx ON personal_access_token (expires_at);

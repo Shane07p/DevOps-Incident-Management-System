@@ -4,6 +4,7 @@ import { AREAS, ADMIN_PAGES } from '@/app/navigation'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
 import { AlertsPage } from '@/pages/AlertsPage'
+import { AuditLogPage } from '@/pages/AuditLogPage'
 import { EscalationPage } from '@/pages/EscalationPage'
 import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
@@ -29,7 +30,7 @@ const SCREENS: Record<string, ReactNode> = {
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.
-const ADMIN_SCREENS: Record<string, ReactNode> = { '/tools': <ToolsPage />, '/users': <UsersPage /> }
+const ADMIN_SCREENS: Record<string, ReactNode> = { '/audit': <AuditLogPage />, '/tools': <ToolsPage />, '/users': <UsersPage /> }
 
 // Response screens: incidents and alerts. Open to every role; they rank above the /incidents/* and /alerts/*
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.

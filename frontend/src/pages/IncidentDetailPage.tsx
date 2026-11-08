@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
 import { getIncident, type TimelineEntry } from '@/api/incidents'
+import { listRunbooks } from '@/api/runbooks'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
@@ -54,6 +55,64 @@ function Timeline({ entries }: { entries: TimelineEntry[] }) {
 }
 
 /** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
+// Show runbooks belonging to the incident's service.
+function IncidentRunbooks({
+  serviceId,
+}: {
+  serviceId: number
+}) {
+  const runbooks = useQuery({
+    queryKey: ['runbooks', serviceId],
+    queryFn: () => listRunbooks(serviceId),
+  })
+
+  return (
+    <section
+      aria-labelledby="incident-runbooks-heading"
+      className="flex flex-col gap-3"
+    >
+      <h2
+        id="incident-runbooks-heading"
+        className="text-lg font-semibold"
+      >
+        Suggested runbooks
+      </h2>
+
+      {runbooks.isPending ? (
+        <LoadingState message="Loading runbooks" />
+      ) : runbooks.isError ? (
+        <ErrorState
+          message={runbooks.error.message}
+          onRetry={() => void runbooks.refetch()}
+        />
+      ) : runbooks.data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No runbooks available for this service.
+        </p>
+      ) : (
+        <div className="grid gap-4">
+          {runbooks.data.map((runbook) => (
+            <article
+              key={runbook.id}
+              className="rounded-lg border bg-card p-4"
+            >
+              <h3 className="font-semibold">
+                {runbook.title}
+              </h3>
+
+              <ol className="mt-3 list-decimal space-y-2 pl-6 text-sm">
+                {runbook.steps.map((step, index) => (
+                  <li key={index}>{step}</li>
+                ))}
+              </ol>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function IncidentDetailPage() {
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
@@ -109,6 +168,8 @@ export function IncidentDetailPage() {
               />
             </div>
           </section>
+
+          <IncidentRunbooks serviceId={incident.data.service.id} />
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">

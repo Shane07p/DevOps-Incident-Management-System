@@ -449,7 +449,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Automated |
 | TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Automated |
 | TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Automated |
-| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Bhakti) |
+| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `IncidentDetailPage.test.tsx` (suggested runbooks and ordered steps); `RunbooksPage.test.tsx` (Viewer/Engineer permissions) | Automated (Bhakti) |
 
 ### Logs and metrics through the backend (FR-26, FR-27, D34)
 

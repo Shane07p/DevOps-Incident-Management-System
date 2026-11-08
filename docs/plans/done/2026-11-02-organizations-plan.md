@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Part 1 of [the organizations design](2026-11-02-organizations-design.md): anyone signs up and creates an org, signs in by email, and sees only their org's data.
+**Goal:** Part 1 of [the organizations design](../2026-11-02-organizations-design.md): anyone signs up and creates an org, signs in by email, and sees only their org's data.
 
 **Architecture:** A request-scoped `OrgContext` holds the current org. Hibernate's `CurrentTenantIdentifierResolver` reads it when a session opens, and `@TenantId` on every org-owned entity adds `org_id` to every read (including `findById`) and fills it on every write. `organization`, `app_user`, and `membership` stay global; the token carries the org and the role comes from the membership.
 
@@ -2097,7 +2097,7 @@ Update the totals line (18 Must).
 
 - [ ] **Step 4: `docs/TRACEABILITY.csv` and `docs/testing/TEST_CASES.md`**: rows for FR-01.4 to FR-01.6, and a section "Orgs and sign-up (FR-01.4 to FR-01.6, D48)" listing `SignupControllerTest`, `OrgIsolationTest`, `TenantFilteringTest`, `OrganizationsMigrationTest`, `UserAdminControllerTest.theLastAdminCannotBeDemoted`, `IncidentControllerTest.eachOrgStartsAtInc1`, `AlertWebhookOrgTest`, `EscalationWorkerOrgTest`, and `SignupPage.test.tsx`, each `Automated`. Mark the FR rows Passed with the date and commit only after `./mvnw verify` and `npm test` pass on this branch.
 
-- [ ] **Step 5: `docs/PROJECT_STRUCTURE.md`**: in §1, add a line after the overview chart: "Settle is multi-tenant: anyone signs up and creates an org, and every org-owned row carries `org_id`, filtered by Hibernate (D48, [design](plans/2026-11-02-organizations-design.md))." Replace the sentence "For this single-organization prototype, …" with "Within an org, authenticated users can read shared incident records; nobody sees another org's."
+- [ ] **Step 5: `docs/PROJECT_STRUCTURE.md`**: in §1, add a line after the overview chart: "Settle is multi-tenant: anyone signs up and creates an org, and every org-owned row carries `org_id`, filtered by Hibernate (D48, [design](../2026-11-02-organizations-design.md))." Replace the sentence "For this single-organization prototype, …" with "Within an org, authenticated users can read shared incident records; nobody sees another org's."
 
 - [ ] **Step 6: Run everything once more**
 

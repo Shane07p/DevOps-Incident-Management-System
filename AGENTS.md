@@ -9,6 +9,7 @@ the one for the part you change as well as this file.
 Settle, an incident management web application for IT314 (Group 2). The specification in `docs/`
 is the source of truth: start with `docs/PROJECT_STRUCTURE.md` for the architecture and incident
 rules, and `docs/PROJECT.md` for scope and the decision log. Each issue links the parts it needs.
+`docs/README.md` lists every document and when to open it; open only what the task needs.
 
 ## Domain rules
 
@@ -96,6 +97,7 @@ git checkout <branch> && git rebase origin/main      # or: continue an existing 
    something works, run it.
 3. Affected documents in `docs/` are updated. A row in `docs/testing/TEST_CASES.md` or
    `docs/TRACEABILITY.csv` says Passed only after its check has run, with the date and commit.
+   `python scripts/check_docs.py` passes, and you have read `docs/lessons.md`.
 4. CI passes on the pull request. After every push, wait for it with `gh pr checks <n> --watch`.
    If a check fails, read its log before changing anything: `gh run list --branch <branch>` gives
    the run id, and `gh run view <run-id> --log-failed` shows the failing steps. Fix the cause, push,

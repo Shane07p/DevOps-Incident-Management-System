@@ -20,22 +20,7 @@ Interviews and an online forum post are planned. Requirements change only throug
 
 ## Documents
 
-| File | Purpose |
-| --- | --- |
-| [../README.md](../README.md) | Run, test, and deploy; live links |
-| [../AGENTS.md](../AGENTS.md) | Rules every change follows; `backend/`, `frontend/`, and `ai-service/` each add their own `AGENTS.md` |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md) | How the team works: issues, branches, pull requests, and review |
-| [PROJECT.md](PROJECT.md) | Product, scope, stack, team, and the decision log |
-| [FEATURES.md](FEATURES.md) | Every feature, how it is used, its requirement, and its sprint |
-| [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) | Architecture and the detailed incident rules |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | FRs, NFRs, and DRs (the current version; `requirements/Group-2.pdf` is the submitted one) |
-| [user-stories.md](user-stories.md) | User stories with acceptance criteria |
-| [epics-and-conflicts.md](epics-and-conflicts.md) | Epics, survey findings, and conflict resolutions |
-| [sprint-plan.md](sprint-plan.md) | Roadmap and sprint records |
-| [plans/](plans/) | The implementation plan (who builds what), plus the [AI/ML roadmap](plans/ai-ml-roadmap.md) (AI features, AI SRE, MCP server) |
-| [TESTING_AND_WORKFLOW.md](TESTING_AND_WORKFLOW.md) | How we test, track, and review work |
-| [testing/](testing/) | The [test plan](testing/TEST_PLAN.md), [test cases](testing/TEST_CASES.md), and [test report](testing/TEST_REPORT.md) |
-| [TRACEABILITY.csv](TRACEABILITY.csv) | Each FR sub-ID, its check, and its status |
+[README.md](README.md) lists every document, what it holds, and when to open it.
 
 ## Scope
 

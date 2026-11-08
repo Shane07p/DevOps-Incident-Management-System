@@ -63,7 +63,7 @@ public class PersonalAccessTokenService {
 
 	@Transactional(readOnly = true)
 	public List<PersonalAccessTokenResponse> listTokens(Long userId) {
-		return tokenRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
+		return tokenRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId).stream()
 				.map(PersonalAccessTokenResponse::from)
 				.toList();
 	}
@@ -71,7 +71,8 @@ public class PersonalAccessTokenService {
 	@Transactional
 	public CreatePersonalAccessTokenResponse createToken(CreatePersonalAccessTokenRequest request, Long userId) {
 		String name = request.name().trim();
-		if (tokenRepository.findByUserIdAndNameIgnoreCase(userId, name).isPresent()) {
+		Long orgId = OrgContext.current();
+		if (tokenRepository.findActiveByOrgIdAndUserIdAndNameIgnoreCase(orgId, userId, name).isPresent()) {
 			throw new ConflictException("Token with name '" + name + "' already exists");
 		}
 

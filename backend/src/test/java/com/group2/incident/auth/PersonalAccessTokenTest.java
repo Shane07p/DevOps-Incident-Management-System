@@ -20,19 +20,24 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.PersonalAccessToken;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.PersonalAccessTokenRepository;
+import com.group2.incident.auth.security.PersonalAccessTokenFilter;
 import com.group2.incident.auth.service.PersonalAccessTokenService;
 import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.org.entity.Membership;
+import com.group2.incident.org.entity.Organization;
 import com.group2.incident.org.repository.MembershipRepository;
+import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
+import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +46,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -70,6 +81,12 @@ class PersonalAccessTokenTest {
 
 	@Autowired
 	private AuditEntryRepository auditEntryRepository;
+
+	@Autowired
+	private OrganizationRepository organizationRepository;
+
+	@Autowired
+	private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
 	@Autowired
 	private EntityManager entityManager;
@@ -176,6 +193,70 @@ class PersonalAccessTokenTest {
 	}
 
 	@Test
+	void createToken_reuseRevokedTokenName_succeeds() throws Exception {
+		String createResp = mvc.perform(post("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\": \"ReusableToken\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+
+		Long tokenId = JsonPath.<Number>read(createResp, "$.id").longValue();
+
+		mvc.perform(delete("/api/me/tokens/" + tokenId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt))
+				.andExpect(status().isNoContent());
+
+		mvc.perform(post("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\": \"reusabletoken\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.name").value("reusabletoken"));
+	}
+
+	@Test
+	void duplicateName_afterRevocation_acceptedAtDatabaseLevel() {
+		Instant now = clock.instant();
+		String hash1 = "7777777777777777777777777777777777777777777777777777777777777777";
+		String hash2 = "8888888888888888888888888888888888888888888888888888888888888888";
+
+		PersonalAccessToken token1 = tokenRepository.saveAndFlush(
+				new PersonalAccessToken(engineer, "RevokableDb", hash1, now, now.plus(Duration.ofDays(90))));
+		token1.revoke(now);
+		tokenRepository.saveAndFlush(token1);
+
+		PersonalAccessToken token2 = tokenRepository.saveAndFlush(
+				new PersonalAccessToken(engineer, "revokabledb", hash2, now, now.plus(Duration.ofDays(90))));
+
+		assertThat(token2.getId()).isNotNull();
+	}
+
+	@Test
+	void differentOrgs_canUseSameTokenName() {
+		Instant now = clock.instant();
+		Organization otherOrg = organizationRepository.saveAndFlush(
+				new Organization("Other Org", "other-org-tokens-" + System.currentTimeMillis(), now));
+
+		String hash1 = "5555555555555555555555555555555555555555555555555555555555555555";
+		String hash2 = "6666666666666666666666666666666666666666666666666666666666666666";
+
+		PersonalAccessToken token1 = tokenRepository.saveAndFlush(
+				new PersonalAccessToken(engineer, "OrgSharedName", hash1, now, now.plus(Duration.ofDays(90))));
+
+		jdbcTemplate.update("""
+				INSERT INTO incident.personal_access_token (org_id, user_id, name, token_hash, created_at, expires_at)
+				VALUES (?, ?, ?, ?, ?, ?)
+				""", otherOrg.getId(), engineer.getId(), "orgsharedname", hash2, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now.plus(Duration.ofDays(90))));
+
+		Integer count = jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM incident.personal_access_token WHERE user_id = ? AND lower(name) = lower(?)",
+				Integer.class, engineer.getId(), "OrgSharedName");
+		assertThat(count).isEqualTo(2);
+		assertThat(token1.getId()).isNotNull();
+	}
+
+	@Test
 	void createToken_blankName_returns400BadRequest() throws Exception {
 		mvc.perform(post("/api/me/tokens")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt)
@@ -216,6 +297,31 @@ class PersonalAccessTokenTest {
 				.andExpect(jsonPath("$[1].name").value("Token-1"))
 				.andExpect(jsonPath("$[0].token").doesNotExist())
 				.andExpect(jsonPath("$[0].tokenHash").doesNotExist());
+	}
+
+	@Test
+	void listTokens_identicalCreatedAt_ordersByIdDesc() throws Exception {
+		// Verify deterministic secondary sort (IdDesc) when creation timestamps are identical
+		Instant fixedNow = clock.instant();
+		ReflectionTestUtils.setField(tokenService, "clock", Clock.fixed(fixedNow, ZoneOffset.UTC));
+
+		mvc.perform(post("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\": \"Tie-1\"}"))
+				.andExpect(status().isCreated());
+
+		mvc.perform(post("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\": \"Tie-2\"}"))
+				.andExpect(status().isCreated());
+
+		mvc.perform(get("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].name").value("Tie-2"))
+				.andExpect(jsonPath("$[1].name").value("Tie-1"));
 	}
 
 	@Test
@@ -490,6 +596,57 @@ class PersonalAccessTokenTest {
 
 		PersonalAccessToken afterUse = tokenRepository.findById(tokenId).orElseThrow();
 		assertThat(afterUse.getLastUsedAt()).isNotNull();
+	}
+
+	@Test
+	void patAuthentication_unknownToken_returns401() throws Exception {
+		String unknownToken = "pat_" + "0".repeat(64);
+
+		mvc.perform(get("/api/incidents")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + unknownToken))
+				.andExpect(status().isUnauthorized())
+				.andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer error=\"invalid_token\""))
+				.andExpect(jsonPath("$.status").value(401))
+				.andExpect(jsonPath("$.message").value("Invalid personal access token"));
+
+		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+	}
+
+	@Test
+	void patAuthentication_syntheticJwt_doesNotContainRawPat() throws Exception {
+		String createResp = mvc.perform(post("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerJwt)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\": \"JwtPrivacyTest\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+
+		Long tokenId = JsonPath.<Number>read(createResp, "$.id").longValue();
+		String rawToken = JsonPath.read(createResp, "$.token");
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/incidents");
+		request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + rawToken);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		AtomicReference<Authentication> capturedAuth = new AtomicReference<>();
+		FilterChain chain = (req, res) -> {
+			capturedAuth.set(SecurityContextHolder.getContext().getAuthentication());
+		};
+
+		PersonalAccessTokenFilter filter = new PersonalAccessTokenFilter(tokenService);
+		filter.doFilter(request, response, chain);
+
+		assertThat(capturedAuth.get()).isInstanceOf(JwtAuthenticationToken.class);
+		JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) capturedAuth.get();
+		Jwt jwt = jwtAuth.getToken();
+
+		assertThat(jwt.getTokenValue()).isEqualTo("pat-" + tokenId);
+		assertThat(jwt.getTokenValue()).doesNotContain(rawToken);
+		assertThat(jwtAuth.toString()).doesNotContain(rawToken);
+		assertThat(jwt.getClaimAsString("sub")).isEqualTo(String.valueOf(engineer.getId()));
+		assertThat(jwt.getClaimAsBoolean("pat")).isTrue();
+		assertThat(jwt.<Number>getClaim("pat_id").longValue()).isEqualTo(tokenId);
+		assertThat(jwtAuth.getAuthorities()).extracting("authority").containsExactly("ROLE_ENGINEER");
 	}
 }
 

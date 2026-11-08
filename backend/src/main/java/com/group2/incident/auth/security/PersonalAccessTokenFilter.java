@@ -52,7 +52,8 @@ public class PersonalAccessTokenFilter extends OncePerRequestFilter {
 		try {
 			ValidatedPat validated = tokenService.validateToken(rawToken);
 
-			Jwt jwt = Jwt.withTokenValue(rawToken)
+			String syntheticTokenValue = "pat-" + validated.token().getId();
+			Jwt jwt = Jwt.withTokenValue(syntheticTokenValue)
 					.header("alg", "none")
 					.subject(String.valueOf(validated.user().getId()))
 					.issuedAt(validated.token().getCreatedAt())

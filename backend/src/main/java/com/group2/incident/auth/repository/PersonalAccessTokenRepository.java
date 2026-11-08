@@ -15,12 +15,16 @@ public interface PersonalAccessTokenRepository extends JpaRepository<PersonalAcc
 	@EntityGraph(attributePaths = { "user" })
 	Optional<PersonalAccessToken> findByTokenHash(String tokenHash);
 
-	List<PersonalAccessToken> findAllByUserIdOrderByCreatedAtDesc(Long userId);
+	List<PersonalAccessToken> findAllByUserIdOrderByCreatedAtDescIdDesc(Long userId);
 
 	Optional<PersonalAccessToken> findByIdAndUserId(Long id, Long userId);
 
-	@Query("select t from PersonalAccessToken t where t.user.id = :userId and lower(t.name) = lower(:name)")
-	Optional<PersonalAccessToken> findByUserIdAndNameIgnoreCase(@Param("userId") Long userId, @Param("name") String name);
+	@Query("select t from PersonalAccessToken t where t.orgId = :orgId and t.user.id = :userId and lower(t.name) = lower(:name) and t.revokedAt is null")
+	Optional<PersonalAccessToken> findActiveByOrgIdAndUserIdAndNameIgnoreCase(
+			@Param("orgId") Long orgId,
+			@Param("userId") Long userId,
+			@Param("name") String name
+	);
 
 	@Modifying
 	@Query("update PersonalAccessToken t set t.lastUsedAt = :now where t.id = :id")

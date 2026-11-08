@@ -504,8 +504,8 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Planned (Utsav D) |
 | TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
+| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
 

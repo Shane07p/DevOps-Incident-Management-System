@@ -15,6 +15,7 @@ import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
+import { ServiceMapPage } from '@/pages/ServiceMapPage'
 import { ServicesPage } from '@/pages/ServicesPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
@@ -23,6 +24,7 @@ import { UsersPage } from '@/pages/UsersPage'
 const SCREENS: Record<string, ReactNode> = {
   '/escalation': <EscalationPage />,
   '/schedules': <SchedulesPage />,
+  '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
 }
 

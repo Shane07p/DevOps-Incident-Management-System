@@ -5,6 +5,6 @@
   },
   "fault": {
     "demo_certificate_days_until_expiry": 0,
-    "demo_ssl_errors_total": 12
+    "demo_ssl_errors_total": 15
   }
 }

@@ -7,8 +7,8 @@
   },
   "fault": {
     "demo_http_requests_total": {
-      "success_rate": 0.2,
-      "error_rate": 0.8
+      "success_rate": 0.18,
+      "error_rate": 0.82
     }
   }
 }

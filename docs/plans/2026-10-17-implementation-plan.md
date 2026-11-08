@@ -36,12 +36,12 @@ Thu 12 Nov; each issue carries its own deadline at the top of its description.
 | Person | Sprint 1 | Sprint 2 | Sprint 3 | Sprint 4 |
 | --- | --- | --- | --- | --- |
 | **Utsav B** | #47 Audit writer; #49 Service catalog API | #71 On-call schedules: assign at creation, fallback contact | #85 Escalation: policies, scheduler, outbox and RabbitMQ; #83 Acknowledge; #84 status and severity changes | #153 Audit log API; #154 Service map |
-| **Utsav D** | #50 Incidents API (with Manan) | #70 Notifications: in-app rows and the bell API | #146 On-call changes audited; #147 Disable and enable members | #155, #166 and #167 moved to Shane on 8 Nov (deadlines missed) |
+| **Utsav D** | #50 Incidents API (with Manan) | #70 Notifications: in-app rows and the bell API | #146 On-call changes audited; #147 Disable and enable members | — |
 | **Manan** | #50 Incidents API (with Utsav D) | #72 Dedup and grouping: an alert creates or joins an incident | #87 Comments and corrections | #150 pgvector; #158 History search; #159 AI-1 in the backend |
 | **Het** | #48 User admin API; creates `SecurityMatrixTest` | #68 Tool tokens, `POST /webhooks/alerts`; #69 rate limits | #86 Reassign and incident roles | #151 Personal access tokens; #152 Deploy tracking; #165 Access tokens page |
 | **Manush** | — (the monitors work is #73) | #73 Monitors from one region: a failing monitor raises an alert; #74 Heartbeats; #79 monitors and heartbeats pages | #88 Grafana checks from 2 to 3 locations; Grafana alerts into intake | — (finishing #73, #74, #79, #88) |
 | **Shlok** | #54 Services page; #55 Incident list, create form, and detail page | #80 On-call page; #81 alert inbox | #89 Incident actions; timeline with comments | #171 SLA clocks on the board; #198 Orgs and sign-up: frontend |
-| **Shane** | #53 Users page; #59 Compose and settings; merge #61 | #77 Tools page; #78 notification bell; #75 Grafana Cloud account | #90 Escalation policies page; #82 RabbitMQ hosting; sprint records (#58) | #149 Sprint 4 stories, requirements, and decisions; #197 Orgs and sign-up: backend; #160 Public status page API; #155 Runbooks API, #166 Audit log page, #167 Service map page (from Utsav D, 8 Nov) |
+| **Shane** | #53 Users page; #59 Compose and settings; merge #61 | #77 Tools page; #78 notification bell; #75 Grafana Cloud account | #90 Escalation policies page; #82 RabbitMQ hosting; sprint records (#58) | #149 Sprint 4 stories, requirements, and decisions; #197 Orgs and sign-up: backend; #160 Public status page API; #155 Runbooks API; #166 Audit log page; #167 Service map page |
 | **Himanshu** | Done (#21) | #62 Ollama embeddings; #76 demo shop v1 | #91 Agent tool loop on demo data | #162 MCP server with read tools; #163 Logs explorer and metrics dashboards; #168 History search page; #170 Similar incidents |
 | **Bhakti** | — | #63 Postmortem dataset | #92 Log-pattern evidence | #161 AI-1 retrieval evaluation; #157 Evidence links; #164 Status page on real data; #169 Incident page: deploys, logs, evidence; #172 Runbooks pages |
 | **Dhruva** | — | #64 Demo-shop scenario table | #142 Recorded demo-shop telemetry; #93 Metric-baseline and deploy-window evidence | #156 Logs and metrics API |
@@ -183,7 +183,7 @@ FR-28 in [REQUIREMENTS.md](../REQUIREMENTS.md). Each item's test cases are in
 | Deploy tracking | Het | US-19, FR-20.1 | TC-FR-20.1a to d | #152: Open |
 | Audit log API | Utsav B | US-17, FR-13 | Its own cases (PR #179) | #153: In review (PR #179) |
 | Service map: dependencies and blast radius | Utsav B | US-26, FR-14.2, FR-24 | Its own cases (PR #180) | #154: In review (PR #180) |
-| Runbooks per service | Shane (from Utsav D) | US-27, FR-25 | TC-FR-25.1a to d | #155: In review |
+| Runbooks per service | Shane | US-27, FR-25 | TC-FR-25.1a to d | #155: In review |
 | Logs and metrics API through the backend | Dhruva | US-28, US-29, FR-26, FR-27, D34 | TC-FR-26.1a to 27.1a | #156: Open |
 | Evidence links on an incident | Bhakti | FR-09.3 | TC-FR-09.3a to c | #157: Open |
 | History search | Manan | US-15, FR-17 | TC-FR-17.1a to d | #158: Open |
@@ -194,8 +194,8 @@ FR-28 in [REQUIREMENTS.md](../REQUIREMENTS.md). Each item's test cases are in
 | Logs explorer and metrics dashboards | Himanshu | US-28, US-29 | TC-FR-26.1b, 27.3a | #163: Open |
 | Public status page on real data, and posting updates | Bhakti | US-20, D45 | TC-FR-21.1c | #164: Open |
 | Access tokens page | Het | US-25 | TC-FR-23.1b | #165: Open |
-| Audit log page | Shane (from Utsav D) | US-17 | TC-US-17a, b | #166: Open |
-| Service map page | Shane (from Utsav D) | US-26 | TC-US-26a, b | #167: Open |
+| Audit log page | Shane | US-17 | TC-US-17a, b | #166: Open |
+| Service map page | Shane | US-26 | TC-US-26a, b | #167: Open |
 | History search page | Himanshu | US-15 | TC-FR-17.1e | #168: Open |
 | Incident page: deploys, logs and charts, and evidence links | Bhakti | FR-09, FR-27.2 | TC-FR-27.2a | #169: Open |
 | Similar incidents and the duplicate warning | Himanshu | US-18 | TC-FR-18.2a | #170: Open |

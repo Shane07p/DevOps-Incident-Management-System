@@ -362,6 +362,13 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-AI-64b | Negative | Checkout while the fulfillment queue is full, or fills during payment | 503 and `checkout.failed`; no payment taken when full beforehand | `test_services.py` | Automated |
 | TC-AI-64c | Boundary value | The oldest order leaves while a newer one waits | Queue lag is the newer order's wait | `test_queue.py` | Automated |
 
+### Recorded demo-shop telemetry for the five scenarios (Issue #142)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-142a | Equivalence | Every scenario in `scenarios.yaml` has a recording fixture | Recording exists with `logs.jsonl`, `metrics.json`, `deploy_events.json`, `metadata.json`, under 1 MB | `test_recordings.py::test_every_scenario_has_a_recording` | Automated |
+| TC-AI-142b | Equivalence | Each recording fault window shows expected changes | SCN-01 latency spikes, SCN-02 error rate rises, SCN-03 deploy event, SCN-04 queue depth grows, SCN-05 cert expires | `test_recordings.py` | Automated |
+
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |

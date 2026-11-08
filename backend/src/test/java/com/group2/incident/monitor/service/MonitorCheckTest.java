@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -228,6 +229,37 @@ class MonitorCheckTest {
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM monitor_check_result WHERE monitor_id = ?", Integer.class, monitorId))
 				.isZero();
 		assertThat(failuresInARow()).isZero();
+	}
+
+	@Test
+	@DisplayName("A monitor moved to another service during an outage alerts there, and leaves the old alert unrecovered")
+	void movingToAnotherServiceStartsAfresh() throws Exception {
+		check(DOWN);
+		check(DOWN);
+		check(DOWN);
+		long oldService = serviceId;
+		assertThat(alerts()).isEqualTo(1);
+
+		serviceId = orgs.createService(org.adminToken(), "Checkout " + ++servicesCreated, org.adminId());
+		mvc.perform(put("/api/monitors/{id}", monitorId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(monitorBody("https://203.0.113.10/health", 3)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.consecutiveFailures").value(0))
+				.andExpect(jsonPath("$.activeAlertId").doesNotExist());
+
+		check(DOWN);
+		check(DOWN);
+		assertThat(alerts()).isZero();
+		check(DOWN);
+		assertThat(alerts()).isEqualTo(1);
+		assertThat(incidents()).isEqualTo(1);
+
+		// The new service's pass recovers its own alert, not the old service's.
+		check(UP);
+		assertThat(jdbc.queryForObject("SELECT recovered_at FROM alert WHERE service_id = ?", Timestamp.class, serviceId)).isNotNull();
+		assertThat(jdbc.queryForObject("SELECT recovered_at FROM alert WHERE service_id = ?", Timestamp.class, oldService)).isNull();
 	}
 
 	/** One check of this test's monitor at the time it is due, answering {@code outcome}. */

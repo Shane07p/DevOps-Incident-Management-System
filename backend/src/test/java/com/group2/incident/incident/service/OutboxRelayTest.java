@@ -2,6 +2,7 @@ package com.group2.incident.incident.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 
 import com.group2.incident.common.config.MessagingConfig;
@@ -22,6 +23,7 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -115,7 +117,21 @@ class OutboxRelayTest {
 	@Test
 	void anEventTheBrokerDoesNotConfirmStaysPending() {
 		Outbox event = outbox.saveAndFlush(new Outbox("INCIDENT", 9L, "INCIDENT_ESCALATED", "{\"incidentId\":9}", clock.instant()));
-		doThrow(new AmqpConnectException(new ConnectException("RabbitMQ is down"))).when(rabbitTemplate).invoke(any());
+		doThrow(new AmqpConnectException(new ConnectException("RabbitMQ is down")))
+				.when(rabbitTemplate).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
+
+		assertThat(relay.relayOnce()).isZero();
+
+		Outbox after = outbox.findById(event.getId()).orElseThrow();
+		assertThat(after.getStatus()).isEqualTo(OutboxStatus.PENDING);
+		assertThat(after.getProcessedAt()).isNull();
+	}
+
+	@Test
+	void anEventNoQueueTakesStaysPending() {
+		// The exchange is there, but no consumer has bound a queue: RabbitMQ confirms, then drops it.
+		admin.deleteQueue(consumer.getName());
+		Outbox event = outbox.saveAndFlush(new Outbox("INCIDENT", 9L, "INCIDENT_ESCALATED", "{\"incidentId\":9}", clock.instant()));
 
 		assertThat(relay.relayOnce()).isZero();
 

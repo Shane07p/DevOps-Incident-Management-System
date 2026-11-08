@@ -231,11 +231,16 @@ def query_deploy_events(
 
 
 # Recorded Demo Shop metric baselines and anomalies matching the 5 fault scenarios (SCN-01 to SCN-05)
+# Each observation carries when it was seen, inside its own scenario's window, so a query for one
+# incident's time range returns that incident's evidence and not another scenario's. SCN-01's falls
+# within its recording (demo_shop_slow_gateway.jsonl); the others stand apart until #142's recordings
+# replace these hand-written values.
 DEMO_SHOP_RECORDED_METRICS = {
     "payments": [
         {
             "metric": "demo_http_request_duration_seconds",
             "scenario_id": "SCN-01",
+            "observed_at": "2026-10-27T08:15:40Z",
             "observation": "p99 latency 2001.93ms (normal baseline < 50ms, SLA threshold 1500ms)",
             "normal_value": 25.0,
             "incident_value": 2001.93,
@@ -245,6 +250,7 @@ DEMO_SHOP_RECORDED_METRICS = {
         {
             "metric": "demo_certificate_days_until_expiry",
             "scenario_id": "SCN-05",
+            "observed_at": "2026-10-30T10:00:00Z",
             "observation": "TLS certificate expiry dropped to 0 days (normal baseline 90 days)",
             "normal_value": 90.0,
             "incident_value": 0.0,
@@ -254,6 +260,7 @@ DEMO_SHOP_RECORDED_METRICS = {
         {
             "metric": "demo_ssl_errors_total",
             "scenario_id": "SCN-05",
+            "observed_at": "2026-10-30T10:00:05Z",
             "observation": "SSL handshake errors counter incremented to 1 (normal baseline 0)",
             "normal_value": 0.0,
             "incident_value": 1.0,
@@ -265,6 +272,7 @@ DEMO_SHOP_RECORDED_METRICS = {
         {
             "metric": "demo_http_requests_total_5xx",
             "scenario_id": "SCN-02",
+            "observed_at": "2026-10-28T10:00:00Z",
             "observation": "Checkout failure rate spiked to 80% with simulated database deadlocks (normal baseline < 0.1%)",
             "normal_value": 0.001,
             "incident_value": 0.80,
@@ -276,6 +284,7 @@ DEMO_SHOP_RECORDED_METRICS = {
         {
             "metric": "demo_queue_depth",
             "scenario_id": "SCN-04",
+            "observed_at": "2026-10-29T10:00:00Z",
             "observation": "Order fulfillment queue worker paused, backlog accumulated to 42 orders (normal baseline 0-1)",
             "normal_value": 0.0,
             "incident_value": 42.0,
@@ -293,12 +302,27 @@ def query_metric_anomalies(
     end_time: Optional[str] = None,
 ) -> ToolResult:
     """
-    Query recorded metric baselines vs anomalous values for the target service.
+    Query recorded metric baselines vs anomalous values for the target service, observed within an
+    optional time range, as query_deploy_events does.
     """
+    try:
+        start_dt = parse_time(start_time) if start_time else None
+        end_dt = parse_time(end_time) if end_time else None
+    except Exception as exc:
+        return ToolResult(
+            tool_name="query_metric_anomalies",
+            success=False,
+            error=f"Invalid timestamp format: {exc}",
+        )
+
     service_key = service.lower()
     metrics = DEMO_SHOP_RECORDED_METRICS.get(service_key, [])
     if metric_name:
         metrics = [m for m in metrics if m["metric"].lower() == metric_name.lower()]
+    if start_dt:
+        metrics = [m for m in metrics if parse_time(m["observed_at"]) >= start_dt]
+    if end_dt:
+        metrics = [m for m in metrics if parse_time(m["observed_at"]) <= end_dt]
 
     evidence_items: List[EvidenceItem] = []
     for idx, m in enumerate(metrics):

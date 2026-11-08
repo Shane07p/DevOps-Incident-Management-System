@@ -8,6 +8,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,6 +36,21 @@ class HttpProbeTest {
 		server.createContext("/moved", exchange -> {
 			exchange.getResponseHeaders().add("Location", "http://203.0.113.10/elsewhere");
 			answer(exchange, 302);
+		});
+		// Answers at once, then keeps sending a byte every half second for up to 15 seconds.
+		server.createContext("/streaming", exchange -> {
+			requests.incrementAndGet();
+			exchange.sendResponseHeaders(200, 0);
+			try (var body = exchange.getResponseBody()) {
+				for (int i = 0; i < 30; i++) {
+					body.write('x');
+					body.flush();
+					Thread.sleep(500);
+				}
+			}
+			catch (IOException | InterruptedException e) {
+				// The probe closed the connection: what this stub is for.
+			}
 		});
 		server.start();
 		base = "http://127.0.0.1:" + server.getAddress().getPort();
@@ -72,6 +88,17 @@ class HttpProbeTest {
 
 		assertThat(outcome.success()).isFalse();
 		assertThat(outcome.statusCode()).isEqualTo(302);
+	}
+
+	@Test
+	@DisplayName("A body that keeps coming does not hold the check: the status decides as soon as it arrives")
+	void streamingBodyDoesNotHoldTheCheck() {
+		long started = System.nanoTime();
+
+		ProbeOutcome outcome = probe(true).probe(base + "/streaming", 200);
+
+		assertThat(outcome.success()).isTrue();
+		assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(5));
 	}
 
 	@Test

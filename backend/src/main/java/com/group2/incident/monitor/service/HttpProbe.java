@@ -2,6 +2,7 @@ package com.group2.incident.monitor.service;
 
 import com.group2.incident.common.error.FieldValidationException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -9,6 +10,10 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -51,23 +56,46 @@ public class HttpProbe {
 				.GET()
 				.build();
 		long started = clock.millis();
+		// The whole call, DNS to headers, has one deadline, so no target can hold the worker longer.
+		CompletableFuture<HttpResponse<InputStream>> call = client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream());
 		try {
-			int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+			HttpResponse<InputStream> response = call.get(REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			// Only the status matters. Closing the body unread stops the download, so a slow or endless
+			// body cannot keep the check running after the headers have arrived.
+			response.body().close();
+			int status = response.statusCode();
 			long elapsed = clock.millis() - started;
 			if (status == expectedStatus) {
 				return ProbeOutcome.passed(status, elapsed);
 			}
 			return ProbeOutcome.failed(status, elapsed, "Expected HTTP " + expectedStatus + ", got " + status);
 		}
-		catch (HttpTimeoutException e) {
-			return ProbeOutcome.failed(null, clock.millis() - started, "No answer within " + REQUEST_TIMEOUT.toSeconds() + " seconds");
+		catch (TimeoutException e) {
+			call.cancel(true);
+			return timedOut(started);
+		}
+		catch (ExecutionException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof HttpTimeoutException) {
+				return timedOut(started);
+			}
+			return couldNotConnect(cause != null ? cause : e);
 		}
 		catch (IOException e) {
-			return ProbeOutcome.failed(null, null, "Could not connect: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+			return couldNotConnect(e);
 		}
 		catch (InterruptedException e) {
+			call.cancel(true);
 			Thread.currentThread().interrupt();
 			return ProbeOutcome.failed(null, null, "The check was interrupted");
 		}
+	}
+
+	private ProbeOutcome timedOut(long started) {
+		return ProbeOutcome.failed(null, clock.millis() - started, "No answer within " + REQUEST_TIMEOUT.toSeconds() + " seconds");
+	}
+
+	private static ProbeOutcome couldNotConnect(Throwable e) {
+		return ProbeOutcome.failed(null, null, "Could not connect: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
 	}
 }

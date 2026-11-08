@@ -19,7 +19,6 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -84,19 +83,12 @@ public class IncidentController {
 	}
 
 	@PutMapping("/{id}/roles")
-	@Operation(summary = "Assign or transfer an incident role (LEAD, COMMS, OPS)")
-	public ResponseEntity<IncidentResponse> assignRole(
+	@Operation(summary = "Give the Comms or Ops role to a person; the Lead is the assignee")
+	public IncidentResponse assignRole(
 			@PathVariable Long id,
 			@Valid @RequestBody AssignRoleRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		Long actorId = Long.parseLong(jwt.getSubject());
-		IncidentResponse response = incidentService.assignRole(id, request, actorId);
-		var responseBuilder = ResponseEntity.ok();
-		if (response.warning() != null) {
-			responseBuilder.header("X-Warning", response.warning())
-					.header("Warning", "299 - \"" + response.warning() + "\"");
-		}
-		return responseBuilder.body(response);
+		return incidentService.assignRole(id, request, Long.parseLong(jwt.getSubject()));
 	}
 
 	/** Adds a separate timeline entry without changing the incident version or status. */

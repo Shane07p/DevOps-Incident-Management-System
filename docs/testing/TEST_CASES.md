@@ -441,10 +441,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Planned (Utsav D) |
-| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Planned (Utsav D) |
-| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Planned (Utsav D) |
-| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Planned (Utsav D) |
+| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Automated |
+| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Automated |
+| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Automated |
+| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Automated |
 | TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Bhakti) |
 
 ### Logs and metrics through the backend (FR-26, FR-27, D34)

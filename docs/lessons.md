@@ -45,3 +45,7 @@ Rule: just before merging, check the highest `V` on `main`. A migration not yet 
 ## 2026-11-08 · Secrets only where they are needed
 Seen in: #219. The raw personal access token sat in the security context for the whole request.
 Rule: once a credential is checked, carry its id, not its value.
+
+## 2026-11-09 · Hand-written data again, now a rule
+Seen in: #224, after #215. Metric and deploy evidence came from values typed into the code, not the recordings merged in #215.
+Rule: promoted to `ai-service/AGENTS.md` ("Evidence comes from the recordings").

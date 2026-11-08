@@ -2,11 +2,11 @@
 
 ## How to use this file
 
-This is the **current requirements baseline**. [`requirements/Group-2.pdf`](requirements/Group-2.pdf) is
+This is the **current requirements baseline**. [`requirements/Group-2.pdf`](Group-2.pdf) is
 the version we submitted; where the two differ, this file wins (D30).
 
 - **IDs never change.** A requirement that is merged or moved keeps its ID and says where it went,
-  so links from `TRACEABILITY.csv`, the user stories, and the plans keep working. New requirements
+  so links from `traceability.csv`, the user stories, and the plans keep working. New requirements
   take the next free number. Every change is listed at the end.
 - **Priority** is Must, Should, or Could. A sub-requirement's own priority overrides its parent's.
 - User stories are in [user-stories.md](user-stories.md); survey findings and conflict resolutions
@@ -182,7 +182,7 @@ Targets marked *proposed* are starting points, to be confirmed after the first l
 
 ### NFR-03 Capacity
 - **NFR-03.1** The system shall support one organization with at least 10 concurrent users, 50 services, and 10,000 stored incidents. *(proposed)*
-- **NFR-03.2** *Moved to TESTING_AND_WORKFLOW.md (how capacity is tested).*
+- **NFR-03.2** *Moved to testing-and-workflow.md (how capacity is tested).*
 
 ### NFR-04 Security
 - **NFR-04.1** Passwords shall be stored as salted hashes, and the server shall check permissions on every protected operation.
@@ -197,7 +197,7 @@ Targets marked *proposed* are starting points, to be confirmed after the first l
 ### NFR-06 Usability
 - **NFR-06.1** The incident list shall clearly show severity, status, owner, and SLA state.
 - **NFR-06.2** Forms shall identify missing or invalid fields. Severity shall be shown with a label or symbol as well as colour.
-- **NFR-06.3** *Moved to TESTING_AND_WORKFLOW.md (usability reviews with users).*
+- **NFR-06.3** *Moved to testing-and-workflow.md (usability reviews with users).*
 
 ### NFR-07 Maintainability
 - **NFR-07.1** Authentication, incident handling, notifications, and reporting shall be separate modules.
@@ -210,7 +210,7 @@ Targets marked *proposed* are starting points, to be confirmed after the first l
 
 ### NFR-09 Browser compatibility
 - **NFR-09.1** Core workflows shall work in current desktop Chrome and Firefox.
-- **NFR-09.2** *Moved to TESTING_AND_WORKFLOW.md (recording tested versions).*
+- **NFR-09.2** *Moved to testing-and-workflow.md (recording tested versions).*
 
 ### NFR-10 Backup and recovery
 - **NFR-10.1** There shall be a documented manual backup and restore procedure, proven by restoring a test backup.
@@ -226,8 +226,8 @@ Targets marked *proposed* are starting points, to be confirmed after the first l
 
 ### NFR-13 Testing
 - **NFR-13.1** *Merged into DR-10.2.*
-- **NFR-13.2** *Moved to TESTING_AND_WORKFLOW.md.*
-- **NFR-13.3** *Moved to TESTING_AND_WORKFLOW.md.*
+- **NFR-13.2** *Moved to testing-and-workflow.md.*
+- **NFR-13.3** *Moved to testing-and-workflow.md.*
 
 ### NFR-14 Live updates (applies with FR-12.3)
 - **NFR-14.1** Connected boards shall show saved changes without a manual refresh.
@@ -307,14 +307,14 @@ SEV1 critical service or business impact · SEV2 high impact needing urgent atte
 | FR-07.5 | Says escalation never acknowledges or resolves | Absorbs DR-09.4 |
 | FR-07.7 | Reworded as behaviour | Was written as an implementation step |
 | FR-09.3 | **New:** evidence links | Survey: resolvers look at logs first (epics §4.2) |
-| FR-23 to FR-28 | **New:** personal access tokens, service map and blast radius, runbooks, logs explorer, metrics dashboards, MCP server | Sprint 4 features that were *New* in FEATURES.md (#149) |
+| FR-23 to FR-28 | **New:** personal access tokens, service map and blast radius, runbooks, logs explorer, metrics dashboards, MCP server | Sprint 4 features that were *New* in features.md (#149) |
 | FR-10.3 | Merged into FR-11.3 | Same as action items |
 | FR-11.3 | Covers corrective and preventive actions | Absorbs FR-10.3 |
 | FR-18.1 | "Local" → "self-hosted" | D28 |
 | FR-20, FR-21 | Deferred → Should and Could | Match the submitted PDF and user stories US-19, US-20 |
 | FR-22 | **Should → Must**; recovery never auto-resolves | The project brief lists "monitor service health" (D29) |
 | NFR-01, NFR-03 | Measurable, proposed targets | "Shall be measured" can't pass or fail |
-| NFR-03.2, 06.3, 09.2, 13.2, 13.3 | Moved to TESTING_AND_WORKFLOW.md | They describe how we test, not the system |
+| NFR-03.2, 06.3, 09.2, 13.2, 13.3 | Moved to testing-and-workflow.md | They describe how we test, not the system |
 | NFR-08.3, NFR-10.2 | Moved to Out of scope | They were scope notes |
 | NFR-12.1 | Self-hosted through Ollama; no external AI providers | D28 |
 | NFR-13.1 | Merged into DR-10.2 | Same rule |

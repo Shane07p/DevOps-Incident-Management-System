@@ -7,8 +7,9 @@ the one for the part you change as well as this file.
 ## The project
 
 Settle, an incident management web application for IT314 (Group 2). The specification in `docs/`
-is the source of truth: start with `docs/PROJECT_STRUCTURE.md` for the architecture and incident
-rules, and `docs/PROJECT.md` for scope and the decision log. Each issue links the parts it needs.
+is the source of truth: start with `docs/2-design/architecture.md` for the architecture and
+incident rules, and `docs/3-project-management/project.md` for scope and the decision log. Each
+issue links the parts it needs.
 `docs/README.md` lists every document and when to open it; open only what the task needs.
 
 ## Domain rules
@@ -42,8 +43,8 @@ These come from the design documents. Breaking one silently breaks a planned tes
 
 ## Decisions
 
-If a change depends on an Open decision in the `docs/PROJECT.md` log, record it there first, with
-its date and reference. Do not quietly invent the answer.
+If a change depends on an Open decision in the `docs/3-project-management/project.md` log, record
+it there first, with its date and reference. Do not quietly invent the answer.
 
 ## Secrets and deployment
 
@@ -95,8 +96,8 @@ git checkout <branch> && git rebase origin/main      # or: continue an existing 
 1. The acceptance criteria of the issue are met.
 2. The tests for the part you changed pass, and you have read the output. Before claiming
    something works, run it.
-3. Affected documents in `docs/` are updated. A row in `docs/testing/TEST_CASES.md` or
-   `docs/TRACEABILITY.csv` says Passed only after its check has run, with the date and commit.
+3. Affected documents in `docs/` are updated. A row in `docs/4-testing/test-cases.md` or
+   `docs/4-testing/traceability.csv` says Passed only after its check has run, with the date and commit.
    `python scripts/check_docs.py` passes, and you have read `docs/lessons.md`.
 4. CI passes on the pull request. After every push, wait for it with `gh pr checks <n> --watch`.
    If a check fails, read its log before changing anything: `gh run list --branch <branch>` gives

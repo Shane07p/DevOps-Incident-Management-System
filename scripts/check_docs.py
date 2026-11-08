@@ -4,8 +4,8 @@ Docs lint: keeps the documents agents and people rely on from drifting.
 
 Fails when
   1. a relative link or #anchor in a tracked Markdown file points nowhere;
-  2. a "Passed" row in docs/TRACEABILITY.csv lacks the date and commit it passed on (AGENTS.md);
-  3. docs/TRACEABILITY.csv names a test case ID that docs/testing/TEST_CASES.md has no row for.
+  2. a "Passed" row in docs/4-testing/traceability.csv lacks the date and commit it passed on (AGENTS.md);
+  3. docs/4-testing/traceability.csv names a test case ID that docs/4-testing/test-cases.md has no row for.
 
 Standard library only. Run from anywhere: python scripts/check_docs.py
 """
@@ -21,8 +21,8 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
-TRACEABILITY = ROOT / "docs" / "TRACEABILITY.csv"
-TEST_CASES = ROOT / "docs" / "testing" / "TEST_CASES.md"
+TRACEABILITY = ROOT / "docs" / "4-testing" / "traceability.csv"
+TEST_CASES = ROOT / "docs" / "4-testing" / "test-cases.md"
 
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 IMAGE = re.compile(r"!\[[^\]]*\]\(\s*<?([^)\s>]+)>?\s*\)")
@@ -106,12 +106,12 @@ def check_traceability() -> list[str]:
     with TRACEABILITY.open(encoding="utf-8", newline="") as handle:
         for line, row in enumerate(csv.DictReader(handle), start=2):
             status = row.get("Status", "")
-            where = f"docs/TRACEABILITY.csv:{line}"
+            where = f"docs/4-testing/traceability.csv:{line}"
             if status.startswith("Passed") and not PASSED_PROOF.search(status):
                 problems.append(f"{where}: \"{status}\" needs the date and commit it passed on, as Passed (YYYY-MM-DD, <commit>)")
             for test_case in TEST_CASE_ID.findall(row.get("Planned check", "")):
                 if test_case not in known:
-                    problems.append(f"{where}: {test_case} has no row in docs/testing/TEST_CASES.md")
+                    problems.append(f"{where}: {test_case} has no row in docs/4-testing/test-cases.md")
     return problems
 
 

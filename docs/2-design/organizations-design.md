@@ -166,4 +166,4 @@ starts empty and the first sign-up creates the first real org. `BOOTSTRAP_ADMIN_
   belongs to a membership), #159 (the vector query filters by org), and #147 (disabling acts on the
   membership). The others are scoped automatically.
 - **Documents:** D48 in the decision log; a user story US-31 (sign up and create an org); new FR-01
-  sub-requirements; PROJECT_STRUCTURE §1 and the HLD show orgs; the README's sign-in instructions.
+  sub-requirements; architecture.md §1 and the HLD show orgs; the README's sign-in instructions.

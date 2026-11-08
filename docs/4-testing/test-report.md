@@ -1,7 +1,7 @@
 # Test Report
 
 Real results only, one section per sprint, written at the end of the sprint (#58). The
-[test plan](TEST_PLAN.md) says what is run; the [test cases](TEST_CASES.md) say what each test checks.
+[test plan](test-plan.md) says what is run; the [test cases](test-cases.md) say what each test checks.
 
 Every number names where it came from: a CI run link, or a local run with its date and commit.
 
@@ -12,7 +12,7 @@ Every number names where it came from: a CI run link, or a local run with its da
 | Automated tests | Tests run, passed, failed, and skipped for the backend, frontend, and AI service | The CI run on `main` at the end of the sprint |
 | Coverage | Backend line and branch coverage (JaCoCo); frontend statement, branch, and line coverage (Vitest) | The `backend-coverage` and `frontend-coverage` artifacts |
 | Mutation | PIT mutation score on the transition and SLA classes, and the surviving mutants worth fixing | `./mvnw test-compile org.pitest:pitest-maven:mutationCoverage`, then `target/pit-reports/` |
-| Test cases | Cases planned for the sprint: passed, failed, or not run, with reasons | [TEST_CASES.md](TEST_CASES.md) and the test results |
+| Test cases | Cases planned for the sprint: passed, failed, or not run, with reasons | [test-cases.md](test-cases.md) and the test results |
 | Manual demo | The steps, Pass or Fail per step, and the Chrome and Firefox versions | The demo run |
 | Defects | Bugs found in the sprint, with their issue links and status | GitHub issues labelled `bug` |
 | Notes | What the results show, and what to improve next sprint | |

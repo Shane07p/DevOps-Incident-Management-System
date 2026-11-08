@@ -1,19 +1,19 @@
 # Test Plan
 
 How Settle is tested in Sprints 1 to 3, who does it, and when a change counts as tested. The test
-cases are in [TEST_CASES.md](TEST_CASES.md), the results in [TEST_REPORT.md](TEST_REPORT.md), and
-the requirement-to-test map in [TRACEABILITY.csv](../TRACEABILITY.csv).
+cases are in [test-cases.md](test-cases.md), the results in [test-report.md](test-report.md), and
+the requirement-to-test map in [traceability.csv](traceability.csv).
 
 ## 1. Scope
 
 **In scope:** the features of Sprints 1 to 3 in the
-[implementation plan](../plans/2026-10-17-implementation-plan.md): users and roles, the service
+[implementation plan](../3-project-management/implementation-plan.md): users and roles, the service
 catalog, incidents, SLA clocks, alert intake and deduplication, on-call, notifications, monitors and
 heartbeats, acknowledgement, status and severity changes, escalation, reassignment and roles,
 comments and corrections, and rate limits.
 
 **Not in scope yet:** features of Sprints 4 to 6, the quality of AI answers (measured in the
-[AI/ML roadmap](../plans/ai-ml-roadmap.md#data-and-evaluation)), and load testing, which runs in
+[AI/ML roadmap](../2-design/ai-ml-roadmap.md#data-and-evaluation)), and load testing, which runs in
 Sprint 6.
 
 ## 2. Test levels
@@ -35,7 +35,7 @@ at three levels (see the [testing table in backend/AGENTS.md](../../backend/AGEN
 
 ## 3. Test design techniques
 
-Every test case in [TEST_CASES.md](TEST_CASES.md) names the technique used to choose it.
+Every test case in [test-cases.md](test-cases.md) names the technique used to choose it.
 
 | Technique | Used for |
 | --- | --- |
@@ -76,8 +76,8 @@ issue lists the test case IDs it must automate.
 1. Every test case planned for the sprint passes, or has an open defect and a reason.
 2. The sprint demo passed in Chrome and Firefox, with the versions recorded.
 3. PIT has run on the rule classes and its score is recorded.
-4. The sprint's section in [TEST_REPORT.md](TEST_REPORT.md) and the rows in
-   [TRACEABILITY.csv](../TRACEABILITY.csv) are updated with real results only.
+4. The sprint's section in [test-report.md](test-report.md) and the rows in
+   [traceability.csv](traceability.csv) are updated with real results only.
 
 ## 6. Responsibilities
 
@@ -110,9 +110,9 @@ issue lists the test case IDs it must automate.
 | Deliverable | Where |
 | --- | --- |
 | Test plan | This file |
-| Test cases | [TEST_CASES.md](TEST_CASES.md) |
-| Test report per sprint | [TEST_REPORT.md](TEST_REPORT.md) |
-| Requirement-to-test map | [TRACEABILITY.csv](../TRACEABILITY.csv) |
+| Test cases | [test-cases.md](test-cases.md) |
+| Test report per sprint | [test-report.md](test-report.md) |
+| Requirement-to-test map | [traceability.csv](traceability.csv) |
 | Test, coverage, and mutation reports | CI artifacts: `backend-test-reports`, `backend-coverage`, `frontend-coverage`; PIT's HTML report |
 
 ## 10. Risks

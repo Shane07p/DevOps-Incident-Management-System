@@ -362,6 +362,13 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-AI-64b | Negative | Checkout while the fulfillment queue is full, or fills during payment | 503 and `checkout.failed`; no payment taken when full beforehand | `test_services.py` | Automated |
 | TC-AI-64c | Boundary value | The oldest order leaves while a newer one waits | Queue lag is the newer order's wait | `test_queue.py` | Automated |
 
+### Recorded demo-shop telemetry for the five scenarios (Issue #142)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-142a | Equivalence | Every scenario in `scenarios.yaml` has a recording fixture | Recording exists with `logs.jsonl`, `metrics.json`, `deploy_events.json`, `metadata.json`, under 1 MB | `test_recordings.py::test_every_scenario_has_a_recording` | Automated |
+| TC-AI-142b | Equivalence | Each recording fault window shows expected changes | SCN-01 latency spikes, SCN-02 error rate rises, SCN-03 deploy event, SCN-04 queue depth grows, SCN-05 cert expires | `test_recordings.py` | Automated |
+
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -438,10 +445,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Planned (Utsav D) |
-| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Planned (Utsav D) |
-| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Planned (Utsav D) |
-| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Planned (Utsav D) |
+| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Automated |
+| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Automated |
+| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Automated |
+| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Automated |
 | TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Bhakti) |
 
 ### Logs and metrics through the backend (FR-26, FR-27, D34)
@@ -506,10 +513,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Planned (Utsav D) |
-| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
+| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Automated |
+| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
+| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
 

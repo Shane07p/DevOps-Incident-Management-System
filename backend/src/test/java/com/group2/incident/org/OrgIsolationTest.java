@@ -102,6 +102,8 @@ class OrgIsolationTest {
 		idsOfB.put("notificationId", notificationOfB);
 		long tokenOfB = TestOrgs.id(send(b, post("/api/me/tokens"), "{\"name\":\"TokenOfB\"}"));
 		idsOfB.put("tokenId", tokenOfB);
+		idsOfB.put("runbookId", TestOrgs.id(send(b, post("/api/services/{id}/runbooks", serviceOfB),
+				"{\"title\": \"Restart\", \"steps\": [\"Restart the service\"]}")));
 		// Sign-up and the service each wrote an audit entry in B.
 		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
 	}
@@ -149,6 +151,11 @@ class OrgIsolationTest {
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),
 				Arguments.of("POST /api/notifications/{id}/read", HttpMethod.POST, "/api/notifications/{notificationId}/read", null),
 				Arguments.of("DELETE /api/me/tokens/{id}", HttpMethod.DELETE, "/api/me/tokens/{tokenId}", null),
+				Arguments.of("GET /api/services/{id}/runbooks", HttpMethod.GET, "/api/services/{serviceId}/runbooks", null),
+				Arguments.of("POST /api/services/{id}/runbooks", HttpMethod.POST, "/api/services/{serviceId}/runbooks",
+						"{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
+				Arguments.of("PUT /api/runbooks/{id}", HttpMethod.PUT, "/api/runbooks/{runbookId}", "{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
+				Arguments.of("DELETE /api/runbooks/{id}", HttpMethod.DELETE, "/api/runbooks/{runbookId}", null),
 				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"));
 	}
 

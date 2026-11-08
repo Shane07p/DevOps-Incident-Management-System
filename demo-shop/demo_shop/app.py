@@ -291,3 +291,19 @@ async def stop_traffic() -> dict:
 @app.get("/traffic/status", response_model=TrafficStatusResponse, summary="Get traffic generator progress")
 def traffic_status() -> TrafficStatusResponse:
     return traffic_generator.get_status()
+
+
+# ---------------------------------------------------------------------------
+# Structured Telemetry Logs Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/telemetry/logs", summary="Get recorded structured logs")
+def get_telemetry_logs(since: Optional[str] = None) -> List[dict]:
+    return StructuredLogger.get_logs(since=since)
+
+
+@app.post("/telemetry/logs/clear", summary="Clear structured logs buffer")
+def clear_telemetry_logs() -> dict:
+    StructuredLogger.clear_logs()
+    return {"status": "ok"}
+

@@ -1,0 +1,10 @@
+{
+  "scenario_id": "SCN-02",
+  "switch": "error_spike",
+  "service": "checkout",
+  "fault_started_at": "2026-11-08T15:22:37.542785+00:00",
+  "baseline_seconds": 5,
+  "fault_seconds": 8,
+  "rate": 4.0,
+  "recorded_at": "2026-11-08T15:22:45.591933+00:00"
+}

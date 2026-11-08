@@ -86,6 +86,13 @@ class FaultManager:
             self._switches[name] = True
             telemetry.set_fault_active(name, True)
 
+            StructuredLogger.info(
+                service="demo-shop",
+                event="fault.activated",
+                fault_id=SCENARIO_METADATA.get(name, {}).get("scenario_id"),
+                details={"switch": name, "enabled": True},
+            )
+
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
             # Side effects specific to fault
@@ -142,12 +149,7 @@ class FaultManager:
                     details={"message": "Order fulfillment queue worker paused, backlog will accumulate"},
                 )
 
-            StructuredLogger.info(
-                service="demo-shop",
-                event="fault.activated",
-                fault_id=SCENARIO_METADATA.get(name, {}).get("scenario_id"),
-                details={"switch": name, "enabled": True},
-            )
+
 
         return True
 
@@ -231,6 +233,8 @@ class FaultManager:
         for name in list(self._switches.keys()):
             if self.is_enabled(name):
                 self.disable(name)
+        with self._lock:
+            self._last_deploy_event = None
         StructuredLogger.info(
             service="demo-shop",
             event="faults.reset_all",

@@ -14,8 +14,10 @@ import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.auth.service.PersonalAccessTokenService;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.Runbook;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
@@ -66,6 +68,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private MockMvc mvc;
+
+	@Autowired
+	private RunbookRepository runbooks;
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -126,6 +131,10 @@ public class SecurityMatrixTest {
 	private Long adminPatId;
 	private Long engineerPatId;
 	private Long viewerPatId;
+	// One runbook each: the Admin deletes theirs before the Engineer tries.
+	private Long adminRunbookId;
+	private Long engineerRunbookId;
+	private Long viewerRunbookId;
 
 	public record MatrixRow(
 			String name,
@@ -399,6 +408,34 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/services/{id}/runbooks",
+						HttpMethod.GET,
+						"/api/services/{id}/runbooks",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/services/{id}/runbooks",
+						HttpMethod.POST,
+						"/api/services/{id}/runbooks",
+						"{\"title\":\"Matrix ${RANDOM}\",\"steps\":[\"Restart\"]}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/runbooks/{id}",
+						HttpMethod.PUT,
+						"/api/runbooks/{id}",
+						"{\"title\":\"Matrix ${RANDOM}\",\"steps\":[\"Restart\"]}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/runbooks/{id}",
+						HttpMethod.DELETE,
+						"/api/runbooks/{id}",
+						null,
+						204, 204, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/audit",
 						HttpMethod.GET,
 						"/api/audit",
@@ -479,6 +516,9 @@ public class SecurityMatrixTest {
 		adminPatId = patService.createToken(new CreatePersonalAccessTokenRequest("admin-matrix-token"), adminUserId).id();
 		engineerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("engineer-matrix-token"), engineerUserId).id();
 		viewerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("viewer-matrix-token"), viewer.getId()).id();
+		adminRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Admin runbook", List.of("Step"), clock.instant())).getId();
+		engineerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Engineer runbook", List.of("Step"), clock.instant())).getId();
+		viewerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Viewer runbook", List.of("Step"), clock.instant())).getId();
 	}
 
 	@Test
@@ -512,25 +552,26 @@ public class SecurityMatrixTest {
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
 		// Admin
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId), row.bodyTemplate(), adminToken, row.adminStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId, adminRunbookId), row.bodyTemplate(), adminToken, row.adminStatus());
 
 		// Engineer
-		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId, engineerPatId), row.bodyTemplate(), engineerToken, row.engineerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId, engineerPatId, engineerRunbookId), row.bodyTemplate(), engineerToken, row.engineerStatus());
 
 		// Viewer
-		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId, viewerPatId), row.bodyTemplate(), viewerToken, row.viewerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId, viewerPatId, viewerRunbookId), row.bodyTemplate(), viewerToken, row.viewerStatus());
 
 		// Unauthenticated
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId), row.bodyTemplate(), null, row.unauthenticatedStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId, adminRunbookId), row.bodyTemplate(), null, row.unauthenticatedStatus());
 	}
 
-	private String resolvePath(String pathTemplate, Long notificationId, Long patId) {
+	private String resolvePath(String pathTemplate, Long notificationId, Long patId, Long runbookId) {
 		String id = pathTemplate.startsWith("/api/tools/") ? targetToolId.toString()
 				: pathTemplate.startsWith("/api/services/") ? targetServiceId.toString()
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
+				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
 	}

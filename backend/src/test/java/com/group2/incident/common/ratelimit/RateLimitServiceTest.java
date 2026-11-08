@@ -33,6 +33,14 @@ class RateLimitServiceTest {
 		RateLimitResult fourthWebhook = service.tryConsumeWebhook(100L);
 		assertThat(fourthWebhook.allowed()).isFalse();
 		assertThat(fourthWebhook.retryAfterSeconds()).isGreaterThanOrEqualTo(1);
+
+		// PAT limit: default capacity is 60
+		for (int i = 0; i < 60; i++) {
+			assertThat(service.tryConsumePat(200L).allowed()).isTrue();
+		}
+		RateLimitResult sixtyFirstPat = service.tryConsumePat(200L);
+		assertThat(sixtyFirstPat.allowed()).isFalse();
+		assertThat(sixtyFirstPat.retryAfterSeconds()).isGreaterThanOrEqualTo(1);
 	}
 
 	@Test
@@ -88,6 +96,7 @@ class RateLimitServiceTest {
 		return new RateLimitProperties(
 				new RateLimitProperties.LimitConfig(loginCapacity, loginWindow),
 				new RateLimitProperties.LimitConfig(webhookCapacity, webhookWindow),
+				new RateLimitProperties.LimitConfig(60, Duration.ofSeconds(60)),
 				maxBuckets);
 	}
 }

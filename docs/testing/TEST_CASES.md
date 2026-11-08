@@ -38,6 +38,9 @@ easy to find, put its name in the Test column, and change the status in the same
 | TC-FR-01.1k | Equivalence | The login form submitted empty | Field errors shown; no request sent | `LoginPage.test.tsx` (shows a message under each empty field and sends nothing) | Automated |
 | TC-FR-01.1l | Equivalence | The server answers 401 to the login form | "Invalid username or password" shown | `LoginPage.test.tsx` (says the username or password is wrong without saying which) | Automated |
 | TC-FR-01.1m | Concurrency | Log out while an Admin's role change for the same user commits | The role change stays; the token version counts both | `AuthServiceLogoutTest.logoutKeepsARoleChangedMeanwhile` | Automated |
+| TC-FR-01.1n | Concurrency | A role change that read the user before two logouts commits after them | The token version counts all three; the token the second logout revoked gets 401 | `RoleChangeRevocationRaceTest` (Testcontainers) | Automated |
+| TC-FR-01.5i | Negative | A signs out and B signs in while B's incidents, notifications, or a request of A's are still loading | B never sees A's data; B's own request is made | `AuthProvider.test.tsx` | Automated |
+| TC-FR-01.1o | Negative | A request made with A's token answers 401, or the start-up check of A's saved token answers, after B has signed in | B stays signed in as B | `AuthProvider.test.tsx` | Automated |
 
 ### Permissions (FR-01.2): decision table
 
@@ -90,6 +93,29 @@ One row per endpoint; each cell is the expected status. `SecurityMatrixTest` run
 | TC-FR-14.1g | Equivalence (invalid) | A second service with the same name | 409 | `DatabaseSchemaTest.duplicateServiceNameIsRejected`; `ServiceControllerTest.duplicateServiceNameIsRejected` | Automated |
 | TC-FR-14.1h | Negative | Update a service's targets | One audit entry showing before and after | `ServiceControllerTest.adminUpdatesService` | Automated |
 | TC-FR-14.1i | Equivalence | The services form with a resolution target below its response target | A field error; nothing sent | `ServicesPage.test.tsx` | Automated |
+
+### Service dependencies and blast radius (FR-14.2, Issue #154)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-14.2a | Equivalence | Admin replaces dependencies with valid service IDs | 200 with replaced dependency list; database updated | `ServiceDependencyControllerTest.adminSuccessfullyReplacesDependencies` | Automated |
+| TC-FR-14.2b | State transition | Replace dependency set with a subset of existing links | Previously linked services removed; only submitted IDs remain | `ServiceDependencyControllerTest.replacingDependenciesRemovesPreviousLinks` | Automated |
+| TC-FR-14.2c | Negative | Service set to depend on itself | 400 Bad Request naming field `dependsOn` | `ServiceDependencyControllerTest.selfDependencyReturns400`, `DatabaseSchemaTest.serviceDependencyRejectsSelfDependency` | Automated |
+| TC-FR-14.2d | Equivalence (invalid) | Referencing a nonexistent service ID | 400 Bad Request naming field `dependsOn` | `ServiceDependencyControllerTest.nonexistentReferencedServiceIdReturns400` | Automated |
+| TC-FR-14.2e | Negative | Target service ID does not exist | 404 Not Found | `ServiceDependencyControllerTest.nonexistentTargetServiceReturns404` | Automated |
+| TC-FR-14.2f | State transition | Update dependency set; then re-submit identical dependency set | 1 audit entry for actual change; no-op update produces 0 additional audit entries | `ServiceDependencyControllerTest.dependencyChangesAreAuditedAndNoopSkipped` | Automated |
+| TC-FR-14.2g | Equivalence | Service map requested | 200 with `nodes` (id, name, criticality, health) and `edges` (from, to) | `ServiceDependencyControllerTest.serviceMapReturnsNodesWithExpectedFields` | Automated |
+| TC-FR-14.2h | Equivalence | Service map dependency direction | Directed edge from dependent service to dependency service (`from` dependent `to` dependency) | `ServiceDependencyControllerTest.serviceMapReturnsEdgesWithCorrectDirection` | Automated |
+| TC-FR-14.2i | Equivalence | A service with no monitor, a passing one, one failed once of three, and one failed three of three; plus a passing second monitor on the last | `UNKNOWN`, `OPERATIONAL`, `DEGRADED`, `DOWN`: the worst monitor wins | `ServiceDependencyControllerTest.healthComesFromTheMonitors` | Automated |
+| TC-FR-14.2j | Equivalence | Blast radius for service with direct dependents | 200 returning direct dependents | `ServiceDependencyControllerTest.blastRadiusDirectDependents` | Automated |
+| TC-FR-14.2k | Equivalence | Blast radius for service with transitive dependents (2+ levels) | 200 returning all direct and transitive dependents | `ServiceDependencyControllerTest.blastRadiusTransitiveDependents` | Automated |
+| TC-FR-14.2l | State transition | Graph with dependency cycle (A -> B -> C -> A) queried for blast radius | Traversal terminates safely without infinite loop; target service excluded | `ServiceDependencyControllerTest.blastRadiusHandlesCyclesSafely` | Automated |
+| TC-FR-14.2m | Boundary value | Multiple dependency paths to the same dependent (diamond graph) | Affected service returned at most once (no duplicates) | `ServiceDependencyControllerTest.blastRadiusReturnsEachAffectedServiceAtMostOnce` | Automated |
+| TC-FR-14.2n | Negative | Blast radius for nonexistent service ID | 404 Not Found | `ServiceDependencyControllerTest.blastRadiusNonexistentServiceReturns404` | Automated |
+| TC-FR-14.2o | Boundary value | Blast radius for service with zero dependents | 200 with empty list `[]` | `ServiceDependencyControllerTest.blastRadiusReturnsEmptyListWhenNoDependents` | Automated |
+| TC-FR-14.2p | Decision table | Every role calls the three endpoints | Only an Admin may change dependencies; every role reads the map and the blast radius; no token gives 401 | `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-14.2q | Equivalence (invalid) | A body of `{}`, a misspelt field, or `dependsOn: null` | 400 naming `dependsOn`; the links stay as they were; `[]` still removes them all | `ServiceDependencyControllerTest.missingDependsOnIsRefused`, `emptyListRemovesEveryDependency` | Automated |
+| TC-FR-14.2r | Equivalence | Another org's service, as the target or in `dependsOn`; the map | 404 or a field error; the map holds only the caller's services | `OrgIsolationTest` | Automated |
 
 ### Incidents (FR-02, FR-04.1)
 
@@ -188,6 +214,7 @@ Shift A runs 09:00 to 17:00, followed by a gap until shift B starts at 18:00.
 | TC-FR-15.1a | Equivalence (invalid) | A shift overlapping an existing one | 400; adjacent shifts are allowed | `OnCallServiceTest` | Automated |
 | TC-FR-15.1b | Equivalence (invalid) | The On-call page form with a shift overlapping an existing one | The error shows on the form; nothing sent | `SchedulesPage.test.tsx` | Automated |
 | TC-FR-15.1c | Concurrency | Two schedule saves for one service at once | The second waits for the first; the result is one schedule, never a mix of both | `OnCallServiceTest.concurrentScheduleSavesDoNotMix` | Automated |
+| TC-FR-15.1d | Concurrency | Add a shift while the fallback save is still pending | Add waits; it then sends the saved fallback, so neither change undoes the other (NFR-11.2) | `ServiceSchedule.test.tsx` | Automated |
 | TC-FR-15.2e | Boundary value | The On-call page at a shift's first moment, one second before its end, and at its end | "On call now" matches the server's rule: start inclusive, end exclusive | `schedule.test.ts` | Automated |
 | TC-FR-05.1a | Equivalence | Any assignment at creation | The assignment is on the timeline, and the assignee is notified | `OnCallServiceTest`; `NotificationTest.tcFr07_1a_assignedIncidentCreatesUnreadNotificationForAssignee` | Automated |
 
@@ -216,6 +243,8 @@ The monitor raises an alert after N = 3 consecutive failures.
 | TC-FR-22.3a | State transition | After recovery | The incident stays open until a person resolves it | `MonitorCheckTest.recoveryLeavesTheIncidentOpen` (Testcontainers) | Automated |
 | TC-FR-22.1e | Boundary value | A monitor interval of 29 seconds, and of 30 | 29 is refused with a field error; 30 is accepted | `MonitorControllerTest.intervalBoundary` | Automated |
 | TC-FR-22.1f | Negative | A monitor URL on our own network: loopback, private ranges, `169.254.169.254`, IPv6 local | Refused on save with a field error, and never contacted by a check | `MonitorTargetGuardTest`, `HttpProbeTest.refusedTargetIsNotContacted`, `MonitorControllerTest.internalUrlIsRefused` | Automated |
+| TC-FR-22.1g | State transition | A monitor in an outage is moved to another service | The count starts again; the new service gets its own alert at the threshold; its pass does not recover the old service's alert | `MonitorCheckTest.movingToAnotherServiceStartsAfresh` (Testcontainers) | Automated |
+| TC-FR-22.1h | Boundary value | A target that answers at once and then keeps sending its body | The check ends with the status, well within its 10-second deadline | `HttpProbeTest.streamingBodyDoesNotHoldTheCheck` | Automated |
 | TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Planned (Manush) |
 | TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Planned (Manush) |
 
@@ -287,15 +316,20 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 | TC-D24a | Integration | A PENDING outbox event, with RabbitMQ running | A consumer bound to `incident.#` receives it with its payload, routing key, and message id; it becomes SENT | `OutboxRelayTest.aPendingEventIsPublishedConsumedAndMarkedSent` | Automated |
 | TC-D24b | Equivalence | Two PENDING events | They leave oldest first | `OutboxRelayTest.eventsLeaveOldestFirst` | Automated |
 | TC-D24c | Negative | RabbitMQ does not confirm an event | It stays PENDING for the next pass | `OutboxRelayTest.anEventTheBrokerDoesNotConfirmStaysPending` | Automated |
+| TC-D24d | Negative | RabbitMQ confirms an event no queue is bound for | It stays PENDING, not SENT | `OutboxRelayTest.anEventNoQueueTakesStaysPending` (Testcontainers) | Automated |
 
 ### Reassignment and roles (FR-05.2 to FR-05.5, D39)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-05.3a | Equivalence | Reassign an incident | The new owner is notified; the timeline shows from, to, by, and when; no clock restarts | `ReassignTest`, `ReassignRaceTest` | Automated |
-| TC-FR-05.4a | Equivalence | Assign or transfer an incident role | On the timeline with actor and time | `IncidentRoleTest`, `IncidentRoleRaceTest` | Automated |
+| TC-FR-05.3b | Negative | Two screens load an incident; one reassigns it, then the other reassigns it with the version it loaded (NFR-11.2) | 409; the first reassignment stands. A request without `expectedVersion` gets 400 | `ReassignTest` | Automated |
+| TC-FR-05.4a | Equivalence | Assign or transfer the Comms or Ops role | On the timeline with actor and time | `IncidentRoleTest`, `IncidentRoleRaceTest` | Automated |
+| TC-FR-05.4b | Negative | Give the Lead role through `PUT /roles` | 400 naming `PUT /assignee`: the Lead is the assignee (D39); nothing saved | `IncidentRoleTest` | Automated |
+| TC-FR-05.4c | Negative | A role change sent with the version from before another change committed (NFR-11.2) | 409; nothing saved | `IncidentRoleTest` | Automated |
 | TC-FR-01.3a | Negative | A user with an incident role calls an Admin-only endpoint | 403: the role gives no admin rights | `IncidentRoleTest` | Automated |
 | TC-FR-05.5a | Equivalence | One person holds two roles on a SEV2, then on a SEV4 | A warning on the SEV2; none on the SEV4; both saved | `IncidentRoleTest` | Automated |
+| TC-FR-05.5b | Equivalence | Reassign a SEV2 incident to the person who holds Comms | The response warns that they hold Lead and Comms, and the incident's GET keeps showing it | `IncidentRoleTest` | Automated |
 
 ### Comments and corrections (FR-08, FR-09)
 
@@ -320,6 +354,21 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
 | TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
 
+### Demo-shop scenario table (Issue #64)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-64a | Equivalence | Load `scenarios.yaml` | File exists, has `schema_version: 1`, a `scenarios` list, all 5 switches, every required field, and machine-readable `log_patterns` and nullable `deploy_event` | `test_scenarios.py` | Automated |
+| TC-AI-64b | Negative | Checkout while the fulfillment queue is full, or fills during payment | 503 and `checkout.failed`; no payment taken when full beforehand | `test_services.py` | Automated |
+| TC-AI-64c | Boundary value | The oldest order leaves while a newer one waits | Queue lag is the newer order's wait | `test_queue.py` | Automated |
+
+### Recorded demo-shop telemetry for the five scenarios (Issue #142)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-142a | Equivalence | Every scenario in `scenarios.yaml` has a recording fixture | Recording exists with `logs.jsonl`, `metrics.json`, `deploy_events.json`, `metadata.json`, under 1 MB | `test_recordings.py::test_every_scenario_has_a_recording` | Automated |
+| TC-AI-142b | Equivalence | Each recording fault window shows expected changes | SCN-01 latency spikes, SCN-02 error rate rises, SCN-03 deploy event, SCN-04 queue depth grows, SCN-05 cert expires | `test_recordings.py` | Automated |
+
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -332,6 +381,9 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-AI-91f | Negative | Tool call to unknown or unregistered tool name | Rejected safely with error description without crashing loop | `test_agent_loop.py::test_tool_registry_rejects_unknown_tool` | Automated |
 | TC-AI-91g | Negative | Investigation where no evidence is found | Returns `status: no_evidence` and `hypotheses: []` | `test_agent_loop.py::test_empty_evidence_and_no_hypotheses` | Automated |
 | TC-AI-91h | Integration | HTTP call to `POST /investigate` | 200 with `aiGenerated: true`, evidence, and hypotheses | `test_agent_loop.py::test_api_investigate_successful` | Automated |
+| TC-AI-91i | Negative | The final answer's summary or reasoning is not text; a hypothesis is null or has a NaN confidence | No 500; reasoning left out; those hypotheses dropped (NFR-12.2) | `test_agent_robustness.py` | Automated |
+| TC-AI-91j | Boundary value | A provider that keeps answering past the deadline; a budget of 100 tokens | Stopped at the deadline with `status: timeout`; each turn may generate only the tokens left | `test_agent_robustness.py` | Automated |
+| TC-AI-91k | Equivalence | Metric anomalies for one incident's time range, a range with none, and a time that is not one | Only that scenario's evidence; nothing; refused | `test_agent_robustness.py` | Automated |
 
 ## Sprint 4
 
@@ -389,10 +441,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Planned (Utsav D) |
-| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Planned (Utsav D) |
-| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Planned (Utsav D) |
-| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Planned (Utsav D) |
+| TC-FR-25.1a | Equivalence | A runbook with three steps | Read back in the same order | `RunbookControllerTest` | Automated |
+| TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Automated |
+| TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Automated |
+| TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Automated |
 | TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `IncidentDetailPage.test.tsx` (suggested runbooks and ordered steps); `RunbooksPage.test.tsx` (Viewer/Engineer permissions) | Automated (Bhakti) |
 
 ### Logs and metrics through the backend (FR-26, FR-27, D34)
@@ -412,19 +464,20 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `EvidenceLinkTest` | Planned (Bhakti) |
-| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceLinkTest` | Planned (Bhakti) |
-| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `EvidenceLinkTest` | Planned (Bhakti) |
+| TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `IncidentControllerTest.invalidEvidenceUrlReturns400` (Testcontainers) | Automated |
+| TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceConcurrencyTest.twoConcurrentEvidenceLinksAreSavedWithoutChangingVersion` (Testcontainers) | Automated |
+| TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest.evidenceAllowedOnClosedIncident` (Testcontainers) | Automated |
 
 ### History search (FR-17)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Planned (Manan) |
-| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-17.1a | Equivalence | A word found only in a title, only in a description, and only in a timeline entry | Each incident is found, with where it matched | `IncidentSearchTest` | Automated |
+| TC-FR-17.1b | Decision table | A query with each filter (service, severity, status) | Only incidents matching the query and the filter | `IncidentSearchTest` | Automated |
+| TC-FR-17.1c | Boundary value | 20 and 21 matches | One page, then two pages | `IncidentSearchTest` | Automated |
+| TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Automated |
+| TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
+| TC-FR-17.1f | Concurrency | A filter is set while the typed keyword still waits its 400 ms | Both the keyword and the filter end up in the URL | `HistorySearchPage.test.tsx` | Automated |
 
 ### AI-1 Find similar (FR-18, D44)
 
@@ -456,10 +509,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Planned (Utsav D) |
-| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
+| TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Automated |
+| TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
+| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
 

@@ -124,7 +124,7 @@ class ReassignTest {
 
 		long notificationsBefore = notifications.count();
 
-		String body = "{\"assigneeId\": %d}".formatted(engineer2.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer2.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
@@ -162,11 +162,48 @@ class ReassignTest {
 	}
 
 	@Test
+	@DisplayName("NFR-11.2: a reassignment made from an older view of the incident is refused with 409, not applied")
+	void staleReassignmentIsRefused() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN, engineer1);
+		long seen = incident.getVersion();
+
+		// Two screens loaded the incident; the first one's change commits.
+		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"assigneeId\": %d, \"expectedVersion\": %d}".formatted(engineer2.getId(), seen)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.version").value(seen + 1));
+
+		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"assigneeId\": %d, \"expectedVersion\": %d}".formatted(admin.getId(), seen)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("This record was changed by another request; reload and try again"));
+
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getAssignee().getId()).isEqualTo(engineer2.getId());
+	}
+
+	@Test
+	@DisplayName("A reassignment without the incident version it was made from is refused with 400")
+	void reassignmentWithoutVersionIsRefused() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN, engineer1);
+
+		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"assigneeId\": %d}".formatted(engineer2.getId())))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.expectedVersion").value("The incident version you saw is required"));
+	}
+
+	@Test
 	@DisplayName("Reassignment from unassigned incident records 'unassigned' in timeline details")
 	void reassignFromUnassignedIncident() throws Exception {
 		Incident incident = createIncident(IncidentStatus.OPEN, null);
 
-		String body = "{\"assigneeId\": %d}".formatted(engineer1.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer1.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
@@ -186,7 +223,7 @@ class ReassignTest {
 	void reassignWithInvalidUserIdReturns400() throws Exception {
 		Incident incident = createIncident(IncidentStatus.OPEN, engineer1);
 
-		String body = "{\"assigneeId\": 999999}";
+		String body = "{\"assigneeId\": 999999, \"expectedVersion\": 0}";
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
@@ -205,7 +242,7 @@ class ReassignTest {
 		accounts.membership(disabledUser).disable();
 		entityManager.flush();
 
-		String body = "{\"assigneeId\": %d}".formatted(disabledUser.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(disabledUser.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
@@ -226,7 +263,7 @@ class ReassignTest {
 		AppUser otherOrgUser = users.saveAndFlush(new AppUser("crossorg@other.local", "Cross Org User", "hash", now));
 		memberships.saveAndFlush(new Membership(otherOrg, otherOrgUser, Role.ENGINEER, now));
 
-		String body = "{\"assigneeId\": %d}".formatted(otherOrgUser.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(otherOrgUser.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
@@ -252,7 +289,7 @@ class ReassignTest {
 	@Test
 	@DisplayName("Reassign nonexistent incident returns 404 Not Found")
 	void reassignNonexistentIncidentReturns404() throws Exception {
-		String body = "{\"assigneeId\": %d}".formatted(engineer2.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer2.getId());
 
 		mvc.perform(put("/api/incidents/999999/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
@@ -267,7 +304,7 @@ class ReassignTest {
 	void reassignClosedIncidentReturns409() throws Exception {
 		Incident incident = createIncident(IncidentStatus.CLOSED, engineer1);
 
-		String body = "{\"assigneeId\": %d}".formatted(engineer2.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer2.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)
@@ -283,7 +320,7 @@ class ReassignTest {
 	void viewerForbidden() throws Exception {
 		Incident incident = createIncident(IncidentStatus.OPEN, engineer1);
 
-		String body = "{\"assigneeId\": %d}".formatted(engineer2.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer2.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
@@ -298,7 +335,7 @@ class ReassignTest {
 		Incident incidentAdmin = createIncident(IncidentStatus.OPEN, engineer1);
 		Incident incidentEng = createIncident(IncidentStatus.OPEN, engineer1);
 
-		String body = "{\"assigneeId\": %d}".formatted(engineer2.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer2.getId());
 
 		mvc.perform(put("/api/incidents/" + incidentAdmin.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
@@ -322,7 +359,7 @@ class ReassignTest {
 		int initialTimelineCount = timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId()).size();
 		int initialNotificationCount = notifications.findAll().size();
 
-		String body = "{\"assigneeId\": %d}".formatted(engineer1.getId());
+		String body = "{\"assigneeId\": %d, \"expectedVersion\": 0}".formatted(engineer1.getId());
 
 		mvc.perform(put("/api/incidents/" + incident.getId() + "/assignee")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineer1Token)

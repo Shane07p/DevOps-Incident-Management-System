@@ -9,12 +9,16 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageBuilder;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,7 +26,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Sends PENDING outbox events to RabbitMQ, oldest first (D24, #82). An event is marked SENT only after
- * the broker confirms it, so it can be delivered twice but never lost: consumers dedupe by message id.
+ * the broker confirms it and routed it to a queue, so it can be delivered twice but never lost:
+ * consumers dedupe by message id. Until a consumer binds a queue, events wait in the outbox.
  * Runs only when {@code RABBITMQ_URL} is set; otherwise the events wait in the outbox.
  */
 @Slf4j
@@ -57,21 +62,43 @@ public class OutboxRelay {
 	private int relayPendingEvents() {
 		int sent = 0;
 		for (Outbox event : outboxRepository.findTop50ByStatusOrderByCreatedAtAscIdAsc(OutboxStatus.PENDING)) {
-			try {
-				rabbitTemplate.invoke(operations -> {
-					operations.send(MessagingConfig.EVENTS_EXCHANGE, routingKey(event.getEventType()), toMessage(event));
-					operations.waitForConfirmsOrDie(CONFIRM_TIMEOUT_MS);
-					return null;
-				});
-			}
-			catch (AmqpException e) {
-				log.warn("RabbitMQ did not confirm outbox event {}; it stays PENDING until the next pass: {}", event.getId(), e.getMessage());
+			String refused = publish(event);
+			if (refused != null) {
+				log.warn("RabbitMQ did not take outbox event {}; it stays PENDING until the next pass: {}", event.getId(), refused);
 				return sent;
 			}
 			outboxRepository.markSent(event.getId(), clock.instant());
 			sent++;
 		}
 		return sent;
+	}
+
+	/**
+	 * Null once the broker has confirmed the event and routed it to a queue; otherwise why not. The
+	 * publish is mandatory, so an event no queue is bound for comes back as returned: a confirm alone
+	 * would only say the exchange took it, and then dropped it.
+	 */
+	private String publish(Outbox event) {
+		CorrelationData correlation = new CorrelationData("outbox-" + event.getId());
+		try {
+			rabbitTemplate.send(MessagingConfig.EVENTS_EXCHANGE, routingKey(event.getEventType()), toMessage(event), correlation);
+			CorrelationData.Confirm confirm = correlation.getFuture().get(CONFIRM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+			if (!confirm.ack()) {
+				return "not confirmed: " + confirm.reason();
+			}
+			// Spring AMQP sets a return on the correlation before it completes the confirm.
+			if (correlation.getReturned() != null) {
+				return "no queue is bound for " + correlation.getReturned().getRoutingKey();
+			}
+			return null;
+		}
+		catch (AmqpException | ExecutionException | TimeoutException e) {
+			return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return "interrupted";
+		}
 	}
 
 	/** INCIDENT_ESCALATED becomes incident.escalated, so consumers can bind to incident.#. */

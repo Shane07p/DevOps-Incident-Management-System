@@ -12,8 +12,10 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.entity.Criticality;
+import com.group2.incident.catalog.entity.Runbook;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
@@ -41,6 +43,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -63,6 +66,12 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private MockMvc mvc;
+
+	@Autowired
+	private RunbookRepository runbooks;
+
+	@Autowired
+	private JdbcTemplate jdbc;
 
 	@Autowired
 	private AppUserRepository users;
@@ -114,6 +123,10 @@ public class SecurityMatrixTest {
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
+	// One runbook each: the Admin deletes theirs before the Engineer tries.
+	private Long adminRunbookId;
+	private Long engineerRunbookId;
+	private Long viewerRunbookId;
 
 	public record MatrixRow(
 			String name,
@@ -240,6 +253,27 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"PUT /api/services/{id}/dependencies",
+						HttpMethod.PUT,
+						"/api/services/{id}/dependencies",
+						"{\"dependsOn\":[]}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}/blast-radius",
+						HttpMethod.GET,
+						"/api/services/{id}/blast-radius",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/service-map",
+						HttpMethod.GET,
+						"/api/service-map",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/tools",
 						HttpMethod.GET,
 						"/api/tools",
@@ -289,6 +323,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/incidents/search",
+						HttpMethod.GET,
+						"/api/incidents/search",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/incidents/{id}",
 						HttpMethod.GET,
 						"/api/incidents/{id}",
@@ -313,14 +354,14 @@ public class SecurityMatrixTest {
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
-						"{\"assigneeId\":${ASSIGNEE_ID}}",
+						"{\"assigneeId\":${ASSIGNEE_ID},\"expectedVersion\":${INCIDENT_VERSION}}",
 						200, 200, 403, 401
 				),
 				new MatrixRow(
 						"PUT /api/incidents/{id}/roles",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/roles",
-						"{\"role\":\"COMMS\",\"userId\":${ASSIGNEE_ID}}",
+						"{\"role\":\"COMMS\",\"userId\":${ASSIGNEE_ID},\"expectedVersion\":${INCIDENT_VERSION}}",
 						200, 200, 403, 401
 				),
 				new MatrixRow(
@@ -328,6 +369,13 @@ public class SecurityMatrixTest {
 						HttpMethod.POST,
 						"/api/incidents/{id}/comments",
 						"{\"comment\":\"Security matrix comment\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/evidence",
+						HttpMethod.POST,
+						"/api/incidents/{id}/evidence",
+						"{\"url\":\"https://grafana.example.com/logs\",\"label\":\"Grafana logs\"}",
 						201, 201, 403, 401
 				),
 				new MatrixRow(
@@ -350,6 +398,34 @@ public class SecurityMatrixTest {
 						"/api/notifications/{id}/read",
 						null,
 						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/services/{id}/runbooks",
+						HttpMethod.GET,
+						"/api/services/{id}/runbooks",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/services/{id}/runbooks",
+						HttpMethod.POST,
+						"/api/services/{id}/runbooks",
+						"{\"title\":\"Matrix ${RANDOM}\",\"steps\":[\"Restart\"]}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/runbooks/{id}",
+						HttpMethod.PUT,
+						"/api/runbooks/{id}",
+						"{\"title\":\"Matrix ${RANDOM}\",\"steps\":[\"Restart\"]}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/runbooks/{id}",
+						HttpMethod.DELETE,
+						"/api/runbooks/{id}",
+						null,
+						204, 204, 403, 401
 				),
 				new MatrixRow(
 						"GET /api/audit",
@@ -407,6 +483,10 @@ public class SecurityMatrixTest {
 				new Notification(engineer, incident, "Engineer notification", clock.instant())).getId();
 		viewerNotificationId = notifications.saveAndFlush(
 				new Notification(viewer, incident, "Viewer notification", clock.instant())).getId();
+
+		adminRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Admin runbook", List.of("Step"), clock.instant())).getId();
+		engineerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Engineer runbook", List.of("Step"), clock.instant())).getId();
+		viewerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Viewer runbook", List.of("Step"), clock.instant())).getId();
 	}
 
 	@Test
@@ -440,30 +520,34 @@ public class SecurityMatrixTest {
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
 		// Admin
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId), row.bodyTemplate(), adminToken, row.adminStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminRunbookId), row.bodyTemplate(), adminToken, row.adminStatus());
 
 		// Engineer
-		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId), row.bodyTemplate(), engineerToken, row.engineerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId, engineerRunbookId), row.bodyTemplate(), engineerToken, row.engineerStatus());
 
 		// Viewer
-		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId), row.bodyTemplate(), viewerToken, row.viewerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId, viewerRunbookId), row.bodyTemplate(), viewerToken, row.viewerStatus());
 
 		// Unauthenticated
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId), row.bodyTemplate(), null, row.unauthenticatedStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminRunbookId), row.bodyTemplate(), null, row.unauthenticatedStatus());
 	}
 
-	private String resolvePath(String pathTemplate, Long notificationId) {
+	private String resolvePath(String pathTemplate, Long notificationId, Long runbookId) {
 		String id = pathTemplate.startsWith("/api/tools/") ? targetToolId.toString()
 				: pathTemplate.startsWith("/api/services/") ? targetServiceId.toString()
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
+				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {
 		MockHttpServletRequestBuilder req = request(method, path);
+		if (path.equals("/api/incidents/search")) {
+			req.queryParam("q", "SecurityMatrix");
+		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}
@@ -472,7 +556,10 @@ public class SecurityMatrixTest {
 			String body = bodyTemplate.replace("${RANDOM}", UUID.randomUUID().toString().substring(0, 8))
 					.replace("${OWNER_ID}", adminUserId.toString())
 					.replace("${ASSIGNEE_ID}", assigneeId != null ? assigneeId.toString() : "")
-					.replace("${SERVICE_ID}", targetServiceId.toString());
+					.replace("${SERVICE_ID}", targetServiceId.toString())
+					// The version the incident has now, as a screen that just loaded it would send.
+					.replace("${INCIDENT_VERSION}", String.valueOf(jdbc.queryForObject(
+							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)));
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

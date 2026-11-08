@@ -184,18 +184,28 @@ class EvidenceVault:
                 refs = cand.evidence_refs
                 reason = cand.reasoning
             elif isinstance(cand, dict):
-                hyp_str = str(cand.get("hypothesis", "")).strip()
+                # The model's answer is untrusted input: anything not of the expected type is dropped,
+                # never turned into text such as "None" or passed on to fail the response (NFR-12.2).
+                raw_hyp = cand.get("hypothesis")
+                hyp_str = raw_hyp.strip() if isinstance(raw_hyp, str) else ""
+                raw_conf = cand.get("confidence", 0.0)
                 try:
-                    conf = float(cand.get("confidence", 0.0))
+                    conf = 0.0 if isinstance(raw_conf, bool) else float(raw_conf)
                 except (ValueError, TypeError):
                     conf = 0.0
                 raw_refs = cand.get("evidenceRefs") if "evidenceRefs" in cand else cand.get("evidence_refs", [])
-                refs = [str(r).strip() for r in raw_refs if str(r).strip()] if isinstance(raw_refs, list) else []
-                reason = cand.get("reasoning")
+                refs = [r.strip() for r in raw_refs if isinstance(r, str) and r.strip()] if isinstance(raw_refs, list) else []
+                raw_reason = cand.get("reasoning")
+                reason = raw_reason if isinstance(raw_reason, str) else None
             else:
                 continue
 
             if not hyp_str:
+                continue
+
+            # NaN or infinity would pass the clamp below as full confidence.
+            if not math.isfinite(conf):
+                logger.warning("Dropping hypothesis '%s' due to a non-finite confidence.", hyp_str)
                 continue
 
             # Must have at least one citation
@@ -271,7 +281,9 @@ def _extract_hypotheses_from_text(content: str) -> tuple[str, List[Dict[str, Any
         try:
             data = json.loads(candidate_json)
             if isinstance(data, dict):
-                summary = data.get("summary", summary)
+                raw_summary = data.get("summary")
+                if isinstance(raw_summary, str) and raw_summary.strip():
+                    summary = raw_summary
                 hyps = data.get("hypotheses", [])
                 if isinstance(hyps, list):
                     hypotheses_raw = hyps
@@ -372,11 +384,17 @@ class AgentInvestigationLoop:
             # Compute remaining time for this provider call
             remaining_time = max(0.05, limits.timeout_seconds - (time.monotonic() - start_time))
 
-            # 4. Invoke LLM Provider
+            # 4. Invoke LLM Provider. The provider's own timeout only notices a silent connection, so
+            # a slow trickle could outlast the investigation; this deadline cancels the whole call.
+            # The token budget left caps what the model may generate in this turn.
             try:
-                turn_response: ModelTurnResponse = await self.provider.generate(
-                    messages=messages,
-                    tools=self.tool_registry.list_tools(),
+                turn_response: ModelTurnResponse = await asyncio.wait_for(
+                    self.provider.generate(
+                        messages=messages,
+                        tools=self.tool_registry.list_tools(),
+                        timeout=remaining_time,
+                        max_output_tokens=max(1, limits.max_tokens - tokens_used),
+                    ),
                     timeout=remaining_time,
                 )
             except asyncio.TimeoutError:

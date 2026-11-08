@@ -61,6 +61,10 @@ class SecurityConfig {
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
 						.requestMatchers("/api/audit/**").hasRole("ADMIN")
+						// Runbooks are written by Engineers too (FR-25), so their rule comes before the Admin-only one.
+						.requestMatchers(HttpMethod.POST, "/api/services/*/runbooks").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.DELETE, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
@@ -70,6 +74,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/timeline/*/corrections")
+						.hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/evidence")
 						.hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer

@@ -74,11 +74,14 @@ public class UserAdminService {
 			throw new ConflictException("An org needs at least one Admin");
 		}
 		target.changeRole(request.role());
-		target.getUser().revokeTokens();
 		auditService.record(admin.getUser(), AuditAction.USER_ROLE_CHANGED, AuditItemType.USER, target.getUser().getId(),
 				"role: " + oldRole + " → " + request.role());
+		UserResponse response = UserResponse.from(target);
+		// One SQL increment, as logout does: bumping a loaded user and saving it could write back an older
+		// version over a logout committed meanwhile, and bring a revoked token back to life (D21).
+		users.revokeTokens(targetUserId);
 		log.info("Admin {} changed the role of user {} from {} to {}", adminUserId, targetUserId, oldRole, request.role());
-		return UserResponse.from(target);
+		return response;
 	}
 
 	private Membership member(long userId) {

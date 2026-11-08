@@ -1,0 +1,10 @@
+{
+  "scenario_id": "SCN-03",
+  "switch": "bad_deploy",
+  "service": "checkout",
+  "fault_started_at": "2026-11-08T15:22:51.224407+00:00",
+  "baseline_seconds": 5,
+  "fault_seconds": 8,
+  "rate": 4.0,
+  "recorded_at": "2026-11-08T15:22:59.297691+00:00"
+}

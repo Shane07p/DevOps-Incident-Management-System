@@ -16,7 +16,7 @@ public class RateLimitResetTestExecutionListener extends AbstractTestExecutionLi
 	@Override
 	public void beforeTestMethod(TestContext testContext) {
 		RateLimitService service = testContext.getApplicationContext().getBean(RateLimitService.class);
-		for (String buckets : List.of("loginBuckets", "webhookBuckets")) {
+		for (String buckets : List.of("loginBuckets", "webhookBuckets", "patBuckets")) {
 			((Cache<?, ?>) ReflectionTestUtils.getField(service, buckets)).invalidateAll();
 		}
 	}

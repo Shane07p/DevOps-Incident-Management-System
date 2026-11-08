@@ -19,3 +19,10 @@ if (!window.matchMedia) {
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
 Element.prototype.scrollIntoView ??= () => {}
+
+// jsdom has no ResizeObserver; Radix Checkbox measures itself with one.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}

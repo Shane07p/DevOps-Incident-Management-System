@@ -342,3 +342,47 @@ def test_bad_deploy_skips_webhook_when_not_configured(client, monkeypatch):
 
     # Rollback to clean up
     client.post("/faults/bad_deploy", json={"enabled": False})
+
+
+def test_bad_deploy_sends_webhook_outside_lock(client, monkeypatch):
+    import httpx
+
+    lock_states_during_post = []
+
+    def mock_post(url, json=None, headers=None, timeout=None):
+        lock_states_during_post.append(fault_manager._lock.locked())
+        return httpx.Response(202, json={"status": "RECORDED"})
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "http://incident-backend.test")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "mock-tool-token-12345")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post)
+
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert len(lock_states_during_post) == 1
+    # Lock MUST NOT be held during the post request
+    assert lock_states_during_post[0] is False
+
+    client.post("/faults/bad_deploy", json={"enabled": False})
+
+
+def test_bad_deploy_configurable_service_name(client, monkeypatch):
+    import httpx
+
+    calls = []
+
+    def mock_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return httpx.Response(202, json={"status": "RECORDED"})
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "http://incident-backend.test")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "mock-tool-token-12345")
+    monkeypatch.setattr("demo_shop.faults.Config.DEPLOY_SERVICE_NAME", "PaymentGateway")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post)
+
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert len(calls) == 1
+    assert calls[0]["service"] == "PaymentGateway"
+
+    client.post("/faults/bad_deploy", json={"enabled": False})

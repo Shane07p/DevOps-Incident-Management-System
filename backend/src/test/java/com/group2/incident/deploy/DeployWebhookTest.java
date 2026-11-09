@@ -21,6 +21,7 @@ import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.deploy.repository.IncidentDeploymentRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEventType;
@@ -76,6 +77,9 @@ class DeployWebhookTest {
 
 	@Autowired
 	private DeploymentRepository deployments;
+
+	@Autowired
+	private IncidentDeploymentRepository incidentDeployments;
 
 	@Autowired
 	private IncidentRepository incidents;
@@ -497,7 +501,10 @@ class DeployWebhookTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminJwt))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.timeline[?(@.eventType == 'DEPLOY_LINKED')].details")
-						.value("Linked deployment v2.0.0 (commit200) for Payments"));
+						.value("Linked deployment v2.0.0 (commit200) for Payments"))
+				.andExpect(jsonPath("$.deploys[?(@.id == " + dep.getId() + ")].version").value("v2.0.0"));
+
+		assertThat(incidentDeployments.existsByIncidentIdAndDeploymentId(incident.getId(), dep.getId())).isTrue();
 	}
 
 	@Test
@@ -588,6 +595,37 @@ class DeployWebhookTest {
 		var timeline = timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId());
 		long deployLinkedCount = timeline.stream().filter(t -> t.getEventType() == TimelineEventType.DEPLOY_LINKED).count();
 		assertThat(deployLinkedCount).isEqualTo(1);
+		assertThat(incidentDeployments.findAllByIncidentId(incident.getId())).hasSize(1);
+	}
+
+	@Test
+	void linkDeployment_olderThanTwoHoursRemainsVisibleAfterLinking() throws Exception {
+		Incident incident = new Incident("Old Dep Incident", "Desc", payments, Severity.SEV2, IncidentStatus.OPEN, admin, clock.instant(), 60, 480);
+		incident.assignNumber(1011L);
+		incidents.saveAndFlush(incident);
+
+		Instant tenHoursAgo = incident.getCreatedAt().minus(java.time.Duration.ofHours(10));
+		Deployment oldDep = deployments.saveAndFlush(new Deployment(payments, "v0.9.0", "oldCommit123", "Dev Old", tenHoursAgo));
+
+		// Before linking: old deploy is outside 2-hour discovery window, so it is not in deploys
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminJwt))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.deploys[?(@.id == " + oldDep.getId() + ")]").doesNotExist());
+
+		// Link old deploy
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/deploys/" + oldDep.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminJwt))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.eventType").value("DEPLOY_LINKED"));
+
+		// After linking: old deploy remains visible in incident response
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminJwt))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.deploys[?(@.id == " + oldDep.getId() + ")].version").value("v0.9.0"));
+
+		assertThat(incidentDeployments.existsByIncidentIdAndDeploymentId(incident.getId(), oldDep.getId())).isTrue();
 	}
 
 	@Test

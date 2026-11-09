@@ -82,6 +82,8 @@ class FaultManager:
         if name not in self._switches:
             raise ValueError(f"Unknown fault switch: '{name}'. Valid switches: {list(self._switches.keys())}")
 
+        deploy_event_to_send: DeployEvent | None = None
+
         with self._lock:
             if self._switches[name]:
                 return True
@@ -101,32 +103,33 @@ class FaultManager:
             if name == FaultName.BAD_DEPLOY.value:
                 prev_version = self._current_version
                 self._current_version = Config.BAD_DEPLOY_VERSION
+                service_name = Config.DEPLOY_SERVICE_NAME
                 deploy_event = DeployEvent(
-                    service="checkout",
+                    service=service_name,
                     version=Config.BAD_DEPLOY_VERSION,
                     previous_version=prev_version,
                     timestamp=now_iso,
                     commit="a1b2c3d",
                     author="ci-bot",
                     status="completed",
-                    message=f"Deployed {Config.BAD_DEPLOY_VERSION} to checkout service",
+                    message=f"Deployed {Config.BAD_DEPLOY_VERSION} to {service_name} service",
                 )
                 self._last_deploy_event = deploy_event
                 telemetry.deploy_events_total.add(
                     1,
                     {
-                        "service": "checkout",
+                        "service": service_name,
                         "version": Config.BAD_DEPLOY_VERSION,
                         "previous_version": prev_version,
                     },
                 )
                 StructuredLogger.warning(
-                    service="checkout",
+                    service=service_name,
                     event="deploy.event",
                     fault_id="SCN-03",
                     details=deploy_event.model_dump(),
                 )
-                self._send_deploy_webhook(deploy_event)
+                deploy_event_to_send = deploy_event
 
             elif name == FaultName.EXPIRING_CERTIFICATE.value:
                 telemetry.set_cert_days(0)
@@ -152,7 +155,9 @@ class FaultManager:
                     details={"message": "Order fulfillment queue worker paused, backlog will accumulate"},
                 )
 
-
+        # Webhook HTTP request is sent outside self._lock to avoid holding application locks during network I/O
+        if deploy_event_to_send is not None:
+            self._send_deploy_webhook(deploy_event_to_send)
 
         return True
 

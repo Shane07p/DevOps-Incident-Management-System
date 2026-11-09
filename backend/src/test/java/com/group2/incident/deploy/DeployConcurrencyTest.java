@@ -199,6 +199,11 @@ class DeployConcurrencyTest {
 					Integer.class, incidentId);
 			assertThat(timelineCount).isEqualTo(1);
 
+			Integer incidentDeployCount = jdbc.queryForObject(
+					"SELECT count(*) FROM incident_deployment WHERE incident_id = ? AND deployment_id = ?",
+					Integer.class, incidentId, deployId);
+			assertThat(incidentDeployCount).isEqualTo(1);
+
 			Map<String, Object> incidentRow = jdbc.queryForMap(
 					"SELECT status, version FROM incident WHERE id = ?", incidentId);
 			assertThat(incidentRow.get("status")).isEqualTo(initialStatus);

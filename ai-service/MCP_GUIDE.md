@@ -42,6 +42,7 @@ http://localhost:8001/mcp
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `MCP_PORT` | `8001` | Port for the standalone FastMCP Streamable HTTP server |
 | `SETTLE_API_URL` | `http://localhost:8080` | Settle backend REST API base URL |
 | `SETTLE_API_TIMEOUT` | `10` | Timeout in seconds for backend calls |
 
@@ -127,10 +128,13 @@ Or configure via `.claude.json`:
 | `get_service` | `service_id` (int) | Service owner, criticality, and SLA targets | `GET /api/services/{id}` |
 | `who_is_on_call` | `service_id` (int) | Current primary on-call and fallback contact | `GET /api/services/{id}/on-call` |
 | `list_alerts` | none | Inbox alerts from monitoring integrations | `GET /api/alerts` |
+| `service_map` | none | Service dependency graph and health status | `GET /api/service-map` |
+| `get_runbook` | `service_id` (int) | Service runbooks and mitigation steps | `GET /api/services/{id}/runbooks` |
 
 > [!NOTE]
 > - All write tools (e.g. `add_comment`, `acknowledge`, `declare_incident`) are deferred to Sprint 5 (Decision D38).
-> - Additional roadmap read tools (`service_map` for #154 and `get_runbook` for #155) will be registered once their backend PRs merge.
+> - All read tools require authentication via `Authorization: Bearer <token>` connection header.
+> - `get_runbook` retrieves runbooks by service ID (`GET /api/services/{id}/runbooks`).
 
 ---
 

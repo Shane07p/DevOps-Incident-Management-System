@@ -20,6 +20,8 @@ Read tools (active):
   - `get_service`: Service owner, criticality, and SLA targets (`GET /api/services/{id}`).
   - `who_is_on_call`: Current on-call schedule and fallback (`GET /api/services/{id}/on-call`).
   - `list_alerts`: Alerts inbox (`GET /api/alerts`).
+  - `service_map`: Service dependency graph & health status (`GET /api/service-map`).
+  - `get_runbook`: Service runbooks and mitigation steps (`GET /api/services/{id}/runbooks`).
 """
 
 from __future__ import annotations
@@ -258,6 +260,27 @@ async def list_alerts() -> Any:
     return await _call_backend_api("api/alerts", method="GET")
 
 
+async def service_map() -> Any:
+    """
+    Get the service map including health status and dependencies between services.
+
+    Calls backend GET /api/service-map with the caller's personal access token from headers.
+    """
+    return await _call_backend_api("api/service-map", method="GET")
+
+
+async def get_runbook(service_id: int) -> Any:
+    """
+    Get the runbooks registered for a service.
+
+    Calls backend GET /api/services/{service_id}/runbooks with the caller's personal access token from headers.
+    Note: Contract uses GET /api/services/{service_id}/runbooks (not /api/runbooks/{id}).
+    """
+    if not isinstance(service_id, int) or service_id <= 0:
+        raise ToolError("service_id must be a positive integer")
+    return await _call_backend_api(f"api/services/{service_id}/runbooks", method="GET")
+
+
 # Register active read tools on the FastMCP instance
 mcp.tool(name="list_incidents")(list_incidents)
 mcp.tool(name="get_incident")(get_incident)
@@ -265,6 +288,8 @@ mcp.tool(name="search_incidents")(search_incidents)
 mcp.tool(name="get_service")(get_service)
 mcp.tool(name="who_is_on_call")(who_is_on_call)
 mcp.tool(name="list_alerts")(list_alerts)
+mcp.tool(name="service_map")(service_map)
+mcp.tool(name="get_runbook")(get_runbook)
 
 
 def get_mcp_app() -> Any:
@@ -273,5 +298,6 @@ def get_mcp_app() -> Any:
 
 
 if __name__ == "__main__":
-    # Run as standalone MCP server process on port 8001
-    mcp.run(transport="streamable-http", port=8001)
+    # Run as standalone MCP server process on port 8001 (configurable via MCP_PORT)
+    port = int(os.getenv("MCP_PORT", "8001"))
+    mcp.run(transport="streamable-http", port=port)

@@ -1,5 +1,6 @@
 package com.group2.incident.auth.security;
 
+import com.group2.incident.auth.service.PersonalAccessTokenService;
 import com.group2.incident.common.tenancy.OrgContextFilter;
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -50,7 +52,11 @@ class SecurityConfig {
 
 	@Bean
 	@Order(2)
-	SecurityFilterChain securityFilterChain(HttpSecurity http, JwtUserConverter jwtUserConverter) throws Exception {
+	SecurityFilterChain securityFilterChain(
+			HttpSecurity http,
+			JwtUserConverter jwtUserConverter,
+			PersonalAccessTokenService personalAccessTokenService
+	) throws Exception {
 		http.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
@@ -61,6 +67,10 @@ class SecurityConfig {
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
 						.requestMatchers("/api/audit/**").hasRole("ADMIN")
+						// Runbooks are written by Engineers too (FR-25), so their rule comes before the Admin-only one.
+						.requestMatchers(HttpMethod.POST, "/api/services/*/runbooks").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.DELETE, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
@@ -75,7 +85,20 @@ class SecurityConfig {
 						.hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
+						.bearerTokenResolver(request -> {
+							String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+							if (header != null && header.startsWith("Bearer ")) {
+								String token = header.substring(7).trim();
+								if (token.startsWith("pat_")) {
+									return null;
+								}
+								return token;
+							}
+							return null;
+						})
 						.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtUserConverter)));
+		// Intercept and authenticate personal access tokens before standard Bearer JWT filter.
+		http.addFilterBefore(new PersonalAccessTokenFilter(personalAccessTokenService), BearerTokenAuthenticationFilter.class);
 		// After the token is checked, the request works for the org in the token (D48).
 		http.addFilterAfter(new OrgContextFilter(), BearerTokenAuthenticationFilter.class);
 		return http.build();

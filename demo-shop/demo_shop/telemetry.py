@@ -222,6 +222,8 @@ telemetry = TelemetryManager()
 class StructuredLogger:
     """Emits machine-readable JSON structured logs to stdout."""
 
+    _buffer: list[dict[str, Any]] = []
+
     @staticmethod
     def _sanitize(data: Any) -> Any:
         if isinstance(data, dict):
@@ -260,9 +262,23 @@ class StructuredLogger:
         if details:
             record["details"] = cls._sanitize(details)
 
+        cls._buffer.append(record)
+        if len(cls._buffer) > 20000:
+            cls._buffer = cls._buffer[-10000:]
+
         json_line = json.dumps(record, separators=(",", ":"))
         sys.stdout.write(json_line + "\n")
         sys.stdout.flush()
+
+    @classmethod
+    def get_logs(cls, since: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not since:
+            return list(cls._buffer)
+        return [r for r in cls._buffer if r.get("timestamp", "") >= since]
+
+    @classmethod
+    def clear_logs(cls):
+        cls._buffer.clear()
 
     @classmethod
     def info(cls, service: str, event: str, **kwargs):

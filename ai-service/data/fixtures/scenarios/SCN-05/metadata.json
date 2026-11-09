@@ -1,0 +1,10 @@
+{
+  "scenario_id": "SCN-05",
+  "switch": "expiring_certificate",
+  "service": "payments",
+  "fault_started_at": "2026-11-08T15:32:59.140157+00:00",
+  "baseline_seconds": 5,
+  "fault_seconds": 8,
+  "rate": 4.0,
+  "recorded_at": "2026-11-08T15:33:07.186297+00:00"
+}

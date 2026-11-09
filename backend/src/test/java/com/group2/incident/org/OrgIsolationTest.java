@@ -87,7 +87,9 @@ class OrgIsolationTest {
 		long monitorOfB = TestOrgs.id(send(b, post("/api/monitors"), """
 				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": %d, "failureThreshold": 3, "enabled": true}""".formatted(serviceOfB)));
 		// The fallback contact becomes the assignee and gets a notification.
-		long incidentOfB = TestOrgs.id(orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing"));
+		String incidentJson = orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing");
+		long incidentOfB = TestOrgs.id(incidentJson);
+		long timelineEntryOfB = JsonPath.<Number>read(incidentJson, "$.timeline[0].id").longValue();
 		String notifications = send(b, get("/api/notifications"), null);
 		long notificationOfB = JsonPath.<Number>read(notifications, "$.notifications[0].id").longValue();
 
@@ -96,7 +98,12 @@ class OrgIsolationTest {
 		idsOfB.put("toolId", toolOfB);
 		idsOfB.put("monitorId", monitorOfB);
 		idsOfB.put("incidentId", incidentOfB);
+		idsOfB.put("entryId", timelineEntryOfB);
 		idsOfB.put("notificationId", notificationOfB);
+		long tokenOfB = TestOrgs.id(send(b, post("/api/me/tokens"), "{\"name\":\"TokenOfB\"}"));
+		idsOfB.put("tokenId", tokenOfB);
+		idsOfB.put("runbookId", TestOrgs.id(send(b, post("/api/services/{id}/runbooks", serviceOfB),
+				"{\"title\": \"Restart\", \"steps\": [\"Restart the service\"]}")));
 		// Sign-up and the service each wrote an audit entry in B.
 		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
 	}
@@ -130,19 +137,25 @@ class OrgIsolationTest {
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
-						"{\"assigneeId\": {adminOfA}}"),
+						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",
-						"{\"role\":\"COMMS\",\"userId\": {adminOfA}}"),
+						"{\"role\":\"COMMS\",\"userId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("POST /api/incidents/{id}/comments", HttpMethod.POST, "/api/incidents/{incidentId}/comments",
 						"{\"comment\":\"x\"}"),
 				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
 						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
-						"/api/incidents/{incidentId}/timeline/{incidentId}/corrections", "{\"details\":\"x\"}"),
+						"/api/incidents/{incidentId}/timeline/{entryId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
 				Arguments.of("PUT /api/monitors/{id}", HttpMethod.PUT, "/api/monitors/{monitorId}", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),
 				Arguments.of("POST /api/notifications/{id}/read", HttpMethod.POST, "/api/notifications/{notificationId}/read", null),
+				Arguments.of("DELETE /api/me/tokens/{id}", HttpMethod.DELETE, "/api/me/tokens/{tokenId}", null),
+				Arguments.of("GET /api/services/{id}/runbooks", HttpMethod.GET, "/api/services/{serviceId}/runbooks", null),
+				Arguments.of("POST /api/services/{id}/runbooks", HttpMethod.POST, "/api/services/{serviceId}/runbooks",
+						"{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
+				Arguments.of("PUT /api/runbooks/{id}", HttpMethod.PUT, "/api/runbooks/{runbookId}", "{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
+				Arguments.of("DELETE /api/runbooks/{id}", HttpMethod.DELETE, "/api/runbooks/{runbookId}", null),
 				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"));
 	}
 

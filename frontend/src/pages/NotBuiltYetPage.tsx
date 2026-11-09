@@ -13,7 +13,6 @@ const PLANNED_SPRINT: Record<string, number> = {
   '/heartbeats': 2,
   '/escalation': 3,
   '/service-map': 4,
-  '/runbooks': 4,
   '/status-pages': 4,
   '/logs': 4,
   '/metrics': 4,

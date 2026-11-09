@@ -9,6 +9,8 @@ import datetime
 from threading import Lock
 from typing import Dict, List
 
+import httpx
+
 from demo_shop.config import Config
 from demo_shop.models import DeployEvent, FaultName, FaultState, FaultsStatusResponse
 from demo_shop.telemetry import StructuredLogger, telemetry
@@ -124,6 +126,7 @@ class FaultManager:
                     fault_id="SCN-03",
                     details=deploy_event.model_dump(),
                 )
+                self._send_deploy_webhook(deploy_event)
 
             elif name == FaultName.EXPIRING_CERTIFICATE.value:
                 telemetry.set_cert_days(0)
@@ -240,6 +243,47 @@ class FaultManager:
             event="faults.reset_all",
             details={"message": "All fault switches disabled, baseline healthy state restored"},
         )
+
+    def _send_deploy_webhook(self, deploy_event: DeployEvent) -> None:
+        """Sends the deployment event to the backend deploy webhook (FR-20.1, AC-5)."""
+        backend_url = Config.BACKEND_URL
+        tool_token = Config.TOOL_TOKEN
+        if not backend_url or not tool_token:
+            StructuredLogger.info(
+                service="demo-shop",
+                event="deploy.webhook_skipped",
+                fault_id="SCN-03",
+                details={"reason": "BACKEND_URL or TOOL_TOKEN not configured"},
+            )
+            return
+
+        url = f"{backend_url.rstrip('/')}/webhooks/deploys"
+        payload = {
+            "service": deploy_event.service,
+            "version": deploy_event.version,
+            "commit": deploy_event.commit,
+            "author": deploy_event.author,
+            "deployedAt": deploy_event.timestamp,
+        }
+        headers = {
+            "Authorization": f"Bearer {tool_token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = httpx.post(url, json=payload, headers=headers, timeout=5.0)
+            StructuredLogger.info(
+                service="demo-shop",
+                event="deploy.webhook_sent",
+                fault_id="SCN-03",
+                details={"status_code": resp.status_code, "url": url},
+            )
+        except Exception as exc:
+            StructuredLogger.warning(
+                service="demo-shop",
+                event="deploy.webhook_failed",
+                fault_id="SCN-03",
+                details={"error": str(exc), "url": url},
+            )
 
     def get_status(self) -> FaultsStatusResponse:
         with self._lock:

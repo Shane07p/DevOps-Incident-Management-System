@@ -15,6 +15,8 @@ public interface ServiceRepository extends JpaRepository<ServiceEntity, Long> {
 
     List<ServiceEntity> findAllByOrderByNameAsc();
 
+    Optional<ServiceEntity> findByNameIgnoreCase(String name);
+
     boolean existsByNameIgnoreCase(String name);
 
     boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);

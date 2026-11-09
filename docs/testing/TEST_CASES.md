@@ -436,10 +436,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Planned (Het) |
+| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Automated |
+| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Automated |
+| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Automated |
+| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Automated |
 
 ### Runbooks (FR-25)
 

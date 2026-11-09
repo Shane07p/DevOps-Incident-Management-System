@@ -14,6 +14,9 @@ import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.deploy.dto.DeployResponse;
+import com.group2.incident.deploy.entity.Deployment;
+import com.group2.incident.deploy.repository.DeploymentRepository;
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
@@ -39,6 +42,7 @@ import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.org.service.OrgMembers;
 import java.net.URI;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,6 +72,7 @@ public class IncidentService {
 	private final NotificationService notificationService;
 	private final OrganizationRepository orgs;
 	private final OrgMembers orgMembers;
+	private final DeploymentRepository deploymentRepository;
 	private final Clock clock;
 
 	@Transactional
@@ -177,7 +182,14 @@ public class IncidentService {
 		Incident incident = incidentRepository.findWithDetailsById(id)
 				.orElseThrow(() -> new NotFoundException("Incident " + id + " not found"));
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(id);
-		return toResponse(incident, timeline);
+		Instant windowStart = incident.getCreatedAt().minus(Duration.ofHours(2));
+		Instant windowEnd = incident.getCreatedAt();
+		List<DeployResponse> deploys = deploymentRepository
+				.findInWindow(incident.getService().getId(), windowStart, windowEnd)
+				.stream()
+				.map(DeployResponse::from)
+				.toList();
+		return toResponse(incident, timeline, deploys);
 	}
 
 	@Transactional(readOnly = true)
@@ -261,6 +273,14 @@ public class IncidentService {
 
 	/** Maps an incident and its append-only timeline, including correction links, to API data. */
 	private static IncidentResponse toResponse(Incident incident, List<TimelineEntry> timeline) {
+		return toResponse(incident, timeline, List.of());
+	}
+
+	private static IncidentResponse toResponse(
+			Incident incident,
+			List<TimelineEntry> timeline,
+			List<DeployResponse> deploys
+	) {
 		IncidentServiceDto serviceDto = new IncidentServiceDto(
 				incident.getService().getId(),
 				incident.getService().getName()
@@ -298,7 +318,8 @@ public class IncidentService {
 				incident.getResolutionTargetMinutes(),
 				incident.getResponseDueAt(),
 				incident.getResolutionDueAt(),
-				timelineResponses
+				timelineResponses,
+				deploys != null ? deploys : List.of()
 		);
 	}
 
@@ -399,6 +420,35 @@ public class IncidentService {
 				original
 		));
 		return toTimelineEntryResponse(correction);
+	}
+
+	/** Links a deployment to an incident timeline without duplicating entries or changing incident status/version. */
+	@Transactional
+	public TimelineEntryResponse linkDeployment(Long incidentId, Long deployId, Long actorId) {
+		Incident incident = requireIncidentForUpdate(incidentId);
+		AppUser actor = requireActor(actorId);
+		Deployment deployment = deploymentRepository.findById(deployId)
+				.orElseThrow(() -> new NotFoundException("Deployment " + deployId + " not found"));
+
+		String details = "Linked deployment " + deployment.getVersion() + " (" + deployment.getCommit() + ") for "
+				+ deployment.getService().getName();
+
+		List<TimelineEntry> existing = timelineEntryRepository
+				.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		for (TimelineEntry entry : existing) {
+			if (entry.getEventType() == TimelineEventType.DEPLOY_LINKED && details.equals(entry.getDetails())) {
+				return toTimelineEntryResponse(entry);
+			}
+		}
+
+		TimelineEntry timelineEntry = timelineEntryRepository.save(new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.DEPLOY_LINKED,
+				details,
+				clock.instant()
+		));
+		return toTimelineEntryResponse(timelineEntry);
 	}
 
 	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */
@@ -544,6 +594,11 @@ public class IncidentService {
 
 	private Incident requireIncident(Long incidentId) {
 		return incidentRepository.findById(incidentId)
+				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
+	}
+
+	private Incident requireIncidentForUpdate(Long incidentId) {
+		return incidentRepository.findByIdForUpdate(incidentId)
 				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
 	}
 

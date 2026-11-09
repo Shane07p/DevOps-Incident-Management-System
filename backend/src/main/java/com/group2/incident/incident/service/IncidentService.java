@@ -69,6 +69,7 @@ public class IncidentService {
 	private static final String STALE_CHANGE = "This record was changed by another request; reload and try again";
 
 	private final IncidentRepository incidentRepository;
+	private final IncidentEmbeddingService incidentEmbeddingService;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final ServiceCatalogService serviceCatalogService;
 	private final OnCallService onCallService;
@@ -142,6 +143,7 @@ public class IncidentService {
 			incident.assignTo(assignee);
 		}
 		incident = incidentRepository.save(incident);
+		incidentEmbeddingService.embedOnCreation(incident);
 
 		String details = "Reported as " + request.severity() + " on " + service.getName();
 		TimelineEntry timelineEntry = new TimelineEntry(

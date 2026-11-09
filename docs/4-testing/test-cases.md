@@ -496,6 +496,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Automated |
 | TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
 | TC-FR-17.1f | Concurrency | A filter is set while the typed keyword still waits its 400 ms | Both the keyword and the filter end up in the URL | `HistorySearchPage.test.tsx` | Automated |
+| TC-FR-17.1g | Equivalence | Search by meaning with service, severity, status, and page filters | Returns ranked results with the same filters and pagination | `IncidentSimilarityTest.semanticSearchAppliesFiltersAndPagination` (Testcontainers with pgvector) | In review (Manan) |
 
 ### AI-1 Find similar (FR-18, D44)
 
@@ -503,10 +504,12 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | In review (Manan) |
 | TC-D44b | Equivalence | A new incident, then the background worker receives a valid embedding from `POST /embed` | Creation does not call the AI service; the worker stores the 768-value embedding on the incident | `IncidentEmbeddingTest.creationQueuesEmbeddingForBackgroundWorker`, `IncidentEmbeddingTest.retryStoresPreviouslyUnavailableEmbedding` (Testcontainers) | In review (Manan) |
-| TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
+| TC-FR-18.1a | Equivalence | Four above-threshold candidates and one below-threshold candidate | The top 3 above-threshold incidents are returned in score order | `IncidentSimilarityTest.similarIncidentsAreThresholdedOrderedAndCapped` (Testcontainers with pgvector) | In review (Manan) |
+| TC-FR-18.1b | Equivalence | Similarity query on a title with open and resolved candidates | The closest open candidate is a warning; no incident is merged or created | `IncidentSimilarityTest.duplicateCheckReturnsOnlyOpenMatches` (Testcontainers with pgvector) | In review (Manan) |
+| TC-FR-18.1c | Org isolation | An equally similar incident exists in another organization | Neither similar-incidents nor duplicate-check returns the other org's incident | `OrgIsolationTest.similarSearchNeverReturnsAnEquallySimilarIncidentFromAnotherOrg`, `OrgIsolationTest.duplicateCheckDoesNotReturnAMoreSimilarIncidentFromAnotherOrg` | In review (Manan) |
 | TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
 | TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset during incident creation | The incident is created; failed embeddings remain retryable and the client respects its timeout | `AiEmbeddingClientTest`, `IncidentEmbeddingTest` (Testcontainers) | In review (Manan) |
-| TC-FR-18.4b | Negative | The AI service is unavailable for similar-incident lookup | The endpoint returns 200 with an empty array, never an error | `SimilarIncidentsTest` | Planned (Manan) |
+| TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | In review (Manan) |
 
 ### Public status page (FR-21, D45): decision table on who may publish
 

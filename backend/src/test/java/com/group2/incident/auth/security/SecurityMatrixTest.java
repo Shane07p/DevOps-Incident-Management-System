@@ -352,6 +352,20 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/incidents/{id}/similar",
+						HttpMethod.GET,
+						"/api/incidents/{id}/similar",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/duplicate-check",
+						HttpMethod.GET,
+						"/api/incidents/duplicate-check",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/incidents/{id}",
 						HttpMethod.GET,
 						"/api/incidents/{id}",
@@ -637,6 +651,9 @@ public class SecurityMatrixTest {
 		MockHttpServletRequestBuilder req = request(method, path);
 		if (path.equals("/api/incidents/search")) {
 			req.queryParam("q", "SecurityMatrix");
+		}
+		if (path.equals("/api/incidents/duplicate-check")) {
+			req.queryParam("title", "SecurityMatrix incident");
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

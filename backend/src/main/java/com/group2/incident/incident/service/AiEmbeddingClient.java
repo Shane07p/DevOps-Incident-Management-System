@@ -51,12 +51,20 @@ public class AiEmbeddingClient {
 	}
 
 	public Optional<List<Double>> embedDocument(String text) {
+		return embed(text, "document");
+	}
+
+	public Optional<List<Double>> embedQuery(String text) {
+		return embed(text, "query");
+	}
+
+	private Optional<List<Double>> embed(String text, String kind) {
 		if (!isEnabled()) {
 			return Optional.empty();
 		}
 
 		try {
-			String body = jsonMapper.writeValueAsString(new EmbeddingRequest(text, "document"));
+			String body = jsonMapper.writeValueAsString(new EmbeddingRequest(text, kind));
 			HttpRequest request = HttpRequest.newBuilder(embeddingEndpoint)
 					.timeout(timeout)
 					.header("Content-Type", "application/json")
@@ -64,32 +72,32 @@ public class AiEmbeddingClient {
 					.build();
 			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				log.warn("AI service returned HTTP {}; the incident embedding will be retried", response.statusCode());
+				log.warn("AI service returned HTTP {}; {} embedding request failed", response.statusCode(), kind);
 				return Optional.empty();
 			}
 
 			EmbeddingResponse result = jsonMapper.readValue(response.body(), EmbeddingResponse.class);
 			if (!isValidEmbedding(result)) {
-				log.warn("AI service returned an invalid embedding; the incident embedding will be retried");
+				log.warn("AI service returned an invalid {} embedding", kind);
 				return Optional.empty();
 			}
 			return Optional.of(result.embedding());
 		}
 		catch (HttpTimeoutException e) {
-			log.warn("AI embedding request timed out; the incident embedding will be retried");
+			log.warn("AI {} embedding request timed out", kind);
 			return Optional.empty();
 		}
 		catch (IOException e) {
-			log.warn("AI embedding service is unavailable; the incident embedding will be retried");
+			log.warn("AI embedding service is unavailable for {} request", kind);
 			return Optional.empty();
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			log.warn("AI embedding request was interrupted; the incident embedding will be retried");
+			log.warn("AI {} embedding request was interrupted", kind);
 			return Optional.empty();
 		}
 		catch (JacksonException e) {
-			log.warn("AI service returned an unreadable embedding; the incident embedding will be retried");
+			log.warn("AI service returned an unreadable {} embedding", kind);
 			return Optional.empty();
 		}
 	}

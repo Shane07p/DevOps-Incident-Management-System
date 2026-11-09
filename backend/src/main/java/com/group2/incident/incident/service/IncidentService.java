@@ -69,6 +69,7 @@ public class IncidentService {
 	private static final String STALE_CHANGE = "This record was changed by another request; reload and try again";
 
 	private final IncidentRepository incidentRepository;
+	private final IncidentSimilarityService incidentSimilarityService;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final ServiceCatalogService serviceCatalogService;
 	private final OnCallService onCallService;
@@ -250,8 +251,26 @@ public class IncidentService {
 			IncidentStatus status,
 			int page
 	) {
+		return searchIncidents(query, serviceId, severity, status, page, "keyword");
+	}
+
+	@Transactional(readOnly = true)
+	public IncidentSearchPageResponse searchIncidents(
+			String query,
+			Long serviceId,
+			Severity severity,
+			IncidentStatus status,
+			int page,
+			String mode
+	) {
 		if (page < 0) {
 			throw new FieldValidationException("page", "must not be negative");
+		}
+		if ("semantic".equals(mode)) {
+			return incidentSimilarityService.searchByMeaning(query, serviceId, severity, status, page);
+		}
+		if (!"keyword".equals(mode)) {
+			throw new FieldValidationException("mode", "must be keyword or semantic");
 		}
 
 		String severityName = severity != null ? severity.name() : null;

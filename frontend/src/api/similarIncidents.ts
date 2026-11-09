@@ -3,14 +3,17 @@ import { apiFetch } from './client'
 import { incidentStatusSchema, severitySchema } from './schemas'
 
 // ---------------------------------------------------------------------------
-// Schemas — aligned with Issue #159 contract (draft, not yet merged)
+// Schemas — proposed to Manan on #159 (pending confirmation and merge)
 // ---------------------------------------------------------------------------
 
 /**
  * Similar incident returned by the backend (AI-1 / Issue #159 / #170).
  * Displays up to 3 similar past incidents with match percentage and how each was fixed.
  *
- * Contract: score is always 0.0–1.0, fix is always `fix` (single field).
+ * Contract proposed on #156/#159:
+ * - score is always 0.0–1.0 (float, not 0–100)
+ * - fix is always `fix` (single string field, no alternate fallback)
+ * - returns flat array (no `{ incidents: [...] }` wrapper)
  * Shape will be finalised when #159 merges; until then, keep this draft.
  */
 export const similarIncidentSchema = z.object({
@@ -28,13 +31,13 @@ export const similarIncidentSchema = z.object({
 
 export type SimilarIncident = z.infer<typeof similarIncidentSchema>
 
-/** GET /api/incidents/{id}/similar always returns a flat array. */
+/** GET /api/incidents/{id}/similar returns a flat array of similar incidents. */
 export const similarIncidentsResponseSchema = z.array(similarIncidentSchema)
 
 /**
  * Open duplicate candidate detected during incident declaration.
- * Returned by GET /api/incidents/{id}/similar with status filter
- * or a dedicated endpoint — exact path TBD in #159.
+ * Contract proposed to Manan on #159:
+ * GET /api/incidents/duplicate-check?title=...&serviceId=...
  */
 export const duplicateIncidentSchema = z.object({
   id: z.number(),
@@ -48,8 +51,9 @@ export type DuplicateIncident = z.infer<typeof duplicateIncidentSchema>
 
 /**
  * Duplicate check response: returns a single candidate or null.
- * Exact endpoint path TBD in #159 — currently drafted as
+ * Contract proposed to Manan on #159:
  * GET /api/incidents/duplicate-check?title=...&serviceId=...
+ * Response: { duplicate: boolean, incident: DuplicateIncident | null, message?: string }
  */
 export const duplicateCheckResponseSchema = z.object({
   duplicate: z.boolean(),

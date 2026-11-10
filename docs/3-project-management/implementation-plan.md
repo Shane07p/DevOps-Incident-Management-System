@@ -188,7 +188,7 @@ FR-28 in [srs.md](../1-requirements/srs.md). Each item's test cases are in
 | Evidence links on an incident | Bhakti | FR-09.3 | TC-FR-09.3a to c | #157: Open |
 | History search | Manan | US-15, FR-17 | TC-FR-17.1a to d | #158: Open |
 | AI-1 Find similar in the backend | Manan | US-18, FR-18, D44 | TC-FR-18.1a, 18.4a | #159: Open |
-| Public status page and customer updates | Shane | US-20, FR-21, D45 | TC-FR-21.1a to 21.2a | #160: Open |
+| Public status page and customer updates | Shane | US-20, FR-21, D45 | TC-FR-21.1a to 21.2a | #160: In review (PR #233) |
 | AI-1 retrieval evaluation | Bhakti | AI/ML roadmap | pytest | #161: Done (PR #175) |
 | MCP server with read tools | Himanshu | US-30, FR-28, D38 | TC-FR-28.1a to 28.2a | #162: Open |
 | Logs explorer and metrics dashboards | Himanshu | US-28, US-29 | TC-FR-26.1b, 27.3a | #163: Open |

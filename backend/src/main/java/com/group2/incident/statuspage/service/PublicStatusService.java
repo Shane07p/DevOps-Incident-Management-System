@@ -112,33 +112,35 @@ public class PublicStatusService {
 			String serviceName = publicNames.get(incident.getService().getId());
 			List<PublicUpdateResponse> newestFirst = updates.reversed().stream().map(PublicUpdateResponse::from).toList();
 			// Customers see it resolved once Comms says so, or once the team has resolved it.
-			if (latest.getStatus() != PublicUpdateStatus.RESOLVED && !FINISHED.contains(incident.getStatus())) {
+			boolean publiclyResolved = latest.getStatus() == PublicUpdateStatus.RESOLVED;
+			if (!publiclyResolved && !FINISHED.contains(incident.getStatus())) {
 				active.add(new PublishedIncident(incident.getId(), serviceName, latest.getStatus(), newestFirst, null));
+				continue;
 			}
-			else if (!latest.getCreatedAt().isBefore(since)) {
-				resolved.add(new PublishedIncident(incident.getId(), serviceName, latest.getStatus(), newestFirst,
-						latest.getCreatedAt()));
+			Instant resolvedAt = publiclyResolved ? resolvedSince(updates) : latest.getCreatedAt();
+			if (!resolvedAt.isBefore(since)) {
+				resolved.add(new PublishedIncident(incident.getId(), serviceName, latest.getStatus(), newestFirst, resolvedAt));
 			}
 		}
-		Comparator<PublishedIncident> newestActivity =
-				Comparator.comparing((PublishedIncident incident) -> incident.updates().getFirst().createdAt()).reversed();
-		active.sort(newestActivity);
-		resolved.sort(newestActivity);
+		active.sort(Comparator.comparing((PublishedIncident incident) -> incident.updates().getFirst().createdAt()).reversed());
+		resolved.sort(Comparator.comparing(PublishedIncident::resolvedAt).reversed());
 		return new PublicStatusResponse(org.getName(), serviceViews, active, resolved);
 	}
 
-	/** Check counts per service and UTC day since {@code since}: {checks, passed}. Raw SQL, so the org is named. */
+	/**
+	 * Check counts per service and UTC day since {@code since}: {checks, passed}. Each check counts for the service
+	 * its monitor watched when it ran, even if the monitor moved since. Raw SQL, so the org is named.
+	 */
 	private Map<Long, Map<LocalDate, long[]>> checksByServiceAndDay(long orgId, Instant since) {
 		Map<Long, Map<LocalDate, long[]>> result = new HashMap<>();
 		jdbc.query("""
-				select m.service_id,
+				select r.service_id,
 				       cast(r.checked_at at time zone 'UTC' as date) as day,
 				       count(*) as checks,
 				       count(*) filter (where r.success) as passed
 				from monitor_check_result r
-				join uptime_monitor m on m.id = r.monitor_id and m.org_id = r.org_id
 				where r.org_id = ? and r.checked_at >= ?
-				group by m.service_id, day
+				group by r.service_id, day
 				""", row -> {
 			result.computeIfAbsent(row.getLong("service_id"), id -> new HashMap<>())
 					.put(row.getObject("day", LocalDate.class), new long[] { row.getLong("checks"), row.getLong("passed") });
@@ -164,6 +166,18 @@ public class PublicStatusService {
 		}
 		return new PublishedService(service.getId(), service.getPublicName(), health,
 				checks == 0 ? null : percent(passed, checks), days);
+	}
+
+	/**
+	 * When the incident entered RESOLVED: the first of the RESOLVED updates it ends with, so a follow-up note
+	 * neither moves the time nor brings an old incident back into the 90 days.
+	 */
+	static Instant resolvedSince(List<PublicUpdate> oldestFirst) {
+		Instant since = oldestFirst.getLast().getCreatedAt();
+		for (int i = oldestFirst.size() - 1; i >= 0 && oldestFirst.get(i).getStatus() == PublicUpdateStatus.RESOLVED; i--) {
+			since = oldestFirst.get(i).getCreatedAt();
+		}
+		return since;
 	}
 
 	/** Two decimal places, so 2 of 3 is 66.67. */

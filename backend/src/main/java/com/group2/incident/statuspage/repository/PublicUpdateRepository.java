@@ -12,13 +12,15 @@ import org.springframework.data.repository.query.Param;
 public interface PublicUpdateRepository extends JpaRepository<PublicUpdate, Long> {
 
 	/**
-	 * The public updates the status page needs for these services, oldest first: every update on an incident
-	 * still open inside, and the updates of the last 90 days on the others.
+	 * Every public update, oldest first, on the incidents of these services that the page may list: those the
+	 * team has not finished, and the others with an update since {@code since}. All of an incident's updates come
+	 * back, so the time it entered RESOLVED is never cut off.
 	 */
 	@Query("""
 			select u from PublicUpdate u join fetch u.incident i
 			where i.service.id in :serviceIds
-			  and (i.status not in :finished or u.createdAt >= :since)
+			  and (i.status not in :finished
+			       or exists (select 1 from PublicUpdate v where v.incident = i and v.createdAt >= :since))
 			order by u.createdAt asc, u.id asc
 			""")
 	List<PublicUpdate> findForStatusPage(

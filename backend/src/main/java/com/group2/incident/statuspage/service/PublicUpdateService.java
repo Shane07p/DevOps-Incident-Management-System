@@ -17,6 +17,7 @@ import com.group2.incident.statuspage.entity.PublicUpdate;
 import com.group2.incident.statuspage.repository.PublicUpdateRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -56,7 +57,8 @@ public class PublicUpdateService {
 			throw new ConflictException("This incident's service is not on the public status page; an Admin can add it");
 		}
 
-		Instant now = clock.instant();
+		// PostgreSQL keeps microseconds; the response then shows the same time the page will.
+		Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 		String message = request.message().strip();
 		PublicUpdate update = publicUpdateRepository.save(
 				new PublicUpdate(incident, request.status(), message, actor.getUser(), now));

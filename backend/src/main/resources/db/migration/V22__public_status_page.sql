@@ -7,6 +7,13 @@ ALTER TABLE service
     ADD CONSTRAINT service_public_name_check
         CHECK (NOT public_visible OR (public_name IS NOT NULL AND btrim(public_name) <> ''));
 
+-- A check counts for the service its monitor watched at check time, so moving a monitor to another
+-- service keeps each service's uptime history where it happened.
+ALTER TABLE monitor_check_result ADD COLUMN service_id bigint REFERENCES service (id);
+UPDATE monitor_check_result r SET service_id = m.service_id FROM uptime_monitor m WHERE m.id = r.monitor_id;
+ALTER TABLE monitor_check_result ALTER COLUMN service_id SET NOT NULL;
+CREATE INDEX monitor_check_result_service_idx ON monitor_check_result (org_id, service_id, checked_at);
+
 -- One row per published update. Never edited or deleted through the application.
 CREATE TABLE public_update (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -8,6 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.group2.incident.common.ratelimit.RateLimitService;
+import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.monitor.repository.DueMonitor;
+import com.group2.incident.monitor.service.MonitorCheckRecorder;
+import com.group2.incident.monitor.service.ProbeOutcome;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestOrgs;
 import com.group2.incident.support.TestOrgs.SignedUp;
@@ -56,6 +60,9 @@ class PublicStatusTest {
 
 	@Autowired
 	private Clock clock;
+
+	@Autowired
+	private MonitorCheckRecorder recorder;
 
 	private final List<Long> createdOrgs = new ArrayList<>();
 
@@ -208,6 +215,63 @@ class PublicStatusTest {
 	}
 
 	@Test
+	void aMovedMonitorLeavesItsEarlierChecksWithTheServiceItWatched() throws Exception {
+		SignedUp org = signUp();
+		long first = orgs.createService(org.adminToken(), "Checkout", org.adminId());
+		long second = orgs.createService(org.adminToken(), "Search", org.adminId());
+		publish(org, first, "Checkout", "Checkout");
+		publish(org, second, "Search", "Search");
+		String monitorBody = """
+				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60,
+				 "serviceId": %d, "failureThreshold": 3, "enabled": true}""";
+		long monitor = TestOrgs.id(send(org.adminToken(), post("/api/monitors"), monitorBody.formatted(first), 201));
+
+		record(org, monitor, ProbeOutcome.passed(200, 12));
+		send(org.adminToken(), put("/api/monitors/{id}", monitor), monitorBody.formatted(second), 200);
+		record(org, monitor, ProbeOutcome.failed(500, 12L, "HTTP 500"));
+
+		String page = page(org);
+		assertThat(JsonPath.<List<Double>>read(page, "$.services[?(@.name == 'Checkout')].uptimePercent"))
+				.containsExactly(100.0);
+		assertThat(JsonPath.<List<Double>>read(page, "$.services[?(@.name == 'Search')].uptimePercent"))
+				.containsExactly(0.0);
+	}
+
+	@Test
+	void aFollowUpAfterResolvingKeepsTheResolutionTime() throws Exception {
+		SignedUp org = signUp();
+		long service = orgs.createService(org.adminToken(), "Checkout", org.adminId());
+		publish(org, service, "Checkout", "Checkout");
+		long incidentId = TestOrgs.id(orgs.declareIncident(org.adminToken(), service, "Checkout failing"));
+
+		postUpdate(org, incidentId, "INVESTIGATING", "Checkout is failing.");
+		String resolved = send(org.adminToken(), post("/api/incidents/{id}/public-updates", incidentId),
+				"{\"status\":\"RESOLVED\",\"message\":\"Checkout works again.\"}", 201);
+		postUpdate(org, incidentId, "RESOLVED", "The cause was an expired certificate.");
+
+		String page = page(org);
+		assertThat(Instant.parse(JsonPath.read(page, "$.resolvedIncidents[0].resolvedAt")))
+				.isEqualTo(Instant.parse(JsonPath.read(resolved, "$.createdAt")));
+		assertThat(JsonPath.<List<Object>>read(page, "$.resolvedIncidents[0].updates")).hasSize(3);
+	}
+
+	@Test
+	void aRecentFollowUpDoesNotBringBackAnIncidentResolvedLongAgo() throws Exception {
+		SignedUp org = signUp();
+		long service = orgs.createService(org.adminToken(), "Checkout", org.adminId());
+		publish(org, service, "Checkout", "Checkout");
+		long incidentId = TestOrgs.id(orgs.declareIncident(org.adminToken(), service, "Checkout failing"));
+		Instant now = clock.instant();
+		update(org, incidentId, "INVESTIGATING", now.minus(Duration.ofDays(100)));
+		update(org, incidentId, "RESOLVED", now.minus(Duration.ofDays(95)));
+		update(org, incidentId, "RESOLVED", now.minus(Duration.ofDays(1)));
+
+		String page = page(org);
+		assertThat(JsonPath.<List<Object>>read(page, "$.resolvedIncidents")).isEmpty();
+		assertThat(JsonPath.<List<Object>>read(page, "$.activeIncidents")).isEmpty();
+	}
+
+	@Test
 	void aStaleTokenDoesNotStopTheCustomerReadingThePage() throws Exception {
 		SignedUp org = signUp();
 		mvc.perform(get("/api/public/status/{slug}", slug(org)).header(HttpHeaders.AUTHORIZATION, "Bearer not-a-real-token"))
@@ -241,8 +305,25 @@ class PublicStatusTest {
 	}
 
 	private void check(SignedUp org, long monitorId, Instant at, boolean success) {
-		jdbc.update("insert into monitor_check_result (org_id, monitor_id, checked_at, success) values (?, ?, ?, ?)",
-				org.orgId(), monitorId, Timestamp.from(at), success);
+		jdbc.update("""
+				insert into monitor_check_result (org_id, monitor_id, service_id, checked_at, success)
+				select ?, id, service_id, ?, ? from uptime_monitor where id = ?""",
+				org.orgId(), Timestamp.from(at), success, monitorId);
+	}
+
+	/** A check through the recorder the monitor worker uses, with the monitor's current version. */
+	private void record(SignedUp org, long monitorId, ProbeOutcome outcome) {
+		long version = jdbc.queryForObject("select version from uptime_monitor where id = ?", Long.class, monitorId);
+		boolean saved = OrgContext.runAs(org.orgId(), () -> recorder.record(
+				new DueMonitor(monitorId, org.orgId(), version, "https://203.0.113.10/health", 200), outcome, clock.instant()));
+		assertThat(saved).isTrue();
+	}
+
+	/** A public update written at a chosen time, as the API cannot backdate one. */
+	private void update(SignedUp org, long incidentId, String status, Instant at) {
+		jdbc.update("""
+				insert into public_update (org_id, incident_id, status, message, author_id, created_at)
+				values (?, ?, ?, ?, ?, ?)""", org.orgId(), incidentId, status, "Update " + status, org.adminId(), Timestamp.from(at));
 	}
 
 	private long addMember(SignedUp org, String displayName, String role) throws Exception {

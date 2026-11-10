@@ -488,9 +488,11 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | In review (Manan) |
+| TC-D44b | Equivalence | A new incident, then the background worker receives a valid embedding from `POST /embed` | Creation does not call the AI service; the worker stores the 768-value embedding on the incident | `IncidentEmbeddingTest.creationQueuesEmbeddingForBackgroundWorker`, `IncidentEmbeddingTest.retryStoresPreviouslyUnavailableEmbedding` (Testcontainers) | In review (Manan) |
 | TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
 | TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
-| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |
+| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset during incident creation | The incident is created; failed embeddings remain retryable and the client respects its timeout | `AiEmbeddingClientTest`, `IncidentEmbeddingTest` (Testcontainers) | In review (Manan) |
+| TC-FR-18.4b | Negative | The AI service is unavailable for similar-incident lookup | The endpoint returns 200 with an empty array, never an error | `SimilarIncidentsTest` | Planned (Manan) |
 
 ### Public status page (FR-21, D45): decision table on who may publish
 

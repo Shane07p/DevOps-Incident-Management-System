@@ -8,8 +8,10 @@ Detects rollbacks, regressions, and dependency deployments.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 
@@ -28,28 +30,33 @@ DEFAULT_SERVICE_DEPENDENCIES: Dict[str, List[str]] = {
     "order-fulfillment": [],
 }
 
-DEFAULT_RECORDED_DEPLOYS: List[Dict[str, Any]] = [
-    {
-        "service": "checkout",
-        "version": "v1.0.1-broken",
-        "previous_version": "v1.0.0",
-        "timestamp": "2026-10-27T08:16:00Z",
-        "commit": "a1b2c3d",
-        "author": "ci-bot",
-        "status": "completed",
-        "message": "Deployed v1.0.1-broken to checkout service causing immediate checkout deadlock",
-    },
-    {
-        "service": "payments",
-        "version": "v1.0.0",
-        "previous_version": "v0.9.9",
-        "timestamp": "2026-10-26T12:00:00Z",
-        "commit": "f4708c4",
-        "author": "ci-bot",
-        "status": "completed",
-        "message": "Routine stable deployment to payments service",
-    },
-]
+def load_recorded_deploys(
+    fixtures_dir: Optional[Path] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Load recorded demo-shop deployments from data/fixtures/scenarios/SCN-0X/deploy_events.json.
+    """
+    if fixtures_dir is None:
+        fixtures_dir = Path(__file__).resolve().parent / "data" / "fixtures" / "scenarios"
+
+    deploys: List[Dict[str, Any]] = []
+    if not fixtures_dir.exists():
+        return deploys
+
+    for scn_dir in sorted(fixtures_dir.glob("SCN-*")):
+        deploy_file = scn_dir / "deploy_events.json"
+        if deploy_file.exists():
+            try:
+                events = json.loads(deploy_file.read_text(encoding="utf-8"))
+                if isinstance(events, list):
+                    deploys.extend(events)
+            except Exception:
+                pass
+
+    return deploys
+
+
+DEFAULT_RECORDED_DEPLOYS: List[Dict[str, Any]] = load_recorded_deploys()
 
 
 def is_rollback(version: str, previous_version: str = "", message: str = "") -> bool:

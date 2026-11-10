@@ -35,8 +35,8 @@ def test_build_deploy_url():
 def test_find_deploy_events_direct_match():
     deploys = find_deploy_events(
         service="checkout",
-        start_time="2026-10-27T08:00:00Z",
-        end_time="2026-10-27T08:30:00Z",
+        start_time="2026-11-08T15:00:00Z",
+        end_time="2026-11-08T15:30:00Z",
     )
     assert len(deploys) == 1
     dep = deploys[0]
@@ -47,32 +47,32 @@ def test_find_deploy_events_direct_match():
 
 
 def test_find_deploy_events_lookback_window():
-    # Incident started at 08:20:00Z, deploy was at 08:16:00Z (4 minutes prior)
+    # Incident started at 15:25:00Z, deploy was at 15:22:51Z (approx 2.1 minutes prior)
     deploys = find_deploy_events(
         service="checkout",
-        incident_start="2026-10-27T08:20:00Z",
+        incident_start="2026-11-08T15:25:00Z",
         lookback_minutes=60,
     )
     assert len(deploys) == 1
     dep = deploys[0]
     assert dep["version"] == "v1.0.1-broken"
-    assert dep["minutes_before_incident"] == 4.0
+    assert dep["minutes_before_incident"] == pytest.approx(2.1, abs=0.2)
 
 
 def test_find_deploy_events_lookback_window_boundary():
-    # Deploy at 08:16:00Z.
-    # Lookback window starting after deploy (e.g. at 08:30:00 with lookback=10m => window is 08:20 to 08:30)
+    # Deploy at 15:22:51Z.
+    # Lookback window starting after deploy (at 15:35:00 with lookback=10m => window is 15:25 to 15:35)
     deploys_outside = find_deploy_events(
         service="checkout",
-        incident_start="2026-10-27T08:30:00Z",
+        incident_start="2026-11-08T15:35:00Z",
         lookback_minutes=10,
     )
     assert len(deploys_outside) == 0
 
-    # Lookback window containing deploy (e.g. at 08:30:00 with lookback=20m => window is 08:10 to 08:30)
+    # Lookback window containing deploy (at 15:35:00 with lookback=20m => window is 15:15 to 15:35)
     deploys_inside = find_deploy_events(
         service="checkout",
-        incident_start="2026-10-27T08:30:00Z",
+        incident_start="2026-11-08T15:35:00Z",
         lookback_minutes=20,
     )
     assert len(deploys_inside) == 1
@@ -145,11 +145,11 @@ def test_find_deploy_events_dependency_service_correlation():
 
 
 def test_find_deploy_events_timezone_offsets():
-    # 08:16:00Z in +05:30 is 13:46:00+05:30
+    # 15:22:51Z in +05:30 is 20:52:51+05:30
     deploys = find_deploy_events(
         service="checkout",
-        start_time="2026-10-27T13:40:00+05:30",
-        end_time="2026-10-27T13:50:00+05:30",
+        start_time="2026-11-08T20:50:00+05:30",
+        end_time="2026-11-08T20:55:00+05:30",
     )
     assert len(deploys) == 1
     assert deploys[0]["version"] == "v1.0.1-broken"
@@ -159,15 +159,51 @@ def test_find_deploy_events_rejects_reversed_time():
     with pytest.raises(ValueError, match="end_time must be after or equal to start_time"):
         find_deploy_events(
             service="checkout",
-            start_time="2026-10-27T09:00:00Z",
-            end_time="2026-10-27T08:00:00Z",
+            start_time="2026-11-08T16:00:00Z",
+            end_time="2026-11-08T15:00:00Z",
         )
 
 
 def test_find_deploy_events_unknown_service():
     deploys = find_deploy_events(
         service="non-existent-service",
-        start_time="2026-10-27T08:00:00Z",
-        end_time="2026-10-27T09:00:00Z",
+        start_time="2026-11-08T15:00:00Z",
+        end_time="2026-11-08T16:00:00Z",
     )
     assert deploys == []
+
+
+def test_query_deploy_events_via_registry_execute():
+    from agent_tools import build_default_tool_registry
+    registry = build_default_tool_registry()
+
+    # Agent calls query_deploy_events with incident_start and include_dependencies=True
+    result = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "incident_start": "2026-11-08T15:25:00Z",
+            "include_dependencies": True,
+        },
+    )
+    assert result.success is True
+    assert "deploys" in result.data
+    deploys = result.data["deploys"]
+    assert len(deploys) >= 1
+    assert any(d["service"] == "checkout" and d["version"] == "v1.0.1-broken" for d in deploys)
+
+
+def test_query_deploy_events_via_registry_execute_defaults_dependencies():
+    from agent_tools import build_default_tool_registry
+    registry = build_default_tool_registry()
+
+    # When incident_start is given, include_dependencies defaults to True
+    result = registry.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "incident_start": "2026-11-08T15:25:00Z",
+        },
+    )
+    assert result.success is True
+    assert len(result.data["deploys"]) >= 1

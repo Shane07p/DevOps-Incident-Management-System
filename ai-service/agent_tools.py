@@ -166,11 +166,15 @@ def query_deploy_events(
     incident_start: Optional[str] = None,
     incident_end: Optional[str] = None,
     lookback_minutes: int = 120,
-    include_dependencies: bool = False,
+    include_dependencies: Optional[bool] = None,
 ) -> ToolResult:
     """
     Query recorded deployments for the target service within an optional time range.
+    Defaults to including upstream dependencies when incident_start is provided.
     """
+    if include_dependencies is None:
+        include_dependencies = bool(incident_start)
+
     try:
         matching_deploys = find_deploy_events(
             deploys=DEMO_SHOP_RECORDED_DEPLOYS,
@@ -387,6 +391,12 @@ class ToolRegistry:
         for key, val in args.items():
             if key in properties:
                 expected_type = properties[key].get("type")
+                if expected_type == "boolean" and not isinstance(val, bool):
+                    return ToolResult(
+                        tool_name=name,
+                        success=False,
+                        error=f"Invalid argument '{key}': expected boolean, got {type(val).__name__}",
+                    )
                 if expected_type == "string" and not isinstance(val, str):
                     return ToolResult(
                         tool_name=name,
@@ -399,7 +409,7 @@ class ToolRegistry:
                         success=False,
                         error=f"Invalid argument '{key}': expected number, got {type(val).__name__}",
                     )
-                if expected_type == "integer" and not isinstance(val, int):
+                if expected_type == "integer" and (not isinstance(val, int) or isinstance(val, bool)):
                     return ToolResult(
                         tool_name=name,
                         success=False,
@@ -455,6 +465,10 @@ def build_default_tool_registry() -> ToolRegistry:
                     "service": {"type": "string", "description": "Service name"},
                     "start_time": {"type": "string", "description": "Optional start timestamp"},
                     "end_time": {"type": "string", "description": "Optional end timestamp"},
+                    "incident_start": {"type": "string", "description": "ISO-8601 UTC timestamp of incident start"},
+                    "incident_end": {"type": "string", "description": "Optional ISO-8601 UTC timestamp of incident end"},
+                    "lookback_minutes": {"type": "integer", "description": "Lookback window in minutes (default: 120)"},
+                    "include_dependencies": {"type": "boolean", "description": "Whether to include deployments of upstream dependencies (default: True when incident_start is provided)"},
                 },
                 "required": ["service"],
             },

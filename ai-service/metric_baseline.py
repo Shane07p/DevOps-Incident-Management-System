@@ -11,8 +11,23 @@ from __future__ import annotations
 import json
 import math
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlencode
+
+
+# Explicit set of metrics where lower values represent anomalies / degraded health
+LOWER_IS_WORSE_METRICS: Set[str] = {
+    "demo_certificate_days_until_expiry",
+    "certificate_days_until_expiry",
+    "days_until_expiry",
+}
+
+
+def is_lower_is_worse_metric(metric_name: str) -> bool:
+    """Check whether lower values indicate an anomaly (e.g. certificate expiry)."""
+    name = metric_name.lower()
+    return name in LOWER_IS_WORSE_METRICS or any(kw in name for kw in ("expiry", "remaining"))
 
 
 def parse_time(value: str) -> datetime:
@@ -84,7 +99,7 @@ def format_ratio_summary(
     ratio = calculate_baseline_ratio(normal_value, incident_value)
 
     # Inverted metrics where lower is anomalous (e.g., certificate days until expiry)
-    if "expiry" in metric_name.lower() or "remaining" in metric_name.lower():
+    if is_lower_is_worse_metric(metric_name):
         if normal_value > 0 and incident_value <= 0:
             return f"{metric_name} reached zero{unit_str} (normal baseline {normal_value:g}{unit_str})"
         drop = normal_value - incident_value
@@ -109,18 +124,28 @@ def classify_severity(
     normal_value: float,
     incident_value: float,
     threshold_ratio: float = 1.5,
+    unit: str = "",
 ) -> str:
     """
     Classify anomaly severity (CRITICAL, HIGH, WARNING, NORMAL) based on
     deviation from normal baseline.
     """
     # Inverted metric: certificate expiry
-    if "expiry" in metric_name.lower() or "days" in metric_name.lower():
+    if is_lower_is_worse_metric(metric_name):
         if incident_value <= 0:
             return "CRITICAL"
         elif incident_value <= 7:
             return "HIGH"
         elif incident_value <= 30:
+            return "WARNING"
+        return "NORMAL"
+
+    if unit == "rate" or "rate" in metric_name.lower():
+        if incident_value >= 0.5:
+            return "CRITICAL"
+        elif incident_value >= 0.1:
+            return "HIGH"
+        elif incident_value > 0:
             return "WARNING"
         return "NORMAL"
 
@@ -160,7 +185,7 @@ def evaluate_metric_anomaly(
     ratio = calculate_baseline_ratio(normal_value, incident_value)
     delta = incident_value - normal_value
     percent_change = ((delta / normal_value) * 100.0) if normal_value > 0 else (100.0 if incident_value > 0 else 0.0)
-    severity = classify_severity(metric_name, normal_value, incident_value, threshold_ratio)
+    severity = classify_severity(metric_name, normal_value, incident_value, threshold_ratio, unit=unit)
     summary = format_ratio_summary(metric_name, normal_value, incident_value, unit)
 
     return {
@@ -177,85 +202,86 @@ def evaluate_metric_anomaly(
     }
 
 
-# Default recorded metrics matching the five Demo Shop fault scenarios (SCN-01 to SCN-05)
-DEFAULT_RECORDED_METRICS: Dict[str, List[Dict[str, Any]]] = {
-    "payments": [
-        {
-            "metric": "demo_http_request_duration_seconds",
-            "scenario_id": "SCN-01",
-            "observed_at": "2026-10-27T08:15:40Z",
-            "observation": "p99 latency 2001.93ms (normal baseline < 50ms, SLA threshold 1500ms)",
-            "normal_value": 25.0,
-            "incident_value": 2001.93,
-            "unit": "ms",
-            "severity": "CRITICAL",
-        },
-        {
-            "metric": "demo_certificate_days_until_expiry",
-            "scenario_id": "SCN-05",
-            "observed_at": "2026-10-30T10:00:00Z",
-            "observation": "TLS certificate expiry dropped to 0 days (normal baseline 90 days)",
-            "normal_value": 90.0,
-            "incident_value": 0.0,
-            "unit": "days",
-            "severity": "CRITICAL",
-        },
-        {
-            "metric": "demo_ssl_errors_total",
-            "scenario_id": "SCN-05",
-            "observed_at": "2026-10-30T10:00:05Z",
-            "observation": "SSL handshake errors counter incremented to 1 (normal baseline 0)",
-            "normal_value": 0.0,
-            "incident_value": 1.0,
-            "unit": "errors",
-            "severity": "HIGH",
-        },
-    ],
-    "checkout": [
-        {
-            "metric": "demo_http_requests_total_5xx",
-            "scenario_id": "SCN-02",
-            "observed_at": "2026-10-28T10:00:00Z",
-            "observation": "Checkout failure rate spiked to 80% with simulated database deadlocks (normal baseline < 0.1%)",
-            "normal_value": 0.001,
-            "incident_value": 0.80,
-            "unit": "rate",
-            "severity": "CRITICAL",
-        },
-        {
-            "metric": "demo_http_requests_total",
-            "scenario_id": "SCN-03",
-            "observed_at": "2026-10-27T08:16:15Z",
-            "observation": "Checkout failed requests spiked after broken deploy (normal baseline < 0.1%)",
-            "normal_value": 0.001,
-            "incident_value": 0.75,
-            "unit": "rate",
-            "severity": "CRITICAL",
-        },
-    ],
-    "order-fulfillment": [
-        {
-            "metric": "demo_queue_depth",
-            "scenario_id": "SCN-04",
-            "observed_at": "2026-10-29T10:00:00Z",
-            "observation": "Order fulfillment queue worker paused, backlog accumulated to 42 orders (normal baseline 0-1)",
-            "normal_value": 0.0,
-            "incident_value": 42.0,
-            "unit": "orders",
-            "severity": "HIGH",
-        },
-        {
-            "metric": "demo_queue_lag_seconds",
-            "scenario_id": "SCN-04",
-            "observed_at": "2026-10-29T10:00:10Z",
-            "observation": "Queue processing lag increased to 180s (normal baseline < 5s)",
-            "normal_value": 2.0,
-            "incident_value": 180.0,
-            "unit": "s",
-            "severity": "HIGH",
-        },
-    ],
-}
+def load_recorded_metrics(
+    fixtures_dir: Optional[Path] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Load recorded demo-shop metrics from data/fixtures/scenarios/SCN-0X/.
+    Reads normal (baseline) and incident (fault) values from metrics.json,
+    and the timestamp from metadata.json.
+    Drops static 'observation' and 'severity' fields so they are computed dynamically.
+    """
+    if fixtures_dir is None:
+        fixtures_dir = Path(__file__).resolve().parent / "data" / "fixtures" / "scenarios"
+
+    metrics_by_service: Dict[str, List[Dict[str, Any]]] = {}
+    if not fixtures_dir.exists():
+        return metrics_by_service
+
+    for scn_dir in sorted(fixtures_dir.glob("SCN-*")):
+        meta_file = scn_dir / "metadata.json"
+        metrics_file = scn_dir / "metrics.json"
+        if not meta_file.exists() or not metrics_file.exists():
+            continue
+
+        try:
+            metadata = json.loads(meta_file.read_text(encoding="utf-8"))
+            metrics_data = json.loads(metrics_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        service = metadata.get("service", "").lower()
+        scenario_id = metadata.get("scenario_id", scn_dir.name)
+        observed_at = metadata.get("fault_started_at") or metadata.get("recorded_at", "")
+
+        baseline_sec = metrics_data.get("baseline", {})
+        fault_sec = metrics_data.get("fault", {})
+
+        service_list = metrics_by_service.setdefault(service, [])
+
+        for metric_name, fault_val in fault_sec.items():
+            base_val = baseline_sec.get(metric_name)
+
+            if isinstance(fault_val, dict):
+                if "p99" in fault_val:
+                    normal_val = float(base_val.get("p99", 0.0)) if isinstance(base_val, dict) else 0.0
+                    incident_val = float(fault_val.get("p99", 0.0))
+                    unit = fault_val.get("unit", "ms")
+                elif "error_rate" in fault_val:
+                    normal_val = float(base_val.get("error_rate", 0.0)) if isinstance(base_val, dict) else 0.0
+                    incident_val = float(fault_val.get("error_rate", 0.0))
+                    unit = "rate"
+                else:
+                    normal_val = 0.0
+                    incident_val = 0.0
+                    unit = ""
+            else:
+                normal_val = float(base_val) if base_val is not None else 0.0
+                incident_val = float(fault_val)
+                if "days" in metric_name:
+                    unit = "days"
+                elif "depth" in metric_name:
+                    unit = "orders"
+                elif "lag" in metric_name or "seconds" in metric_name:
+                    unit = "s"
+                elif "errors" in metric_name:
+                    unit = "errors"
+                else:
+                    unit = ""
+
+            service_list.append({
+                "metric": metric_name,
+                "scenario_id": scenario_id,
+                "observed_at": observed_at,
+                "normal_value": normal_val,
+                "incident_value": incident_val,
+                "unit": unit,
+            })
+
+    return metrics_by_service
+
+
+DEFAULT_RECORDED_METRICS: Dict[str, List[Dict[str, Any]]] = load_recorded_metrics()
 
 
 def find_metric_anomalies(
@@ -317,13 +343,16 @@ def find_metric_anomalies(
             query_url = build_metric_query_url(query_base_url, datasource_uid, expr, s_from, s_to)
 
         anomaly_record = dict(entry)
+        anomaly_record.pop("observation", None)
+        anomaly_record.pop("severity", None)
         anomaly_record.update({
             "service": service,
             "ratio": eval_result["ratio"],
             "delta": eval_result["delta"],
             "percent_change": eval_result["percent_change"],
-            "severity": entry.get("severity") or eval_result["severity"],
-            "observation": entry.get("observation") or eval_result["summary"],
+            "severity": eval_result["severity"],
+            "observation": eval_result["summary"],
+            "summary": eval_result["summary"],
             "query_url": query_url,
         })
         results.append(anomaly_record)

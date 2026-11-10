@@ -49,3 +49,11 @@ Rule: once a credential is checked, carry its id, not its value.
 ## 2026-11-09 · Hand-written data again, now a rule
 Seen in: #224, after #215. Metric and deploy evidence came from values typed into the code, not the recordings merged in #215.
 Rule: promoted to `ai-service/AGENTS.md` ("Evidence comes from the recordings").
+
+## 2026-11-11 · History keeps the link it had when it happened
+Seen in: #233 (Codex). Uptime joined check results to their monitor's current service, so moving a monitor moved its past checks too.
+Rule: a record that must stay true later stores what it belonged to at the time (here `service_id` on each check), not only a link to something that can change.
+
+## 2026-11-11 · A state's start time is its first entry, not its latest
+Seen in: #233 (Codex). A second RESOLVED update moved `resolvedAt` forward and could bring an old incident back into the 90-day list.
+Rule: take a transition time from the first event that entered the state, and load enough history to see it.

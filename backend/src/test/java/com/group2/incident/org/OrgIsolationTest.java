@@ -154,6 +154,8 @@ class OrgIsolationTest {
 						"{\"role\":\"COMMS\",\"userId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("POST /api/incidents/{id}/comments", HttpMethod.POST, "/api/incidents/{incidentId}/comments",
 						"{\"comment\":\"x\"}"),
+				Arguments.of("POST /api/incidents/{id}/public-updates", HttpMethod.POST, "/api/incidents/{incidentId}/public-updates",
+						"{\"status\":\"INVESTIGATING\",\"message\":\"x\"}"),
 				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
 						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
 				Arguments.of("POST /api/incidents/{id}/deploys/{deployId}", HttpMethod.POST,
@@ -250,6 +252,8 @@ class OrgIsolationTest {
 		Set<String> missing = new TreeSet<>();
 		handlerMapping.getHandlerMethods().forEach((info, method) -> info.getPatternValues().stream()
 				.filter(pattern -> pattern.contains("{"))
+				// The public status page is open to every org by its slug; PublicStatusTest checks it shows one org only.
+				.filter(pattern -> !pattern.startsWith("/api/public/"))
 				.forEach(pattern -> info.getMethodsCondition().getMethods()
 						.forEach(verb -> {
 							String key = verb.name() + " " + pattern;

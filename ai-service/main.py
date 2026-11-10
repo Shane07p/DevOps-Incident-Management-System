@@ -6,7 +6,7 @@ FastAPI service providing AI-assisted incident recommendations and autonomous SR
 Sprint 1 Scope:
   - GET  /health   -> Instant service liveness check
   - POST /suggest  -> Returns suggestions conforming strictly to the AI contract shape
-                      in docs/plans/2026-10-17-implementation-plan.md.
+                      in docs/3-project-management/implementation-plan.md.
 
 Sprint 2 additions (Issue #62):
   - POST /embed    -> Returns a numeric embedding vector via Ollama.
@@ -328,7 +328,7 @@ async def ready(response: Response) -> dict:
 def suggest(request: SuggestRequest) -> SuggestResponse:
     """
     Returns recommendations based on incident details and past incident context.
-    Conforms to the AI contract in docs/plans/2026-10-17-implementation-plan.md.
+    Conforms to the AI contract in docs/3-project-management/implementation-plan.md.
     In Sprint 1, this returns suggestions referencing IDs from pastIncidents.
     (Real TF-IDF and Ollama LLM integration start in Sprint 2).
     """

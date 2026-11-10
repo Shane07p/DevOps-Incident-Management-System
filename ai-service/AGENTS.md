@@ -14,3 +14,6 @@ Python with FastAPI, running models through Ollama. The project-wide rules are i
 - **Pin exact versions** in `requirements.txt` (`==`), so builds repeat and Dependabot can track
   them.
 - **CI has no model.** Tests use the stub or recorded data, never a live Ollama.
+- **Evidence comes from the recordings.** Tools and tests read the demo-shop recordings in
+  `data/fixtures/scenarios/SCN-0X/`, never values typed into the code: data written to match the
+  expected answer cannot catch a wrong one (`docs/lessons.md`, #215, #224).

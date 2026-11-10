@@ -1,15 +1,15 @@
 # Features
 
 Everything Settle will do, how people use it, and when it is built. The AI features, the AI SRE,
-and the MCP server are in the [AI/ML roadmap](plans/ai-ml-roadmap.md). The sprints are in
-[sprint-plan.md](sprint-plan.md).
+and the MCP server are in the [AI/ML roadmap](ai-ml-roadmap.md). The sprints are in
+[sprint-plan.md](../3-project-management/sprint-plan.md).
 
 The product takes the best of two tools:
 - **incident.io** for incident response: declaring, roles, the timeline, postmortems, and insights.
 - **Better Stack** for monitoring: uptime checks, heartbeats, logs and metrics, and the status page.
 
 **About the tables:**
-- **Req.** is the requirement in `REQUIREMENTS.md`. *New* means it still has to be added there
+- **Req.** is the requirement in `srs.md`. *New* means it still has to be added there
   before it is built.
 - **Sprint** is when it is planned.
 

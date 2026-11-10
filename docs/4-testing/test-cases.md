@@ -1,9 +1,9 @@
 # Test Cases
 
-Designed test cases for Sprints 1 to 3. The [test plan](TEST_PLAN.md) explains the levels and
-techniques; results go in [TEST_REPORT.md](TEST_REPORT.md).
+Designed test cases for Sprints 1 to 3. The [test plan](test-plan.md) explains the levels and
+techniques; results go in [test-report.md](test-report.md).
 
-**IDs** extend the planned checks in [TRACEABILITY.csv](../TRACEABILITY.csv): `TC-FR-16.3b` is the
+**IDs** extend the planned checks in [traceability.csv](traceability.csv): `TC-FR-16.3b` is the
 second designed case for check `TC-FR-16.3`. Features with no FR yet use their decision ID
 (`TC-D36a`).
 
@@ -12,7 +12,7 @@ second designed case for check `TC-FR-16.3`. Features with no FR yet use their d
 - **In review:** the test is in an open PR.
 - **Planned:** not written yet; the owner and issue are given.
 
-A case is marked Passed or Failed only in [TEST_REPORT.md](TEST_REPORT.md), after a recorded run.
+A case is marked Passed or Failed only in [test-report.md](test-report.md), after a recorded run.
 
 **How to use this file:** your issue lists the case IDs you must automate. Name the test so it is
 easy to find, put its name in the Test column, and change the status in the same PR.
@@ -555,7 +555,7 @@ Two rule methods get basis path testing, done by their owners once the code exis
 | The SLA check (target, start, stop, now → running, met, or breached) | Utsav D and Manan |
 
 For each one:
-1. Draw its control-flow graph and add the picture to `docs/testing/`.
+1. Draw its control-flow graph and add the picture to `docs/4-testing/`.
 2. Work out the cyclomatic complexity, V(G) = edges − nodes + 2.
 3. List V(G) independent paths, and write one test per path. Name them here as `TC-WB-…`.
 4. Check that JaCoCo shows every branch of the method covered.

@@ -1,16 +1,16 @@
 # Testing and Workflow
 
 Other documents cover the rest:
-- the roadmap and sprint records: [sprint-plan.md](sprint-plan.md);
-- each sprint's work: [plans/](plans/);
-- the team: [PROJECT.md](PROJECT.md#team);
-- the epics: [epics-and-conflicts.md](epics-and-conflicts.md).
+- the roadmap and sprint records: [sprint-plan.md](../3-project-management/sprint-plan.md);
+- each sprint's work: [plans/](../3-project-management/);
+- the team: [project.md](../3-project-management/project.md#team);
+- the epics: [epics-and-conflicts.md](../1-requirements/epics-and-conflicts.md).
 
 This file covers how the work is tested, tracked, and reviewed. The detailed testing documents are
-in [testing/](testing/):
-- [TEST_PLAN.md](testing/TEST_PLAN.md): levels, techniques, environments, entry and exit criteria;
-- [TEST_CASES.md](testing/TEST_CASES.md): every designed test case, its technique, and its test;
-- [TEST_REPORT.md](testing/TEST_REPORT.md): real results per sprint.
+in [testing/](./):
+- [test-plan.md](test-plan.md): levels, techniques, environments, entry and exit criteria;
+- [test-cases.md](test-cases.md): every designed test case, its technique, and its test;
+- [test-report.md](test-report.md): real results per sprint.
 
 ## Essential tests
 
@@ -35,7 +35,7 @@ Do not duplicate every rule across unit, integration, and browser tests. Use eac
 
 ## Requirement-to-test tracking
 
-[TRACEABILITY.csv](TRACEABILITY.csv) covers every FR sub-ID from the existing detailed requirements. Each row has its original statement, a specific planned check ID and expected result, and a status. Check IDs are planned labels, not claims that test files exist. The extra `ACK-OWNER` and `COMMENT-CONCURRENT` checks above cover the clarified design rules.
+[traceability.csv](traceability.csv) covers every FR sub-ID from the existing detailed requirements. Each row has its original statement, a specific planned check ID and expected result, and a status. Check IDs are planned labels, not claims that test files exist. The extra `ACK-OWNER` and `COMMENT-CONCURRENT` checks above cover the clarified design rules.
 
 Use **Planned - not run**, **Optional - not selected**, **Deferred**, or **Scope review - not run** now. Scope-review rows identify differences or missing detail between the current requirements and the submitted PDF; they must not be counted as fully covered. When implementation starts, link the planned label to the real test method or manual evidence. Change status to Passed or Failed only after running that check, recording the run date and commit or evidence link. When only part of a requirement is built, use **Partly passed** with the same date and commit, and name what is still missing. Deferred items stay visible instead of disappearing from coverage. This CSV covers functional requirements; use the essential-tests table and detailed NFR/DR IDs for the additional quality and domain checks.
 
@@ -85,7 +85,7 @@ The existing stakeholder list can remain even when features are deferred. A stak
 
 ## Done means
 
-The sprint record format is in [sprint-plan.md](sprint-plan.md#3-sprint-records).
+The sprint record format is in [sprint-plan.md](../3-project-management/sprint-plan.md#3-sprint-records).
 
 Before marking a story done:
 - check its acceptance criteria;

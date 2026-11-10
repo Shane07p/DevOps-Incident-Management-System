@@ -625,7 +625,7 @@ public class IncidentService {
 
 	/**
 	 * Refuses a change made from an older view of the incident, rather than applying it over a change
-	 * committed since (NFR-11.2, PROJECT_STRUCTURE section 7). The row's own version check still catches
+	 * committed since (NFR-11.2, architecture.md section 7). The row's own version check still catches
 	 * two changes that overlap in time.
 	 */
 	private static void requireVersion(Incident incident, long expectedVersion) {

@@ -39,7 +39,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 /**
  * Validates caller rate limits on login and alert webhook (NFR-04.4, D42).
- * Implements test cases TC-NFR-04.4a through TC-NFR-04.4e from docs/testing/TEST_CASES.md.
+ * Implements test cases TC-NFR-04.4a through TC-NFR-04.4e from docs/4-testing/test-cases.md.
  */
 @IntegrationTest
 class RateLimitTest {

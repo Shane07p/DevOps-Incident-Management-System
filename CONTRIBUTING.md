@@ -29,7 +29,7 @@ version. To run the app, see the [README](README.md).
 ## For every issue
 
 1. **Take your assigned issue.** `gh issue list --assignee @me`. It lists the acceptance criteria,
-   the contract to follow, and the [test case IDs](docs/testing/TEST_CASES.md) you must automate.
+   the contract to follow, and the [test case IDs](docs/4-testing/test-cases.md) you must automate.
 2. **Start from the latest `main`.**
    ```
    git checkout main && git pull

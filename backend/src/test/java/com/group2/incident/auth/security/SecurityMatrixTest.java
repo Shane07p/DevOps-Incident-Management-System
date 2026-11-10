@@ -482,6 +482,20 @@ public class SecurityMatrixTest {
 						"/api/me/tokens/{id}",
 						null,
 						204, 204, 204, 401
+				),
+				new MatrixRow(
+						"GET /api/telemetry/logs",
+						HttpMethod.GET,
+						"/api/telemetry/logs",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/telemetry/metrics",
+						HttpMethod.GET,
+						"/api/telemetry/metrics",
+						null,
+						200, 200, 200, 401
 				)
 		);
 	}

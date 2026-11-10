@@ -242,12 +242,17 @@ def load_recorded_metrics(
         for metric_name, fault_val in fault_sec.items():
             base_val = baseline_sec.get(metric_name)
 
+            # A dict value holds several fields; "field" names the one read, so the summary
+            # says "error_rate" rather than only the counter's name.
+            field = ""
             if isinstance(fault_val, dict):
                 if "p99" in fault_val:
+                    field = "p99"
                     normal_val = float(base_val.get("p99", 0.0)) if isinstance(base_val, dict) else 0.0
                     incident_val = float(fault_val.get("p99", 0.0))
                     unit = fault_val.get("unit", "ms")
                 elif "error_rate" in fault_val:
+                    field = "error_rate"
                     normal_val = float(base_val.get("error_rate", 0.0)) if isinstance(base_val, dict) else 0.0
                     incident_val = float(fault_val.get("error_rate", 0.0))
                     unit = "rate"
@@ -271,6 +276,7 @@ def load_recorded_metrics(
 
             service_list.append({
                 "metric": metric_name,
+                "field": field,
                 "scenario_id": scenario_id,
                 "observed_at": observed_at,
                 "normal_value": normal_val,
@@ -327,8 +333,9 @@ def find_metric_anomalies(
         normal = float(entry.get("normal_value", 0.0))
         incident = float(entry.get("incident_value", 0.0))
         unit = entry.get("unit", "")
+        label = f'{entry["metric"]} {entry["field"]}' if entry.get("field") else entry["metric"]
         eval_result = evaluate_metric_anomaly(
-            metric_name=entry["metric"],
+            metric_name=label,
             normal_value=normal,
             incident_value=incident,
             unit=unit,

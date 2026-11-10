@@ -185,7 +185,7 @@ def test_every_scenario_finds_expected_metric_and_deploy_evidence():
     Validates that for all five scenarios, metric and deploy evidence assert the real recorded numbers:
     - SCN-01: payments latency p99 rises from 8.5 to 2001.93 ms (CRITICAL)
     - SCN-02: checkout error rate rises from 0 to 0.82 (CRITICAL)
-    - SCN-03: checkout error rate rises from 0 to 1.0, and shows v1.0.1-broken as a direct deploy minutes before fault
+    - SCN-03: checkout error rate rises from 0 to 1.0, and shows v1.0.1-broken as a direct deploy at the fault start
     - SCN-04: order-fulfillment queue depth rises from 1 to 8, lag rises from 0 to 7s
     - SCN-05: payments certificate days drop from 90 to 0, and SSL errors rise from 0 to 15
     """
@@ -205,18 +205,25 @@ def test_every_scenario_finds_expected_metric_and_deploy_evidence():
     assert err_02["incident_value"] == 0.82
     assert err_02["severity"] == "CRITICAL"
     assert "0.82" in err_02["observation"]
+    assert "error_rate" in err_02["observation"]
 
-    # SCN-03: checkout error rate rising from 0 to 1.0 and direct deploy v1.0.1-broken minutes before fault
+    # SCN-03: checkout error rate rising from 0 to 1.0, and the direct deploy v1.0.1-broken at the
+    # recorded fault start (the recording logs the deploy a few milliseconds after the switch)
     anomalies_03 = find_metric_anomalies("checkout", start_time="2026-11-08T15:22:45Z", end_time="2026-11-08T15:23:00Z")
     err_03 = next(m for m in anomalies_03 if m["scenario_id"] == "SCN-03")
     assert err_03["metric"] == "demo_http_requests_total"
     assert err_03["normal_value"] == 0.0
     assert err_03["incident_value"] == 1.0
-    deploys_03 = find_deploy_events(service="checkout", incident_start="2026-11-08T15:25:00Z")
-    assert len(deploys_03) >= 1
+    metadata_03 = json.loads(
+        (Path(__file__).resolve().parents[1] / "data" / "fixtures" / "scenarios" / "SCN-03" / "metadata.json")
+        .read_text(encoding="utf-8")
+    )
+    deploys_03 = find_deploy_events(service="checkout", incident_start=metadata_03["fault_started_at"])
+    assert len(deploys_03) == 1
     assert deploys_03[0]["version"] == "v1.0.1-broken"
     assert deploys_03[0]["is_direct"] is True
-    assert deploys_03[0]["minutes_before_incident"] < 5.0
+    assert deploys_03[0]["relevance"] == "direct"
+    assert abs(deploys_03[0]["minutes_before_incident"]) < 1.0
 
     # SCN-04: order-fulfillment queue depth rises from 1 to 8, lag from 0 to 7
     anomalies_04 = find_metric_anomalies("order-fulfillment", start_time="2026-11-08T15:30:00Z", end_time="2026-11-08T15:35:00Z")

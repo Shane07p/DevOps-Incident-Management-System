@@ -173,12 +173,35 @@ def test_find_deploy_events_unknown_service():
     assert deploys == []
 
 
-def test_query_deploy_events_via_registry_execute():
-    from agent_tools import build_default_tool_registry
-    registry = build_default_tool_registry()
+# The recordings hold no deploy for checkout's dependencies, so these tests add one
+# payments deploy (payments is a checkout dependency) to tell the two cases apart.
+PAYMENTS_DEPENDENCY_DEPLOY = {
+    "service": "payments",
+    "version": "v2.3.0",
+    "previous_version": "v2.2.9",
+    "timestamp": "2026-11-08T15:20:00Z",
+    "commit": "d4e5f6a",
+    "author": "ci-bot",
+    "status": "completed",
+    "message": "Deployed v2.3.0 to payments service",
+}
 
+
+@pytest.fixture
+def deploys_with_dependency(monkeypatch):
+    import agent_tools
+
+    monkeypatch.setattr(
+        agent_tools,
+        "DEMO_SHOP_RECORDED_DEPLOYS",
+        [*DEFAULT_RECORDED_DEPLOYS, PAYMENTS_DEPENDENCY_DEPLOY],
+    )
+    return agent_tools.build_default_tool_registry()
+
+
+def test_query_deploy_events_via_registry_execute(deploys_with_dependency):
     # Agent calls query_deploy_events with incident_start and include_dependencies=True
-    result = registry.execute(
+    result = deploys_with_dependency.execute(
         "query_deploy_events",
         {
             "service": "checkout",
@@ -187,18 +210,13 @@ def test_query_deploy_events_via_registry_execute():
         },
     )
     assert result.success is True
-    assert "deploys" in result.data
-    deploys = result.data["deploys"]
-    assert len(deploys) >= 1
-    assert any(d["service"] == "checkout" and d["version"] == "v1.0.1-broken" for d in deploys)
+    relevance = {d["service"]: d["relevance"] for d in result.data["deploys"]}
+    assert relevance == {"checkout": "direct", "payments": "dependency"}
 
 
-def test_query_deploy_events_via_registry_execute_defaults_dependencies():
-    from agent_tools import build_default_tool_registry
-    registry = build_default_tool_registry()
-
+def test_query_deploy_events_via_registry_execute_defaults_dependencies(deploys_with_dependency):
     # When incident_start is given, include_dependencies defaults to True
-    result = registry.execute(
+    result = deploys_with_dependency.execute(
         "query_deploy_events",
         {
             "service": "checkout",
@@ -206,4 +224,19 @@ def test_query_deploy_events_via_registry_execute_defaults_dependencies():
         },
     )
     assert result.success is True
-    assert len(result.data["deploys"]) >= 1
+    payments = next(d for d in result.data["deploys"] if d["service"] == "payments")
+    assert payments["relevance"] == "dependency"
+    assert payments["version"] == "v2.3.0"
+
+
+def test_query_deploy_events_via_registry_execute_without_dependencies(deploys_with_dependency):
+    result = deploys_with_dependency.execute(
+        "query_deploy_events",
+        {
+            "service": "checkout",
+            "incident_start": "2026-11-08T15:25:00Z",
+            "include_dependencies": False,
+        },
+    )
+    assert result.success is True
+    assert [d["service"] for d in result.data["deploys"]] == ["checkout"]

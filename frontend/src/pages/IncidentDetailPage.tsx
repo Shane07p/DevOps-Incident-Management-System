@@ -3,18 +3,13 @@ import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
-import { getIncident, type TimelineEntry } from '@/api/incidents'
+import { getIncident } from '@/api/incidents'
 import { listRunbooks } from '@/api/runbooks'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { formatIst, formatMinutes } from '@/lib/time'
-
-// "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
-const eventLabel = (eventType: string) => {
-  const words = eventType.toLowerCase().replaceAll('_', ' ')
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
+import { IncidentTimeline } from './incident/IncidentTimeline'
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -32,25 +27,6 @@ function SlaDue({ label, dueAt, targetMinutes }: { label: string; dueAt: string;
       <span className="font-mono text-lg font-semibold tnum">{formatIst(dueAt)}</span>
       <span className="text-xs text-muted-foreground">Target {formatMinutes(targetMinutes)} from declaration</span>
     </div>
-  )
-}
-
-function Timeline({ entries }: { entries: TimelineEntry[] }) {
-  if (entries.length === 0) return <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
-  return (
-    <ol className="flex flex-col gap-4 border-l pl-5">
-      {entries.map((entry) => (
-        <li key={entry.id} className="relative flex flex-col gap-0.5">
-          <span aria-hidden="true" className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-foreground" />
-          <span className="text-sm">
-            <span className="font-semibold">{eventLabel(entry.eventType)}</span>
-            <span className="text-muted-foreground"> · {entry.actor ?? 'System'}</span>
-          </span>
-          {entry.details && <span className="text-sm">{entry.details}</span>}
-          <span className="font-mono text-xs text-muted-foreground tnum">{formatIst(entry.recordedAt)}</span>
-        </li>
-      ))}
-    </ol>
   )
 }
 
@@ -175,7 +151,7 @@ export function IncidentDetailPage() {
             <h2 id="timeline-heading" className="text-lg font-semibold">
               Timeline
             </h2>
-            <Timeline entries={incident.data.timeline} />
+            <IncidentTimeline incidentId={incident.data.id} entries={incident.data.timeline} />
           </section>
         </>
       )}

@@ -40,6 +40,9 @@ It never does arithmetic on raw data.
 ### AI-1 Find similar
 - **What it does:** turns every incident into a searchable record (title, symptoms, service,
   cause, and fix) and finds the closest matches.
+- At creation, the backend embeds the fields currently available on an incident: title,
+  description (symptoms), and service name. Cause and fix are not structured incident fields yet,
+  so the backend does not invent them; include them when the incident model gains those fields.
 - **Shown in three places:**
   - on the incident page, as "similar past incidents" with a match % and how each was fixed;
   - when declaring an incident, as "this looks like open incident INC-42" (a warning only;

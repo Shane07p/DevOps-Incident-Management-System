@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.group2.incident.support.IntegrationTest;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,6 +48,28 @@ class DatabaseSchemaTest {
 		assertThat(versions).startsWith("1", "2", "3");
 		assertThat(allSucceeded).isTrue();
 		assertThat(flyway.info().pending()).isEmpty();
+	}
+
+	@Test
+	void pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema() {
+		String extensionSchema = jdbc.queryForObject("""
+				select n.nspname
+				from pg_extension e
+				join pg_namespace n on n.oid = e.extnamespace
+				where e.extname = 'vector'
+				""", String.class);
+		assertThat(extensionSchema).isEqualTo("incident");
+
+		jdbc.execute("create temporary table pgvector_round_trip (embedding incident.vector(768))");
+		String vectorValue = "[" + IntStream.range(0, 768)
+				.mapToObj(Integer::toString)
+				.collect(Collectors.joining(",")) + "]";
+		jdbc.update("insert into pgvector_round_trip (embedding) values (?::incident.vector)", vectorValue);
+
+		assertThat(jdbc.queryForObject(
+				"select vector_dims(embedding) from pgvector_round_trip", Integer.class)).isEqualTo(768);
+		assertThat(jdbc.queryForObject(
+				"select embedding::text from pgvector_round_trip", String.class)).isEqualTo(vectorValue);
 	}
 
 	@Test

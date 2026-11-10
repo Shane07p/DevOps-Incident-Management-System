@@ -385,6 +385,14 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-AI-91j | Boundary value | A provider that keeps answering past the deadline; a budget of 100 tokens | Stopped at the deadline with `status: timeout`; each turn may generate only the tokens left | `test_agent_robustness.py` | Automated |
 | TC-AI-91k | Equivalence | Metric anomalies for one incident's time range, a range with none, and a time that is not one | Only that scenario's evidence; nothing; refused | `test_agent_robustness.py` | Automated |
 
+### Metric-baseline and deploy-window evidence (Issue #93)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-93a | Equivalence | Compare metric values against baseline levels (e.g. error rate, latency, queue depth, cert expiry) | Correct anomaly ratio, deviation delta, severity classification, and PromQL Grafana Explore URL | `test_metric_baseline.py` | Automated |
+| TC-AI-93b | Boundary value | Deploys in lookback window (default 2h), on window boundaries, and outside window | Recent deploys returned with `minutes_before_incident`; outside excluded | `test_deploy_window.py` | Automated |
+| TC-AI-93c | Scenario | Service dependency deploys and rollback detection | Dependencies included when requested with `relevance: dependency`; rollbacks flagged | `test_deploy_window.py` | Automated |
+
 ## Sprint 4
 
 The service map API (#154) brings its own cases in its pull request (#180).

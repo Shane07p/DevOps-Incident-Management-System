@@ -17,6 +17,14 @@ from log_patterns import (
     load_recorded_logs,
     parse_time,
 )
+from metric_baseline import (
+    DEFAULT_RECORDED_METRICS,
+    find_metric_anomalies,
+)
+from deploy_window import (
+    DEFAULT_RECORDED_DEPLOYS,
+    find_deploy_events,
+)
 
 DATA_DIR = Path(__file__).resolve().parent / "data" / "fixtures"
 SCENARIOS_DIR = DATA_DIR / "scenarios"
@@ -148,62 +156,42 @@ def query_log_patterns(
 
 
 # Recorded Demo Shop deploys fixture matching Issue #76 / SCN-03
-DEMO_SHOP_RECORDED_DEPLOYS = [
-    {
-        "service": "checkout",
-        "version": "v1.0.1-broken",
-        "previous_version": "v1.0.0",
-        "timestamp": "2026-10-27T08:16:00Z",
-        "commit": "a1b2c3d",
-        "author": "ci-bot",
-        "status": "completed",
-        "message": "Deployed v1.0.1-broken to checkout service causing immediate checkout deadlock",
-    },
-    {
-        "service": "payments",
-        "version": "v1.0.0",
-        "previous_version": "v0.9.9",
-        "timestamp": "2026-10-26T12:00:00Z",
-        "commit": "f4708c4",
-        "author": "ci-bot",
-        "status": "completed",
-        "message": "Routine stable deployment to payments service",
-    },
-]
+DEMO_SHOP_RECORDED_DEPLOYS = DEFAULT_RECORDED_DEPLOYS
 
 
 def query_deploy_events(
     service: str,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
+    incident_start: Optional[str] = None,
+    incident_end: Optional[str] = None,
+    lookback_minutes: int = 120,
+    include_dependencies: Optional[bool] = None,
 ) -> ToolResult:
     """
     Query recorded deployments for the target service within an optional time range.
+    Defaults to including upstream dependencies when incident_start is provided.
     """
+    if include_dependencies is None:
+        include_dependencies = bool(incident_start)
+
     try:
-        start_dt = parse_time(start_time) if start_time else None
-        end_dt = parse_time(end_time) if end_time else None
+        matching_deploys = find_deploy_events(
+            deploys=DEMO_SHOP_RECORDED_DEPLOYS,
+            service=service,
+            incident_start=incident_start,
+            incident_end=incident_end,
+            start_time=start_time,
+            end_time=end_time,
+            lookback_minutes=lookback_minutes,
+            include_dependencies=include_dependencies,
+        )
     except Exception as exc:
         return ToolResult(
             tool_name="query_deploy_events",
             success=False,
             error=f"Invalid timestamp format: {exc}",
         )
-
-    matching_deploys = []
-    for dep in DEMO_SHOP_RECORDED_DEPLOYS:
-        if dep["service"].lower() != service.lower():
-            continue
-        if start_dt or end_dt:
-            try:
-                dep_dt = parse_time(dep["timestamp"])
-            except Exception:
-                continue
-            if start_dt and dep_dt < start_dt:
-                continue
-            if end_dt and dep_dt > end_dt:
-                continue
-        matching_deploys.append(dep)
 
     evidence_items: List[EvidenceItem] = []
     for idx, dep in enumerate(matching_deploys):
@@ -231,68 +219,7 @@ def query_deploy_events(
 
 
 # Recorded Demo Shop metric baselines and anomalies matching the 5 fault scenarios (SCN-01 to SCN-05)
-# Each observation carries when it was seen, inside its own scenario's window, so a query for one
-# incident's time range returns that incident's evidence and not another scenario's. SCN-01's falls
-# within its recording (demo_shop_slow_gateway.jsonl); the others stand apart until #142's recordings
-# replace these hand-written values.
-DEMO_SHOP_RECORDED_METRICS = {
-    "payments": [
-        {
-            "metric": "demo_http_request_duration_seconds",
-            "scenario_id": "SCN-01",
-            "observed_at": "2026-10-27T08:15:40Z",
-            "observation": "p99 latency 2001.93ms (normal baseline < 50ms, SLA threshold 1500ms)",
-            "normal_value": 25.0,
-            "incident_value": 2001.93,
-            "unit": "ms",
-            "severity": "CRITICAL",
-        },
-        {
-            "metric": "demo_certificate_days_until_expiry",
-            "scenario_id": "SCN-05",
-            "observed_at": "2026-10-30T10:00:00Z",
-            "observation": "TLS certificate expiry dropped to 0 days (normal baseline 90 days)",
-            "normal_value": 90.0,
-            "incident_value": 0.0,
-            "unit": "days",
-            "severity": "CRITICAL",
-        },
-        {
-            "metric": "demo_ssl_errors_total",
-            "scenario_id": "SCN-05",
-            "observed_at": "2026-10-30T10:00:05Z",
-            "observation": "SSL handshake errors counter incremented to 1 (normal baseline 0)",
-            "normal_value": 0.0,
-            "incident_value": 1.0,
-            "unit": "errors",
-            "severity": "HIGH",
-        },
-    ],
-    "checkout": [
-        {
-            "metric": "demo_http_requests_total_5xx",
-            "scenario_id": "SCN-02",
-            "observed_at": "2026-10-28T10:00:00Z",
-            "observation": "Checkout failure rate spiked to 80% with simulated database deadlocks (normal baseline < 0.1%)",
-            "normal_value": 0.001,
-            "incident_value": 0.80,
-            "unit": "rate",
-            "severity": "CRITICAL",
-        },
-    ],
-    "order-fulfillment": [
-        {
-            "metric": "demo_queue_depth",
-            "scenario_id": "SCN-04",
-            "observed_at": "2026-10-29T10:00:00Z",
-            "observation": "Order fulfillment queue worker paused, backlog accumulated to 42 orders (normal baseline 0-1)",
-            "normal_value": 0.0,
-            "incident_value": 42.0,
-            "unit": "orders",
-            "severity": "HIGH",
-        },
-    ],
-}
+DEMO_SHOP_RECORDED_METRICS = DEFAULT_RECORDED_METRICS
 
 
 def query_metric_anomalies(
@@ -306,8 +233,13 @@ def query_metric_anomalies(
     optional time range, as query_deploy_events does.
     """
     try:
-        start_dt = parse_time(start_time) if start_time else None
-        end_dt = parse_time(end_time) if end_time else None
+        metrics = find_metric_anomalies(
+            service=service,
+            metric_records=DEMO_SHOP_RECORDED_METRICS,
+            metric_name=metric_name,
+            start_time=start_time,
+            end_time=end_time,
+        )
     except Exception as exc:
         return ToolResult(
             tool_name="query_metric_anomalies",
@@ -315,19 +247,12 @@ def query_metric_anomalies(
             error=f"Invalid timestamp format: {exc}",
         )
 
-    service_key = service.lower()
-    metrics = DEMO_SHOP_RECORDED_METRICS.get(service_key, [])
-    if metric_name:
-        metrics = [m for m in metrics if m["metric"].lower() == metric_name.lower()]
-    if start_dt:
-        metrics = [m for m in metrics if parse_time(m["observed_at"]) >= start_dt]
-    if end_dt:
-        metrics = [m for m in metrics if parse_time(m["observed_at"]) <= end_dt]
-
     evidence_items: List[EvidenceItem] = []
     for idx, m in enumerate(metrics):
         ev_id = f"ev-metric-{idx}"
         content = f"Metric anomaly on '{service}': {m['metric']} - {m['observation']}"
+        if m.get("query_url"):
+            content += f" (Explore: {m['query_url']})"
         evidence_items.append(
             EvidenceItem(
                 id=ev_id,
@@ -466,6 +391,12 @@ class ToolRegistry:
         for key, val in args.items():
             if key in properties:
                 expected_type = properties[key].get("type")
+                if expected_type == "boolean" and not isinstance(val, bool):
+                    return ToolResult(
+                        tool_name=name,
+                        success=False,
+                        error=f"Invalid argument '{key}': expected boolean, got {type(val).__name__}",
+                    )
                 if expected_type == "string" and not isinstance(val, str):
                     return ToolResult(
                         tool_name=name,
@@ -478,7 +409,7 @@ class ToolRegistry:
                         success=False,
                         error=f"Invalid argument '{key}': expected number, got {type(val).__name__}",
                     )
-                if expected_type == "integer" and not isinstance(val, int):
+                if expected_type == "integer" and (not isinstance(val, int) or isinstance(val, bool)):
                     return ToolResult(
                         tool_name=name,
                         success=False,
@@ -534,6 +465,10 @@ def build_default_tool_registry() -> ToolRegistry:
                     "service": {"type": "string", "description": "Service name"},
                     "start_time": {"type": "string", "description": "Optional start timestamp"},
                     "end_time": {"type": "string", "description": "Optional end timestamp"},
+                    "incident_start": {"type": "string", "description": "ISO-8601 UTC timestamp of incident start"},
+                    "incident_end": {"type": "string", "description": "Optional ISO-8601 UTC timestamp of incident end"},
+                    "lookback_minutes": {"type": "integer", "description": "Lookback window in minutes (default: 120)"},
+                    "include_dependencies": {"type": "boolean", "description": "Whether to include deployments of upstream dependencies (default: True when incident_start is provided)"},
                 },
                 "required": ["service"],
             },

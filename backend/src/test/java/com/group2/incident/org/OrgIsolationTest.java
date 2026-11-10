@@ -83,7 +83,17 @@ class OrgIsolationTest {
 		send(b, put("/api/services/{id}/on-call", serviceOfB), "{\"fallbackContactId\": %d, \"shifts\": []}".formatted(b.adminId()));
 		send(b, put("/api/services/{id}/escalation-policy", serviceOfB),
 				"{\"steps\": [{\"stepNumber\": 1, \"responderId\": %d, \"waitMinutes\": 15}]}".formatted(b.adminId()));
-		long toolOfB = TestOrgs.id(send(b, post("/api/tools"), "{\"name\":\"Prometheus\"}"));
+		String toolJson = send(b, post("/api/tools"), "{\"name\":\"Prometheus\"}");
+		long toolOfB = TestOrgs.id(toolJson);
+		String toolTokenOfB = JsonPath.read(toolJson, "$.token");
+		String deployJson = mvc.perform(post("/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolTokenOfB)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"service": "Payments", "version": "v1.0.0", "commit": "b0b0b0", "author": "CI", "deployedAt": "2026-11-09T10:00:00Z"}"""))
+				.andExpect(status().isAccepted())
+				.andReturn().getResponse().getContentAsString();
+		long deployOfB = JsonPath.<Number>read(deployJson, "$.id").longValue();
 		long monitorOfB = TestOrgs.id(send(b, post("/api/monitors"), """
 				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": %d, "failureThreshold": 3, "enabled": true}""".formatted(serviceOfB)));
 		// The fallback contact becomes the assignee and gets a notification.
@@ -96,6 +106,7 @@ class OrgIsolationTest {
 		idsOfB.put("serviceId", serviceOfB);
 		idsOfB.put("userId", b.adminId());
 		idsOfB.put("toolId", toolOfB);
+		idsOfB.put("deployId", deployOfB);
 		idsOfB.put("monitorId", monitorOfB);
 		idsOfB.put("incidentId", incidentOfB);
 		idsOfB.put("entryId", timelineEntryOfB);
@@ -133,6 +144,7 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/services/{id}/dependencies", HttpMethod.PUT, "/api/services/{serviceId}/dependencies",
 						"{\"dependsOn\": []}"),
 				Arguments.of("GET /api/services/{id}/blast-radius", HttpMethod.GET, "/api/services/{serviceId}/blast-radius", null),
+				Arguments.of("GET /api/services/{id}/deploys", HttpMethod.GET, "/api/services/{serviceId}/deploys", null),
 				Arguments.of("PUT /api/services/{id}/escalation-policy", HttpMethod.PUT, "/api/services/{serviceId}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
@@ -144,6 +156,8 @@ class OrgIsolationTest {
 						"{\"comment\":\"x\"}"),
 				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
 						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
+				Arguments.of("POST /api/incidents/{id}/deploys/{deployId}", HttpMethod.POST,
+						"/api/incidents/{incidentId}/deploys/{deployId}", null),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
 						"/api/incidents/{incidentId}/timeline/{entryId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),

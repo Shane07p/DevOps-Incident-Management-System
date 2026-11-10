@@ -274,3 +274,115 @@ def test_fault_switch_enable_disable_is_idempotent(client):
     assert resp4.status_code == 200
     rollback2 = fault_manager.get_last_deploy_event()
     assert rollback1.timestamp == rollback2.timestamp
+
+
+def test_bad_deploy_sends_webhook_when_configured(client, monkeypatch):
+    import httpx
+
+    calls = []
+
+    def mock_post(url, json=None, headers=None, timeout=None):
+        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+        return httpx.Response(202, json={"status": "RECORDED"})
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "http://incident-backend.test")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "mock-tool-token-12345")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post)
+
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert len(calls) == 1
+
+    call = calls[0]
+    assert call["url"] == "http://incident-backend.test/webhooks/deploys"
+    assert call["headers"]["Authorization"] == "Bearer mock-tool-token-12345"
+    assert call["headers"]["Content-Type"] == "application/json"
+    assert call["json"]["service"] == "checkout"
+    assert call["json"]["version"] == "v1.0.1-broken"
+    assert call["json"]["commit"] == "a1b2c3d"
+    assert call["json"]["author"] == "ci-bot"
+    assert "deployedAt" in call["json"]
+
+    # Rollback to clean up
+    client.post("/faults/bad_deploy", json={"enabled": False})
+
+
+def test_bad_deploy_safe_failure_when_webhook_fails(client, monkeypatch):
+    import httpx
+
+    def mock_post_fail(url, json=None, headers=None, timeout=None):
+        raise httpx.ConnectError("Connection refused by backend")
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "http://unreachable-backend.test")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "mock-tool-token")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post_fail)
+
+    # Must succeed cleanly (no 500 crash in demo-shop)
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert fault_manager.is_enabled("bad_deploy") is True
+
+    # Rollback to clean up
+    client.post("/faults/bad_deploy", json={"enabled": False})
+
+
+def test_bad_deploy_skips_webhook_when_not_configured(client, monkeypatch):
+    calls = []
+
+    def mock_post(url, json=None, headers=None, timeout=None):
+        calls.append(url)
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post)
+
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert len(calls) == 0
+
+    # Rollback to clean up
+    client.post("/faults/bad_deploy", json={"enabled": False})
+
+
+def test_bad_deploy_sends_webhook_outside_lock(client, monkeypatch):
+    import httpx
+
+    lock_states_during_post = []
+
+    def mock_post(url, json=None, headers=None, timeout=None):
+        lock_states_during_post.append(fault_manager._lock.locked())
+        return httpx.Response(202, json={"status": "RECORDED"})
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "http://incident-backend.test")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "mock-tool-token-12345")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post)
+
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert len(lock_states_during_post) == 1
+    # Lock MUST NOT be held during the post request
+    assert lock_states_during_post[0] is False
+
+    client.post("/faults/bad_deploy", json={"enabled": False})
+
+
+def test_bad_deploy_configurable_service_name(client, monkeypatch):
+    import httpx
+
+    calls = []
+
+    def mock_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return httpx.Response(202, json={"status": "RECORDED"})
+
+    monkeypatch.setattr("demo_shop.faults.Config.BACKEND_URL", "http://incident-backend.test")
+    monkeypatch.setattr("demo_shop.faults.Config.TOOL_TOKEN", "mock-tool-token-12345")
+    monkeypatch.setattr("demo_shop.faults.Config.DEPLOY_SERVICE_NAME", "PaymentGateway")
+    monkeypatch.setattr("demo_shop.faults.httpx.post", mock_post)
+
+    resp = client.post("/faults/bad_deploy", json={"enabled": True})
+    assert resp.status_code == 200
+    assert len(calls) == 1
+    assert calls[0]["service"] == "PaymentGateway"
+
+    client.post("/faults/bad_deploy", json={"enabled": False})

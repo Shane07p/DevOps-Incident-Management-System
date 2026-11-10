@@ -436,10 +436,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Planned (Het) |
+| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Automated |
+| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Automated |
+| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Automated |
+| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Automated |
 
 ### Runbooks (FR-25)
 
@@ -487,7 +487,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D44a | Equivalence | Store and read back a 768-dimension vector | The same values | `DatabaseSchemaTest` | Planned (Manan) |
+| TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | In review (Manan) |
 | TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
 | TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
 | TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |

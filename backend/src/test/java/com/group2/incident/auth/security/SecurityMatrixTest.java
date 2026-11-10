@@ -19,6 +19,8 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.deploy.entity.Deployment;
+import com.group2.incident.deploy.repository.DeploymentRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.Incident;
@@ -109,6 +111,9 @@ public class SecurityMatrixTest {
 	@Autowired
 	private PersonalAccessTokenService patService;
 
+	@Autowired
+	private DeploymentRepository deployments;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -124,6 +129,7 @@ public class SecurityMatrixTest {
 	private Long targetServiceId;
 	private Long targetToolId;
 	private Long targetIncidentId;
+	private Long targetDeployId;
 	private Long targetMonitorId;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
@@ -275,6 +281,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/services/{id}/deploys",
+						HttpMethod.GET,
+						"/api/services/{id}/deploys",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/service-map",
 						HttpMethod.GET,
 						"/api/service-map",
@@ -385,6 +398,13 @@ public class SecurityMatrixTest {
 						"/api/incidents/{id}/evidence",
 						"{\"url\":\"https://grafana.example.com/logs\",\"label\":\"Grafana logs\"}",
 						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/deploys/{deployId}",
+						HttpMethod.POST,
+						"/api/incidents/{id}/deploys/{deployId}",
+						null,
+						200, 200, 403, 401
 				),
 				new MatrixRow(
 						"POST /api/incidents/{id}/timeline/{entryId}/corrections",
@@ -513,6 +533,14 @@ public class SecurityMatrixTest {
 		viewerNotificationId = notifications.saveAndFlush(
 				new Notification(viewer, incident, "Viewer notification", clock.instant())).getId();
 
+		targetDeployId = deployments.saveAndFlush(new Deployment(
+				savedService,
+				"v1.0.0-sec",
+				"abcdef1234567890",
+				"Security Author",
+				clock.instant()
+		)).getId();
+
 		adminPatId = patService.createToken(new CreatePersonalAccessTokenRequest("admin-matrix-token"), adminUserId).id();
 		engineerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("engineer-matrix-token"), engineerUserId).id();
 		viewerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("viewer-matrix-token"), viewer.getId()).id();
@@ -573,7 +601,9 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
-		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
+		return pathTemplate.replace("{id}", id)
+				.replace("{entryId}", "999999999")
+				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999");
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {
@@ -672,6 +702,70 @@ public class SecurityMatrixTest {
 		// 5. Revoked tool token -> 401
 		toolService.revokeTool(toolCreateResponse.id(), adminUserId);
 		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void webhookDeploysAuthenticationMatrix() throws Exception {
+		String validPayload = """
+				{
+					"service": "SecurityMatrixBaseService",
+					"version": "v1.0.0",
+					"commit": "abcdef1234567890",
+					"author": "Alice Developer",
+					"deployedAt": "2026-11-09T10:00:00Z"
+				}
+				""";
+
+		// 1. Missing token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 2. Wrong tool token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer tt_invalid_token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 3. User JWT tokens (Admin, Engineer, Viewer) are not valid tool tokens -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 4. Valid registered tool token -> 202 Accepted
+		var toolCreateResponse = toolService.createTool(
+				new CreateToolRequest("Matrix Deploy Tool " + UUID.randomUUID()),
+				adminUserId
+		);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isAccepted());
+
+		// 5. Revoked tool token -> 401
+		toolService.revokeTool(toolCreateResponse.id(), adminUserId);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(validPayload))

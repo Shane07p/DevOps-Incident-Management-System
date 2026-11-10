@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.group2.incident.support.IntegrationTest;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,7 +27,8 @@ class DatabaseSchemaTest {
 	private static final List<String> TABLES =
 			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
-					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency", "personal_access_token");
+					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency", "personal_access_token",
+					"deployment", "incident_deployment");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -45,6 +48,28 @@ class DatabaseSchemaTest {
 		assertThat(versions).startsWith("1", "2", "3");
 		assertThat(allSucceeded).isTrue();
 		assertThat(flyway.info().pending()).isEmpty();
+	}
+
+	@Test
+	void pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema() {
+		String extensionSchema = jdbc.queryForObject("""
+				select n.nspname
+				from pg_extension e
+				join pg_namespace n on n.oid = e.extnamespace
+				where e.extname = 'vector'
+				""", String.class);
+		assertThat(extensionSchema).isEqualTo("incident");
+
+		jdbc.execute("create temporary table pgvector_round_trip (embedding incident.vector(768))");
+		String vectorValue = "[" + IntStream.range(0, 768)
+				.mapToObj(Integer::toString)
+				.collect(Collectors.joining(",")) + "]";
+		jdbc.update("insert into pgvector_round_trip (embedding) values (?::incident.vector)", vectorValue);
+
+		assertThat(jdbc.queryForObject(
+				"select vector_dims(embedding) from pgvector_round_trip", Integer.class)).isEqualTo(768);
+		assertThat(jdbc.queryForObject(
+				"select embedding::text from pgvector_round_trip", String.class)).isEqualTo(vectorValue);
 	}
 
 	@Test
@@ -78,6 +103,27 @@ class DatabaseSchemaTest {
 				where schemaname = 'incident' and tablename = 'personal_access_token'
 				  and indexname = 'uq_personal_access_token_user_name'
 				  and indexdef ilike '%unique%org_id%user_id%lower%WHERE (revoked_at is null)%'
+				""", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
+	void deploymentHasServiceVersionTimeUniqueIndex() {
+		assertThat(jdbc.queryForObject("""
+				select count(*) from pg_indexes
+				where schemaname = 'incident' and tablename = 'deployment'
+				  and indexname = 'uq_deployment_service_version_time'
+				  and indexdef ilike '%unique%org_id%service_id%version%deployed_at%'
+				""", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
+	void incidentDeploymentHasIncidentDeploymentUniqueConstraint() {
+		assertThat(jdbc.queryForObject("""
+				select count(*) from pg_constraint c
+				join pg_namespace n on n.oid = c.connamespace
+				where n.nspname = 'incident'
+				  and c.conname = 'uq_incident_deployment'
+				  and c.contype = 'u'
 				""", Integer.class)).isEqualTo(1);
 	}
 

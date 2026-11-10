@@ -9,6 +9,8 @@ import datetime
 from threading import Lock
 from typing import Dict, List
 
+import httpx
+
 from demo_shop.config import Config
 from demo_shop.models import DeployEvent, FaultName, FaultState, FaultsStatusResponse
 from demo_shop.telemetry import StructuredLogger, telemetry
@@ -80,6 +82,8 @@ class FaultManager:
         if name not in self._switches:
             raise ValueError(f"Unknown fault switch: '{name}'. Valid switches: {list(self._switches.keys())}")
 
+        deploy_event_to_send: DeployEvent | None = None
+
         with self._lock:
             if self._switches[name]:
                 return True
@@ -99,31 +103,33 @@ class FaultManager:
             if name == FaultName.BAD_DEPLOY.value:
                 prev_version = self._current_version
                 self._current_version = Config.BAD_DEPLOY_VERSION
+                service_name = Config.DEPLOY_SERVICE_NAME
                 deploy_event = DeployEvent(
-                    service="checkout",
+                    service=service_name,
                     version=Config.BAD_DEPLOY_VERSION,
                     previous_version=prev_version,
                     timestamp=now_iso,
                     commit="a1b2c3d",
                     author="ci-bot",
                     status="completed",
-                    message=f"Deployed {Config.BAD_DEPLOY_VERSION} to checkout service",
+                    message=f"Deployed {Config.BAD_DEPLOY_VERSION} to {service_name} service",
                 )
                 self._last_deploy_event = deploy_event
                 telemetry.deploy_events_total.add(
                     1,
                     {
-                        "service": "checkout",
+                        "service": service_name,
                         "version": Config.BAD_DEPLOY_VERSION,
                         "previous_version": prev_version,
                     },
                 )
                 StructuredLogger.warning(
-                    service="checkout",
+                    service=service_name,
                     event="deploy.event",
                     fault_id="SCN-03",
                     details=deploy_event.model_dump(),
                 )
+                deploy_event_to_send = deploy_event
 
             elif name == FaultName.EXPIRING_CERTIFICATE.value:
                 telemetry.set_cert_days(0)
@@ -149,7 +155,9 @@ class FaultManager:
                     details={"message": "Order fulfillment queue worker paused, backlog will accumulate"},
                 )
 
-
+        # Webhook HTTP request is sent outside self._lock to avoid holding application locks during network I/O
+        if deploy_event_to_send is not None:
+            self._send_deploy_webhook(deploy_event_to_send)
 
         return True
 
@@ -240,6 +248,47 @@ class FaultManager:
             event="faults.reset_all",
             details={"message": "All fault switches disabled, baseline healthy state restored"},
         )
+
+    def _send_deploy_webhook(self, deploy_event: DeployEvent) -> None:
+        """Sends the deployment event to the backend deploy webhook (FR-20.1, AC-5)."""
+        backend_url = Config.BACKEND_URL
+        tool_token = Config.TOOL_TOKEN
+        if not backend_url or not tool_token:
+            StructuredLogger.info(
+                service="demo-shop",
+                event="deploy.webhook_skipped",
+                fault_id="SCN-03",
+                details={"reason": "BACKEND_URL or TOOL_TOKEN not configured"},
+            )
+            return
+
+        url = f"{backend_url.rstrip('/')}/webhooks/deploys"
+        payload = {
+            "service": deploy_event.service,
+            "version": deploy_event.version,
+            "commit": deploy_event.commit,
+            "author": deploy_event.author,
+            "deployedAt": deploy_event.timestamp,
+        }
+        headers = {
+            "Authorization": f"Bearer {tool_token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = httpx.post(url, json=payload, headers=headers, timeout=5.0)
+            StructuredLogger.info(
+                service="demo-shop",
+                event="deploy.webhook_sent",
+                fault_id="SCN-03",
+                details={"status_code": resp.status_code, "url": url},
+            )
+        except Exception as exc:
+            StructuredLogger.warning(
+                service="demo-shop",
+                event="deploy.webhook_failed",
+                fault_id="SCN-03",
+                details={"error": str(exc), "url": url},
+            )
 
     def get_status(self) -> FaultsStatusResponse:
         with self._lock:

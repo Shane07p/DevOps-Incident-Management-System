@@ -126,4 +126,14 @@ public class IncidentController {
 		return incidentService.correctTimelineEntry(
 				id, entryId, request.details(), Long.parseLong(jwt.getSubject()));
 	}
+
+	/** Links a deployment to an incident timeline. */
+	@PostMapping("/{id}/deploys/{deployId}")
+	@Operation(summary = "Link a deployment to an incident timeline")
+	public TimelineEntryResponse linkDeployment(
+			@PathVariable Long id,
+			@PathVariable Long deployId,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.linkDeployment(id, deployId, Long.parseLong(jwt.getSubject()));
+	}
 }

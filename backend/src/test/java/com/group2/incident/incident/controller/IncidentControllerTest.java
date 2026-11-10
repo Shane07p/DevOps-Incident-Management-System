@@ -17,6 +17,8 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.deploy.entity.Deployment;
+import com.group2.incident.deploy.repository.DeploymentRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
@@ -61,6 +63,9 @@ class IncidentControllerTest {
 
 	@Autowired
 	private TimelineEntryRepository timelineEntries;
+
+	@Autowired
+	private DeploymentRepository deployments;
 
 	@Autowired
 	private AuditEntryRepository auditEntries;
@@ -544,6 +549,24 @@ class IncidentControllerTest {
 					}
 					"""))
 			.andExpect(status().isCreated());
+
+		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
+		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.CLOSED);
+		assertThat(unchanged.getVersion()).isEqualTo(originalVersion);
+	}
+
+	@Test
+	@DisplayName("Deployment can be linked to a closed incident without changing status or version")
+	void deployAllowedOnClosedIncident() throws Exception {
+		Incident incident = createIncident(IncidentStatus.CLOSED);
+		Long originalVersion = incident.getVersion();
+		Deployment deployment = deployments.saveAndFlush(new Deployment(paymentsService, "v1.9.9", "hash199", "Author", clock.instant()));
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/deploys/" + deployment.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.eventType").value("DEPLOY_LINKED"));
 
 		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
 		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.CLOSED);

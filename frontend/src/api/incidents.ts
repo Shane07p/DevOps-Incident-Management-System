@@ -13,6 +13,9 @@ export const incidentSummarySchema = z.object({
   severity: severitySchema,
   status: incidentStatusSchema,
   createdAt: timestamp,
+  // The board sorts by time left; which of the two clocks still runs follows from the status.
+  responseDueAt: timestamp,
+  resolutionDueAt: timestamp,
 })
 
 export type IncidentSummary = z.infer<typeof incidentSummarySchema>
@@ -57,6 +60,9 @@ export const incidentSchema = z.object({
   resolutionTargetMinutes: z.number(),
   responseDueAt: timestamp,
   resolutionDueAt: timestamp,
+  // When each clock stopped: the first accepted acknowledgement, and RESOLVED. Null while it runs.
+  acknowledgedAt: timestamp.nullable().default(null),
+  resolvedAt: timestamp.nullable().default(null),
   timeline: z.array(timelineEntrySchema),
   deploys: z.array(deploySchema).default([]),
 })

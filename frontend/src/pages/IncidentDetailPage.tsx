@@ -8,7 +8,8 @@ import { listRunbooks } from '@/api/runbooks'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
-import { formatIst, formatMinutes } from '@/lib/time'
+import { formatIst } from '@/lib/time'
+import { SlaClocks } from './incident/SlaClocks'
 
 // "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
 const eventLabel = (eventType: string) => {
@@ -21,16 +22,6 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
     <div className="flex flex-col gap-1">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="text-sm">{children}</dd>
-    </div>
-  )
-}
-
-function SlaDue({ label, dueAt, targetMinutes }: { label: string; dueAt: string; targetMinutes: number }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="font-mono text-lg font-semibold tnum">{formatIst(dueAt)}</span>
-      <span className="text-xs text-muted-foreground">Target {formatMinutes(targetMinutes)} from declaration</span>
     </div>
   )
 }
@@ -159,14 +150,7 @@ export function IncidentDetailPage() {
             <h2 id="sla-heading" className="text-lg font-semibold">
               SLA
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SlaDue label="Response due" dueAt={incident.data.responseDueAt} targetMinutes={incident.data.responseTargetMinutes} />
-              <SlaDue
-                label="Resolution due"
-                dueAt={incident.data.resolutionDueAt}
-                targetMinutes={incident.data.resolutionTargetMinutes}
-              />
-            </div>
+            <SlaClocks incident={incident.data} />
           </section>
 
           <IncidentRunbooks serviceId={incident.data.service.id} />

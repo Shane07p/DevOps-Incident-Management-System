@@ -23,7 +23,7 @@ const account = (name: 'A' | 'B') => ({
 const respond = (body: unknown, status = 200) => new Response(status === 204 ? null : JSON.stringify(body), { status })
 
 const incident = (title: string) => ({
-  id: 123, reference: 'INC-1', title, serviceName: 'A service', severity: 'SEV1', status: 'OPEN', createdAt: '2026-11-07T00:00:00Z',
+  id: 123, reference: 'INC-1', title, serviceName: 'A service', severity: 'SEV1', status: 'OPEN', createdAt: '2026-11-07T00:00:00Z', responseDueAt: '2026-11-07T00:15:00Z', resolutionDueAt: '2026-11-07T04:00:00Z',
 })
 
 function later<T>() {

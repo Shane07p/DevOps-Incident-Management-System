@@ -199,7 +199,7 @@ FR-28 in [srs.md](../1-requirements/srs.md). Each item's test cases are in
 | History search page | Himanshu | US-15 | TC-FR-17.1e | #168: Open |
 | Incident page: deploys, logs and charts, and evidence links | Bhakti | FR-09, FR-27.2 | TC-FR-27.2a | #169: Open |
 | Similar incidents and the duplicate warning | Himanshu | US-18 | TC-FR-18.2a | #170: Open |
-| SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: Open |
+| SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: draft PR, waiting for the clock fields from #83 and #84 |
 | Runbooks pages | Bhakti | US-27, FR-25.2 | TC-FR-25.2a | #172: Open |
 
 **Cut first if late:** log patterns and saved views in the logs explorer; then the "by meaning" mode

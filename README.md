@@ -94,7 +94,7 @@ use a throwaway database instead of resetting your volume:
 
 ```bash
 docker run --rm -d --name incident-scratch -p 5434:5432 \
-  -e POSTGRES_DB=incident -e POSTGRES_USER=incident -e POSTGRES_PASSWORD=incident postgres:16
+  -e POSTGRES_DB=incident -e POSTGRES_USER=incident -e POSTGRES_PASSWORD=incident pgvector/pgvector:0.8.6-pg16-bookworm
 
 # Without the seed
 DB_URL=jdbc:postgresql://localhost:5434/incident ./mvnw spring-boot:run
@@ -104,6 +104,12 @@ DB_URL=jdbc:postgresql://localhost:5434/incident \
 
 docker stop incident-scratch    # removes the container and its data
 ```
+
+The local Compose database and Testcontainers use the pinned PostgreSQL 16 Bookworm image
+[`pgvector/pgvector:0.8.6-pg16-bookworm`](https://hub.docker.com/r/pgvector/pgvector), which
+packages the pgvector extension. Supabase provides pgvector as a managed PostgreSQL extension;
+Flyway enables it in the `incident` schema on startup, so the same migration works in local, test,
+and hosted databases.
 
 To run the packaged backend and the built UI against the same database instead:
 

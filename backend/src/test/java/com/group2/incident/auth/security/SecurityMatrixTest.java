@@ -33,6 +33,7 @@ import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
+import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.HashSet;
@@ -483,6 +484,22 @@ public class SecurityMatrixTest {
 						null,
 						204, 204, 204, 401
 				),
+				// Customers have no account, so everyone reads the page, logged in or not (D45).
+				new MatrixRow(
+						"GET /api/public/status/{slug}",
+						HttpMethod.GET,
+						"/api/public/status/{slug}",
+						null,
+						200, 200, 200, 200
+				),
+				// The matrix Engineer is neither the incident's Lead nor its Comms (D45, TC-FR-21.2a).
+				new MatrixRow(
+						"POST /api/incidents/{id}/public-updates",
+						HttpMethod.POST,
+						"/api/incidents/{id}/public-updates",
+						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
+						201, 403, 403, 401
+				),
 				new MatrixRow(
 						"GET /api/telemetry/logs",
 						HttpMethod.GET,
@@ -522,6 +539,7 @@ public class SecurityMatrixTest {
 		service.putTarget(Severity.SEV2, 60, 480);
 		service.putTarget(Severity.SEV3, 240, 2880);
 		service.putTarget(Severity.SEV4, 1440, 10080);
+		service.publishAs(true, "Matrix service", clock.instant());
 		ServiceEntity savedService = services.saveAndFlush(service);
 		targetServiceId = savedService.getId();
 
@@ -616,6 +634,7 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
+				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
 				.replace("{entryId}", "999999999")
 				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999");
 	}

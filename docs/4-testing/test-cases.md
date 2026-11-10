@@ -506,10 +506,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-21.1a | Negative | `GET /api/public/status` for an incident with internal notes, comments, and names | None of them in the response | `PublicStatusTest` | Planned (Shane) |
-| TC-FR-21.1b | Equivalence | Fixed monitor results over 90 days | The uptime percentage computed from them | `PublicStatusTest` | Planned (Shane) |
+| TC-FR-21.1a | Negative | `GET /api/public/status/{slug}` for an incident with an internal title, a comment, and named people; a second org's services and updates; a service an Admin did not publish | None of them in the response; only the published updates, under the service's public name | `PublicStatusTest` | Automated |
+| TC-FR-21.1b | Equivalence | Fixed monitor results today, 10 days ago, and 100 days ago | 90-day uptime from the first two only (75.00%), each day's percentage, and null for a day with no check | `PublicStatusTest` | Automated |
 | TC-FR-21.1c | Equivalence | The status page with each health state; the incident page as a Viewer | Each state renders; the Viewer sees no posting form | `StatusPage.test.tsx` | Planned (Bhakti) |
-| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry; 403 for the other two. Until #86 lands: accepted for Engineers and Admins | `PublicStatusTest`, `SecurityMatrixTest` | Planned (Shane) |
+| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry naming each; 403 for the other two | `PublicStatusTest`, `SecurityMatrixTest` | Automated |
 
 ### MCP server (FR-28, D38)
 

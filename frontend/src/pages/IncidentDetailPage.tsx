@@ -9,6 +9,7 @@ import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { formatIst, formatMinutes } from '@/lib/time'
+import { IncidentActions } from './incident/IncidentActions'
 
 // "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
 const eventLabel = (eventType: string) => {
@@ -54,7 +55,7 @@ function Timeline({ entries }: { entries: TimelineEntry[] }) {
   )
 }
 
-/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
+/** One incident: what it is, what a responder can do to it, both SLA due times, and its timeline. */
 // Show runbooks belonging to the incident's service.
 function IncidentRunbooks({
   serviceId,
@@ -154,6 +155,8 @@ export function IncidentDetailPage() {
               <span className="font-mono tnum">{formatIst(incident.data.createdAt)}</span>
             </Detail>
           </dl>
+
+          <IncidentActions incident={incident.data} />
 
           <section aria-labelledby="sla-heading" className="flex flex-col gap-3">
             <h2 id="sla-heading" className="text-lg font-semibold">

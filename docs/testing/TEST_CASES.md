@@ -362,6 +362,13 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-AI-64b | Negative | Checkout while the fulfillment queue is full, or fills during payment | 503 and `checkout.failed`; no payment taken when full beforehand | `test_services.py` | Automated |
 | TC-AI-64c | Boundary value | The oldest order leaves while a newer one waits | Queue lag is the newer order's wait | `test_queue.py` | Automated |
 
+### Recorded demo-shop telemetry for the five scenarios (Issue #142)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-142a | Equivalence | Every scenario in `scenarios.yaml` has a recording fixture | Recording exists with `logs.jsonl`, `metrics.json`, `deploy_events.json`, `metadata.json`, under 1 MB | `test_recordings.py::test_every_scenario_has_a_recording` | Automated |
+| TC-AI-142b | Equivalence | Each recording fault window shows expected changes | SCN-01 latency spikes, SCN-02 error rate rises, SCN-03 deploy event, SCN-04 queue depth grows, SCN-05 cert expires | `test_recordings.py` | Automated |
+
 ### AI SRE tool loop on demo data (Issue #91, FR-18.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -419,15 +426,19 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Automated |
 | TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Planned (Het) |
-| TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.2b | Decision table | A Viewer's token calls an Engineer action | 403 | `SecurityMatrixTest` | Planned (Het) |
-| TC-FR-23.2c | State transition | Revoke the token, or disable its owner, then use it | 401 | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.2d | Boundary value | Use the token one second before, and exactly at, 90 days after creation (controlled `Clock`) | 200, then 401 | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.2e | Boundary value | The 60th and the 61st request in one minute | 200, then 429 with `Retry-After` | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.3a | Negative | A token calls `POST /api/me/tokens` or `GET /api/me/tokens` | Refused; nothing is created | `PersonalAccessTokenTest` | Planned (Het) |
-| TC-FR-23.4a | Negative | Create and revoke a token, then read the captured logs | Two audit entries; the token is in no log line | `PersonalAccessTokenTest` | Planned (Het) |
+| TC-FR-23.1c | Decision table | Create duplicate active token name (same org) vs revoked name vs different org | Duplicate active is 409; revoked name can be reused (201); separate orgs can use same name | `PersonalAccessTokenTest`, `PersonalAccessTokenRaceTest` | Automated |
+| TC-FR-23.1d | Concurrency | Two requests to create the same token name at the same moment | One succeeds (201), one gets 409 Conflict | `PersonalAccessTokenRaceTest` | Automated |
+| TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2b | Decision table | A Viewer's token calls an Engineer action | 403 | `SecurityMatrixTest` | Automated |
+| TC-FR-23.2c | State transition | Revoke the token, or disable its owner, then use it | 401 | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2d | Boundary value | Use the token one second before, and exactly at, 90 days after creation (controlled `Clock`) | 200, then 401 | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2e | Boundary value | The 60th and the 61st request in one minute | 200, then 429 with `Retry-After` | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2f | Negative | Send unknown token (`Bearer pat_` followed by 64 zeros) | 401 with WWW-Authenticate header, no authentication context established | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.2g | Security | Downstream authentication context for validated PAT | Synthetic Jwt contains `pat-<id>` instead of raw token secret, retaining user claims and roles | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.3a | Negative | A token calls `POST /api/me/tokens` or `GET /api/me/tokens` | Refused; nothing is created | `PersonalAccessTokenTest` | Automated |
+| TC-FR-23.4a | Negative | Create and revoke a token, then read the captured logs | Two audit entries; the token is in no log line | `PersonalAccessTokenTest` | Automated |
 
 ### Deploy tracking (FR-20.1): boundary values on the 2-hour window
 
@@ -446,7 +457,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-25.1b | Equivalence (invalid) | An empty title, or no steps | 400 with a field error | `RunbookControllerTest` | Automated |
 | TC-FR-25.1c | Decision table | A Viewer creates, edits, or deletes a runbook | 403 | `SecurityMatrixTest` | Automated |
 | TC-FR-25.1d | Equivalence | Create, edit, and delete a runbook | One audit entry each | `RunbookControllerTest` | Automated |
-| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `RunbooksPage.test.tsx` | Planned (Bhakti) |
+| TC-FR-25.2a | Equivalence | Open an incident whose service has runbooks, as an Engineer and as a Viewer | Both see the runbooks; only the Engineer sees editing | `IncidentDetailPage.test.tsx` (suggested runbooks and ordered steps); `RunbooksPage.test.tsx` (Viewer/Engineer permissions) | Automated (Bhakti) |
 
 ### Logs and metrics through the backend (FR-26, FR-27, D34)
 
@@ -512,8 +523,8 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Automated |
 | TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
-| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx` | Planned (Utsav D) |
+| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
 

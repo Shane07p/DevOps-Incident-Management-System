@@ -27,7 +27,12 @@ from deploy_window import (
 )
 
 DATA_DIR = Path(__file__).resolve().parent / "data" / "fixtures"
-DEFAULT_LOG_FIXTURE = DATA_DIR / "demo_shop_slow_gateway.jsonl"
+SCENARIOS_DIR = DATA_DIR / "scenarios"
+DEFAULT_LOG_FIXTURE = SCENARIOS_DIR / "SCN-01" / "logs.jsonl"
+if not DEFAULT_LOG_FIXTURE.exists():
+    _legacy = DATA_DIR / "demo_shop_slow_gateway.jsonl"
+    if _legacy.exists():
+        DEFAULT_LOG_FIXTURE = _legacy
 
 
 # ---------------------------------------------------------------------------

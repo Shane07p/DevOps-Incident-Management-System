@@ -100,6 +100,8 @@ class OrgIsolationTest {
 		idsOfB.put("incidentId", incidentOfB);
 		idsOfB.put("entryId", timelineEntryOfB);
 		idsOfB.put("notificationId", notificationOfB);
+		long tokenOfB = TestOrgs.id(send(b, post("/api/me/tokens"), "{\"name\":\"TokenOfB\"}"));
+		idsOfB.put("tokenId", tokenOfB);
 		idsOfB.put("runbookId", TestOrgs.id(send(b, post("/api/services/{id}/runbooks", serviceOfB),
 				"{\"title\": \"Restart\", \"steps\": [\"Restart the service\"]}")));
 		// Sign-up and the service each wrote an audit entry in B.
@@ -148,6 +150,7 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/monitors/{id}", HttpMethod.PUT, "/api/monitors/{monitorId}", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),
 				Arguments.of("POST /api/notifications/{id}/read", HttpMethod.POST, "/api/notifications/{notificationId}/read", null),
+				Arguments.of("DELETE /api/me/tokens/{id}", HttpMethod.DELETE, "/api/me/tokens/{tokenId}", null),
 				Arguments.of("GET /api/services/{id}/runbooks", HttpMethod.GET, "/api/services/{serviceId}/runbooks", null),
 				Arguments.of("POST /api/services/{id}/runbooks", HttpMethod.POST, "/api/services/{serviceId}/runbooks",
 						"{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),

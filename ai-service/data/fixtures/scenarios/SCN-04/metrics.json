@@ -1,0 +1,10 @@
+{
+  "baseline": {
+    "demo_queue_depth": 1,
+    "demo_queue_lag_seconds": 0.0
+  },
+  "fault": {
+    "demo_queue_depth": 8,
+    "demo_queue_lag_seconds": 7.0
+  }
+}

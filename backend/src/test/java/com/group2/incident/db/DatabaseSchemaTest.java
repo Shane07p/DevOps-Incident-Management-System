@@ -25,7 +25,7 @@ class DatabaseSchemaTest {
 	private static final List<String> TABLES =
 			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
-					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency");
+					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency", "personal_access_token");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -69,6 +69,16 @@ class DatabaseSchemaTest {
 				where table_schema = 'incident' and table_name = 'incident'
 				  and column_name in ('correlation_source', 'correlation_key')
 				""", Integer.class)).isEqualTo(2);
+	}
+
+	@Test
+	void personalAccessTokenHasOrgUserActivePartialUniqueIndex() {
+		assertThat(jdbc.queryForObject("""
+				select count(*) from pg_indexes
+				where schemaname = 'incident' and tablename = 'personal_access_token'
+				  and indexname = 'uq_personal_access_token_user_name'
+				  and indexdef ilike '%unique%org_id%user_id%lower%WHERE (revoked_at is null)%'
+				""", Integer.class)).isEqualTo(1);
 	}
 
 	@Test

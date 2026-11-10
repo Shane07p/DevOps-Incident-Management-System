@@ -10,9 +10,10 @@ the requirement-to-test map in [traceability.csv](traceability.csv).
 [implementation plan](../3-project-management/implementation-plan.md): users and roles, the service
 catalog, incidents, SLA clocks, alert intake and deduplication, on-call, notifications, monitors and
 heartbeats, acknowledgement, status and severity changes, escalation, reassignment and roles,
-comments and corrections, and rate limits.
+comments and corrections, and rate limits. Issue #159 also adds Sprint 4 AI-1 embedding storage,
+timeout handling, and retry coverage.
 
-**Not in scope yet:** features of Sprints 4 to 6, the quality of AI answers (measured in the
+**Not in scope yet:** the remaining features of Sprints 4 to 6, the quality of AI retrieval (measured in the
 [AI/ML roadmap](../2-design/ai-ml-roadmap.md#data-and-evaluation)), and load testing, which runs in
 Sprint 6.
 

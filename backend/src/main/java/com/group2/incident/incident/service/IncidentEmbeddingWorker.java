@@ -15,7 +15,7 @@ public class IncidentEmbeddingWorker {
 		this.incidentEmbeddingService = incidentEmbeddingService;
 	}
 
-	@Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
+	@Scheduled(initialDelay = 15_000, fixedDelay = 15_000)
 	public void retryPendingEmbeddings() {
 		OrgContext.runAsRoot(incidentEmbeddingService::retryPendingEmbeddings);
 	}

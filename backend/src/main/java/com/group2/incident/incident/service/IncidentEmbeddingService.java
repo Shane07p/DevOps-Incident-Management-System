@@ -1,6 +1,5 @@
 package com.group2.incident.incident.service;
 
-import com.group2.incident.incident.entity.Incident;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -13,7 +12,9 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -21,33 +22,46 @@ public class IncidentEmbeddingService {
 
 	private static final int RETRY_BATCH_SIZE = 10;
 
+	private static final Duration CLAIM_LEASE = Duration.ofMinutes(5);
+
 	private final AiEmbeddingClient aiEmbeddingClient;
 
 	private final JdbcTemplate jdbcTemplate;
 
 	private final Clock clock;
 
-	public void embedOnCreation(Incident incident) {
-		if (!aiEmbeddingClient.isEnabled()) {
-			return;
-		}
+	private final TransactionTemplate transactionTemplate;
 
-		Optional<List<Double>> embedding = aiEmbeddingClient.embedDocument(documentText(
-				incident.getTitle(), incident.getDescription(), incident.getService().getName()));
-		if (embedding.isPresent()) {
-			saveEmbedding(incident.getId(), incident.getOrgId(), embedding.get());
-		}
-		else {
-			deferRetry(incident.getId(), incident.getOrgId(), 0);
-		}
-	}
-
-	@Transactional
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public int retryPendingEmbeddings() {
 		if (!aiEmbeddingClient.isEnabled()) {
 			return 0;
 		}
 
+		Instant now = clock.instant();
+		Instant leaseUntil = now.plus(CLAIM_LEASE);
+		List<PendingIncident> pending = transactionTemplate.execute(
+				status -> claimPending(now, leaseUntil));
+		if (pending == null) {
+			throw new IllegalStateException("Embedding claim transaction returned no batch");
+		}
+
+		for (PendingIncident incident : pending) {
+			Optional<List<Double>> embedding = aiEmbeddingClient.embedDocument(documentText(
+					incident.title(), incident.description(), incident.serviceName()));
+			if (embedding.isPresent()) {
+				transactionTemplate.executeWithoutResult(
+						status -> saveEmbedding(incident.id(), incident.orgId(), embedding.get()));
+			}
+			else {
+				transactionTemplate.executeWithoutResult(
+						status -> deferRetry(incident.id(), incident.orgId(), incident.attempts()));
+			}
+		}
+		return pending.size();
+	}
+
+	private List<PendingIncident> claimPending(Instant now, Instant leaseUntil) {
 		List<PendingIncident> pending = jdbcTemplate.query("""
 				select i.id, i.org_id, i.title, i.description, s.name as service_name, i.embedding_attempts
 				from incident i
@@ -57,19 +71,19 @@ public class IncidentEmbeddingService {
 				order by i.embedding_retry_at, i.id
 				limit ?
 				for update of i skip locked
-				""", this::mapPendingIncident, Timestamp.from(clock.instant()), RETRY_BATCH_SIZE);
+				""", this::mapPendingIncident, Timestamp.from(now), RETRY_BATCH_SIZE);
 
 		for (PendingIncident incident : pending) {
-			Optional<List<Double>> embedding = aiEmbeddingClient.embedDocument(documentText(
-					incident.title(), incident.description(), incident.serviceName()));
-			if (embedding.isPresent()) {
-				saveEmbedding(incident.id(), incident.orgId(), embedding.get());
-			}
-			else {
-				deferRetry(incident.id(), incident.orgId(), incident.attempts());
+			int updated = jdbcTemplate.update("""
+					update incident
+					set embedding_retry_at = ?
+					where id = ? and org_id = ? and embedding is null
+					""", Timestamp.from(leaseUntil), incident.id(), incident.orgId());
+			if (updated != 1) {
+				throw new IllegalStateException("Could not claim embedding retry for incident " + incident.id());
 			}
 		}
-		return pending.size();
+		return pending;
 	}
 
 	private void saveEmbedding(long incidentId, long orgId, List<Double> embedding) {

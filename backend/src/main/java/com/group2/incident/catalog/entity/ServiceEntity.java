@@ -67,6 +67,13 @@ public class ServiceEntity {
     @MapKeyColumn(name = "severity", length = 10)
     private Map<Severity, SlaTarget> targets = new EnumMap<>(Severity.class);
 
+    // Shown on the org's public status page, under publicName (D45).
+    @Column(name = "public_visible", nullable = false)
+    private boolean publicVisible;
+
+    @Column(name = "public_name", length = 100)
+    private String publicName;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -87,6 +94,13 @@ public class ServiceEntity {
         this.description = description;
         this.owner = owner;
         this.criticality = criticality;
+        this.updatedAt = updatedAt;
+    }
+
+    /** Shows the service on the public status page under {@code publicName}, or hides it (D45). */
+    public void publishAs(boolean visible, String publicName, Instant updatedAt) {
+        this.publicVisible = visible;
+        this.publicName = publicName;
         this.updatedAt = updatedAt;
     }
 

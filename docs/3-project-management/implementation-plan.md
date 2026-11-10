@@ -158,7 +158,7 @@ blocks starts.
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Done (PR #203; Lead made the assignee in the fixes PR) |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Open |
 | Grafana Cloud checks from 2 to 3 locations; alert rules for Down and Degraded, and on the demo shop's error rate, post into intake | Manush | D35, D36 | One failing location raises nothing; two in a row do; two slow ones raise Degraded | #88: Open |
-| Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Open |
+| Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: timeline with comments and corrections in PR #230; the actions follow, waiting for #83 and #84 |
 | Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Done (PR #177) |
 | Agent tool loop on demo data | Himanshu | [AI/ML roadmap](../2-design/ai-ml-roadmap.md) | pytest | #91: Done (PR #181) |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |

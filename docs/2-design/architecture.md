@@ -19,9 +19,9 @@ flowchart TD
 ```
 
 Settle is multi-tenant: anyone signs up and creates an org, and every org-owned row carries `org_id`,
-filtered by Hibernate (D48, [design](plans/2026-11-02-organizations-design.md)).
+filtered by Hibernate (D48, [design](organizations-design.md)).
 
-The backend is the authority for status changes, timing, and permissions. Browser validation helps the user, but the backend checks every request again. The AI service never writes to the database: its tools call the same REST API as a person, with that person's permissions. The parts arrive sprint by sprint (see [sprint-plan.md](sprint-plan.md)); the first version was one backend instance, one database, and a scheduled escalation task.
+The backend is the authority for status changes, timing, and permissions. Browser validation helps the user, but the backend checks every request again. The AI service never writes to the database: its tools call the same REST API as a person, with that person's permissions. The parts arrive sprint by sprint (see [sprint-plan.md](../3-project-management/sprint-plan.md)); the first version was one backend instance, one database, and a scheduled escalation task.
 
 What runs where, and why it stays small (D24, D33, D46):
 - **One backend instance, one database.** Escalation polls the database for due deadlines; it does not need a queue.
@@ -36,10 +36,10 @@ The detailed HLD (v4, 2 November) is [diagrams/hld.png](diagrams/hld.png). It sh
 
 ## 2. Code layout
 
-Folders are listed in the [README](../README.md#layout). Inside the backend, each feature (`auth`,
+Folders are listed in the [README](../../README.md#layout). Inside the backend, each feature (`auth`,
 `audit`, `catalog`, `incident`, `alert`, `notification`; `postmortem` arrives in Sprint 5)
 has one folder per layer, and shared code lives in `common/`. See the Layout section of
-[backend/AGENTS.md](../backend/AGENTS.md#layout). Controllers receive requests, services apply rules, and repositories read
+[backend/AGENTS.md](../../backend/AGENTS.md#layout). Controllers receive requests, services apply rules, and repositories read
 and write records. Do not return JPA entities directly as API responses, and don't add an interface
 for every service class.
 
@@ -149,7 +149,7 @@ Status, ownership, severity, and comment events are append-only through the appl
 
 ## 10. Optional AI extension
 
-The planned features and their order are in [docs/plans/ai-ml-roadmap.md](plans/ai-ml-roadmap.md).
+The planned features and their order are in [docs/2-design/ai-ml-roadmap.md](ai-ml-roadmap.md).
 
 Start with one useful feature: retrieve previous incidents and ask a local model to suggest investigation steps from their fixes. Show the referenced incident IDs and label the result as a suggestion. A similar past incident does not prove the same cause.
 

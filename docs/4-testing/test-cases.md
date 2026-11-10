@@ -1,9 +1,9 @@
 # Test Cases
 
-Designed test cases for Sprints 1 to 3. The [test plan](TEST_PLAN.md) explains the levels and
-techniques; results go in [TEST_REPORT.md](TEST_REPORT.md).
+Designed test cases for Sprints 1 to 3. The [test plan](test-plan.md) explains the levels and
+techniques; results go in [test-report.md](test-report.md).
 
-**IDs** extend the planned checks in [TRACEABILITY.csv](../TRACEABILITY.csv): `TC-FR-16.3b` is the
+**IDs** extend the planned checks in [traceability.csv](traceability.csv): `TC-FR-16.3b` is the
 second designed case for check `TC-FR-16.3`. Features with no FR yet use their decision ID
 (`TC-D36a`).
 
@@ -12,7 +12,7 @@ second designed case for check `TC-FR-16.3`. Features with no FR yet use their d
 - **In review:** the test is in an open PR.
 - **Planned:** not written yet; the owner and issue are given.
 
-A case is marked Passed or Failed only in [TEST_REPORT.md](TEST_REPORT.md), after a recorded run.
+A case is marked Passed or Failed only in [test-report.md](test-report.md), after a recorded run.
 
 **How to use this file:** your issue lists the case IDs you must automate. Name the test so it is
 easy to find, put its name in the Test column, and change the status in the same PR.
@@ -444,10 +444,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Planned (Het) |
-| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Planned (Het) |
+| TC-FR-20.1a | Equivalence (invalid) | A deploy for an unknown service | 400 naming the service | `DeployWebhookTest` | Automated |
+| TC-FR-20.1b | Equivalence | The same service, version, and time posted twice | Stored once | `DeployWebhookTest` | Automated |
+| TC-FR-20.1c | Boundary value | Deploys 2 hours and 1 second, exactly 2 hours, and 1 second before the incident | The last two show with the incident; the first does not | `DeployWebhookTest` | Automated |
+| TC-FR-20.1d | Equivalence | Link a deploy to an incident | One timeline entry | `DeployWebhookTest` | Automated |
 
 ### Runbooks (FR-25)
 
@@ -495,7 +495,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D44a | Equivalence | Store and read back a 768-dimension vector | The same values | `DatabaseSchemaTest` | Planned (Manan) |
+| TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | In review (Manan) |
 | TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
 | TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
 | TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |
@@ -563,7 +563,7 @@ Two rule methods get basis path testing, done by their owners once the code exis
 | The SLA check (target, start, stop, now → running, met, or breached) | Utsav D and Manan |
 
 For each one:
-1. Draw its control-flow graph and add the picture to `docs/testing/`.
+1. Draw its control-flow graph and add the picture to `docs/4-testing/`.
 2. Work out the cyclomatic complexity, V(G) = edges − nodes + 2.
 3. List V(G) independent paths, and write one test per path. Name them here as `TC-WB-…`.
 4. Check that JaCoCo shows every branch of the method covered.

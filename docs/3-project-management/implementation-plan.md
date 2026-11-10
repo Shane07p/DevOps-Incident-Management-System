@@ -5,7 +5,7 @@ what each person builds, in what order, and how to check it. Find your name in
 [Who does what](#who-does-what), then open your issue.
 
 Sprint 1 finished on 26 October, 7 days late (its record is in the
-[sprint plan](../sprint-plan.md#sprint-1-complete)). Sprints 2 to 4 are still in progress: each
+[sprint plan](sprint-plan.md#sprint-1-complete)). Sprints 2 to 4 are still in progress: each
 work item below shows its issue and status, and GitHub's Sprint 2, 3, and 4 milestones are live.
 
 | Sprint | Planned end | What the demo shows | Stories |
@@ -63,7 +63,7 @@ Sprint 3   Utsav D: acknowledge ──► Utsav B: escalation stops on acknowled
 ## Decisions needed before coding
 
 AGENTS.md: if a change depends on an Open decision, record the decision first. These are in the
-[decision log](../PROJECT.md#short-decision-log); an Open one must be decided before the item it
+[decision log](project.md#short-decision-log); an Open one must be decided before the item it
 blocks starts.
 
 | Decision | Topic | Blocks | Status |
@@ -80,7 +80,7 @@ blocks starts.
 | D44 | Incident embeddings in PostgreSQL with pgvector | #150, #159 | Selected |
 | D45 | What the public status page shows; Lead, Comms, and Admins publish | #160, #164 | Selected |
 
-**US-10:** a severity change keeps the SLA targets copied at creation (D09/D10, PROJECT_STRUCTURE
+**US-10:** a severity change keeps the SLA targets copied at creation (D09/D10, architecture.md
 §8). The story says so too.
 
 ## Rules for this week
@@ -89,7 +89,7 @@ blocks starts.
 2. **Contract first.** Before coding an API, post its request and response shapes in your issue.
    The frontend builds against that.
 3. **Tests in the same PR,** at the level in the [testing table](../../backend/AGENTS.md#tests). Your issue
-   lists the [test case IDs](../testing/TEST_CASES.md) you must automate. Paste the test output in
+   lists the [test case IDs](../4-testing/test-cases.md) you must automate. Paste the test output in
    the PR.
 4. **Security rows:** every new endpoint adds its rows to `SecurityMatrixTest` (Admin, Engineer,
    Viewer, no token).
@@ -134,7 +134,7 @@ blocks starts.
 | Item | Owner | Rules | Tests | Status |
 | --- | --- | --- | --- | --- |
 | Register tools: a token is shown once, stored as a hash, and can be revoked. `POST /webhooks/alerts` validates the token and payload. Rate limits on login and webhooks (D42, NFR-04.4) | Het | US-02, D31, D32 | Valid, invalid, and revoked tokens; missing fields create nothing; the token never appears in logs; over the limit returns 429 | #68, #69: Done (PRs #115, #126) |
-| Dedup and grouping: `(source, event_id)` is unique; an explicit correlation key joins an active incident; otherwise a new incident through the normal creation flow | Manan | US-04, [§6](../PROJECT_STRUCTURE.md#6-create-and-group-incidents) | Testcontainers: a repeated event is ignored; two alerts with the same key at once make one incident; linking does not reset either clock | #72: Done (PR #123) |
+| Dedup and grouping: `(source, event_id)` is unique; an explicit correlation key joins an active incident; otherwise a new incident through the normal creation flow | Manan | US-04, [§6](../2-design/architecture.md#6-create-and-group-incidents) | Testcontainers: a repeated event is ignored; two alerts with the same key at once make one incident; linking does not reset either clock | #72: Done (PR #123) |
 | On-call schedules per service in the project time zone; a new incident is assigned to whoever is on call, or the fallback contact; the assignment goes on the timeline | Utsav B | US-06, FR-15, FR-05.1 | JUnit with a controlled `Clock` at shift boundaries; creation picks the right person or the fallback | #71: Done (PR #112) |
 | Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
 | Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73, #74: Open |
@@ -152,15 +152,15 @@ blocks starts.
 
 | Item | Owner | Rules | Tests | Status |
 | --- | --- | --- | --- | --- |
-| Acknowledge: OPEN becomes ACKNOWLEDGED; the acknowledger becomes the assignee; the response clock stops; pending escalations are cancelled | Utsav B | US-08, [§7](../PROJECT_STRUCTURE.md#7-acknowledgement-and-escalation) | Testcontainers: two people acknowledge at once, one wins, the other gets 409 | #83: Open |
-| Status changes (legal transitions only) and severity changes with a reason; SLA targets stay fixed | Utsav B | US-10, [§8](../PROJECT_STRUCTURE.md#8-status-and-sla-rules) | JUnit: every legal and illegal transition; a breach is over the target, not equal to it | #84: Open |
+| Acknowledge: OPEN becomes ACKNOWLEDGED; the acknowledger becomes the assignee; the response clock stops; pending escalations are cancelled | Utsav B | US-08, [§7](../2-design/architecture.md#7-acknowledgement-and-escalation) | Testcontainers: two people acknowledge at once, one wins, the other gets 409 | #83: Open |
+| Status changes (legal transitions only) and severity changes with a reason; SLA targets stay fixed | Utsav B | US-10, [§8](../2-design/architecture.md#8-status-and-sla-rules) | JUnit: every legal and illegal transition; a breach is over the target, not equal to it | #84: Open |
 | Escalation: policies with levels and wait times; a scheduler re-checks that the incident is OPEN and unacknowledged, notifies the next level, and forces a version increment; the fallback is notified once; after a restart an overdue step runs once. Events go through the outbox to RabbitMQ | Utsav B | US-07, FR-07, D24 | Testcontainers: restart with an overdue escalation; escalation racing an acknowledgement | #85: Done (PR #135); its events reach RabbitMQ through the outbox (PR #177) |
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Done (PR #203; Lead made the assignee in the fixes PR) |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Open |
 | Grafana Cloud checks from 2 to 3 locations; alert rules for Down and Degraded, and on the demo shop's error rate, post into intake | Manush | D35, D36 | One failing location raises nothing; two in a row do; two slow ones raise Degraded | #88: Open |
 | Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Open |
 | Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Done (PR #177) |
-| Agent tool loop on demo data | Himanshu | [AI/ML roadmap](ai-ml-roadmap.md) | pytest | #91: Done (PR #181) |
+| Agent tool loop on demo data | Himanshu | [AI/ML roadmap](../2-design/ai-ml-roadmap.md) | pytest | #91: Done (PR #181) |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |
 | Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Open |
 | Metric-baseline and deploy-window evidence | Dhruva | AI/ML roadmap | pytest | #93: Open |
@@ -169,9 +169,9 @@ blocks starts.
 
 ### Sprint 4
 
-The stories are US-25 to US-30 in [user-stories.md](../user-stories.md), and the requirements FR-23 to
-FR-28 in [REQUIREMENTS.md](../REQUIREMENTS.md). Each item's test cases are in
-[TEST_CASES.md](../testing/TEST_CASES.md#sprint-4).
+The stories are US-25 to US-30 in [user-stories.md](../1-requirements/user-stories.md), and the requirements FR-23 to
+FR-28 in [srs.md](../1-requirements/srs.md). Each item's test cases are in
+[test-cases.md](../4-testing/test-cases.md#sprint-4).
 
 | Item | Owner | Rules | Tests | Status |
 | --- | --- | --- | --- | --- |
@@ -386,7 +386,7 @@ the [layout](../../backend/AGENTS.md#layout). Controllers return DTO records, ne
 - **Incidents:** `IncidentService.create` is one `@Transactional` method: load the service, save the
   incident (OPEN, reporter from the token, targets copied), then the timeline entry and the audit
   entry. `IncidentCreationRollbackTest` makes `AuditService` throw and checks nothing was saved.
-- **Sprints 2 and 3:** the rules are in [PROJECT_STRUCTURE](../PROJECT_STRUCTURE.md) §6 (alerts),
+- **Sprints 2 and 3:** the rules are in [architecture.md](../2-design/architecture.md) §6 (alerts),
   §7 (acknowledgement and escalation), and §8 (status and SLA).
 
 ---
@@ -424,15 +424,15 @@ stub that cites the past incidents it is given. Contract for `/suggest`:
 ```
 
 Every suggestion names the past incidents it came from (FR-18.2). The rest of the AI work is in the
-[AI/ML roadmap](ai-ml-roadmap.md).
+[AI/ML roadmap](../2-design/ai-ml-roadmap.md).
 
 ---
 
 ## Testing
 
-The [test plan](../testing/TEST_PLAN.md) has the levels, techniques, and entry and exit criteria; the
-[test cases](../testing/TEST_CASES.md) list every case for Sprints 1 to 3 with its owner; results go
-in the [test report](../testing/TEST_REPORT.md).
+The [test plan](../4-testing/test-plan.md) has the levels, techniques, and entry and exit criteria; the
+[test cases](../4-testing/test-cases.md) list every case for Sprints 1 to 3 with its owner; results go
+in the [test report](../4-testing/test-report.md).
 
 - **Everyone tests their own work,** at the level in the [testing table](../../backend/AGENTS.md#tests).
 - **Coverage:** JaCoCo (backend) and Vitest (frontend) run on every build, and each PR gets a
@@ -442,7 +442,7 @@ in the [test report](../testing/TEST_REPORT.md).
   exact status. Each API PR adds its rows.
 - **Manual demo:** at the end of each sprint, run the demo in Chrome and Firefox and note the browser
   versions (#58).
-- **Traceability:** put real test names in `TRACEABILITY.csv`. Mark a row Passed only after it has
+- **Traceability:** put real test names in `traceability.csv`. Mark a row Passed only after it has
   run, with the date and commit.
 - **Cypress:** moves to Sprint 6.
 

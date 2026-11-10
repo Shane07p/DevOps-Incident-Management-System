@@ -30,6 +30,16 @@ export const timelineEntrySchema = z.object({
 
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>
 
+export const deploySchema = z.object({
+  id: z.number(),
+  version: z.string(),
+  commit: z.string(),
+  author: z.string(),
+  deployedAt: timestamp,
+})
+
+export type Deploy = z.infer<typeof deploySchema>
+
 export const incidentSchema = z.object({
   id: z.number(),
   reference: z.string(),
@@ -48,6 +58,7 @@ export const incidentSchema = z.object({
   responseDueAt: timestamp,
   resolutionDueAt: timestamp,
   timeline: z.array(timelineEntrySchema),
+  deploys: z.array(deploySchema).default([]),
 })
 
 export type Incident = z.infer<typeof incidentSchema>
@@ -79,4 +90,9 @@ export function getIncident(id: number) {
 /** Admins and Engineers only. */
 export function createIncident(incident: NewIncident) {
   return apiFetch('/incidents', incidentSchema, { method: 'POST', body: incident })
+}
+
+/** Links an existing deployment to an incident. Admins and Engineers only. */
+export function linkDeploy(incidentId: number, deployId: number) {
+  return apiFetch(`/incidents/${incidentId}/deploys/${deployId}`, timelineEntrySchema, { method: 'POST' })
 }

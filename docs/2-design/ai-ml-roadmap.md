@@ -3,7 +3,7 @@
 **Team:** Himanshu, Shlok, Bhakti, and Dhruva. Who builds each part is assigned per sprint.
 
 This file covers everything AI: four AI features, the AI SRE and its evidence, the MCP server,
-models, and how we prove that it works. The non-AI features are in [FEATURES.md](../FEATURES.md).
+models, and how we prove that it works. The non-AI features are in [features.md](features.md).
 
 ## Rules
 

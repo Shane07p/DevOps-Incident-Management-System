@@ -172,7 +172,8 @@ class OrgIsolationTest {
 						"{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
 				Arguments.of("PUT /api/runbooks/{id}", HttpMethod.PUT, "/api/runbooks/{runbookId}", "{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
 				Arguments.of("DELETE /api/runbooks/{id}", HttpMethod.DELETE, "/api/runbooks/{runbookId}", null),
-				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"));
+				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"),
+				Arguments.of("PUT /api/users/{id}/enabled", HttpMethod.PUT, "/api/users/{userId}/enabled", "{\"enabled\":false}"));
 	}
 
 	/** Every endpoint, called as A's Admin with B's ids, answers 404: never 403, never B's data. */

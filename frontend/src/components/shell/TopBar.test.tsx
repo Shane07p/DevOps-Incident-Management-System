@@ -34,7 +34,11 @@ afterEach(() => {
 })
 
 describe('TopBar', () => {
-  it("shows the org's name in the header and the account menu", async () => {
+  it("shows the org's name in the header and the account menu, and navigates to Access tokens", async () => {
+    mockFetch({
+      'GET /api/auth/me': { body: { user: users[0], org: { id: 5, name: 'Acme', slug: 'acme' } } },
+      'GET /api/me/tokens': { body: [] },
+    })
     renderHome()
 
     const breadcrumb = await screen.findByRole('navigation', { name: 'Breadcrumb' })
@@ -43,6 +47,10 @@ describe('TopBar', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Account' }))
     const menu = await screen.findByRole('menu')
     expect(within(menu).getByText('Acme')).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Access tokens' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Members' })).toBeInTheDocument()
+
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Access tokens' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Access tokens' })).toBeInTheDocument()
   })
 })

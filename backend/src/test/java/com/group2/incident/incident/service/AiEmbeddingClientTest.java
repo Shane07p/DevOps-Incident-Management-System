@@ -56,6 +56,15 @@ class AiEmbeddingClientTest {
 	}
 
 	@Test
+	@DisplayName("Meaning searches use the query embedding kind")
+	void postsQueryKindForMeaningSearch() {
+		var result = client(baseUrl, Duration.ofSeconds(2)).embedQuery("checkout latency");
+
+		assertThat(result).isPresent();
+		assertThat(requestBody.get()).contains("\"text\":\"checkout latency\"", "\"kind\":\"query\"");
+	}
+
+	@Test
 	@DisplayName("An unset AI URL disables embedding without making a request")
 	void unsetUrlDisablesEmbedding() {
 		AiEmbeddingClient client = client("", Duration.ofMillis(100));

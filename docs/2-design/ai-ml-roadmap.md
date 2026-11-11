@@ -43,6 +43,10 @@ It never does arithmetic on raw data.
 - At creation, the backend embeds the fields currently available on an incident: title,
   description (symptoms), and service name. Cause and fix are not structured incident fields yet,
   so the backend does not invent them; include them when the incident model gains those fields.
+- The backend exposes `GET /api/incidents/{id}/similar`, the non-blocking
+  `GET /api/incidents/duplicate-check`, and `mode=semantic` on history search. Retrieval uses the
+  evaluation's provisional cosine threshold of 0.70 and is always restricted to the caller's org.
+  AI results remain suggestions; they never merge incidents or change incident state.
 - **Shown in three places:**
   - on the incident page, as "similar past incidents" with a match % and how each was fixed;
   - when declaring an incident, as "this looks like open incident INC-42" (a warning only;

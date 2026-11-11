@@ -4,6 +4,8 @@ package com.group2.incident.audit.entity;
 public enum AuditAction {
     USER_CREATED,
     USER_ROLE_CHANGED,
+    USER_DISABLED,
+    USER_ENABLED,
     SERVICE_CREATED,
     SERVICE_UPDATED,
     INCIDENT_CREATED,

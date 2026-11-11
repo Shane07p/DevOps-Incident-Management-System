@@ -1,26 +1,35 @@
 package com.group2.incident.org;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.closeTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.group2.incident.common.ratelimit.RateLimitService;
+import com.group2.incident.incident.service.AiEmbeddingClient;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestOrgs;
 import com.group2.incident.support.TestOrgs.SignedUp;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.jayway.jsonpath.JsonPath;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -31,6 +40,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -59,6 +70,12 @@ class OrgIsolationTest {
 	private RateLimitService rateLimitService;
 
 	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@MockitoBean
+	private AiEmbeddingClient aiEmbeddingClient;
+
+	@Autowired
 	@Qualifier("requestMappingHandlerMapping")
 	private RequestMappingHandlerMapping handlerMapping;
 
@@ -70,6 +87,13 @@ class OrgIsolationTest {
 	private final Map<String, Long> idsOfB = new HashMap<>();
 
 	private long serviceOfA;
+
+	private long sourceIncidentOfA;
+
+	@BeforeEach
+	void resetAiClient() {
+		reset(aiEmbeddingClient);
+	}
 
 	@BeforeAll
 	void createBothOrgs() throws Exception {
@@ -101,6 +125,7 @@ class OrgIsolationTest {
 		// The fallback contact becomes the assignee and gets a notification.
 		String incidentJson = orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing");
 		long incidentOfB = TestOrgs.id(incidentJson);
+		sourceIncidentOfA = TestOrgs.id(orgs.declareIncident(a.adminToken(), serviceOfA, "Checkout service latency"));
 		long timelineEntryOfB = JsonPath.<Number>read(incidentJson, "$.timeline[0].id").longValue();
 		String notifications = send(b, get("/api/notifications"), null);
 		long notificationOfB = JsonPath.<Number>read(notifications, "$.notifications[0].id").longValue();
@@ -112,6 +137,12 @@ class OrgIsolationTest {
 		idsOfB.put("monitorId", monitorOfB);
 		idsOfB.put("heartbeatId", heartbeatOfB);
 		idsOfB.put("incidentId", incidentOfB);
+		jdbcTemplate.update(
+				"update incident set embedding = cast(? as incident.vector), embedding_retry_at = null where id = ? and org_id = ?",
+				vector(0.8, 0.6), sourceIncidentOfA, a.orgId());
+		jdbcTemplate.update(
+				"update incident set embedding = cast(? as incident.vector), embedding_retry_at = null where id = ? and org_id = ?",
+				vector(1, 0), incidentOfB, b.orgId());
 		idsOfB.put("entryId", timelineEntryOfB);
 		idsOfB.put("notificationId", notificationOfB);
 		long tokenOfB = TestOrgs.id(send(b, post("/api/me/tokens"), "{\"name\":\"TokenOfB\"}"));
@@ -151,6 +182,7 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/services/{id}/escalation-policy", HttpMethod.PUT, "/api/services/{serviceId}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
+				Arguments.of("GET /api/incidents/{id}/similar", HttpMethod.GET, "/api/incidents/{incidentId}/similar", null),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
 						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",
@@ -178,7 +210,8 @@ class OrgIsolationTest {
 						"{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
 				Arguments.of("PUT /api/runbooks/{id}", HttpMethod.PUT, "/api/runbooks/{runbookId}", "{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
 				Arguments.of("DELETE /api/runbooks/{id}", HttpMethod.DELETE, "/api/runbooks/{runbookId}", null),
-				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"));
+				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"),
+				Arguments.of("PUT /api/users/{id}/enabled", HttpMethod.PUT, "/api/users/{userId}/enabled", "{\"enabled\":false}"));
 	}
 
 	/** Every endpoint, called as A's Admin with B's ids, answers 404: never 403, never B's data. */
@@ -254,6 +287,32 @@ class OrgIsolationTest {
 		assertThat(ids).extracting(n -> n == null ? null : n.longValue()).doesNotContain(idsOfB.get(keyOfB));
 	}
 
+	@Test
+	void similarSearchNeverReturnsAnEquallySimilarIncidentFromAnotherOrg() throws Exception {
+		when(aiEmbeddingClient.isEnabled()).thenReturn(true);
+
+		String response = mvc.perform(get("/api/incidents/{id}/similar", sourceIncidentOfA)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + a.adminToken()))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		assertThat(response).isEqualTo("[]");
+	}
+
+	@Test
+	void duplicateCheckDoesNotReturnAMoreSimilarIncidentFromAnotherOrg() throws Exception {
+		when(aiEmbeddingClient.isEnabled()).thenReturn(true);
+		when(aiEmbeddingClient.embedQuery(anyString())).thenReturn(Optional.of(embedding(1, 0)));
+
+		mvc.perform(get("/api/incidents/duplicate-check")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + a.adminToken())
+						.queryParam("title", "Checkout service outage"))
+				.andExpect(status().isOk())
+						.andExpect(jsonPath("$.duplicate").value(true))
+						.andExpect(jsonPath("$.incident.id").value(sourceIncidentOfA))
+						.andExpect(jsonPath("$.incident.score").value(closeTo(0.8, 0.002)));
+	}
+
 	/** Keeps idEndpoints() complete, as SecurityMatrixTest does for roles. */
 	@Test
 	void everyEndpointWithAnIdIsCovered() {
@@ -279,6 +338,17 @@ class OrgIsolationTest {
 			result = result.replace("{" + id.getKey() + "}", id.getValue().toString());
 		}
 		return result;
+	}
+
+	private static String vector(double x, double y) {
+		return "[" + x + "," + y + "," + "0,".repeat(765) + "0]";
+	}
+
+	private static List<Double> embedding(double x, double y) {
+		List<Double> values = new ArrayList<>(java.util.Collections.nCopies(768, 0.0));
+		values.set(0, x);
+		values.set(1, y);
+		return values;
 	}
 
 	private String send(SignedUp as, MockHttpServletRequestBuilder request, String body) throws Exception {

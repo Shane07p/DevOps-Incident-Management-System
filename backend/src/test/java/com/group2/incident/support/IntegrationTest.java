@@ -20,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(properties = {
 		"app.monitors.worker-enabled=false",
 		"app.heartbeats.worker-enabled=false",
-		"app.ai.embedding.worker-enabled=false"
+		"app.ai.embedding.worker-enabled=false",
+		"app.ai.service-url="
 })
 @AutoConfigureMockMvc
 @Import({ TestcontainersConfiguration.class, TestAccounts.class, TestOrgs.class })

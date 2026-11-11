@@ -401,6 +401,20 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/incidents/{id}/similar",
+						HttpMethod.GET,
+						"/api/incidents/{id}/similar",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/duplicate-check",
+						HttpMethod.GET,
+						"/api/incidents/duplicate-check",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/incidents/{id}",
 						HttpMethod.GET,
 						"/api/incidents/{id}",
@@ -504,6 +518,14 @@ public class SecurityMatrixTest {
 						"/api/runbooks/{id}",
 						null,
 						204, 204, 403, 401
+				),
+				// Enabling a member who is already enabled changes nothing, so the row repeats safely.
+				new MatrixRow(
+						"PUT /api/users/{id}/enabled",
+						HttpMethod.PUT,
+						"/api/users/{id}/enabled",
+						"{\"enabled\":true}",
+						200, 403, 403, 401
 				),
 				new MatrixRow(
 						"GET /api/audit",
@@ -692,6 +714,9 @@ public class SecurityMatrixTest {
 		MockHttpServletRequestBuilder req = request(method, path);
 		if (path.equals("/api/incidents/search")) {
 			req.queryParam("q", "SecurityMatrix");
+		}
+		if (path.equals("/api/incidents/duplicate-check")) {
+			req.queryParam("title", "SecurityMatrix incident");
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

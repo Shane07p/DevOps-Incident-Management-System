@@ -1,5 +1,6 @@
 package com.group2.incident.auth.controller;
 
+import com.group2.incident.auth.dto.ChangeEnabledRequest;
 import com.group2.incident.auth.dto.ChangeRoleRequest;
 import com.group2.incident.auth.dto.CreateUserRequest;
 import com.group2.incident.auth.dto.UserResponse;
@@ -53,6 +54,16 @@ public class UserAdminController {
 			@AuthenticationPrincipal Jwt jwt
 	) {
 		return userAdminService.changeRole(id, request, userId(jwt));
+	}
+
+	@PutMapping("/{id}/enabled")
+	@Operation(summary = "Disable a member, ending their sessions, or enable them again")
+	public UserResponse changeEnabled(
+			@PathVariable long id,
+			@Valid @RequestBody ChangeEnabledRequest request,
+			@AuthenticationPrincipal Jwt jwt
+	) {
+		return userAdminService.changeEnabled(id, request, userId(jwt));
 	}
 
 	private static long userId(Jwt jwt) {

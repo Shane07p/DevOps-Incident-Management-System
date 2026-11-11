@@ -11,367 +11,301 @@ import ch.qos.logback.core.read.ListAppender;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.FieldValidationException;
+import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.error.ServiceUnavailableException;
 import com.group2.incident.telemetry.config.TelemetryProperties;
 import com.group2.incident.telemetry.dto.LogEntryResponse;
-import com.group2.incident.telemetry.dto.MetricDataPoint;
-import com.group2.incident.telemetry.dto.ServiceMetricsResponse;
+import com.group2.incident.telemetry.dto.MetricSeriesResponse;
 import com.group2.incident.telemetry.service.TelemetryService;
-import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.LoggerFactory;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Tests for TelemetryService satisfying TC-FR-26.1a, TC-FR-26.1c, TC-FR-26.2a, TC-FR-26.3a, TC-FR-27.1a.
- */
+/** TelemetryService against a stub Grafana on loopback: the queries it builds, its limits, and its failures. */
 class TelemetryServiceTest {
 
 	private static final Instant NOW = Instant.parse("2026-11-10T12:00:00Z");
-	private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-	private HttpServer stubServer;
-	private String stubBaseUrl;
-	private final List<String> receivedAuthHeaders = new CopyOnWriteArrayList<>();
-	private final AtomicReference<String> lastLokiQuery = new AtomicReference<>();
-	private final AtomicReference<String> lastPromQuery = new AtomicReference<>();
+	private static final String TOKEN = "glc_test-read-token-123";
 
-	private ServiceRepository serviceRepository;
-	private JsonMapper objectMapper;
+	private HttpServer stub;
+
+	private String baseUrl;
+
+	private final AtomicReference<Map<String, String>> lastQuery = new AtomicReference<>();
+
+	private final AtomicReference<String> lastPath = new AtomicReference<>();
+
+	private final AtomicReference<String> lastAuth = new AtomicReference<>();
+
+	private final AtomicReference<String> lokiBody = new AtomicReference<>("{\"data\":{\"result\":[]}}");
+
+	private final AtomicReference<String> promBody = new AtomicReference<>("{\"data\":{\"result\":[]}}");
+
+	private final AtomicReference<Integer> status = new AtomicReference<>(200);
+
+	private final ServiceRepository services = mock(ServiceRepository.class);
 
 	@BeforeEach
-	void setUp() throws IOException {
-		objectMapper = JsonMapper.builder().build();
-		serviceRepository = mock(ServiceRepository.class);
-
-		ServiceEntity mockService = mock(ServiceEntity.class);
-		when(mockService.getId()).thenReturn(1L);
-		when(mockService.getName()).thenReturn("checkout");
-		when(serviceRepository.findById(1L)).thenReturn(Optional.of(mockService));
-		when(serviceRepository.findByNameIgnoreCase("checkout")).thenReturn(Optional.of(mockService));
-
-		receivedAuthHeaders.clear();
-		lastLokiQuery.set(null);
-		lastPromQuery.set(null);
-
-		stubServer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
-
-		stubServer.createContext("/loki/api/v1/query_range", exchange -> {
-			String auth = exchange.getRequestHeaders().getFirst("Authorization");
-			if (auth != null) {
-				receivedAuthHeaders.add(auth);
-			}
-			lastLokiQuery.set(exchange.getRequestURI().getQuery());
-
-			String jsonResponse = """
-					{
-					  "status": "success",
-					  "data": {
-					    "resultType": "streams",
-					    "result": [
-					      {
-					        "stream": { "service": "checkout", "level": "WARN" },
-					        "values": [
-					          [ "1731240000000000000", "{\\"timestamp\\":\\"2026-11-10T12:00:00Z\\",\\"level\\":\\"WARN\\",\\"message\\":\\"Payment gateway timeout\\",\\"payment_id\\":\\"pay_123\\"}" ],
-					          [ "1731239990000000000", "Plain text log entry without json" ]
-					        ]
-					      }
-					    ]
-					  }
-					}
-					""";
-			sendResponse(exchange, 200, jsonResponse);
+	void startStub() throws IOException {
+		stub = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+		stub.createContext("/", exchange -> {
+			lastPath.set(exchange.getRequestURI().getPath());
+			lastQuery.set(params(exchange.getRequestURI().getRawQuery()));
+			lastAuth.set(exchange.getRequestHeaders().getFirst("Authorization"));
+			String body = exchange.getRequestURI().getPath().contains("loki") ? lokiBody.get() : promBody.get();
+			byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(status.get(), bytes.length);
+			exchange.getResponseBody().write(bytes);
+			exchange.close();
 		});
-
-		stubServer.createContext("/api/v1/query_range", exchange -> {
-			String auth = exchange.getRequestHeaders().getFirst("Authorization");
-			if (auth != null) {
-				receivedAuthHeaders.add(auth);
-			}
-			lastPromQuery.set(exchange.getRequestURI().getQuery());
-
-			String jsonResponse = """
-					{
-					  "status": "success",
-					  "data": {
-					    "resultType": "matrix",
-					    "result": [
-					      {
-					        "metric": { "service": "checkout" },
-					        "values": [
-					          [ 1731240000.0, "42.5" ],
-					          [ 1731240060.0, "47.0" ]
-					        ]
-					      }
-					    ]
-					  }
-					}
-					""";
-			sendResponse(exchange, 200, jsonResponse);
-		});
-
-		stubServer.start();
-		stubBaseUrl = "http://127.0.0.1:" + stubServer.getAddress().getPort();
+		stub.start();
+		baseUrl = "http://127.0.0.1:" + stub.getAddress().getPort();
+		service(1L, "Checkout");
+		service(2L, "Order Fulfillment");
 	}
 
 	@AfterEach
-	void tearDown() {
-		if (stubServer != null) {
-			stubServer.stop(0);
-		}
+	void stopStub() {
+		stub.stop(0);
 	}
 
-	private void sendResponse(HttpExchange exchange, int statusCode, String responseText) throws IOException {
-		byte[] bytes = responseText.getBytes(StandardCharsets.UTF_8);
-		exchange.getResponseHeaders().set("Content-Type", "application/json");
-		exchange.sendResponseHeaders(statusCode, bytes.length);
-		try (OutputStream os = exchange.getResponseBody()) {
-			os.write(bytes);
-		}
-		exchange.close();
-	}
-
-	private TelemetryProperties createProperties(String readToken) {
-		return new TelemetryProperties(
-				new TelemetryProperties.PrometheusConfig(stubBaseUrl, ""),
-				new TelemetryProperties.LokiConfig(stubBaseUrl, ""),
-				readToken,
-				2
-		);
-	}
-
-	// ── TC-FR-26.1a: LogQL query construction & escaping ────────────────────
+	// ---------- TC-FR-26.1a: the query is built from the parameters only ----------
 
 	@Test
-	@DisplayName("TC-FR-26.1a: Query construction across service, level, text, and escaping")
-	void testBuildLogQuery_combinationsAndEscaping() {
-		TelemetryService service = new TelemetryService(
-				createProperties(""), serviceRepository, objectMapper, CLOCK);
+	void theLogQueryNamesTheServiceTheLevelAndTheText() {
+		telemetry().queryLogs(1L, "error", "timeout", null, null, 100);
 
-		// Service only
-		assertThat(service.buildLogQuery("checkout", null, null))
-				.isEqualTo("{service=\"checkout\"}");
-
-		// Level only
-		assertThat(service.buildLogQuery(null, "ERROR", null))
-				.isEqualTo("{level=\"ERROR\"}");
-
-		// Service and level
-		assertThat(service.buildLogQuery("checkout", "warn", null))
-				.isEqualTo("{service=\"checkout\", level=\"WARN\"}");
-
-		// Neither service nor level ("_all" or empty)
-		assertThat(service.buildLogQuery("_all", "_all", null))
-				.isEqualTo("{service=~\".+\"}");
-
-		// Free text search with dangerous LogQL / injection characters: quotes, backslashes, braces, LogQL pipes
-		String userText = "error \"timeout\" \\ fail |= bad {service=\"injected\"}";
-		String query = service.buildLogQuery("checkout", "ERROR", userText);
-
-		// User text must be placed in a literal filter |= "..." and escaped
-		assertThat(query).startsWith("{service=\"checkout\", level=\"ERROR\"} |= \"");
-		assertThat(query).contains("error \\\"timeout\\\" \\\\ fail |= bad {service=\\\"injected\\\"}");
-		assertThat(query).endsWith("\"");
+		assertThat(lastPath.get()).isEqualTo("/loki/api/v1/query_range");
+		assertThat(lastQuery.get().get("query")).isEqualTo("{service=\"checkout\"} | json | level=\"ERROR\" |= \"timeout\"");
+		assertThat(lastQuery.get()).containsEntry("limit", "100").containsEntry("direction", "backward")
+				.containsEntry("end", String.valueOf(NOW.getEpochSecond() * 1_000_000_000L))
+				.containsEntry("start", String.valueOf(NOW.minus(Duration.ofHours(1)).getEpochSecond() * 1_000_000_000L));
 	}
 
 	@Test
-	@DisplayName("TC-FR-26.1a: Loki query execution and response parsing")
-	void testQueryLogsAgainstStubbedLoki() {
-		TelemetryProperties props = createProperties("dummy-token");
-		TelemetryService service = new TelemetryService(props, serviceRepository, objectMapper, CLOCK);
+	void textThatLooksLikeLogQlStaysText() {
+		telemetry().queryLogs(1L, null, "\"} |= \"x\" or {job=~\".+\"", null, null, 10);
 
-		Instant from = NOW.minus(Duration.ofMinutes(15));
-		Instant to = NOW;
-
-		List<LogEntryResponse> logs = service.queryLogs(1L, null, "WARN", "timeout", from, to, 50);
-
-		assertThat(logs).hasSize(2);
-
-		// JSON line parsed
-		LogEntryResponse jsonEntry = logs.get(0);
-		assertThat(jsonEntry.serviceName()).isEqualTo("checkout");
-		assertThat(jsonEntry.level()).isEqualTo("WARN");
-		assertThat(jsonEntry.message()).isEqualTo("Payment gateway timeout");
-		assertThat(jsonEntry.attributes()).containsEntry("payment_id", "pay_123");
-
-		// Plain text line parsed
-		LogEntryResponse plainEntry = logs.get(1);
-		assertThat(plainEntry.message()).isEqualTo("Plain text log entry without json");
-
-		// Check query sent to Loki
-		String lokiQuery = lastLokiQuery.get();
-		assertThat(lokiQuery).isNotNull();
-		assertThat(lokiQuery).contains("query=");
-		assertThat(lokiQuery).contains("direction=BACKWARD");
-		assertThat(lokiQuery).contains("limit=50");
+		assertThat(lastQuery.get().get("query"))
+				.isEqualTo("{service=\"checkout\"} |= \"\\\"} |= \\\"x\\\" or {job=~\\\".+\\\"\"");
 	}
 
-	// ── TC-FR-26.1c: Read token is never logged ─────────────────────────────
+	@Test
+	void aServiceNameWithSpacesBecomesItsHyphenatedLabel() {
+		telemetry().queryLogs(2L, null, null, null, null, 10);
+
+		assertThat(lastQuery.get().get("query")).isEqualTo("{service=\"order-fulfillment\"}");
+	}
 
 	@Test
-	@DisplayName("TC-FR-26.1c: Read token is never logged in any application log line")
-	void testReadTokenIsNotLogged() {
-		String sensitiveToken = "super-secret-read-token-xyz-98765";
-		TelemetryProperties props = createProperties(sensitiveToken);
-		TelemetryService service = new TelemetryService(props, serviceRepository, objectMapper, CLOCK);
+	void anotherOrgsOrAnUnknownServiceIsNotFoundAndNothingIsSent() {
+		assertThatThrownBy(() -> telemetry().queryLogs(99L, null, null, null, null, 10)).isInstanceOf(NotFoundException.class);
+		assertThatThrownBy(() -> telemetry().queryMetric(99L, "requestRate", null, null, "60s"))
+				.isInstanceOf(NotFoundException.class);
+		assertThat(lastPath.get()).isNull();
+	}
 
-		Logger rootLogger = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-		ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
-		listAppender.start();
-		rootLogger.addAppender(listAppender);
+	@ParameterizedTest
+	@CsvSource({ "level, TRACE, 100", "limit, , 0", "limit, , 1001" })
+	void anUnknownLevelOrALimitOutsideOneToAThousandIsRefused(String field, String level, int limit) {
+		assertThatThrownBy(() -> telemetry().queryLogs(1L, level, null, null, null, limit))
+				.isInstanceOf(FieldValidationException.class)
+				.extracting("field").isEqualTo(field);
+	}
 
-		receivedAuthHeaders.clear();
+	// ---------- TC-FR-26.2a: 24 hours is the cap ----------
+
+	@Test
+	void exactlyTwentyFourHoursIsAcceptedAndOneSecondMoreIsRefused() {
+		telemetry().queryLogs(1L, null, null, NOW.minus(Duration.ofHours(24)), NOW, 10);
+		assertThat(lastPath.get()).isNotNull();
+
+		assertThatThrownBy(() -> telemetry().queryLogs(1L, null, null, NOW.minus(Duration.ofHours(24)).minusSeconds(1), NOW, 10))
+				.isInstanceOf(FieldValidationException.class);
+		assertThatThrownBy(() -> telemetry().queryMetric(1L, "errorRate", NOW, NOW.minusSeconds(1), "60s"))
+				.isInstanceOf(FieldValidationException.class);
+	}
+
+	// ---------- TC-FR-26.1c: the token goes in the header and nowhere else ----------
+
+	@Test
+	void theReadTokenIsSentAsAHeaderAndNeverLogged() {
+		Logger logger = (Logger) LoggerFactory.getLogger(TelemetryService.class);
+		ListAppender<ILoggingEvent> captured = new ListAppender<>();
+		captured.start();
+		logger.addAppender(captured);
 		try {
-			service.queryLogs(null, "checkout", "INFO", "hello", NOW.minus(Duration.ofMinutes(5)), NOW, 10);
-			service.queryMetrics(null, "checkout", NOW.minus(Duration.ofMinutes(5)), NOW, "60s");
+			telemetry().queryLogs(1L, null, null, null, null, 10);
+			status.set(500);
+			assertThatThrownBy(() -> telemetry().queryLogs(1L, null, null, null, null, 10))
+					.isInstanceOf(ServiceUnavailableException.class);
+		}
+		finally {
+			logger.detachAppender(captured);
+		}
 
-			// Confirm stub received the auth header with the token
-			assertThat(receivedAuthHeaders).isNotEmpty();
-			assertThat(receivedAuthHeaders).allMatch(h -> h.contains(sensitiveToken));
+		assertThat(lastAuth.get())
+				.isEqualTo("Basic " + Base64.getEncoder().encodeToString(("123456:" + TOKEN).getBytes(StandardCharsets.UTF_8)));
+		assertThat(captured.list).isNotEmpty();
+		assertThat(captured.list).allSatisfy(event -> assertThat(event.getFormattedMessage()).doesNotContain(TOKEN));
+		assertThat(lastQuery.get().values()).noneMatch(value -> value.contains(TOKEN));
+	}
 
-			// Confirm token never appears in any logged line
-			for (ILoggingEvent event : listAppender.list) {
-				assertThat(event.getFormattedMessage())
-						.as("Log message contains sensitive token")
-						.doesNotContain(sensitiveToken);
+	// ---------- TC-FR-26.3a: slow or down gives 503 within the timeout ----------
 
-				if (event.getArgumentArray() != null) {
-					for (Object arg : event.getArgumentArray()) {
-						if (arg != null) {
-							assertThat(arg.toString())
-									.as("Log argument contains sensitive token")
-									.doesNotContain(sensitiveToken);
-						}
-					}
-				}
+	@Test
+	void aGrafanaThatNeverAnswersGives503WithinTheTimeout() throws IOException {
+		HttpServer silent = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+		silent.createContext("/", exchange -> {
+			try {
+				Thread.sleep(10_000);
 			}
-		} finally {
-			rootLogger.detachAppender(listAppender);
-			listAppender.stop();
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		silent.setExecutor(Executors.newCachedThreadPool());
+		silent.start();
+		try {
+			String url = "http://127.0.0.1:" + silent.getAddress().getPort();
+			long started = System.nanoTime();
+			assertThatThrownBy(() -> telemetry(url, 1).queryLogs(1L, null, null, null, null, 10))
+					.isInstanceOf(ServiceUnavailableException.class)
+					.hasMessage("Logs are slow or unavailable right now");
+			assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(4));
+		}
+		finally {
+			silent.stop(0);
 		}
 	}
 
-	// ── TC-FR-26.2a: Time range cap at 24 hours ─────────────────────────────
-
 	@Test
-	@DisplayName("TC-FR-26.2a: Time range of exactly 24 hours is accepted; 24h + 1s rejected with 400")
-	void testTimeRangeCap24Hours() {
-		TelemetryService service = new TelemetryService(
-				createProperties(""), serviceRepository, objectMapper, CLOCK);
-
-		Instant to = NOW;
-		Instant exact24hFrom = to.minus(Duration.ofHours(24));
-		Instant over24hFrom = exact24hFrom.minusSeconds(1);
-
-		// Exactly 24 hours: accepted
-		service.validateTimeRange(exact24hFrom, to);
-
-		// 24 hours + 1 second: throws FieldValidationException (mapped to 400 Bad Request)
-		assertThatThrownBy(() -> service.validateTimeRange(over24hFrom, to))
-				.isInstanceOf(FieldValidationException.class)
-				.hasMessageContaining("24 hours");
-
-		// Inverted range: from > to
-		assertThatThrownBy(() -> service.validateTimeRange(to, exact24hFrom))
-				.isInstanceOf(FieldValidationException.class)
-				.hasMessageContaining("after");
+	void anErrorAnswerOrNoAddressGives503() {
+		status.set(502);
+		assertThatThrownBy(() -> telemetry().queryMetric(1L, "requestRate", null, null, "60s"))
+				.isInstanceOf(ServiceUnavailableException.class);
+		assertThatThrownBy(() -> telemetry("", 5).queryLogs(1L, null, null, null, null, 10))
+				.isInstanceOf(ServiceUnavailableException.class)
+				.hasMessage("Logs are not set up on this server");
 	}
 
-	// ── TC-FR-26.3a: Unreachable / slow Grafana returns 503 ─────────────────
+	// ---------- Reading Loki's answer ----------
 
 	@Test
-	@DisplayName("TC-FR-26.3a: Unreachable or slow Grafana returns 503 within timeout")
-	void testGrafanaSlowOrUnavailableThrows503() throws IOException {
-		int closedPort;
-		try (ServerSocket socket = new ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))) {
-			closedPort = socket.getLocalPort();
+	void logLinesComeBackNewestFirstWithDemoShopsEventAsTheMessage() {
+		lokiBody.set("""
+				{"data":{"result":[
+				  {"stream":{"service":"checkout"},"values":[
+				    ["1762776000000000000","{\\"timestamp\\":\\"2026-11-10T12:00:00Z\\",\\"level\\":\\"ERROR\\",\\"service\\":\\"checkout\\",\\"event\\":\\"checkout.failed\\",\\"request_id\\":\\"req-1\\"}"],
+				    ["1762775940000000000","plain text line"]
+				  ]},
+				  {"stream":{"service":"checkout","detected_level":"warn"},"values":[
+				    ["1762775970000000000","pool is almost full"]
+				  ]}
+				]}}""");
+
+		List<LogEntryResponse> logs = telemetry().queryLogs(1L, null, null, null, null, 2);
+
+		assertThat(logs).extracting(LogEntryResponse::message).containsExactly("checkout.failed", "pool is almost full");
+		assertThat(logs.get(0).level()).isEqualTo("ERROR");
+		assertThat(logs.get(0).attributes()).containsEntry("request_id", "req-1").containsEntry("service", "checkout")
+				.doesNotContainKeys("event", "level", "timestamp");
+		assertThat(logs.get(0).serviceId()).isEqualTo(1L);
+		assertThat(logs.get(0).serviceName()).isEqualTo("Checkout");
+		assertThat(logs.get(1).level()).isEqualTo("WARN");
+	}
+
+	// ---------- TC-FR-27.1a: each metric's query, and its series ----------
+
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"requestRate|sum(rate(demo_http_requests_total{service=\"checkout\"}[5m]))",
+			"errorRate|sum(rate(demo_http_requests_total{service=\"checkout\",status=~\"5..\"}[5m])) / sum(rate(demo_http_requests_total{service=\"checkout\"}[5m]))",
+			"latencyP50|histogram_quantile(0.50, sum(rate(demo_http_request_duration_seconds_bucket{service=\"checkout\"}[5m])) by (le))",
+			"latencyP95|histogram_quantile(0.95, sum(rate(demo_http_request_duration_seconds_bucket{service=\"checkout\"}[5m])) by (le))" })
+	void eachMetricHasItsOwnQuery(String metric, String query) {
+		MetricSeriesResponse series = telemetry().queryMetric(1L, metric, null, null, "5m");
+
+		assertThat(lastPath.get()).isEqualTo("/api/prom/api/v1/query_range");
+		assertThat(lastQuery.get()).containsEntry("query", query).containsEntry("step", "300")
+				.containsEntry("end", String.valueOf(NOW.getEpochSecond()));
+		assertThat(series.metric()).isEqualTo(metric);
+		assertThat(series.stepSeconds()).isEqualTo(300);
+	}
+
+	@Test
+	void pointsWithNoValueAreLeftOut() {
+		promBody.set("""
+				{"data":{"result":[{"metric":{},"values":[
+				  [1762776000,"0.25"],[1762776060,"NaN"],[1762776120,"+Inf"],[1762776180,"0.5"]
+				]}]}}""");
+
+		MetricSeriesResponse series = telemetry().queryMetric(1L, "errorRate", null, null, "60");
+
+		assertThat(series.points()).extracting(p -> p.value()).containsExactly(0.25, 0.5);
+		assertThat(series.points().get(0).timestamp()).isEqualTo(Instant.ofEpochSecond(1762776000));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "requestRate, 14s", "requestRate, 2h", "requestRate, often", "throughput, 60s" })
+	void aStepOutsideFifteenSecondsToAnHourOrAnUnknownMetricIsRefused(String metric, String step) {
+		assertThatThrownBy(() -> telemetry().queryMetric(1L, metric, null, null, step))
+				.isInstanceOf(FieldValidationException.class);
+		assertThat(lastPath.get()).isNull();
+	}
+
+	// ---------- helpers ----------
+
+	private TelemetryService telemetry() {
+		return telemetry(baseUrl, 5);
+	}
+
+	private TelemetryService telemetry(String url, int timeoutSeconds) {
+		TelemetryProperties properties = new TelemetryProperties(
+				new TelemetryProperties.PrometheusConfig(url.isEmpty() ? "" : url + "/api/prom", "123456"),
+				new TelemetryProperties.LokiConfig(url, "123456"), TOKEN, timeoutSeconds);
+		return new TelemetryService(properties, services, JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
+	}
+
+	private void service(long id, String name) {
+		ServiceEntity service = mock(ServiceEntity.class);
+		when(service.getId()).thenReturn(id);
+		when(service.getName()).thenReturn(name);
+		when(services.findById(id)).thenReturn(Optional.of(service));
+	}
+
+	private static Map<String, String> params(String rawQuery) {
+		Map<String, String> params = new LinkedHashMap<>();
+		if (rawQuery == null) {
+			return params;
 		}
-
-		TelemetryProperties brokenProps = new TelemetryProperties(
-				new TelemetryProperties.PrometheusConfig("http://127.0.0.1:" + closedPort, ""),
-				new TelemetryProperties.LokiConfig("http://127.0.0.1:" + closedPort, ""),
-				"test-token",
-				1
-		);
-
-		TelemetryService service = new TelemetryService(brokenProps, serviceRepository, objectMapper, CLOCK);
-
-		Instant from = NOW.minus(Duration.ofMinutes(5));
-		Instant to = NOW;
-
-		assertThatThrownBy(() -> service.queryLogs(null, "checkout", null, null, from, to, 10))
-				.isInstanceOf(ServiceUnavailableException.class)
-				.hasMessageContaining("Log store is slow or unavailable");
-
-		assertThatThrownBy(() -> service.queryMetrics(null, "checkout", from, to, "60s"))
-				.isInstanceOf(ServiceUnavailableException.class)
-				.hasMessageContaining("Metrics store is slow or unavailable");
-	}
-
-	// ── TC-FR-27.1a: PromQL query construction and series response ──────────
-
-	@Test
-	@DisplayName("TC-FR-27.1a: PromQL query construction and series response for each metric")
-	void testPrometheusQueriesAndParsing() {
-		TelemetryProperties props = createProperties("dummy-token");
-		TelemetryService service = new TelemetryService(props, serviceRepository, objectMapper, CLOCK);
-
-		// Check PromQL query templates for a service
-		assertThat(service.buildRequestRateQuery("checkout"))
-				.isEqualTo("sum(rate(demo_http_requests_total{service=\"checkout\"}[5m]))");
-
-		assertThat(service.buildErrorRateQuery("checkout"))
-				.isEqualTo("sum(rate(demo_http_requests_total{service=\"checkout\",status=~\"5..\"}[5m])) / sum(rate(demo_http_requests_total{service=\"checkout\"}[5m]))");
-
-		assertThat(service.buildLatencyP50Query("checkout"))
-				.isEqualTo("histogram_quantile(0.50, sum(rate(demo_http_request_duration_seconds_bucket{service=\"checkout\"}[5m])) by (le))");
-
-		assertThat(service.buildLatencyP95Query("checkout"))
-				.isEqualTo("histogram_quantile(0.95, sum(rate(demo_http_request_duration_seconds_bucket{service=\"checkout\"}[5m])) by (le))");
-
-		// Check PromQL query templates for all services
-		assertThat(service.buildRequestRateQuery(null))
-				.isEqualTo("sum(rate(demo_http_requests_total[5m]))");
-
-		// Execute against stubbed Prometheus
-		Instant from = NOW.minus(Duration.ofMinutes(10));
-		Instant to = NOW;
-
-		ServiceMetricsResponse metrics = service.queryMetrics(null, "checkout", from, to, "60s");
-
-		assertThat(metrics.serviceName()).isEqualTo("checkout");
-		assertThat(metrics.requestRate()).hasSize(2);
-		assertThat(metrics.errorRate()).hasSize(2);
-		assertThat(metrics.latencyP50()).hasSize(2);
-		assertThat(metrics.latencyP95()).hasSize(2);
-
-		MetricDataPoint first = metrics.requestRate().get(0);
-		assertThat(first.value()).isEqualTo(42.5);
-
-		MetricDataPoint second = metrics.requestRate().get(1);
-		assertThat(second.value()).isEqualTo(47.0);
-
-		// Single metric query
-		List<MetricDataPoint> singleSeries = service.queryMetric("requestRate", "checkout", from, to, "60s");
-		assertThat(singleSeries).hasSize(2);
-		assertThat(singleSeries.get(0).value()).isEqualTo(42.5);
+		for (String pair : rawQuery.split("&")) {
+			int eq = pair.indexOf('=');
+			params.put(URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8),
+					URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8));
+		}
+		return params;
 	}
 }

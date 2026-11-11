@@ -1,6 +1,6 @@
 # Test Plan
 
-How Settle is tested in Sprints 1 to 3, who does it, and when a change counts as tested. The test
+How Settle is tested in Sprints 1 to 3 and selected Sprint 4 work, who does it, and when a change counts as tested. The test
 cases are in [test-cases.md](test-cases.md), the results in [test-report.md](test-report.md), and
 the requirement-to-test map in [traceability.csv](traceability.csv).
 
@@ -11,7 +11,8 @@ the requirement-to-test map in [traceability.csv](traceability.csv).
 catalog, incidents, SLA clocks, alert intake and deduplication, on-call, notifications, monitors and
 heartbeats, acknowledgement, status and severity changes, escalation, reassignment and roles,
 comments and corrections, and rate limits. Issue #159 also adds Sprint 4 AI-1 embedding storage,
-timeout handling, and retry coverage.
+timeout handling, retries, similar-incident and duplicate-check endpoints, and meaning-based history
+search.
 
 **Not in scope yet:** the remaining features of Sprints 4 to 6, the quality of AI retrieval (measured in the
 [AI/ML roadmap](../2-design/ai-ml-roadmap.md#data-and-evaluation)), and load testing, which runs in

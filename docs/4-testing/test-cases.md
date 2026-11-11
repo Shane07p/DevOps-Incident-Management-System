@@ -422,6 +422,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-01.6f | Negative | An Admin disables their own account | 409 "You can't disable your own account" | `UserAdminControllerTest` | Automated |
 | TC-FR-01.6g | Equivalence | Disable, disable again, enable, enable again | One `USER_DISABLED` and one `USER_ENABLED` audit entry; repeats change nothing | `UserAdminControllerTest` | Automated |
 | TC-FR-01.6h | Concurrency | Two Admins disable each other at the same moment | The second waits for the first, then gets 409; one enabled Admin remains | `LastAdminRaceTest` | Automated |
+| TC-FR-01.6i | Decision table | An Admin's member list: another member's row, their own row, a disabled member | Disable and Enable send nothing until confirmed; no Disable on your own row; a disabled member is marked; the server's 409 shows in the dialog | `UsersPage.test.tsx` | Automated |
 | TC-FR-01.6j | Concurrency | An Admin is disabled, or demoted, while their own request waits for the org lock | 403; their request changes nothing | `LastAdminRaceTest` | Automated |
 | TC-FR-01.4h | Concurrency | A slug or an email taken between the check and the insert | A taken slug is looked for again (up to 3 times); a taken email is 409 | `SignupServiceTest` | Automated |
 | TC-FR-01.5h | Equivalence | Alert inbox in an org whose incident ids differ from its numbers | Each alert shows its incident's reference (INC-1), not its id | `AlertGroupingTest`, `AlertsPage.test.tsx` | Automated |

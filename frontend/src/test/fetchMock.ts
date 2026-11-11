@@ -45,8 +45,8 @@ export const defaultTargets = {
 }
 
 export const users = [
-  { id: 1, email: 'admin@settle.local', displayName: 'Dev Admin', role: 'ADMIN' },
-  { id: 2, email: 'engineer@settle.local', displayName: 'Dev Engineer', role: 'ENGINEER' },
+  { id: 1, email: 'admin@settle.local', displayName: 'Dev Admin', role: 'ADMIN', enabled: true },
+  { id: 2, email: 'engineer@settle.local', displayName: 'Dev Engineer', role: 'ENGINEER', enabled: true },
 ]
 
 // The org every signed-in test user belongs to; GET /api/auth/me returns { user, org }.

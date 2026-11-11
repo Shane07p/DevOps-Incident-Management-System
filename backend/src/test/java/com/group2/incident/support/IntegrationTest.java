@@ -19,7 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 // The monitor worker would run checks on its own; tests call MonitorWorker.runOnce at times they choose.
 @SpringBootTest(properties = {
 		"app.monitors.worker-enabled=false",
-		"app.ai.embedding.worker-enabled=false"
+		"app.ai.embedding.worker-enabled=false",
+		"app.ai.service-url="
 })
 @AutoConfigureMockMvc
 @Import({ TestcontainersConfiguration.class, TestAccounts.class, TestOrgs.class })

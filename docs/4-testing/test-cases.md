@@ -418,6 +418,12 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-01.6b | Boundary | Demote the last enabled Admin | 409 "An org needs at least one Admin" | `UserAdminControllerTest`, `UserAdminServiceTest` | Automated |
 | TC-FR-01.6c | Negative | Change the role of someone in another org | 404 | `UserAdminControllerTest` | Automated |
 | TC-FR-01.6d | Concurrency | Two Admins demote each other at the same moment | The second waits for the first, then gets 409; one Admin remains | `LastAdminRaceTest` | Automated |
+| TC-FR-01.6e | State transition | Disable a member, reuse their token, log in; enable them, log in | 401 and 401 while disabled; login works once enabled; the old token stays dead | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6f | Negative | An Admin disables their own account | 409 "You can't disable your own account" | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6g | Equivalence | Disable, disable again, enable, enable again | One `USER_DISABLED` and one `USER_ENABLED` audit entry; repeats change nothing | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6h | Concurrency | Two Admins disable each other at the same moment | The second waits for the first, then gets 409; one enabled Admin remains | `LastAdminRaceTest` | Automated |
+| TC-FR-01.6i | Decision table | An Admin's member list: another member's row, their own row, a disabled member | Disable and Enable send nothing until confirmed; no Disable on your own row; a disabled member is marked; the server's 409 shows in the dialog | `UsersPage.test.tsx` | Automated |
+| TC-FR-01.6j | Concurrency | An Admin is disabled, or demoted, while their own request waits for the org lock | 403; their request changes nothing | `LastAdminRaceTest` | Automated |
 | TC-FR-01.4h | Concurrency | A slug or an email taken between the check and the insert | A taken slug is looked for again (up to 3 times); a taken email is 409 | `SignupServiceTest` | Automated |
 | TC-FR-01.5h | Equivalence | Alert inbox in an org whose incident ids differ from its numbers | Each alert shows its incident's reference (INC-1), not its id | `AlertGroupingTest`, `AlertsPage.test.tsx` | Automated |
 | TC-FR-01.4g | Equivalence | Sign-up page and sign in by email | The org is created and the app opens; the header shows the org; a taken email shows on its field; sign-in posts `email` | `SignupPage.test.tsx`, `LoginPage.test.tsx`, `TopBar.test.tsx` | Automated |
@@ -490,17 +496,22 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Automated |
 | TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
 | TC-FR-17.1f | Concurrency | A filter is set while the typed keyword still waits its 400 ms | Both the keyword and the filter end up in the URL | `HistorySearchPage.test.tsx` | Automated |
+| TC-FR-17.1g | Equivalence | Search by meaning with service, severity, status, and page filters | Returns ranked results with the same filters and pagination | `IncidentSimilarityTest.semanticSearchAppliesFiltersAndPagination` (Testcontainers with pgvector) | Automated |
+| TC-FR-17.1h | Equivalence | Semantic mode with a blank query and active filters | Returns the filtered keyword results without an AI request | `IncidentSimilarityTest.blankSemanticQueryFallsBackToFilteredKeywordSearch` | Automated |
 
 ### AI-1 Find similar (FR-18, D44)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | In review (Manan) |
-| TC-D44b | Equivalence | A new incident, then the background worker receives a valid embedding from `POST /embed` | Creation does not call the AI service; the worker stores the 768-value embedding on the incident | `IncidentEmbeddingTest.creationQueuesEmbeddingForBackgroundWorker`, `IncidentEmbeddingTest.retryStoresPreviouslyUnavailableEmbedding` (Testcontainers) | In review (Manan) |
-| TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
+| TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | Automated |
+| TC-D44b | Equivalence | A new incident, then the background worker receives a valid embedding from `POST /embed` | Creation does not call the AI service; the worker stores the 768-value embedding on the incident | `IncidentEmbeddingTest.creationQueuesEmbeddingForBackgroundWorker`, `IncidentEmbeddingTest.retryStoresPreviouslyUnavailableEmbedding` (Testcontainers) | Automated |
+| TC-FR-18.1a | Equivalence | Older and newer incidents include four above-threshold candidates and one below-threshold candidate | Only incidents created before the source are returned; the top 3 above-threshold incidents are returned in score order | `IncidentSimilarityTest.similarIncidentsAreThresholdedOrderedAndCapped` (Testcontainers with pgvector) | Automated |
+| TC-FR-18.1b | Equivalence | Similarity query on a title with open and resolved candidates | The closest open candidate is a warning; no incident is merged or created | `IncidentSimilarityTest.duplicateCheckReturnsOnlyOpenMatches` (Testcontainers with pgvector) | Automated |
+| TC-FR-18.1c | Org isolation | An equally similar incident exists in another organization | Neither similar-incidents nor duplicate-check returns the other org's incident | `OrgIsolationTest.similarSearchNeverReturnsAnEquallySimilarIncidentFromAnotherOrg`, `OrgIsolationTest.duplicateCheckDoesNotReturnAMoreSimilarIncidentFromAnotherOrg` | Automated |
 | TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
-| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset during incident creation | The incident is created; failed embeddings remain retryable and the client respects its timeout | `AiEmbeddingClientTest`, `IncidentEmbeddingTest` (Testcontainers) | In review (Manan) |
-| TC-FR-18.4b | Negative | The AI service is unavailable for similar-incident lookup | The endpoint returns 200 with an empty array, never an error | `SimilarIncidentsTest` | Planned (Manan) |
+| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset during incident creation | The incident is created; failed embeddings remain retryable and the client respects its timeout | `AiEmbeddingClientTest`, `IncidentEmbeddingTest` (Testcontainers) | Automated |
+| TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | Automated |
+| TC-FR-18.4c | Transaction boundary | Duplicate-check and semantic-search requests embed a query before database access | The AI embedding request runs without an open database transaction | `IncidentSimilarityTransactionTest` | Automated |
 
 ### Public status page (FR-21, D45): decision table on who may publish
 

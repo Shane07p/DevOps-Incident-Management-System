@@ -2,15 +2,12 @@ package com.group2.incident.telemetry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.FieldValidationException;
@@ -65,7 +62,9 @@ class TelemetryServiceTest {
 		objectMapper = JsonMapper.builder().build();
 		serviceRepository = mock(ServiceRepository.class);
 
-		ServiceEntity mockService = new ServiceEntity("checkout", "Checkout service", 1L, Criticality.HIGH);
+		ServiceEntity mockService = mock(ServiceEntity.class);
+		when(mockService.getId()).thenReturn(1L);
+		when(mockService.getName()).thenReturn("checkout");
 		when(serviceRepository.findById(1L)).thenReturn(Optional.of(mockService));
 		when(serviceRepository.findByNameIgnoreCase("checkout")).thenReturn(Optional.of(mockService));
 

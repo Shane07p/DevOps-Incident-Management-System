@@ -28,7 +28,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Service to query logs from Grafana Loki (FR-26) and metrics from Prometheus (FR-27).
@@ -43,7 +43,7 @@ public class TelemetryService {
 
 	private final TelemetryProperties properties;
 	private final ServiceRepository serviceRepository;
-	private final ObjectMapper objectMapper;
+	private final JsonMapper objectMapper;
 	private final Clock clock;
 
 	/**

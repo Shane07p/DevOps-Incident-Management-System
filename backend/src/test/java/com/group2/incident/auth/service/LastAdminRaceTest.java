@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.group2.incident.auth.dto.ChangeEnabledRequest;
 import com.group2.incident.auth.dto.ChangeRoleRequest;
 import com.group2.incident.auth.dto.UserResponse;
 import com.group2.incident.auth.entity.Role;
@@ -86,6 +87,33 @@ class LastAdminRaceTest {
 		}));
 
 		assertThatThrownBy(() -> secondDemotion.get(30, TimeUnit.SECONDS))
+				.isInstanceOf(ExecutionException.class)
+				.hasCauseInstanceOf(ConflictException.class);
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM membership WHERE org_id = ? AND role = 'ADMIN' AND enabled",
+				Long.class, org.orgId())).isEqualTo(1);
+	}
+
+	// TC-FR-01.6h: two Admins disable each other at the same moment; the second waits, then gets 409.
+	@Test
+	void twoAdminsDisablingEachOtherAtOnceLeaveOneEnabledAdmin() throws Exception {
+		org = orgs.signUp("race-off-first@race.test", "Race Off Org");
+		long first = org.adminId();
+		long second = TestOrgs.id(mvc.perform(post("/api/users")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"race-off-second@race.test\",\"displayName\":\"Second\",\"password\":\"DevPassw0rd!\",\"role\":\"ADMIN\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString());
+
+		Future<UserResponse> secondDisable = OrgContext.runAs(org.orgId(), () -> new TransactionTemplate(transactionManager).execute(status -> {
+			userAdminService.changeEnabled(second, new ChangeEnabledRequest(false), first);
+			Future<UserResponse> started = otherAdmin.submit(() ->
+					OrgContext.runAs(org.orgId(), () -> userAdminService.changeEnabled(first, new ChangeEnabledRequest(false), second)));
+			waitForASessionBlockedOnALock();
+			return started;
+		}));
+
+		assertThatThrownBy(() -> secondDisable.get(30, TimeUnit.SECONDS))
 				.isInstanceOf(ExecutionException.class)
 				.hasCauseInstanceOf(ConflictException.class);
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM membership WHERE org_id = ? AND role = 'ADMIN' AND enabled",

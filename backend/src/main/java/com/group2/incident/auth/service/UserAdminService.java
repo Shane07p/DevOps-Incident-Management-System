@@ -3,6 +3,7 @@ package com.group2.incident.auth.service;
 import com.group2.incident.audit.entity.AuditAction;
 import com.group2.incident.audit.entity.AuditItemType;
 import com.group2.incident.audit.service.AuditService;
+import com.group2.incident.auth.dto.ChangeEnabledRequest;
 import com.group2.incident.auth.dto.ChangeRoleRequest;
 import com.group2.incident.auth.dto.CreateUserRequest;
 import com.group2.incident.auth.dto.UserResponse;
@@ -81,6 +82,46 @@ public class UserAdminService {
 		// version over a logout committed meanwhile, and bring a revoked token back to life (D21).
 		users.revokeTokens(targetUserId);
 		log.info("Admin {} changed the role of user {} from {} to {}", adminUserId, targetUserId, oldRole, request.role());
+		return response;
+	}
+
+	/**
+	 * Disables a member, so they can no longer sign in to this org, or enables them again (FR-01.6). Disabling
+	 * ends their sessions at once; their access tokens stop working while they are disabled (FR-23.2).
+	 * An Admin cannot disable themselves, and an org always keeps at least one enabled Admin.
+	 */
+	@Transactional
+	public UserResponse changeEnabled(long targetUserId, ChangeEnabledRequest request, long adminUserId) {
+		// Same lock as a role change: two Admins disabling each other at once take turns, and the second
+		// finds itself the last enabled Admin.
+		orgs.findLockedById(OrgContext.current()).orElseThrow(() -> new IllegalStateException("No org for this request"));
+		Membership target = member(targetUserId);
+		Membership admin = member(adminUserId);
+		boolean enable = request.enabled();
+		if (target.isEnabled() == enable) {
+			return UserResponse.from(target);
+		}
+		if (!enable && targetUserId == adminUserId) {
+			throw new ConflictException("You can't disable your own account");
+		}
+		if (!enable && target.getRole() == Role.ADMIN
+				&& memberships.countByOrgIdAndRoleAndEnabledTrue(OrgContext.current(), Role.ADMIN) <= 1) {
+			throw new ConflictException("An org needs at least one Admin");
+		}
+		if (enable) {
+			target.enable();
+		}
+		else {
+			target.disable();
+		}
+		auditService.record(admin.getUser(), enable ? AuditAction.USER_ENABLED : AuditAction.USER_DISABLED,
+				AuditItemType.USER, target.getUser().getId(), "email: " + target.getUser().getEmail());
+		UserResponse response = UserResponse.from(target);
+		if (!enable) {
+			// One SQL increment, as for a role change (D21): every session the person holds ends now.
+			users.revokeTokens(targetUserId);
+		}
+		log.info("Admin {} {} user {}", adminUserId, enable ? "enabled" : "disabled", targetUserId);
 		return response;
 	}
 

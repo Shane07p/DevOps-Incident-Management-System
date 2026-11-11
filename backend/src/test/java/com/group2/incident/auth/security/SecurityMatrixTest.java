@@ -456,6 +456,14 @@ public class SecurityMatrixTest {
 						null,
 						204, 204, 403, 401
 				),
+				// Enabling a member who is already enabled changes nothing, so the row repeats safely.
+				new MatrixRow(
+						"PUT /api/users/{id}/enabled",
+						HttpMethod.PUT,
+						"/api/users/{id}/enabled",
+						"{\"enabled\":true}",
+						200, 403, 403, 401
+				),
 				new MatrixRow(
 						"GET /api/audit",
 						HttpMethod.GET,

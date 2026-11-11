@@ -38,7 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 
 /**
  * Tests for TelemetryService satisfying TC-FR-26.1a, TC-FR-26.1c, TC-FR-26.2a, TC-FR-26.3a, TC-FR-27.1a.

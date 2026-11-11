@@ -68,7 +68,11 @@ class TelemetryServiceTest {
 		when(serviceRepository.findById(1L)).thenReturn(Optional.of(mockService));
 		when(serviceRepository.findByNameIgnoreCase("checkout")).thenReturn(Optional.of(mockService));
 
-		stubServer = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+		receivedAuthHeaders.clear();
+		lastLokiQuery.set(null);
+		lastPromQuery.set(null);
+
+		stubServer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
 
 		stubServer.createContext("/loki/api/v1/query_range", exchange -> {
 			String auth = exchange.getRequestHeaders().getFirst("Authorization");
@@ -234,6 +238,7 @@ class TelemetryServiceTest {
 		listAppender.start();
 		rootLogger.addAppender(listAppender);
 
+		receivedAuthHeaders.clear();
 		try {
 			service.queryLogs(null, "checkout", "INFO", "hello", NOW.minus(Duration.ofMinutes(5)), NOW, 10);
 			service.queryMetrics(null, "checkout", NOW.minus(Duration.ofMinutes(5)), NOW, "60s");
@@ -296,7 +301,7 @@ class TelemetryServiceTest {
 	@DisplayName("TC-FR-26.3a: Unreachable or slow Grafana returns 503 within timeout")
 	void testGrafanaSlowOrUnavailableThrows503() throws IOException {
 		int closedPort;
-		try (ServerSocket socket = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) {
+		try (ServerSocket socket = new ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))) {
 			closedPort = socket.getLocalPort();
 		}
 

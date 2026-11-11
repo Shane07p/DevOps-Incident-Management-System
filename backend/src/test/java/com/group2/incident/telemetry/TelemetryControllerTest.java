@@ -69,7 +69,7 @@ class TelemetryControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(1))
 				.andExpect(jsonPath("$[0].id").value("1731240000000000000"))
-				.andExpect(jsonPath("$[0].service").value("checkout"))
+				.andExpect(jsonPath("$[0].serviceName").value("checkout"))
 				.andExpect(jsonPath("$[0].level").value("WARN"))
 				.andExpect(jsonPath("$[0].message").value("Order payment failed"))
 				.andExpect(jsonPath("$[0].attributes.orderId").value("ord_456"));
@@ -136,7 +136,7 @@ class TelemetryControllerTest {
 						.param("step", "60s"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.serviceId").value(1))
-				.andExpect(jsonPath("$.service").value("checkout"))
+				.andExpect(jsonPath("$.serviceName").value("checkout"))
 				.andExpect(jsonPath("$.requestRate[0].value").value(10.5))
 				.andExpect(jsonPath("$.errorRate[0].value").value(0.05))
 				.andExpect(jsonPath("$.latencyP50[0].value").value(0.12))

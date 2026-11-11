@@ -203,7 +203,7 @@ class TelemetryServiceTest {
 
 		// JSON line parsed
 		LogEntryResponse jsonEntry = logs.get(0);
-		assertThat(jsonEntry.service()).isEqualTo("checkout");
+		assertThat(jsonEntry.serviceName()).isEqualTo("checkout");
 		assertThat(jsonEntry.level()).isEqualTo("WARN");
 		assertThat(jsonEntry.message()).isEqualTo("Payment gateway timeout");
 		assertThat(jsonEntry.attributes()).containsEntry("payment_id", "pay_123");
@@ -352,7 +352,7 @@ class TelemetryServiceTest {
 
 		ServiceMetricsResponse metrics = service.queryMetrics(null, "checkout", from, to, "60s");
 
-		assertThat(metrics.service()).isEqualTo("checkout");
+		assertThat(metrics.serviceName()).isEqualTo("checkout");
 		assertThat(metrics.requestRate()).hasSize(2);
 		assertThat(metrics.errorRate()).hasSize(2);
 		assertThat(metrics.latencyP50()).hasSize(2);

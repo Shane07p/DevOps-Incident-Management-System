@@ -111,7 +111,7 @@ class HeartbeatControllerTest {
 	void intervalBoundary() throws Exception {
 		send(post("/api/heartbeats"), body("Backup", serviceId, 29, 10))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.fieldErrors.intervalSeconds").isNotEmpty());
+				.andExpect(jsonPath("$.errors.intervalSeconds").isNotEmpty());
 
 		send(post("/api/heartbeats"), body("Backup", serviceId, 30, 10))
 				.andExpect(status().isCreated());
@@ -122,7 +122,7 @@ class HeartbeatControllerTest {
 	void graceBoundary() throws Exception {
 		send(post("/api/heartbeats"), body("Backup Negative Grace", serviceId, 60, -1))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.fieldErrors.graceSeconds").isNotEmpty());
+				.andExpect(jsonPath("$.errors.graceSeconds").isNotEmpty());
 
 		send(post("/api/heartbeats"), body("Backup Zero Grace", serviceId, 60, 0))
 				.andExpect(status().isCreated());

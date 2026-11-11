@@ -80,17 +80,14 @@ public class HeartbeatService {
 		return HeartbeatResponse.from(heartbeat);
 	}
 
+	/**
+	 * A ping from a scheduled job, which has no login: the token alone names the heartbeat, in whichever org
+	 * owns it. It is found across orgs, then recorded as that org (D48).
+	 */
 	public HeartbeatPingResponse ping(String token) {
 		Instant now = clock.instant();
-		Heartbeat heartbeat;
-		if (OrgContext.currentOrgId() != null) {
-			heartbeat = heartbeatRepository.findByToken(token)
-					.orElseThrow(() -> new NotFoundException("Heartbeat not found"));
-		}
-		else {
-			heartbeat = OrgContext.runAsRoot(() -> heartbeatRepository.findByToken(token))
-					.orElseThrow(() -> new NotFoundException("Heartbeat not found"));
-		}
+		Heartbeat heartbeat = OrgContext.runAsRoot(() -> heartbeatRepository.findByToken(token))
+				.orElseThrow(() -> new NotFoundException("Heartbeat not found"));
 		return OrgContext.runAs(heartbeat.getOrgId(), () -> recorder.recordPing(heartbeat.getId(), now));
 	}
 

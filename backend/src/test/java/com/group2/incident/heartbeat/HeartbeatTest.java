@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.group2.incident.common.ratelimit.RateLimitService;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.heartbeat.service.HeartbeatRecorder;
 import com.group2.incident.heartbeat.service.HeartbeatWorker;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -60,6 +61,9 @@ class HeartbeatTest {
 
 	@Autowired
 	private HeartbeatWorker worker;
+
+	@Autowired
+	private HeartbeatRecorder recorder;
 
 	private SignedUp org;
 	private int servicesCreated;
@@ -116,11 +120,11 @@ class HeartbeatTest {
 	void tcHBa_pingBeforeDueTimePlusGraceRaisesNothing() throws Exception {
 		Instant pingTime = lateAfter.minusSeconds(1);
 
-		// Ping via public ping URL (needs no login)
-		mvc.perform(post(pingUrl))
-				.andExpect(status().isOk());
+		// The ping lands at a chosen time, 1 second before the deadline; the URL itself is tested in
+		// HeartbeatControllerTest, where the ping takes the real time.
+		OrgContext.runAs(org.orgId(), () -> recorder.recordPing(heartbeatId, pingTime));
 
-		// Check at due time plus grace
+		// Check at due time plus grace: the ping moved the deadline, so nothing is late.
 		worker.runOnce(lateAfter);
 
 		assertThat(alerts()).isZero();

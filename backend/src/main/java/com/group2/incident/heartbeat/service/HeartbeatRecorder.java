@@ -45,7 +45,8 @@ public class HeartbeatRecorder {
 		return true;
 	}
 
-	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	// A ping arrives with no transaction open, so this one is its own; the worker's checks need REQUIRES_NEW, a ping does not.
+	@Transactional
 	public HeartbeatPingResponse recordPing(Long heartbeatId, Instant pingedAt) {
 		Heartbeat heartbeat = heartbeatRepository.findWithServiceById(heartbeatId)
 				.orElseThrow(() -> new NotFoundException("Heartbeat " + heartbeatId + " not found"));

@@ -21,6 +21,8 @@ import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.heartbeat.entity.Heartbeat;
+import com.group2.incident.heartbeat.repository.HeartbeatRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.Incident;
@@ -65,6 +67,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private UptimeMonitorRepository monitors;
+
+	@Autowired
+	private HeartbeatRepository heartbeats;
 
 	@Autowired
 	private TestAccounts accounts;
@@ -132,6 +137,8 @@ public class SecurityMatrixTest {
 	private Long targetIncidentId;
 	private Long targetDeployId;
 	private Long targetMonitorId;
+	private Long targetHeartbeatId;
+	private String targetHeartbeatToken;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
@@ -336,6 +343,48 @@ public class SecurityMatrixTest {
 						"/api/monitors/{id}",
 						"{\"name\":\"Mon_${RANDOM}\",\"url\":\"https://203.0.113.10/health\",\"expectedStatus\":200,\"intervalSeconds\":60,\"serviceId\":${SERVICE_ID},\"failureThreshold\":3,\"enabled\":true}",
 						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/heartbeats",
+						HttpMethod.GET,
+						"/api/heartbeats",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/heartbeats/{id}",
+						HttpMethod.GET,
+						"/api/heartbeats/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/heartbeats",
+						HttpMethod.POST,
+						"/api/heartbeats",
+						"{\"name\":\"HB_${RANDOM}\",\"serviceId\":${SERVICE_ID},\"intervalSeconds\":60,\"graceSeconds\":10,\"enabled\":true}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/heartbeats/{id}",
+						HttpMethod.PUT,
+						"/api/heartbeats/{id}",
+						"{\"name\":\"HB_${RANDOM}\",\"serviceId\":${SERVICE_ID},\"intervalSeconds\":60,\"graceSeconds\":10,\"enabled\":true}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/public/heartbeats/ping/{token}",
+						HttpMethod.POST,
+						"/api/public/heartbeats/ping/{token}",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
+						"GET /api/public/heartbeats/ping/{token}",
+						HttpMethod.GET,
+						"/api/public/heartbeats/ping/{token}",
+						null,
+						200, 200, 200, 200
 				),
 				new MatrixRow(
 						"GET /api/incidents",
@@ -565,6 +614,18 @@ public class SecurityMatrixTest {
 		adminRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Admin runbook", List.of("Step"), clock.instant())).getId();
 		engineerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Engineer runbook", List.of("Step"), clock.instant())).getId();
 		viewerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Viewer runbook", List.of("Step"), clock.instant())).getId();
+
+		Heartbeat targetHeartbeat = heartbeats.saveAndFlush(new Heartbeat(
+				savedService,
+				"Matrix heartbeat",
+				60,
+				10,
+				UUID.randomUUID().toString().replace("-", ""),
+				true,
+				clock.instant()
+		));
+		targetHeartbeatId = targetHeartbeat.getId();
+		targetHeartbeatToken = targetHeartbeat.getToken();
 	}
 
 	@Test
@@ -616,12 +677,14 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
+				: pathTemplate.startsWith("/api/heartbeats/") ? targetHeartbeatId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
 				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
 				.replace("{entryId}", "999999999")
+				.replace("{token}", targetHeartbeatToken != null ? targetHeartbeatToken : "dummy_token")
 				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999");
 	}
 

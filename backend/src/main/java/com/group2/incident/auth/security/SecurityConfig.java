@@ -65,6 +65,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
 						// The public status page is for customers, who have no account (D45).
 						.requestMatchers(HttpMethod.GET, "/api/public/status/*").permitAll()
+						// Public heartbeats ping needs no login (FR-22).
+						.requestMatchers("/api/public/heartbeats/**").permitAll()
 						// The permissions table in the Sprint 1 plan; anything not listed needs any logged-in user.
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
@@ -77,6 +79,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")

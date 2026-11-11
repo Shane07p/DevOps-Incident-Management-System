@@ -15,6 +15,7 @@ import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.incident.service.IncidentSimilarityService;
 import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.incident.entity.IncidentStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -69,7 +70,13 @@ public class IncidentController {
 			@RequestParam(value = "status", required = false) IncidentStatus status,
 			@RequestParam(value = "page", defaultValue = "0") int page,
 			@RequestParam(value = "mode", defaultValue = "keyword") String mode) {
-		return incidentService.searchIncidents(query, serviceId, severity, status, page, mode);
+		if ("semantic".equals(mode) && query != null && !query.isBlank()) {
+			return incidentSimilarityService.searchByMeaning(query, serviceId, severity, status, page);
+		}
+		if ("keyword".equals(mode) || "semantic".equals(mode)) {
+			return incidentService.searchIncidents(query, serviceId, severity, status, page);
+		}
+		throw new FieldValidationException("mode", "must be keyword or semantic");
 	}
 
 	@GetMapping("/duplicate-check")

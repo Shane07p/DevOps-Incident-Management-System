@@ -56,14 +56,13 @@ public class IncidentSimilarityService {
 		}
 
 		return similarityRepository.findMatches(
-						orgId, embedding.get(), incidentId, null, null, null,
+						orgId, embedding.get(), incidentId, incident.getCreatedAt(), null, null, null,
 						false, SIMILARITY_THRESHOLD, 3, 0)
 				.stream()
 				.map(IncidentSimilarityService::toSimilarIncident)
 				.toList();
 	}
 
-	@Transactional(readOnly = true)
 	public DuplicateCheckResponse checkDuplicate(String title, Long serviceId) {
 		String normalizedTitle = validateTitle(title);
 		String serviceName = null;
@@ -86,7 +85,7 @@ public class IncidentSimilarityService {
 
 		long orgId = OrgContext.current();
 		List<IncidentSimilarityMatch> matches = similarityRepository.findMatches(
-				orgId, vectorLiteral(embedding.get()), null, serviceId, null, null, true,
+				orgId, vectorLiteral(embedding.get()), null, null, serviceId, null, null, true,
 				SIMILARITY_THRESHOLD, 1, 0);
 		if (matches.isEmpty()) {
 			return noDuplicate();
@@ -104,7 +103,6 @@ public class IncidentSimilarityService {
 				"Potential duplicate detected");
 	}
 
-	@Transactional(readOnly = true)
 	public IncidentSearchPageResponse searchByMeaning(
 			String query,
 			Long serviceId,
@@ -131,12 +129,12 @@ public class IncidentSimilarityService {
 		long orgId = OrgContext.current();
 		String vector = vectorLiteral(embedding.get());
 		Long totalElements = similarityRepository.countMatches(
-				orgId, vector, null, serviceId,
+				orgId, vector, null, null, serviceId,
 				severity != null ? severity.name() : null,
 				status != null ? status.name() : null,
 				false, SIMILARITY_THRESHOLD);
 		List<IncidentSearchResult> content = similarityRepository.findMatches(
-						orgId, vector, null, serviceId,
+						orgId, vector, null, null, serviceId,
 						severity != null ? severity.name() : null,
 						status != null ? status.name() : null,
 						false, SIMILARITY_THRESHOLD,

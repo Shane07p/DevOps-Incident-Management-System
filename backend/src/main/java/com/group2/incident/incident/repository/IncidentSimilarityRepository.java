@@ -2,6 +2,8 @@ package com.group2.incident.incident.repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ public class IncidentSimilarityRepository {
 			i.org_id = ?
 			and i.embedding is not null
 			and (cast(? as bigint) is null or i.id <> cast(? as bigint))
+			and (cast(? as timestamptz) is null or i.created_at < cast(? as timestamptz))
 			and (cast(? as bigint) is null or i.service_id = cast(? as bigint))
 			and (cast(? as varchar) is null or i.severity = cast(? as varchar))
 			and (cast(? as varchar) is null or i.status = cast(? as varchar))
@@ -65,6 +68,7 @@ public class IncidentSimilarityRepository {
 			long orgId,
 			String vector,
 			Long excludedIncidentId,
+			Instant createdBefore,
 			Long serviceId,
 			String severity,
 			String status,
@@ -77,6 +81,8 @@ public class IncidentSimilarityRepository {
 				vector,
 				orgId,
 				excludedIncidentId, excludedIncidentId,
+				createdBefore != null ? Timestamp.from(createdBefore) : null,
+				createdBefore != null ? Timestamp.from(createdBefore) : null,
 				serviceId, serviceId,
 				severity, severity,
 				status, status,
@@ -90,6 +96,7 @@ public class IncidentSimilarityRepository {
 			long orgId,
 			String vector,
 			Long excludedIncidentId,
+			Instant createdBefore,
 			Long serviceId,
 			String severity,
 			String status,
@@ -100,6 +107,8 @@ public class IncidentSimilarityRepository {
 				vector,
 				orgId,
 				excludedIncidentId, excludedIncidentId,
+				createdBefore != null ? Timestamp.from(createdBefore) : null,
+				createdBefore != null ? Timestamp.from(createdBefore) : null,
 				serviceId, serviceId,
 				severity, severity,
 				status, status,

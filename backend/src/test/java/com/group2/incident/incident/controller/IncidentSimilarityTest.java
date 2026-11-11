@@ -3,6 +3,8 @@ package com.group2.incident.incident.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -85,14 +87,22 @@ class IncidentSimilarityTest {
 		Incident exact = createIncident("Exact match", payments, Severity.SEV2, IncidentStatus.RESOLVED);
 		Incident pointNine = createIncident("90 percent match", payments, Severity.SEV2, IncidentStatus.CLOSED);
 		Incident pointEight = createIncident("80 percent match", payments, Severity.SEV3, IncidentStatus.INVESTIGATING);
-		createIncident("75 percent match", payments, Severity.SEV3, IncidentStatus.OPEN);
-		createIncident("Below threshold", payments, Severity.SEV4, IncidentStatus.OPEN);
+		Incident pointSevenFive = createIncident("75 percent match", payments, Severity.SEV3, IncidentStatus.OPEN);
+		Incident belowThreshold = createIncident("Below threshold", payments, Severity.SEV4, IncidentStatus.OPEN);
+		Incident newer = createIncident("Newer open lookalike", payments, Severity.SEV1, IncidentStatus.OPEN);
+		setCreatedAtOffset(exact, -60);
+		setCreatedAtOffset(pointNine, -60);
+		setCreatedAtOffset(pointEight, -60);
+		setCreatedAtOffset(pointSevenFive, -60);
+		setCreatedAtOffset(belowThreshold, -60);
+		setCreatedAtOffset(newer, 60);
 		setEmbedding(source, vector(1, 0));
 		setEmbedding(exact, vector(1, 0));
 		setEmbedding(pointNine, vector(0.9, Math.sqrt(0.19)));
 		setEmbedding(pointEight, vector(0.8, 0.6));
-		setEmbedding(findByTitle("75 percent match"), vector(0.75, Math.sqrt(0.4375)));
-		setEmbedding(findByTitle("Below threshold"), vector(0.69, Math.sqrt(1 - 0.69 * 0.69)));
+		setEmbedding(pointSevenFive, vector(0.75, Math.sqrt(0.4375)));
+		setEmbedding(belowThreshold, vector(0.69, Math.sqrt(1 - 0.69 * 0.69)));
+		setEmbedding(newer, vector(1, 0));
 		when(aiEmbeddingClient.isEnabled()).thenReturn(true);
 
 		mvc.perform(get("/api/incidents/{id}/similar", source.getId())
@@ -146,6 +156,29 @@ class IncidentSimilarityTest {
 				.andExpect(jsonPath("$.totalElements").value(21))
 				.andExpect(jsonPath("$.totalPages").value(2));
 		verify(aiEmbeddingClient).embedQuery("checkout latency");
+	}
+
+	@Test
+	@DisplayName("A blank semantic query uses the filtered keyword search without calling AI")
+	void blankSemanticQueryFallsBackToFilteredKeywordSearch() throws Exception {
+		Incident matching = createIncident("Filtered history result", payments, Severity.SEV1, IncidentStatus.RESOLVED);
+		createIncident("Wrong severity history result", payments, Severity.SEV2, IncidentStatus.RESOLVED);
+		createIncident("Wrong status history result", payments, Severity.SEV1, IncidentStatus.OPEN);
+		when(aiEmbeddingClient.isEnabled()).thenReturn(true);
+
+		mvc.perform(get("/api/incidents/search")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.queryParam("q", " ")
+						.queryParam("mode", "semantic")
+						.queryParam("serviceId", payments.getId().toString())
+						.queryParam("severity", Severity.SEV1.name())
+						.queryParam("status", IncidentStatus.RESOLVED.name()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.content", hasSize(1)))
+				.andExpect(jsonPath("$.content[0].id").value(matching.getId().intValue()))
+				.andExpect(jsonPath("$.totalElements").value(1));
+
+		verify(aiEmbeddingClient, never()).embedQuery(anyString());
 	}
 
 	@Test
@@ -246,6 +279,13 @@ class IncidentSimilarityTest {
 				set embedding = cast(? as incident.vector), embedding_retry_at = null
 				where id = ? and org_id = ?
 				""", literal, incident.getId(), OrgContext.current());
+		assertThat(updated).isEqualTo(1);
+	}
+
+	private void setCreatedAtOffset(Incident incident, int seconds) {
+		int updated = jdbcTemplate.update(
+				"update incident set created_at = created_at + (? * interval '1 second') where id = ? and org_id = ?",
+				seconds, incident.getId(), OrgContext.current());
 		assertThat(updated).isEqualTo(1);
 	}
 

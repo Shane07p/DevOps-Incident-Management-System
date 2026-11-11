@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +75,7 @@ public class UserAdminService {
 				&& memberships.countByOrgIdAndRoleAndEnabledTrue(OrgContext.current(), Role.ADMIN) <= 1) {
 			throw new ConflictException("An org needs at least one Admin");
 		}
+		requireStillAdmin(admin);
 		target.changeRole(request.role());
 		auditService.record(admin.getUser(), AuditAction.USER_ROLE_CHANGED, AuditItemType.USER, target.getUser().getId(),
 				"role: " + oldRole + " → " + request.role());
@@ -98,15 +100,16 @@ public class UserAdminService {
 		Membership target = member(targetUserId);
 		Membership admin = member(adminUserId);
 		boolean enable = request.enabled();
-		if (target.isEnabled() == enable) {
-			return UserResponse.from(target);
-		}
 		if (!enable && targetUserId == adminUserId) {
 			throw new ConflictException("You can't disable your own account");
 		}
-		if (!enable && target.getRole() == Role.ADMIN
+		if (!enable && target.isEnabled() && target.getRole() == Role.ADMIN
 				&& memberships.countByOrgIdAndRoleAndEnabledTrue(OrgContext.current(), Role.ADMIN) <= 1) {
 			throw new ConflictException("An org needs at least one Admin");
+		}
+		requireStillAdmin(admin);
+		if (target.isEnabled() == enable) {
+			return UserResponse.from(target);
 		}
 		if (enable) {
 			target.enable();
@@ -123,6 +126,16 @@ public class UserAdminService {
 		}
 		log.info("Admin {} {} user {}", adminUserId, enable ? "enabled" : "disabled", targetUserId);
 		return response;
+	}
+
+	/**
+	 * The caller's sign-in was checked before this transaction took the org's lock. Another Admin may have
+	 * disabled or demoted them while the request waited, so it is checked again here, under the lock.
+	 */
+	private static void requireStillAdmin(Membership admin) {
+		if (!admin.isEnabled() || admin.getRole() != Role.ADMIN) {
+			throw new AccessDeniedException("Only an enabled Admin can change members");
+		}
 	}
 
 	private Membership member(long userId) {

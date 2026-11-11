@@ -34,6 +34,16 @@ const revokedToken = {
   revokedAt: '2026-11-05T09:45:00Z',
 }
 
+// Past its 90 days and never revoked: the server refuses it, so it is not Active.
+const expiredToken = {
+  id: 4,
+  name: 'Summer Script',
+  createdAt: '2026-05-01T04:30:00Z',
+  expiresAt: '2026-07-30T04:30:00Z',
+  lastUsedAt: '2026-07-01T10:00:00Z',
+  revokedAt: null,
+}
+
 function renderAccessTokens() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -70,6 +80,17 @@ describe('AccessTokensPage', () => {
 
     // Null lastUsedAt displays "Never"
     expect(screen.getByText('Never')).toBeInTheDocument()
+  })
+
+  it('shows a token past its 90 days as expired, with no Revoke', async () => {
+    mockFetch({ 'GET /api/me/tokens': { body: [activeToken, expiredToken] } })
+    renderAccessTokens()
+
+    const row = (await screen.findByText('Summer Script')).closest('tr')!
+    expect(within(row).getByText(/Expired/)).toBeInTheDocument()
+    expect(within(row).queryByText('Active')).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /Revoke/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Revoke Claude Desktop' })).toBeInTheDocument()
   })
 
   it('renders an empty state when user has no tokens', async () => {

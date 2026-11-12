@@ -56,7 +56,7 @@ class TelemetryConnectionTest {
 
 	@DynamicPropertySource
 	static void telemetry(DynamicPropertyRegistry registry) {
-		registry.add("app.telemetry.secret-key", () -> Base64.getEncoder().encodeToString(new byte[32]));
+		// The key comes from @IntegrationTest; only the stubs on 127.0.0.1 need private targets allowed.
 		registry.add("app.telemetry.allow-private-targets", () -> "true");
 	}
 
@@ -229,6 +229,26 @@ class TelemetryConnectionTest {
 		assertThat(grafanaOfA.requests).extracting(Stub.Request::path)
 				.containsExactlyInAnyOrder("/api/prom/api/v1/query", "/loki/api/v1/labels");
 		assertThat(grafanaOfB.requests).isEmpty();
+	}
+
+	/** Either store may be left out; Test reports the missing one and still tries the other (Codex on #261). */
+	@Test
+	void aLogsOnlyConnectionIsTestedAndSaysMetricsAreNotConnected() throws Exception {
+		send(a, put("/api/settings/telemetry"), """
+				{"lokiUrl": "%s", "lokiUser": "a-user", "prometheusUrl": ""}""".formatted(grafanaOfA.url()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.prometheusUrl").doesNotExist());
+
+		send(a, post("/api/settings/telemetry/test"), null)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.prometheus").value("not connected"))
+				.andExpect(jsonPath("$.loki").value("ok"));
+		send(a, get("/api/telemetry/metrics").queryParam("serviceId", String.valueOf(paymentsOfA))
+				.queryParam("metric", "requestRate"), null)
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.message").value("Metrics aren't connected for your organization"));
+
+		assertThat(grafanaOfA.requests).extracting(Stub.Request::path).containsExactly("/loki/api/v1/labels");
 	}
 
 	// ---------- helpers ----------

@@ -34,6 +34,8 @@ public class TelemetryConnectionService {
 
 	static final String NOT_CONNECTED = "Telemetry isn't connected for your organization";
 
+	static final String NOT_CONNECTED_STORE = "not connected";
+
 	/** Common Prometheus conventions, used when an org leaves a naming field empty. */
 	static final Naming DEFAULT_NAMING = new Naming("service", "http_requests_total", "status",
 			"http_request_duration_seconds");
@@ -139,11 +141,14 @@ public class TelemetryConnectionService {
 	/** Tries each saved store with a cheap read. Runs outside any transaction: the calls can take seconds. */
 	public TelemetryTestResponse test() {
 		ActiveConnection connection = current();
-		return new TelemetryTestResponse(
-				probe(connection.prometheus(), prometheusPath(connection.prometheus(), "/query"),
-						Map.of("query", "vector(1)"), connection.authorization(connection.prometheusUser()), "Metrics"),
-				probe(connection.loki(), "/loki/api/v1/labels", Map.of(),
-						connection.authorization(connection.lokiUser()), "Logs"));
+		// A store the org left out is reported, not called: either one may be missing (logs only, metrics only).
+		String prometheus = connection.prometheus() == null ? NOT_CONNECTED_STORE
+				: probe(connection.prometheus(), prometheusPath(connection.prometheus(), "/query"),
+						Map.of("query", "vector(1)"), connection.authorization(connection.prometheusUser()), "Metrics");
+		String loki = connection.loki() == null ? NOT_CONNECTED_STORE
+				: probe(connection.loki(), "/loki/api/v1/labels", Map.of(),
+						connection.authorization(connection.lokiUser()), "Logs");
+		return new TelemetryTestResponse(prometheus, loki);
 	}
 
 	/** Grafana Cloud's Prometheus address ends in /api/prom and serves /api/v1 under it; a plain one serves it at the root. */
@@ -153,9 +158,6 @@ public class TelemetryConnectionService {
 	}
 
 	private String probe(URI base, String path, Map<String, String> params, String authorization, String store) {
-		if (base == null) {
-			return "not connected";
-		}
 		try {
 			http.get(base, path, params, authorization, store);
 			return "ok";

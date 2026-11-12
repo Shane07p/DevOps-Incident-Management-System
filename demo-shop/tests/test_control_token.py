@@ -25,6 +25,8 @@ CONTROL_ROUTES = [
     ("GET", "/faults", None),
     ("GET", "/faults/deploy-event", None),
     ("GET", "/traffic/status", None),
+    ("GET", "/telemetry/logs", None),
+    ("POST", "/telemetry/logs/clear", None),
 ]
 SHOP_ROUTES = [
     ("POST", "/payments/authorize", {

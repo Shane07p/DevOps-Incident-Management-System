@@ -51,8 +51,8 @@ Interactive Swagger docs: `http://localhost:8001/docs`
 ### Control token for a public demo
 
 Set `DEMO_SHOP_CONTROL_TOKEN` to a private value in the server's environment before exposing the
-shop through a tunnel. Send `Authorization: Bearer <token>` on every `/faults` and `/traffic`
-control request, including reads. Missing or incorrect credentials return HTTP 401. Keep the token
+shop through a tunnel. Send `Authorization: Bearer <token>` on every `/faults`, `/traffic`,
+and `/telemetry/logs` control request, including reads. Missing or incorrect credentials return HTTP 401. Keep the token
 out of source control and logs. The payment, checkout, search, products, health, and readiness
 routes stay open so probes and generated traffic can use them.
 

@@ -332,12 +332,12 @@ def traffic_status() -> TrafficStatusResponse:
 # Structured Telemetry Logs Endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/telemetry/logs", summary="Get recorded structured logs")
+@app.get("/telemetry/logs", summary="Get recorded structured logs", dependencies=[Depends(require_control_token)])
 def get_telemetry_logs(since: Optional[str] = None) -> List[dict]:
     return StructuredLogger.get_logs(since=since)
 
 
-@app.post("/telemetry/logs/clear", summary="Clear structured logs buffer")
+@app.post("/telemetry/logs/clear", summary="Clear structured logs buffer", dependencies=[Depends(require_control_token)])
 def clear_telemetry_logs() -> dict:
     StructuredLogger.clear_logs()
     return {"status": "ok"}

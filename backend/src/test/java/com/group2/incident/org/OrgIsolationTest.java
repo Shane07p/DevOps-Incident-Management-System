@@ -151,6 +151,14 @@ class OrgIsolationTest {
 				"{\"title\": \"Restart\", \"steps\": [\"Restart the service\"]}")));
 		// Sign-up and the service each wrote an audit entry in B.
 		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
+		long invOfB = jdbcTemplate.queryForObject(
+				"insert into investigation (org_id, incident_id, summary, status, created_at) values (?, ?, 'Summary B', 'completed', now()) returning id",
+				Long.class, b.orgId(), incidentOfB);
+		long actionOfB = jdbcTemplate.queryForObject(
+				"insert into investigation_action (investigation_id, text) values (?, 'Restart') returning id",
+				Long.class, invOfB);
+		idsOfB.put("investigationId", invOfB);
+		idsOfB.put("actionId", actionOfB);
 	}
 
 	@AfterAll
@@ -215,7 +223,13 @@ class OrgIsolationTest {
 				// Grafana holds every org's telemetry, so another org's service must be refused before any query.
 				Arguments.of("GET /api/telemetry/logs with B's service", HttpMethod.GET, "/api/telemetry/logs?serviceId={serviceId}", null),
 				Arguments.of("GET /api/telemetry/metrics with B's service", HttpMethod.GET,
-						"/api/telemetry/metrics?serviceId={serviceId}&metric=errorRate", null));
+						"/api/telemetry/metrics?serviceId={serviceId}&metric=errorRate", null),
+				Arguments.of("POST /api/incidents/{id}/investigations", HttpMethod.POST,
+						"/api/incidents/{incidentId}/investigations", null),
+				Arguments.of("GET /api/incidents/{id}/investigations/latest", HttpMethod.GET,
+						"/api/incidents/{incidentId}/investigations/latest", null),
+				Arguments.of("POST /api/investigations/{id}/actions/{actionId}/decision", HttpMethod.POST,
+						"/api/investigations/{investigationId}/actions/{actionId}/decision", "{\"decision\":\"ACCEPTED\"}"));
 	}
 
 	/** Every endpoint, called as A's Admin with B's ids, answers 404: never 403, never B's data. */

@@ -573,6 +573,28 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 ---
 
+## Sprint 5
+
+### Postmortems (FR-11.1, DR-06, D17, #239)
+
+| ID | Technique | Input or condition | Expected | Test | Status | Owner |
+| --- | --- | --- | --- | --- | --- | --- |
+| TC-FR-11.1a | Equivalence | Save all six fields, reload from PostgreSQL, then edit as another responder | One DRAFT with all fields preserved, the last editor as author, and an incremented postmortem version; incident version unchanged | `PostmortemTest.saveReloadsEveryFieldAndNamesTheLastEditor` | In review | Shane |
+| TC-FR-11.1b | Boundary value | Each of the six fields has 10,000, then 10,001 characters | 10,000 accepted; 10,001 gives 400 on that field and preserves the saved text | `PostmortemTest.everyFieldAcceptsTenThousandAndRejectsTenThousandAndOne` | In review | Shane |
+| TC-FR-11.1c | Concurrency | Save or review with a version superseded by another edit | 409; the saved draft, version, author, and timeline stay unchanged | `PostmortemTest.staleUpdateAndReviewLeaveTheSavedDraftAndTimelineUnchanged` | In review | Shane |
+| TC-FR-11.1d | State transition | The author reviews, another responder reviews, then a responder edits | Author gets 409; independent review records reviewer/time and one attributed timeline entry; editing returns to DRAFT and clears review metadata | `PostmortemTest.onlyAnotherPersonCanReviewAndEditingClearsThatReview` | In review | Shane |
+| TC-FR-11.1e | Negative | GET or review with no postmortem; PUT for a missing incident | 404 | `PostmortemTest.missingPostmortemIsNotFoundOnGetAndReview` | In review | Shane |
+| TC-FR-11.1f | Decision table | Each role and no token calls each postmortem endpoint | All authenticated roles read; Engineer/Admin save and review; Viewer gets 403 on writes; no token gets 401 | `SecurityMatrixTest.endpointSecurityMatrix` | In review | Shane |
+| TC-FR-11.1g | Org isolation | Another org's incident has a saved postmortem | GET, PUT, and review return 404 to the caller from the other org | `OrgIsolationTest.anotherOrgsIdsAreNotFound` | In review | Shane |
+| TC-FR-11.1h | Concurrency | PUT has a version when no postmortem exists, or null when a draft already exists | 409; null means the caller saw no postmortem and cannot overwrite a saved draft | `PostmortemTest.nullVersionMeansCreateAndCannotOverwriteAnExistingDraft` | In review | Shane |
+| TC-FR-11.1i | Idempotency | Review an already REVIEWED postmortem using its current version, then repeat with the old version | Current version returns the existing review unchanged and adds no timeline entry; old version gets 409 | `PostmortemTest.repeatingACurrentReviewKeepsItsOriginalReviewerTimeAndTimeline` | In review | Shane |
+| TC-FR-11.1j | Concurrency | Two first drafts overlap, or two edits overlap after reading the same version | Exactly one wins; the loser gets 409 from the unique incident key or optimistic lock, preserving the winner's text and version | `PostmortemConcurrencyTest.overlappingCreatesAndEditsKeepOnlyTheWinningDraft` (PostgreSQL) | In review | Shane |
+| TC-DR-06a | Decision table | SEV1 or SEV2 closure check with no postmortem, DRAFT, REVIEWED, then an edit | 409 without review, allowed after review, then 409 after editing invalidates it | `PostmortemTest.majorIncidentRequiresReviewAndEditingRevokesClosurePermission` | In review | Shane |
+| TC-DR-06b | Decision table | SEV3 or SEV4 closure check without a postmortem | Allowed | `PostmortemTest.minorIncidentMayCloseWithoutAPostmortem` | In review | Shane |
+
+The closure cases exercise `PostmortemService.requireReviewedForClosure` until #84's transitions
+endpoint merges; whichever feature merges second connects the check to RESOLVED → CLOSED.
+
 ## White-box testing
 
 Two rule methods get basis path testing, done by their owners once the code exists:

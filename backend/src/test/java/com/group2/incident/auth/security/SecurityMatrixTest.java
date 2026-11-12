@@ -33,6 +33,8 @@ import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
+import com.group2.incident.postmortem.entity.Postmortem;
+import com.group2.incident.postmortem.repository.PostmortemRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.group2.incident.support.TestOrgExecutionListener;
@@ -123,6 +125,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private DeploymentRepository deployments;
+
+	@Autowired
+	private PostmortemRepository postmortems;
 
 	private String adminToken;
 
@@ -426,6 +431,27 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/incidents/{id}/postmortem",
+						HttpMethod.GET,
+						"/api/incidents/{id}/postmortem",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/postmortem",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/postmortem",
+						"{\"summary\":\"Updated\",\"expectedVersion\":${POSTMORTEM_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/postmortem/review",
+						HttpMethod.POST,
+						"/api/incidents/{id}/postmortem/review",
+						"{\"expectedVersion\":${POSTMORTEM_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/alerts",
 						HttpMethod.GET,
 						"/api/alerts",
@@ -636,6 +662,8 @@ public class SecurityMatrixTest {
 		unsaved.assignNumber(990_001L);
 		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
+		postmortems.saveAndFlush(new Postmortem(incident, "Summary", "Impact", "Cause", "Recovery",
+				"Worked", "Failed", target, clock.instant()));
 
 		// A documentation-only address (RFC 5737): nothing is ever contacted, since the worker is off in tests.
 		targetMonitorId = monitors.saveAndFlush(new UptimeMonitor(savedService, "Matrix monitor", "https://203.0.113.10/health",
@@ -752,6 +780,11 @@ public class SecurityMatrixTest {
 			entityManager.clear();
 			jdbc.update("UPDATE incident SET assignee_id = NULL WHERE id = ?", targetIncidentId);
 		}
+		if (path.endsWith("/postmortem/review")) {
+			entityManager.clear();
+			jdbc.update("UPDATE postmortem SET status = 'DRAFT', reviewed_by = NULL, reviewed_at = NULL WHERE incident_id = ?",
+					targetIncidentId);
+		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 		}
@@ -763,7 +796,9 @@ public class SecurityMatrixTest {
 					.replace("${SERVICE_ID}", targetServiceId.toString())
 					// The version the incident has now, as a screen that just loaded it would send.
 					.replace("${INCIDENT_VERSION}", String.valueOf(jdbc.queryForObject(
-							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)));
+							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)))
+					.replace("${POSTMORTEM_VERSION}", String.valueOf(jdbc.queryForObject(
+							"SELECT version FROM postmortem WHERE incident_id = ?", Long.class, targetIncidentId)));
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

@@ -38,6 +38,7 @@ These come from the design documents. Breaking one silently breaks a planned tes
   `OPEN → ACKNOWLEDGED → INVESTIGATING → IDENTIFIED → MONITORING → RESOLVED → CLOSED`, plus
   `INVESTIGATING → MONITORING` and `MONITORING → INVESTIGATING`. Reject anything else.
 - **AI never changes state.** It suggests; deterministic code handles status, SLA, and escalation.
+- **Recorded test data comes from the real system.** Anything generated says so in its metadata.
 - **Only the backend calls `ai-service`,** which never writes to the database. The app must keep
   working when it is down or slow.
 

@@ -125,6 +125,7 @@ class OrgIsolationTest {
 		// The fallback contact becomes the assignee and gets a notification.
 		String incidentJson = orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing");
 		long incidentOfB = TestOrgs.id(incidentJson);
+		send(b, put("/api/incidents/{id}/postmortem", incidentOfB), "{\"summary\":\"B's private postmortem\"}");
 		sourceIncidentOfA = TestOrgs.id(orgs.declareIncident(a.adminToken(), serviceOfA, "Checkout service latency"));
 		long timelineEntryOfB = JsonPath.<Number>read(incidentJson, "$.timeline[0].id").longValue();
 		String notifications = send(b, get("/api/notifications"), null);
@@ -182,6 +183,11 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/services/{id}/escalation-policy", HttpMethod.PUT, "/api/services/{serviceId}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
+				Arguments.of("GET /api/incidents/{id}/postmortem", HttpMethod.GET, "/api/incidents/{incidentId}/postmortem", null),
+				Arguments.of("PUT /api/incidents/{id}/postmortem", HttpMethod.PUT, "/api/incidents/{incidentId}/postmortem",
+						"{\"summary\":\"Stolen\",\"expectedVersion\":0}"),
+				Arguments.of("POST /api/incidents/{id}/postmortem/review", HttpMethod.POST, "/api/incidents/{incidentId}/postmortem/review",
+						"{\"expectedVersion\":0}"),
 				Arguments.of("GET /api/incidents/{id}/similar", HttpMethod.GET, "/api/incidents/{incidentId}/similar", null),
 				Arguments.of("POST /api/incidents/{id}/acknowledge", HttpMethod.POST, "/api/incidents/{incidentId}/acknowledge",
 						"{\"expectedVersion\": 0}"),

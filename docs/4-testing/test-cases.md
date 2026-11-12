@@ -433,7 +433,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Automated |
-| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Planned (Het) |
+| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Automated |
 | TC-FR-23.1c | Decision table | Create duplicate active token name (same org) vs revoked name vs different org | Duplicate active is 409; revoked name can be reused (201); separate orgs can use same name | `PersonalAccessTokenTest`, `PersonalAccessTokenRaceTest` | Automated |
 | TC-FR-23.1d | Concurrency | Two requests to create the same token name at the same moment | One succeeds (201), one gets 409 Conflict | `PersonalAccessTokenRaceTest` | Automated |
 | TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Automated |

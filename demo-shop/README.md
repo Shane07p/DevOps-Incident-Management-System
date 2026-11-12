@@ -66,6 +66,9 @@ shell running the `curl` examples below as `DEMO_SHOP_CONTROL_TOKEN`.
 
 The Demo Shop runs under the optional `demo` profile so it does not interfere with the default database workflow:
 
+Set `DEMO_SHOP_CONTROL_TOKEN` in the repository root `.env` before exposing a Compose instance.
+Set `ENVIRONMENT=production` there to require the token at startup; Compose forwards both settings.
+
 ```bash
 # Start Demo Shop
 docker compose --profile demo up -d demo-shop

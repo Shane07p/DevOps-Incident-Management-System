@@ -106,6 +106,8 @@ services:
     container_name: incident-demo-shop
     environment:
       PORT: 8001
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEMO_SHOP_CONTROL_TOKEN: ${DEMO_SHOP_CONTROL_TOKEN:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
     ports:

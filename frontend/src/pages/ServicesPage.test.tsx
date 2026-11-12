@@ -131,6 +131,33 @@ describe('ServicesPage', () => {
     })
   })
 
+  // TC-FR-21.1e: an Admin puts a service on the status page under a public name, which it then needs.
+  it('puts a new service on the status page only with a public name', async () => {
+    const fetchMock = renderServices('ADMIN', {
+      'POST /api/services': { status: 201, body: { ...payments, id: 2, name: 'Checkout', publicVisible: true, publicName: 'Card checkout' } },
+    })
+    const dialog = await openNewServiceDialog()
+
+    await fillDetails(dialog)
+    for (const [severity, minutes] of [['SEV1', '240'], ['SEV2', '480'], ['SEV3', '2880'], ['SEV4', '10080']]) {
+      await setMinutes(dialog, `${severity} resolution target, in minutes`, minutes)
+    }
+    expect(within(dialog).getByLabelText('Public name')).toBeDisabled()
+    await userEvent.click(within(dialog).getByLabelText('Show this service on the status page'))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add service' }))
+
+    const message = 'A public name is required to show the service on the status page'
+    expect(await within(dialog).findByText(message)).toBeInTheDocument()
+    expect(callsWith(fetchMock, 'POST')).toHaveLength(0)
+
+    await userEvent.type(within(dialog).getByLabelText('Public name'), 'Card checkout')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add service' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const [[, init]] = callsWith(fetchMock, 'POST')
+    expect(JSON.parse(String(init?.body))).toMatchObject({ publicVisible: true, publicName: 'Card checkout' })
+  })
+
   // TC-FR-14.1i: a resolution target below its response target is refused before anything is sent.
   it('refuses a new service whose resolution target is below its response target, and sends nothing', async () => {
     const fetchMock = renderServices('ADMIN', { 'POST /api/services': { status: 201, body: payments } })

@@ -33,6 +33,10 @@ export const serviceFormSchema = z.object({
   publicVisible: z.boolean(),
   publicName: z.string().trim().max(100, { error: 'Use at most 100 characters' }),
   targets: z.record(z.enum(SEVERITIES), targetSchema),
+}).refine((values) => !values.publicVisible || values.publicName.length > 0, {
+  // The server's rule and message (ServiceCatalogService).
+  path: ['publicName'],
+  error: 'A public name is required to show the service on the status page',
 })
 
 export type ServiceFormValues = z.infer<typeof serviceFormSchema>

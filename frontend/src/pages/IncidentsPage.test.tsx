@@ -189,32 +189,64 @@ describe('Declare incident form', () => {
 })
 
 describe('Incident detail', () => {
-  it('hides the public update form from Viewers', async () => {
+  // TC-FR-21.2b: the form follows the server's rule (an Admin, or the incident's Lead or Comms); Viewers see nothing.
+  it('shows a Viewer no public updates', async () => {
     renderApp('VIEWER', '/incidents/7')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Checkout failing' }),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.queryByRole('heading', { name: 'Post a public update' }),
-    ).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Checkout failing' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Public updates' })).not.toBeInTheDocument()
   })
 
-  it('shows the public update form to Engineers', async () => {
+  it('tells an Engineer who is not the Lead or Comms who posts, and links the status page', async () => {
     renderApp('ENGINEER', '/incidents/7')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Post a public update' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Public updates' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Post public update' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View the public status page' })).toHaveAttribute('href', '/status/dev-org')
   })
 
-  it('shows the public update form to Admins', async () => {
-    renderApp('ADMIN', '/incidents/7')
+  it.each([
+    ['Lead', { assignee: { id: 2, displayName: 'Dev Engineer' } }],
+    ['Comms', { roles: { comms: { id: 2, displayName: 'Dev Engineer' }, ops: null } }],
+  ])('lets the incident %s post a public update', async (_, holder) => {
+    const message = 'Some card payments are failing. Next update in 30 minutes.'
+    const { fetchMock } = renderApp('ENGINEER', '/incidents/7', {
+      'GET /api/incidents/7': { body: { ...checkoutFailing, ...holder } },
+      'POST /api/incidents/7/public-updates': {
+        status: 201,
+        body: { id: 9, status: 'INVESTIGATING', message, createdAt: '2026-10-20T09:00:00Z' },
+      },
+    })
 
-    expect(
-      await screen.findByRole('heading', { name: 'Post a public update' }),
-    ).toBeInTheDocument()
+    await userEvent.type(await screen.findByLabelText('Public message'), message)
+    await userEvent.click(screen.getByRole('button', { name: 'Post public update' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Public message')).toHaveValue(''))
+    const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/incidents/7/public-updates')!
+    expect(JSON.parse(init!.body as string)).toEqual({ status: 'INVESTIGATING', message })
+  })
+
+  it('shows an Admin why the server refused an update', async () => {
+    renderApp('ADMIN', '/incidents/7', {
+      'POST /api/incidents/7/public-updates': {
+        status: 409,
+        body: { status: 409, message: "This incident's service is not on the public status page; an Admin can add it", errors: {} },
+      },
+    })
+
+    await userEvent.type(await screen.findByLabelText('Public message'), 'Payments are slow.')
+    await userEvent.click(screen.getByRole('button', { name: 'Post public update' }))
+
+    expect(await screen.findByText(/not on the public status page/)).toBeInTheDocument()
+  })
+
+  it('needs a message before it posts', async () => {
+    const { fetchMock } = renderApp('ADMIN', '/incidents/7')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Post public update' }))
+
+    expect(await screen.findByText('Write what customers should know')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/incidents/7/public-updates')).toBe(false)
   })
 
   it('shows the incident, both SLA due times in IST, and its timeline', async () => {

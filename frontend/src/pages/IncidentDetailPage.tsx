@@ -8,6 +8,7 @@ import { listRunbooks } from '@/api/runbooks'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import { formatIst, formatMinutes } from '@/lib/time'
 import { IncidentTimeline } from './incident/IncidentTimeline'
 
@@ -146,6 +147,8 @@ export function IncidentDetailPage() {
           </section>
 
           <IncidentRunbooks serviceId={incident.data.service.id} />
+
+          <SimilarIncidentsPanel incidentId={incident.data.id} />
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">

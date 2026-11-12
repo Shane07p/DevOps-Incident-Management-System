@@ -57,3 +57,23 @@ Rule: a record that must stay true later stores what it belonged to at the time 
 ## 2026-11-11 · A state's start time is its first entry, not its latest
 Seen in: #233 (Codex). A second RESOLVED update moved `resolvedAt` forward and could bring an old incident back into the 90-day list.
 Rule: take a transition time from the first event that entered the state, and load enough history to see it.
+
+## 2026-11-13 · Network calls inside a database transaction
+Seen in: #257 and #258. The AI request (up to 20 s) and the telemetry calls ran inside `@Transactional`, so a few slow investigations could take every database connection.
+Rule: read what you need in a short transaction, call the network with none open, then save in another short one (`IncidentEmbeddingService`).
+
+## 2026-11-13 · A test that only checks a helper
+Seen in: #259. "The response clock stops" was tested by calling `SlaCalculator` with times the test chose, so it passed whatever the endpoint did.
+Rule: assert through the API or the database; a helper called with your own values tests the helper, not the feature.
+
+## 2026-11-13 · Endpoints without an id still go into OrgIsolationTest
+Seen in: #261 (Codex). The org settings endpoints had no id in the path, so they were left out of `OrgIsolationTest`.
+Rule: every new endpoint is there; one without an id gets a test that org A's change leaves org B's data as it was.
+
+## 2026-11-13 · Migration numbers clash again
+Seen in: #257 kept V24 after #259 merged it; #84 and #239 held V25 and V26 while #261 needed V25. Second time after 2026-11-08; the rule is already in `backend/AGENTS.md`.
+Rule: reserve nothing; whoever merges next takes the next free number on `main` and renames just before merging.
+
+## 2026-11-13 · Protecting a route means its callers too
+Seen in: #262. The token covered the fault and traffic routes but not the log routes, and the scenario recorder kept calling without it and saved runs whose fault never started.
+Rule: list every route that reads or changes the state, and update and test each caller in the same PR.

@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
@@ -248,11 +249,13 @@ public class TelemetryService {
 		if (baseUrl == null || baseUrl.isBlank()) {
 			throw new ServiceUnavailableException(store + " are not set up on this server");
 		}
-		StringBuilder uri = new StringBuilder(baseUrl.replaceAll("/+$", "")).append(path).append('?');
-		params.forEach((name, value) -> uri.append(name).append('=')
-				.append(URLEncoder.encode(value, StandardCharsets.UTF_8)).append('&'));
-		uri.setLength(uri.length() - 1);
-		HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(uri.toString())).timeout(timeout()).GET();
+		// Only the query string carries what the caller sent, encoded, after a fixed "?": the host and path come
+		// from settings alone, so no parameter can point the request somewhere else.
+		String query = params.entrySet().stream()
+				.map(param -> param.getKey() + "=" + URLEncoder.encode(param.getValue(), StandardCharsets.UTF_8))
+				.collect(Collectors.joining("&"));
+		URI uri = URI.create(baseUrl.replaceAll("/+$", "") + path + "?" + query);
+		HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(timeout()).GET();
 		String auth = authorization(user);
 		if (auth != null) {
 			request.header("Authorization", auth);

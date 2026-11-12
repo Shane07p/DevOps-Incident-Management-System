@@ -1,7 +1,7 @@
 import { CircleCheck, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { UptimeBars } from '@/components/app/UptimeBars'
-import type { DayState } from '@/data/statusSample'
+import type { DayState } from '@/lib/statusTypes'
 import { cn } from '@/lib/utils'
 
 const SERVICES: { name: string; health: 'Operational' | 'Degraded'; events: Record<number, Exclude<DayState, 'ok'>> }[] = [

@@ -52,6 +52,8 @@ export const incidentSchema = z.object({
   reporter: personSchema.nullable(),
   // Null until on-call assignment or an acknowledgement.
   assignee: personSchema.nullable(),
+  // Who holds Comms and Ops; the Lead is the assignee (D39).
+  roles: z.object({ comms: personSchema.nullable(), ops: personSchema.nullable() }).optional(),
   createdAt: timestamp,
   responseTargetMinutes: z.number(),
   resolutionTargetMinutes: z.number(),

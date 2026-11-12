@@ -12,6 +12,7 @@ import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { LogsPage } from '@/pages/LogsPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
@@ -26,6 +27,7 @@ import { UsersPage } from '@/pages/UsersPage'
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
   '/escalation': <EscalationPage />,
+  '/logs': <LogsPage />,
   '/schedules': <SchedulesPage />,
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
@@ -57,7 +59,9 @@ export const routes: RouteObject[] = [
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  // Each org's public page (D45); without a slug the page says how to find one.
   { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
+  { path: '/status/:slug', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
   {
     element: <RequireAuth />,
     children: [

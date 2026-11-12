@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
 import { getIncident } from '@/api/incidents'
 import { listRunbooks } from '@/api/runbooks'
+import { useAuth } from '@/auth/AuthProvider'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
@@ -14,6 +15,7 @@ import { IncidentDeploys } from './incident/IncidentDeploys'
 import { IncidentEvidence } from './incident/IncidentEvidence'
 import { IncidentTelemetry } from './incident/IncidentTelemetry'
 import { IncidentTimeline } from './incident/IncidentTimeline'
+import { PublicUpdates } from './incident/PublicUpdateForm'
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -94,6 +96,7 @@ function IncidentRunbooks({
 }
 
 export function IncidentDetailPage() {
+  const { user, org } = useAuth()
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
   const incident = useQuery({ queryKey: ['incident', id], queryFn: () => getIncident(id), enabled: valid })
@@ -158,6 +161,17 @@ export function IncidentDetailPage() {
           <IncidentRunbooks serviceId={incident.data.service.id} />
 
           <SimilarIncidentsPanel incidentId={incident.data.id} />
+
+          {user && user.role !== 'VIEWER' && (
+            <PublicUpdates
+              incidentId={incident.data.id}
+              orgSlug={org?.slug}
+              // The same rule as the server's: an Admin, or this incident's Lead or Comms.
+              mayPublish={
+                user.role === 'ADMIN' || incident.data.assignee?.id === user.id || incident.data.roles?.comms?.id === user.id
+              }
+            />
+          )}
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">

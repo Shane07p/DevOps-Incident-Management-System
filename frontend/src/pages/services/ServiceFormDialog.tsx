@@ -1,13 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiRequestError } from '@/api/client'
 import type { Criticality } from '@/api/schemas'
 import { getServiceMap, updateDependencies } from '@/api/serviceMap'
 import { createService, updateService, type Service } from '@/api/services'
 import { listUsers } from '@/api/users'
+import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -33,7 +35,9 @@ export function ServiceFormDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const queryClient = useQueryClient()
+  const { org } = useAuth()
   const form = useForm<ServiceFormValues>({ resolver: zodResolver(serviceFormSchema), defaultValues: emptyValues() })
+  const publicVisible = useWatch({ control: form.control, name: 'publicVisible' })
   // Owners are users; the list is Admin-only, like this form.
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: open })
   // A service's dependencies come from the map; they are edited here and saved after the service (US-26).
@@ -182,6 +186,45 @@ export function ServiceFormDialog({
                 )}
               />
             </div>
+            <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
+              <legend className="px-1 text-sm font-medium">Public status page</legend>
+              <FormField
+                control={form.control}
+                name="publicVisible"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
+                    </FormControl>
+                    <FormLabel className="font-normal">Show this service on the status page</FormLabel>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="publicName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Public name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Card payments" disabled={!publicVisible} {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      Customers see this name, never the internal one.
+                      {org && (
+                        <>
+                          {' '}
+                          <Link to={`/status/${org.slug}`} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+                            View the status page
+                          </Link>
+                        </>
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </fieldset>
             <SlaTargetGrid control={form.control} />
             {service && (
               <fieldset className="flex flex-col gap-2">

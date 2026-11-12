@@ -570,6 +570,21 @@ public class SecurityMatrixTest {
 						"/api/incidents/{id}/public-updates",
 						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
 						201, 403, 403, 401
+				),
+				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
+				new MatrixRow(
+						"GET /api/telemetry/logs",
+						HttpMethod.GET,
+						"/api/telemetry/logs",
+						null,
+						400, 400, 400, 401
+				),
+				new MatrixRow(
+						"GET /api/telemetry/metrics",
+						HttpMethod.GET,
+						"/api/telemetry/metrics",
+						null,
+						400, 400, 400, 401
 				)
 		);
 	}

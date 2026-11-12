@@ -211,7 +211,11 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/runbooks/{id}", HttpMethod.PUT, "/api/runbooks/{runbookId}", "{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
 				Arguments.of("DELETE /api/runbooks/{id}", HttpMethod.DELETE, "/api/runbooks/{runbookId}", null),
 				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"),
-				Arguments.of("PUT /api/users/{id}/enabled", HttpMethod.PUT, "/api/users/{userId}/enabled", "{\"enabled\":false}"));
+				Arguments.of("PUT /api/users/{id}/enabled", HttpMethod.PUT, "/api/users/{userId}/enabled", "{\"enabled\":false}"),
+				// Grafana holds every org's telemetry, so another org's service must be refused before any query.
+				Arguments.of("GET /api/telemetry/logs with B's service", HttpMethod.GET, "/api/telemetry/logs?serviceId={serviceId}", null),
+				Arguments.of("GET /api/telemetry/metrics with B's service", HttpMethod.GET,
+						"/api/telemetry/metrics?serviceId={serviceId}&metric=errorRate", null));
 	}
 
 	/** Every endpoint, called as A's Admin with B's ids, answers 404: never 403, never B's data. */

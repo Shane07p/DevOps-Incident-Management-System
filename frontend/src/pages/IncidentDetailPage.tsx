@@ -127,6 +127,12 @@ export function IncidentDetailPage() {
               {incident.data.title}
             </h1>
             <p className="max-w-[760px] whitespace-pre-line text-muted-foreground">{incident.data.description}</p>
+            <Link
+              to={'/incidents/' + incident.data.id + '/postmortem'}
+              className="w-fit text-sm font-medium text-primary underline"
+            >
+              Open postmortem →
+            </Link>
           </div>
 
           <dl className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-4">

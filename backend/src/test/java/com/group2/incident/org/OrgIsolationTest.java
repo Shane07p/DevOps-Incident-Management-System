@@ -226,6 +226,8 @@ class OrgIsolationTest {
 						"/api/telemetry/metrics?serviceId={serviceId}&metric=errorRate", null),
 				Arguments.of("POST /api/incidents/{id}/investigations", HttpMethod.POST,
 						"/api/incidents/{incidentId}/investigations", null),
+				Arguments.of("POST /api/incidents/{id}/drafts", HttpMethod.POST,
+						"/api/incidents/{incidentId}/drafts", "{\"kind\":\"SUMMARY\"}"),
 				Arguments.of("GET /api/incidents/{id}/investigations/latest", HttpMethod.GET,
 						"/api/incidents/{incidentId}/investigations/latest", null),
 				Arguments.of("POST /api/investigations/{id}/actions/{actionId}/decision", HttpMethod.POST,

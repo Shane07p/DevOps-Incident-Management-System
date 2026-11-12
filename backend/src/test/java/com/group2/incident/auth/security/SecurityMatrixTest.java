@@ -603,6 +603,13 @@ public class SecurityMatrixTest {
 						503, 503, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/drafts",
+						HttpMethod.POST,
+						"/api/incidents/{id}/drafts",
+						"{\"kind\":\"SUMMARY\"}",
+						503, 503, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/incidents/{id}/investigations/latest",
 						HttpMethod.GET,
 						"/api/incidents/{id}/investigations/latest",

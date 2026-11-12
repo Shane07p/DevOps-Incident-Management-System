@@ -54,6 +54,7 @@ from agent_loop import (
     RankedHypothesis,
 )
 from agent_tools import EvidenceItem, ToolRegistry, build_bundle_tool_registry, build_default_tool_registry
+from drafting import DraftRequest, DraftResponse, generate_draft
 from providers import LlmProvider, OllamaProvider
 
 logger = logging.getLogger("ai-service")
@@ -499,3 +500,18 @@ async def investigate(request: InvestigationRequest) -> InvestigationResult:
 
     result = await loop.run(request=request, limits_override=limits)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Drafting Endpoint (Sprint 5 — Issue #246)
+# ---------------------------------------------------------------------------
+
+@app.post("/draft", response_model=DraftResponse)
+async def draft(request: DraftRequest) -> DraftResponse:
+    """
+    Generate a human-editable SUMMARY, STATUS_UPDATE, or POSTMORTEM draft (AI-3, FR-11.4).
+    Cites only the incident and timeline entries supplied in the request.
+    """
+    provider = get_investigation_provider()
+    timeout = get_agent_timeout()
+    return await generate_draft(request=request, provider=provider, timeout=timeout)

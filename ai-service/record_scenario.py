@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 import subprocess
 import sys
 import time
@@ -305,6 +306,24 @@ def ensure_server_running(base_url: str) -> Optional[subprocess.Popen]:
     raise RuntimeError(f"Demo-shop server failed to start on {base_url} within 15 seconds.")
 
 
+def control_headers() -> Dict[str, str]:
+    """The demo shop's control token from DEMO_SHOP_CONTROL_TOKEN, when one is set."""
+    token = os.getenv("DEMO_SHOP_CONTROL_TOKEN", "").strip()
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def control(client: httpx.Client, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    """One control call. A refusal stops the recording: a fault that never switched on must not be saved."""
+    response = client.request(method, path, **kwargs)
+    if response.status_code == 401:
+        raise RuntimeError(
+            f"{method} {path} was refused (401): set DEMO_SHOP_CONTROL_TOKEN to the demo shop's control token."
+        )
+    if not response.is_success:
+        raise RuntimeError(f"{method} {path} failed with HTTP {response.status_code}; nothing was recorded.")
+    return response
+
+
 def record_live(
     scenario_id: str,
     rate: float = 3.0,
@@ -319,21 +338,20 @@ def record_live(
 
     close_client = False
     if client is None:
-        client = httpx.Client(base_url=base_url, timeout=TIMEOUT)
+        client = httpx.Client(base_url=base_url, timeout=TIMEOUT, headers=control_headers())
         close_client = True
 
     try:
         # 1. Reset faults and clear logs buffer
-        client.post("/faults/reset")
-        try:
-            client.post("/telemetry/logs/clear")
-        except Exception:
-            pass
+        control(client, "POST", "/faults/reset")
+        control(client, "POST", "/telemetry/logs/clear")
         print(f"[{scenario_id}] Faults reset and telemetry buffer cleared.")
 
         # 2. Start traffic
         duration = baseline_seconds + fault_seconds + 5
-        client.post(
+        control(
+            client,
+            "POST",
             "/traffic/start",
             json={
                 "rate": rate,
@@ -346,28 +364,22 @@ def record_live(
 
         # 3. Activate fault switch — note timestamp
         fault_started_at = utcnow_iso()
-        client.post(f"/faults/{switch}", json={"enabled": True})
+        control(client, "POST", f"/faults/{switch}", json={"enabled": True})
         print(f"[{scenario_id}] Fault '{switch}' activated at {fault_started_at}. Recording fault window ({fault_seconds}s)...")
         time.sleep(fault_seconds)
 
         # 4. Check deploy event
-        deploy_resp = client.get("/faults/deploy-event")
+        deploy_resp = control(client, "GET", "/faults/deploy-event")
         deploy_events = []
-        if deploy_resp.status_code == 200 and deploy_resp.json() is not None:
+        if deploy_resp.json() is not None:
             deploy_events.append(deploy_resp.json())
 
         # 5. Deactivate fault and stop traffic
-        client.post(f"/faults/{switch}", json={"enabled": False})
-        client.post("/traffic/stop")
+        control(client, "POST", f"/faults/{switch}", json={"enabled": False})
+        control(client, "POST", "/traffic/stop")
 
         # 6. Fetch logs
-        logs = []
-        try:
-            logs_resp = client.get("/telemetry/logs")
-            if logs_resp.status_code == 200:
-                logs = logs_resp.json()
-        except Exception as exc:
-            print(f"[{scenario_id}] Warning: could not fetch /telemetry/logs: {exc}")
+        logs = control(client, "GET", "/telemetry/logs").json()
 
         # Compute scenario metrics from actual recorded logs
         metrics = compute_metrics(scenario_id, logs, fault_started_at)
@@ -406,7 +418,7 @@ def main():
     server_proc = None
     try:
         server_proc = ensure_server_running(args.url)
-        with httpx.Client(base_url=args.url, timeout=TIMEOUT) as client:
+        with httpx.Client(base_url=args.url, timeout=TIMEOUT, headers=control_headers()) as client:
             for sid in args.scenario_ids:
                 print(f"\n{'=' * 60}\nRecording scenario: {sid}\n{'=' * 60}")
                 record_live(

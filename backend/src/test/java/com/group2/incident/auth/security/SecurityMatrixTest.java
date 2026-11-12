@@ -596,6 +596,36 @@ public class SecurityMatrixTest {
 						"/api/telemetry/metrics",
 						null,
 						400, 400, 400, 401
+				),
+				// The org's own Grafana connection (#260): Admin only. The Admin's PUT has no URL (400), and
+				// the test call finds no connection (503).
+				new MatrixRow(
+						"GET /api/settings/telemetry",
+						HttpMethod.GET,
+						"/api/settings/telemetry",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/settings/telemetry",
+						HttpMethod.PUT,
+						"/api/settings/telemetry",
+						"{}",
+						400, 403, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/settings/telemetry",
+						HttpMethod.DELETE,
+						"/api/settings/telemetry",
+						null,
+						204, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/settings/telemetry/test",
+						HttpMethod.POST,
+						"/api/settings/telemetry/test",
+						null,
+						503, 403, 403, 401
 				)
 		);
 	}

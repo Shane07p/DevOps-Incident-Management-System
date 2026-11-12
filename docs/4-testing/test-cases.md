@@ -492,6 +492,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-D49e | Negative | A name that passed the check resolves to our own machine when the call is made | Refused while connecting; the request never leaves | `TelemetryHttpTest.theConnectionItselfRefusesAnInternalAddressEvenIfTheCheckWasSkipped` | In review |
 | TC-D49f | Equivalence | The org names its label, counter, and status label; a service sets its own label value | The queries use those names and that value | `TelemetryConnectionTest.aServiceCanSayHowItIsLabelledAndTheOrgItsMetricNames` | In review |
 | TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | In review |
+| TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | In review |
 
 ### Evidence links (FR-09.3)
 

@@ -7,14 +7,14 @@ teams:
 
 built sprint by sprint.
 
-The documents in [docs/](docs/) are the specification. Read [docs/PROJECT.md](docs/PROJECT.md)
-first. Every planned feature is in [docs/FEATURES.md](docs/FEATURES.md), and the AI features in
-the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md).
+The documents in [docs/](docs/) are the specification. Start at [docs/README.md](docs/README.md), which lists
+every deliverable and document. Every planned feature is in [features.md](docs/2-design/features.md), and the
+AI features in the [AI/ML roadmap](docs/2-design/ai-ml-roadmap.md).
 
 ## Status
 
 Sprint 1 is complete; Sprints 2 to 4 are in progress. Each work item's issue and status is in the
-[implementation plan](docs/plans/2026-10-17-implementation-plan.md#work-items).
+[implementation plan](docs/3-project-management/implementation-plan.md#work-items).
 
 | Part | State |
 | --- | --- |
@@ -94,7 +94,7 @@ use a throwaway database instead of resetting your volume:
 
 ```bash
 docker run --rm -d --name incident-scratch -p 5434:5432 \
-  -e POSTGRES_DB=incident -e POSTGRES_USER=incident -e POSTGRES_PASSWORD=incident postgres:16
+  -e POSTGRES_DB=incident -e POSTGRES_USER=incident -e POSTGRES_PASSWORD=incident pgvector/pgvector:0.8.6-pg16-bookworm
 
 # Without the seed
 DB_URL=jdbc:postgresql://localhost:5434/incident ./mvnw spring-boot:run
@@ -104,6 +104,12 @@ DB_URL=jdbc:postgresql://localhost:5434/incident \
 
 docker stop incident-scratch    # removes the container and its data
 ```
+
+The local Compose database and Testcontainers use the pinned PostgreSQL 16 Bookworm image
+[`pgvector/pgvector:0.8.6-pg16-bookworm`](https://hub.docker.com/r/pgvector/pgvector), which
+packages the pgvector extension. Supabase provides pgvector as a managed PostgreSQL extension;
+Flyway enables it in the `incident` schema on startup, so the same migration works in local, test,
+and hosted databases.
 
 To run the packaged backend and the built UI against the same database instead:
 
@@ -139,12 +145,12 @@ cd frontend && npm run cypress:run    # end-to-end, needs both servers; the firs
 | `ai-service/` | Python and FastAPI: embeddings through Ollama, the stub `/suggest`, and evidence functions |
 | `demo-shop/` | Demo Shop v1: retail simulation with 5 fault switches and OpenTelemetry (Sprint 2) |
 
-`ai-service/` (Python, FastAPI, Ollama) and `demo-shop/` run locally or in optional Compose profiles; see the [AI/ML roadmap](docs/plans/ai-ml-roadmap.md) and [demo-shop/README.md](demo-shop/README.md).
+`ai-service/` (Python, FastAPI, Ollama) and `demo-shop/` run locally or in optional Compose profiles; see the [AI/ML roadmap](docs/2-design/ai-ml-roadmap.md) and [demo-shop/README.md](demo-shop/README.md).
 
 ## Team and plans
 
-The team and their tracks are in [docs/PROJECT.md](docs/PROJECT.md#team). Each sprint's work is in
-[docs/plans/](docs/plans/).
+The team and their tracks are in [docs/3-project-management/project.md](docs/3-project-management/project.md#team). Each sprint's work is in
+[docs/3-project-management/](docs/3-project-management/).
 
 ## Deployment
 

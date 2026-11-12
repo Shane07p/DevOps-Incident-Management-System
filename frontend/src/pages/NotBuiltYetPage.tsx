@@ -2,7 +2,7 @@ import { Hammer } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { findPage } from '@/app/navigation'
 
-// When each screen lands, from docs/sprint-plan.md.
+// When each screen lands, from docs/3-project-management/sprint-plan.md.
 const PLANNED_SPRINT: Record<string, number> = {
   '/incidents': 1,
   '/services': 1,

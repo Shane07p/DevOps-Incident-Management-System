@@ -13,7 +13,7 @@ What is here so far:
 | `data/` | Public postmortems with labels, and a held-out test set for AI-1 | #63 |
 
 The backend does not call this service yet. The planned AI features are in the
-[AI/ML roadmap](../docs/plans/ai-ml-roadmap.md).
+[AI/ML roadmap](../docs/2-design/ai-ml-roadmap.md).
 
 **Team Member:** Himanshu (Lead, `ai-service`)
 **Project:** IT314 DevOps Incident Management System
@@ -34,7 +34,7 @@ The backend does not call this service yet. The planned AI features are in the
 
 ## 2. AI Contract & Requirements Mapping
 
-The response from `POST /suggest` conforms strictly to the AI contract in `docs/plans/2026-10-17-implementation-plan.md`:
+The response from `POST /suggest` conforms strictly to the AI contract in `docs/3-project-management/implementation-plan.md`:
 
 - **AI only suggests, never automates (DR-10.2):** Returns advisory investigation actions only; does not mutate incident status or SLA.
 - **Labelled as AI-generated (FR-18.2):** `aiGenerated: true` explicitly included in root payload.

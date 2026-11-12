@@ -8,5 +8,6 @@ public enum AuditItemType {
     ORG,
     MONITOR,
     TOKEN,
-    RUNBOOK
+    RUNBOOK,
+    HEARTBEAT
 }

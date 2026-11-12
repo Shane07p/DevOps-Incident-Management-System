@@ -19,6 +19,10 @@ import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.deploy.entity.Deployment;
+import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.heartbeat.entity.Heartbeat;
+import com.group2.incident.heartbeat.repository.HeartbeatRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.Incident;
@@ -31,6 +35,7 @@ import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
+import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.util.HashSet;
@@ -62,6 +67,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private UptimeMonitorRepository monitors;
+
+	@Autowired
+	private HeartbeatRepository heartbeats;
 
 	@Autowired
 	private TestAccounts accounts;
@@ -109,6 +117,9 @@ public class SecurityMatrixTest {
 	@Autowired
 	private PersonalAccessTokenService patService;
 
+	@Autowired
+	private DeploymentRepository deployments;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -124,7 +135,10 @@ public class SecurityMatrixTest {
 	private Long targetServiceId;
 	private Long targetToolId;
 	private Long targetIncidentId;
+	private Long targetDeployId;
 	private Long targetMonitorId;
+	private Long targetHeartbeatId;
+	private String targetHeartbeatToken;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
@@ -275,6 +289,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/services/{id}/deploys",
+						HttpMethod.GET,
+						"/api/services/{id}/deploys",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"GET /api/service-map",
 						HttpMethod.GET,
 						"/api/service-map",
@@ -324,6 +345,48 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"GET /api/heartbeats",
+						HttpMethod.GET,
+						"/api/heartbeats",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/heartbeats/{id}",
+						HttpMethod.GET,
+						"/api/heartbeats/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/heartbeats",
+						HttpMethod.POST,
+						"/api/heartbeats",
+						"{\"name\":\"HB_${RANDOM}\",\"serviceId\":${SERVICE_ID},\"intervalSeconds\":60,\"graceSeconds\":10,\"enabled\":true}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/heartbeats/{id}",
+						HttpMethod.PUT,
+						"/api/heartbeats/{id}",
+						"{\"name\":\"HB_${RANDOM}\",\"serviceId\":${SERVICE_ID},\"intervalSeconds\":60,\"graceSeconds\":10,\"enabled\":true}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/public/heartbeats/ping/{token}",
+						HttpMethod.POST,
+						"/api/public/heartbeats/ping/{token}",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
+						"GET /api/public/heartbeats/ping/{token}",
+						HttpMethod.GET,
+						"/api/public/heartbeats/ping/{token}",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
 						"GET /api/incidents",
 						HttpMethod.GET,
 						"/api/incidents",
@@ -334,6 +397,20 @@ public class SecurityMatrixTest {
 						"GET /api/incidents/search",
 						HttpMethod.GET,
 						"/api/incidents/search",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/{id}/similar",
+						HttpMethod.GET,
+						"/api/incidents/{id}/similar",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/duplicate-check",
+						HttpMethod.GET,
+						"/api/incidents/duplicate-check",
 						null,
 						200, 200, 200, 401
 				),
@@ -387,6 +464,13 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/deploys/{deployId}",
+						HttpMethod.POST,
+						"/api/incidents/{id}/deploys/{deployId}",
+						null,
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"POST /api/incidents/{id}/timeline/{entryId}/corrections",
 						HttpMethod.POST,
 						"/api/incidents/{id}/timeline/{entryId}/corrections",
@@ -435,6 +519,14 @@ public class SecurityMatrixTest {
 						null,
 						204, 204, 403, 401
 				),
+				// Enabling a member who is already enabled changes nothing, so the row repeats safely.
+				new MatrixRow(
+						"PUT /api/users/{id}/enabled",
+						HttpMethod.PUT,
+						"/api/users/{id}/enabled",
+						"{\"enabled\":true}",
+						200, 403, 403, 401
+				),
 				new MatrixRow(
 						"GET /api/audit",
 						HttpMethod.GET,
@@ -462,6 +554,37 @@ public class SecurityMatrixTest {
 						"/api/me/tokens/{id}",
 						null,
 						204, 204, 204, 401
+				),
+				// Customers have no account, so everyone reads the page, logged in or not (D45).
+				new MatrixRow(
+						"GET /api/public/status/{slug}",
+						HttpMethod.GET,
+						"/api/public/status/{slug}",
+						null,
+						200, 200, 200, 200
+				),
+				// The matrix Engineer is neither the incident's Lead nor its Comms (D45, TC-FR-21.2a).
+				new MatrixRow(
+						"POST /api/incidents/{id}/public-updates",
+						HttpMethod.POST,
+						"/api/incidents/{id}/public-updates",
+						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
+						201, 403, 403, 401
+				),
+				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
+				new MatrixRow(
+						"GET /api/telemetry/logs",
+						HttpMethod.GET,
+						"/api/telemetry/logs",
+						null,
+						400, 400, 400, 401
+				),
+				new MatrixRow(
+						"GET /api/telemetry/metrics",
+						HttpMethod.GET,
+						"/api/telemetry/metrics",
+						null,
+						400, 400, 400, 401
 				)
 		);
 	}
@@ -488,6 +611,7 @@ public class SecurityMatrixTest {
 		service.putTarget(Severity.SEV2, 60, 480);
 		service.putTarget(Severity.SEV3, 240, 2880);
 		service.putTarget(Severity.SEV4, 1440, 10080);
+		service.publishAs(true, "Matrix service", clock.instant());
 		ServiceEntity savedService = services.saveAndFlush(service);
 		targetServiceId = savedService.getId();
 
@@ -513,12 +637,32 @@ public class SecurityMatrixTest {
 		viewerNotificationId = notifications.saveAndFlush(
 				new Notification(viewer, incident, "Viewer notification", clock.instant())).getId();
 
+		targetDeployId = deployments.saveAndFlush(new Deployment(
+				savedService,
+				"v1.0.0-sec",
+				"abcdef1234567890",
+				"Security Author",
+				clock.instant()
+		)).getId();
+
 		adminPatId = patService.createToken(new CreatePersonalAccessTokenRequest("admin-matrix-token"), adminUserId).id();
 		engineerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("engineer-matrix-token"), engineerUserId).id();
 		viewerPatId = patService.createToken(new CreatePersonalAccessTokenRequest("viewer-matrix-token"), viewer.getId()).id();
 		adminRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Admin runbook", List.of("Step"), clock.instant())).getId();
 		engineerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Engineer runbook", List.of("Step"), clock.instant())).getId();
 		viewerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Viewer runbook", List.of("Step"), clock.instant())).getId();
+
+		Heartbeat targetHeartbeat = heartbeats.saveAndFlush(new Heartbeat(
+				savedService,
+				"Matrix heartbeat",
+				60,
+				10,
+				UUID.randomUUID().toString().replace("-", ""),
+				true,
+				clock.instant()
+		));
+		targetHeartbeatId = targetHeartbeat.getId();
+		targetHeartbeatToken = targetHeartbeat.getToken();
 	}
 
 	@Test
@@ -570,16 +714,24 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
+				: pathTemplate.startsWith("/api/heartbeats/") ? targetHeartbeatId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
-		return pathTemplate.replace("{id}", id).replace("{entryId}", "999999999");
+		return pathTemplate.replace("{id}", id)
+				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
+				.replace("{entryId}", "999999999")
+				.replace("{token}", targetHeartbeatToken != null ? targetHeartbeatToken : "dummy_token")
+				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999");
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {
 		MockHttpServletRequestBuilder req = request(method, path);
 		if (path.equals("/api/incidents/search")) {
 			req.queryParam("q", "SecurityMatrix");
+		}
+		if (path.equals("/api/incidents/duplicate-check")) {
+			req.queryParam("title", "SecurityMatrix incident");
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
@@ -672,6 +824,70 @@ public class SecurityMatrixTest {
 		// 5. Revoked tool token -> 401
 		toolService.revokeTool(toolCreateResponse.id(), adminUserId);
 		mvc.perform(request(HttpMethod.POST, "/webhooks/alerts")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void webhookDeploysAuthenticationMatrix() throws Exception {
+		String validPayload = """
+				{
+					"service": "SecurityMatrixBaseService",
+					"version": "v1.0.0",
+					"commit": "abcdef1234567890",
+					"author": "Alice Developer",
+					"deployedAt": "2026-11-09T10:00:00Z"
+				}
+				""";
+
+		// 1. Missing token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 2. Wrong tool token -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer tt_invalid_token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 3. User JWT tokens (Admin, Engineer, Viewer) are not valid tool tokens -> 401
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isUnauthorized());
+
+		// 4. Valid registered tool token -> 202 Accepted
+		var toolCreateResponse = toolService.createTool(
+				new CreateToolRequest("Matrix Deploy Tool " + UUID.randomUUID()),
+				adminUserId
+		);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validPayload))
+				.andExpect(status().isAccepted());
+
+		// 5. Revoked tool token -> 401
+		toolService.revokeTool(toolCreateResponse.id(), adminUserId);
+		mvc.perform(request(HttpMethod.POST, "/webhooks/deploys")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolCreateResponse.token())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(validPayload))

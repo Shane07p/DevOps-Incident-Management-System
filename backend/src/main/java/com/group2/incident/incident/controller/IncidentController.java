@@ -5,13 +5,17 @@ import com.group2.incident.incident.dto.CommentRequest;
 import com.group2.incident.incident.dto.EvidenceRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.CorrectionRequest;
+import com.group2.incident.incident.dto.DuplicateCheckResponse;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.dto.IncidentSearchPageResponse;
 import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.ReassignRequest;
+import com.group2.incident.incident.dto.SimilarIncidentResponse;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.service.IncidentService;
+import com.group2.incident.incident.service.IncidentSimilarityService;
 import com.group2.incident.catalog.entity.Severity;
+import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.incident.entity.IncidentStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class IncidentController {
 
 	private final IncidentService incidentService;
+	private final IncidentSimilarityService incidentSimilarityService;
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
@@ -63,14 +68,35 @@ public class IncidentController {
 			@RequestParam(value = "serviceId", required = false) Long serviceId,
 			@RequestParam(value = "severity", required = false) Severity severity,
 			@RequestParam(value = "status", required = false) IncidentStatus status,
-			@RequestParam(value = "page", defaultValue = "0") int page) {
-		return incidentService.searchIncidents(query, serviceId, severity, status, page);
+			@RequestParam(value = "page", defaultValue = "0") int page,
+			@RequestParam(value = "mode", defaultValue = "keyword") String mode) {
+		if ("semantic".equals(mode) && query != null && !query.isBlank()) {
+			return incidentSimilarityService.searchByMeaning(query, serviceId, severity, status, page);
+		}
+		if ("keyword".equals(mode) || "semantic".equals(mode)) {
+			return incidentService.searchIncidents(query, serviceId, severity, status, page);
+		}
+		throw new FieldValidationException("mode", "must be keyword or semantic");
+	}
+
+	@GetMapping("/duplicate-check")
+	@Operation(summary = "Check whether a title resembles an open incident")
+	public DuplicateCheckResponse checkDuplicate(
+			@RequestParam("title") String title,
+			@RequestParam(value = "serviceId", required = false) Long serviceId) {
+		return incidentSimilarityService.checkDuplicate(title, serviceId);
 	}
 
 	@GetMapping("/{id}")
 	@Operation(summary = "Get incident details including timeline")
 	public IncidentResponse getIncident(@PathVariable Long id) {
 		return incidentService.getIncident(id);
+	}
+
+	@GetMapping("/{id}/similar")
+	@Operation(summary = "Find similar incidents in the caller's organization")
+	public List<SimilarIncidentResponse> findSimilarIncidents(@PathVariable Long id) {
+		return incidentSimilarityService.findSimilarIncidents(id);
 	}
 
 	@PutMapping("/{id}/assignee")
@@ -125,5 +151,15 @@ public class IncidentController {
 			@AuthenticationPrincipal Jwt jwt) {
 		return incidentService.correctTimelineEntry(
 				id, entryId, request.details(), Long.parseLong(jwt.getSubject()));
+	}
+
+	/** Links a deployment to an incident timeline. */
+	@PostMapping("/{id}/deploys/{deployId}")
+	@Operation(summary = "Link a deployment to an incident timeline")
+	public TimelineEntryResponse linkDeployment(
+			@PathVariable Long id,
+			@PathVariable Long deployId,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.linkDeployment(id, deployId, Long.parseLong(jwt.getSubject()));
 	}
 }

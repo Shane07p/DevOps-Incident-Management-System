@@ -470,7 +470,9 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-26.1a | Equivalence | Each combination of service, level, text, and time range, against a stubbed Loki | The query is built from those parameters only; text from the user never becomes query syntax | `TelemetryServiceTest` | Automated |
-| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the filters; the field becomes a filter | `LogsPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the service, level, text, and time range; the clicked field keeps only the loaded lines with that value, and sends nothing new | `LogsPage.test.tsx` | Automated |
+| TC-FR-26.1d | Concurrency | Logs page: a level is set while the typed text still waits its 400 ms | Both the text and the level end up in the URL | `LogsPage.test.tsx` | Automated |
+| TC-FR-26.1e | Boundary value | Logs page: "Last 15 minutes", asked again an hour later | The second request asks from 15 minutes before it, so the window never grows past the range | `LogsPage.test.tsx` | Automated |
 | TC-FR-26.1c | Negative | Run a query, then read the captured logs | The read token is in no log line | `TelemetryServiceTest` | Automated |
 | TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Automated |
 | TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Automated |

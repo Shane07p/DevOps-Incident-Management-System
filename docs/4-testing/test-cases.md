@@ -601,3 +601,16 @@ For each one:
 3. List V(G) independent paths, and write one test per path. Name them here as `TC-WB-…`.
 4. Check that JaCoCo shows every branch of the method covered.
 5. Run PIT on the class and record the mutation score in the sprint's test report.
+
+### AI incident panel (#249)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-249a | Equivalence | Engineer opens an incident with investigation results | AI summary, ranked hypotheses, confidence and evidence are displayed | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249b | Equivalence | Engineer starts an investigation | Investigation request is sent and results are displayed | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249c | Decision table | Engineer accepts a suggested action | Acceptance decision is submitted and results are refreshed | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249d | Decision table | Viewer opens an incident with investigation results | Viewer can read results but cannot investigate or accept/reject actions | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249e | Negative | AI investigation endpoint returns 503 | Panel displays an AI-unavailable message; incident page remains usable | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249f | Equivalence | Engineer selects Catch me up | AI summary draft appears in an editable text area | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249g | Equivalence | Engineer selects Draft update | Generated text fills the public update form and remains editable; it is not automatically published | `PublicUpdateForm.test.tsx` | Automated |
+| TC-AI-249h | Negative | AI draft endpoint returns 503 | Public update form displays an AI-unavailable message and remains usable | `PublicUpdateForm.test.tsx` | Automated |

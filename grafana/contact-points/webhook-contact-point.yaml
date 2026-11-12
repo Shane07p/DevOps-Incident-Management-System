@@ -1,6 +1,9 @@
-# Grafana contact points, payload template, and notification policy (D36)
-# ------------------------------------------------------------------------
-# In Grafana's file-provisioning format (contactPoints, templates, policies).
+# Grafana contact points and payload template (D36)
+# --------------------------------------------------
+# In Grafana's file-provisioning format (contactPoints, templates). There is no `policies`
+# section on purpose: each rule picks its contact point (notification_settings in
+# alerts/alert-rules.yaml), and importing `policies` would replace the stack's whole policy
+# tree, which also routes Grafana's own rules.
 #
 # One webhook contact point per rule type, each with its own tool token: register
 # three tools in Settle (POST /api/tools) and put each token in its own variable. Grafana
@@ -85,37 +88,3 @@ contactPoints:
           authorization_credentials: "${SETTLE_ERROR_RATE_TOOL_TOKEN}"
           payload:
             template: '{{ template "settle.alert" . }}'
-
-# Importing `policies` replaces the org's whole notification policy tree. The root keeps
-# Grafana's default email contact point; only the demo-shop rules (team=group2) go to Settle.
-# Grouping by alertname (one rule each) puts one alert in each notification, which is what
-# the template posts.
-policies:
-  - orgId: 1
-    receiver: grafana-default-email
-    group_by: [grafana_folder, alertname]
-    routes:
-      - receiver: settle-down
-        object_matchers:
-          - [team, "=", group2]
-          - [rule_type, "=", down]
-        group_by: [alertname]
-        group_wait: 30s
-        group_interval: 5m
-        repeat_interval: 4h
-      - receiver: settle-degraded
-        object_matchers:
-          - [team, "=", group2]
-          - [rule_type, "=", degraded]
-        group_by: [alertname]
-        group_wait: 30s
-        group_interval: 5m
-        repeat_interval: 4h
-      - receiver: settle-error-rate
-        object_matchers:
-          - [team, "=", group2]
-          - [rule_type, "=", error_rate]
-        group_by: [alertname]
-        group_wait: 30s
-        group_interval: 5m
-        repeat_interval: 4h

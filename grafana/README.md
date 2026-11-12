@@ -7,7 +7,7 @@ Grafana Cloud checks the demo shop from 2 locations, and its alert rules post in
 grafana/
 ├── checks/synthetic-checks.yaml            # Synthetic Monitoring HTTP checks
 ├── alerts/alert-rules.yaml                 # Down, Degraded, Error rate rules
-└── contact-points/webhook-contact-point.yaml  # template, 3 contact points, policy
+└── contact-points/webhook-contact-point.yaml  # payload template, 3 contact points
 ```
 
 ## Checks (D35)
@@ -37,8 +37,9 @@ change those with it. The header of `alert-rules.yaml` explains the arithmetic.
 
 ## Into Settle
 
-Each rule type has its own contact point and its own tool token. The `settle.alert` template turns
-the firing alert into Settle's alert format:
+Each rule type has its own contact point and its own tool token, and each rule names its contact
+point itself (Grafana's simplified routing), so no notification policy is needed. The
+`settle.alert` template turns the firing alert into Settle's alert format:
 
 ```json
 {
@@ -69,8 +70,10 @@ the firing alert into Settle's alert format:
    (Alerting > Contact points > Notification templates, then each webhook contact point with
    **Custom Payload** set to `{{ template "settle.alert" . }}`). Use Settle's backend URL and one
    token per contact point in place of the `${...}` values. Never commit a token.
-5. Create the rules from `alerts/alert-rules.yaml`, then the notification policy. Importing
-   `policies` replaces the whole policy tree.
+5. Create the rules from `alerts/alert-rules.yaml`. In each rule's **Configure notifications**,
+   choose its contact point (`settle-down`, `settle-degraded`, or `settle-error-rate`), as its
+   `notification_settings` says. Leave the notification policies alone: the stack's tree also
+   routes Grafana's own rules, and importing a `policies` section would replace all of it.
 6. Check each case in `docs/4-testing/test-cases.md` (TC-D36a to f) with the demo shop's fault
    switches, and attach a screenshot of each to the pull request.
 

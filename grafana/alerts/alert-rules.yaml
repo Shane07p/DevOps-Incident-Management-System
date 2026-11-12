@@ -1,8 +1,9 @@
 # Grafana alert rules (D36), in Grafana's file-provisioning format
 # ------------------------------------------------------------------
 # For each demo-shop check: Down (critical, SEV1), Degraded (warning, SEV2), and
-# Error rate (warning, SEV2). The labels route each rule to its own contact point
-# (contact-points/webhook-contact-point.yaml), which posts it to /webhooks/alerts.
+# Error rate (warning, SEV2). Each rule names its contact point in notification_settings
+# (contact-points/webhook-contact-point.yaml), which posts it to /webhooks/alerts. No
+# notification policy is needed, and the stack's policy tree is left as it is.
 #
 # Down and Degraded count locations: last_over_time(...[frequency + 1m]) keeps each
 # location's newest result until its next check, and `sum by (job)` counts the
@@ -68,6 +69,12 @@ groups:
         annotations:
           summary: "Payments is down"
           description: "At least 2 locations failed the payments check on 2 checks in a row."
+        notification_settings:
+          receiver: settle-down
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
       - uid: demo-shop-down-checkout
         title: "Checkout is down"
@@ -110,6 +117,12 @@ groups:
         annotations:
           summary: "Checkout is down"
           description: "At least 2 locations failed the checkout check on 2 checks in a row."
+        notification_settings:
+          receiver: settle-down
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
       - uid: demo-shop-down-search
         title: "Search is down"
@@ -152,6 +165,12 @@ groups:
         annotations:
           summary: "Search is down"
           description: "At least 2 locations failed the search check on 2 checks in a row."
+        notification_settings:
+          receiver: settle-down
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
   # Degraded: at least 2 locations slower than 2 s on 3 checks in a row (warning).
   - orgId: 1
@@ -200,6 +219,12 @@ groups:
         annotations:
           summary: "Payments is slow"
           description: "At least 2 locations took longer than 2 s on the payments check, 3 checks in a row."
+        notification_settings:
+          receiver: settle-degraded
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
       - uid: demo-shop-degraded-checkout
         title: "Checkout is slow"
@@ -242,6 +267,12 @@ groups:
         annotations:
           summary: "Checkout is slow"
           description: "At least 2 locations took longer than 2 s on the checkout check, 3 checks in a row."
+        notification_settings:
+          receiver: settle-degraded
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
       - uid: demo-shop-degraded-search
         title: "Search is slow"
@@ -284,6 +315,12 @@ groups:
         annotations:
           summary: "Search is slow"
           description: "At least 2 locations took longer than 2 s on the search check, 3 checks in a row."
+        notification_settings:
+          receiver: settle-degraded
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
   # Error rate: more than 5% of requests return 5xx for 5 minutes (warning).
   - orgId: 1
@@ -332,6 +369,12 @@ groups:
         annotations:
           summary: "Payments error rate above 5%"
           description: "More than 5% of payments requests returned 5xx for 5 minutes."
+        notification_settings:
+          receiver: settle-error-rate
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
       - uid: demo-shop-error-rate-checkout
         title: "Checkout error rate above 5%"
@@ -374,6 +417,12 @@ groups:
         annotations:
           summary: "Checkout error rate above 5%"
           description: "More than 5% of checkout requests returned 5xx for 5 minutes."
+        notification_settings:
+          receiver: settle-error-rate
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
 
       - uid: demo-shop-error-rate-search
         title: "Search error rate above 5%"
@@ -416,3 +465,9 @@ groups:
         annotations:
           summary: "Search error rate above 5%"
           description: "More than 5% of search requests returned 5xx for 5 minutes."
+        notification_settings:
+          receiver: settle-error-rate
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h

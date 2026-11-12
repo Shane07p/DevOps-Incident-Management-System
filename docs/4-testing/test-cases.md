@@ -280,11 +280,11 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeTest` (Testcontainers) | Planned (Utsav B) |
-| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Planned (Utsav B) |
+| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Automated |
+| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Automated |
+| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Automated |
+| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeRaceTest` (Testcontainers) | Automated |
+| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Automated |
 
 ### Severity (FR-04.2)
 

@@ -9,6 +9,7 @@ What is here so far:
 | `POST /embed` | An embedding of a text from Ollama (`nomic-embed-text`), for finding similar incidents (AI-1) | #62 |
 | `log_patterns.py` | Log-pattern evidence: during an incident, messages that are new, or at least 3 times and twice as often as in the same length of time before it | #92 |
 | `agent_loop.py`, `agent_tools.py`, `providers.py` | Autonomous AI SRE tool loop on recorded Demo Shop data with step, time, and token limits, enforcing real evidence attribution | #91 |
+| `mcp_server.py` | FastMCP Streamable HTTP MCP server with authenticated read tools (`list_incidents`, `get_incident`, `search_incidents`, `get_service`, `who_is_on_call`, `list_alerts`, etc.) | #162 |
 | `data/` | Public postmortems with labels, and a held-out test set for AI-1 | #63 |
 
 The backend does not call this service yet. The planned AI features are in the
@@ -290,3 +291,29 @@ The AI SRE investigation loop autonomously gathers structured evidence from reco
   "durationMs": 142.5
 }
 ```
+
+---
+
+## 7. Sprint 4 MCP Server with Read Tools (Issue #162)
+
+The MCP server connects Claude Desktop, Claude Code, and Cursor to Settle using FastMCP over Streamable HTTP transport:
+
+- **Endpoint:** `http://localhost:8001/mcp` (runs as standalone process to isolate internal AI endpoints).
+- **Authentication:** Personal access token (PAT) forwarded strictly via connection headers (`Authorization: Bearer <pat_...>`). Tokens are never tool arguments.
+- **Security:**
+  - Read-only tools only. No write tools exist in Sprint 4 (Decision D38).
+  - The server never accesses the database directly; all requests flow through Settle's backend REST API.
+  - Caller tokens are isolated per request context and never leaked into logs, error messages, or tool output.
+  - Separate process execution ensures `/suggest`, `/embed`, and `/investigate` remain accessible only from the backend.
+- **Read Tools (Active):**
+  - `list_incidents`: List all incidents (`GET /api/incidents`).
+  - `get_incident`: Incident details with complete timeline (`GET /api/incidents/{id}`).
+  - `search_incidents`: Search past incidents by keyword and filters (`GET /api/incidents/search`).
+  - `get_service`: Service owner, criticality, and SLA targets (`GET /api/services/{id}`).
+  - `who_is_on_call`: Current on-call schedule and fallback (`GET /api/services/{id}/on-call`).
+  - `list_alerts`: Alerts inbox (`GET /api/alerts`).
+- **Configuration:**
+  - `SETTLE_API_URL` (default: `http://localhost:8080`)
+  - `SETTLE_API_TIMEOUT` (default: `10`)
+
+For client configuration details, see the [MCP Client Setup Guide](MCP_GUIDE.md).

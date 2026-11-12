@@ -343,6 +343,7 @@ public class IncidentService {
 				incident.getResolutionTargetMinutes(),
 				incident.getResponseDueAt(),
 				incident.getResolutionDueAt(),
+				incident.getAcknowledgedAt(),
 				timelineResponses,
 				deploys != null ? deploys : List.of()
 		);

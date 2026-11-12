@@ -2,19 +2,24 @@ package com.group2.incident.incident.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.incident.entity.EscalationTask;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.entity.TimelineEventType;
+import com.group2.incident.incident.repository.EscalationTaskRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.incident.service.EscalationService;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestOrgs;
 import com.group2.incident.support.TestOrgs.SignedUp;
 import com.jayway.jsonpath.JsonPath;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +43,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Two competing acknowledgements on the same incident at the same moment: one succeeds (200),
  * the second fails with optimistic lock conflict (409), and database consistency is preserved.
+ * Also the other commit order with escalation: the step commits first, so an acknowledgement
+ * made from the screen before it loses (FR-07.4).
  * Outside the test transaction, against PostgreSQL, following ReassignRaceTest pattern.
  */
 @IntegrationTest
@@ -61,6 +68,12 @@ class AcknowledgeRaceTest {
 
 	@Autowired
 	private TimelineEntryRepository timelineEntryRepository;
+
+	@Autowired
+	private EscalationTaskRepository escalationTasks;
+
+	@Autowired
+	private EscalationService escalationService;
 
 	private final ExecutorService competingThread = Executors.newSingleThreadExecutor();
 
@@ -157,6 +170,55 @@ class AcknowledgeRaceTest {
 				.toList();
 		assertThat(ackEntries).hasSize(1);
 		assertThat(ackEntries.get(0).getActor().getId()).isEqualTo(eng1Id);
+	}
+
+	@Test
+	@DisplayName("TC-FR-07.4: Escalation commits first; an acknowledgement sent with the version from before it gets 409")
+	void escalationCommitsFirstAndAnAcknowledgementFromBeforeItLoses() throws Exception {
+		raceOrg = orgs.signUp("ack-esc-admin@race.test", "Ack Escalation Race Org");
+		String adminToken = raceOrg.adminToken();
+		long serviceId = orgs.createService(adminToken, "Ack Escalation Service", raceOrg.adminId());
+		mvc.perform(put("/api/services/{id}/escalation-policy", serviceId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"steps\": [{\"stepNumber\": 1, \"responderId\": %d, \"waitMinutes\": 15}]}"
+								.formatted(raceOrg.adminId())))
+				.andExpect(status().isOk());
+		long incidentId = TestOrgs.id(orgs.declareIncident(adminToken, serviceId, "Ack Escalation Incident"));
+
+		// The screen shows this version; then an escalation step commits, which raises it.
+		long seen = jdbc.queryForObject("SELECT version FROM incident WHERE id = ?", Long.class, incidentId);
+		Long assigneeBefore = jdbc.queryForObject("SELECT assignee_id FROM incident WHERE id = ?", Long.class, incidentId);
+		boolean escalated = OrgContext.runAs(raceOrg.orgId(), () -> {
+			EscalationTask task = escalationTasks.findByIncidentId(incidentId).orElseThrow();
+			return escalationService.escalateTaskInNewTransaction(
+					task.getId(), task.getNextDueAt().plus(1, ChronoUnit.MINUTES));
+		});
+		assertThat(escalated).isTrue();
+		assertThat(jdbc.queryForObject("SELECT version FROM incident WHERE id = ?", Long.class, incidentId))
+				.isEqualTo(seen + 1);
+
+		// The acknowledgement made from the older screen loses and changes nothing.
+		mvc.perform(post("/api/incidents/" + incidentId + "/acknowledge")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"expectedVersion\": " + seen + "}"))
+				.andExpect(status().isConflict());
+		assertThat(jdbc.queryForObject("SELECT status FROM incident WHERE id = ?", String.class, incidentId))
+				.isEqualTo("OPEN");
+		assertThat(jdbc.queryForObject("SELECT assignee_id FROM incident WHERE id = ?", Long.class, incidentId))
+				.isEqualTo(assigneeBefore);
+		assertThat(jdbc.queryForObject("SELECT acknowledged_at IS NULL FROM incident WHERE id = ?", Boolean.class, incidentId))
+				.isTrue();
+
+		// Sent again with the current version, the acknowledgement is accepted.
+		mvc.perform(post("/api/incidents/" + incidentId + "/acknowledge")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"expectedVersion\": " + (seen + 1) + "}"))
+				.andExpect(status().isOk());
+		assertThat(jdbc.queryForObject("SELECT status FROM incident WHERE id = ?", String.class, incidentId))
+				.isEqualTo("ACKNOWLEDGED");
 	}
 
 	private void waitForASessionBlockedOnALock() {

@@ -1,6 +1,8 @@
 package com.group2.incident.incident.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -26,11 +28,11 @@ import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.incident.service.EscalationService;
 import com.group2.incident.incident.service.IncidentService;
-import com.group2.incident.incident.service.SlaCalculator;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -144,6 +146,12 @@ class AcknowledgeTest {
 		String token = tokenFor("ack-engineer");
 		String body = "{\"expectedVersion\": %d}".formatted(originalVersion);
 
+		// The response clock is running: no acknowledgement yet.
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.acknowledgedAt").value(nullValue()));
+
 		mvc.perform(post("/api/incidents/" + incident.getId() + "/acknowledge")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -153,7 +161,8 @@ class AcknowledgeTest {
 				.andExpect(jsonPath("$.status").value("ACKNOWLEDGED"))
 				.andExpect(jsonPath("$.assignee.id").value(engineer.getId()))
 				.andExpect(jsonPath("$.assignee.displayName").value(engineer.getDisplayName()))
-				.andExpect(jsonPath("$.version").value(originalVersion + 1));
+				.andExpect(jsonPath("$.version").value(originalVersion + 1))
+				.andExpect(jsonPath("$.acknowledgedAt").isNotEmpty());
 
 		// Verify database state
 		Incident persisted = incidents.findById(incident.getId()).orElseThrow();
@@ -181,9 +190,8 @@ class AcknowledgeTest {
 	@Test
 	@DisplayName("TC-FR-16.2a: Equivalence - Acknowledge at minute 10 -> The response clock stops at 10; the resolution clock keeps running")
 	void tcFr16_2a_acknowledgeStopsResponseClockWhileResolutionKeepsRunning() throws Exception {
-		Instant now = clock.instant();
-		// Incident was created exactly 10 minutes ago
-		Instant createdTime = now.minus(10, ChronoUnit.MINUTES);
+		// Created 10 minutes ago, with a 15-minute response target and a 240-minute resolution target.
+		Instant createdTime = clock.instant().truncatedTo(ChronoUnit.SECONDS).minus(10, ChronoUnit.MINUTES);
 		Incident incident = new Incident(
 				"SLA Test Incident",
 				"Measuring SLA clocks",
@@ -192,40 +200,41 @@ class AcknowledgeTest {
 				IncidentStatus.OPEN,
 				engineer,
 				createdTime,
-				15, // response target: 15 min
-				240 // resolution target: 240 min
+				15,
+				240
 		);
 		incident.assignNumber(nextIncidentNumber++);
 		incident = incidents.saveAndFlush(incident);
 
-		// Acknowledge at minute 10 (now)
 		String token = tokenFor("ack-engineer");
-		mvc.perform(post("/api/incidents/" + incident.getId() + "/acknowledge")
+		Instant before = clock.instant();
+		String acknowledged = mvc.perform(post("/api/incidents/" + incident.getId() + "/acknowledge")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"expectedVersion\": 0}"))
-				.andExpect(status().isOk());
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		Instant after = clock.instant();
 
-		Incident reloaded = incidents.findById(incident.getId()).orElseThrow();
-		assertThat(reloaded.getStatus()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
-		Instant ackTime = reloaded.getAcknowledgedAt();
-		assertThat(ackTime).isNotNull();
+		// The response clock stopped when the acknowledgement was accepted, at minute 10.
+		Instant acknowledgedAt = Instant.parse(JsonPath.read(acknowledged, "$.acknowledgedAt"));
+		assertThat(acknowledgedAt).isBetween(before, after);
+		assertThat(Duration.between(createdTime, acknowledgedAt))
+				.isGreaterThanOrEqualTo(Duration.ofMinutes(10))
+				.isLessThan(Duration.ofMinutes(11));
 
-		// 1. Response clock: stopped at acknowledgement time (elapsed is 10 minutes)
-		// At minute 10: elapsed is 10 min <= 15 min target -> NOT breached
-		assertThat(SlaCalculator.isBreached(reloaded.getCreatedAt(), ackTime, reloaded.getResponseTargetMinutes())).isFalse();
+		// Both clocks still count from creation; acknowledging changed neither target.
+		assertThat(Instant.parse(JsonPath.read(acknowledged, "$.responseDueAt")))
+				.isEqualTo(createdTime.plus(15, ChronoUnit.MINUTES));
+		assertThat(Instant.parse(JsonPath.read(acknowledged, "$.resolutionDueAt")))
+				.isEqualTo(createdTime.plus(240, ChronoUnit.MINUTES));
 
-		// Even at minute 20 (or any later time), because the response clock stopped at ackTime (minute 10), response SLA is NOT breached!
-		assertThat(SlaCalculator.isBreached(reloaded.getCreatedAt(), ackTime, reloaded.getResponseTargetMinutes())).isFalse();
-
-		// 2. Resolution clock: NOT stopped by acknowledgement; keeps running!
-		// At minute 20: 20 min <= 240 min target -> NOT breached
-		Instant minute20 = createdTime.plus(20, ChronoUnit.MINUTES);
-		assertThat(SlaCalculator.isBreached(reloaded.getCreatedAt(), minute20, reloaded.getResolutionTargetMinutes())).isFalse();
-
-		// At minute 250: 250 min > 240 min target -> BREACHED (because resolution clock kept running)
-		Instant minute250 = createdTime.plus(250, ChronoUnit.MINUTES);
-		assertThat(SlaCalculator.isBreached(reloaded.getCreatedAt(), minute250, reloaded.getResolutionTargetMinutes())).isTrue();
+		// The incident page shows the same stop time; the resolution clock has none yet, so it keeps running.
+		mvc.perform(get("/api/incidents/" + incident.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("ACKNOWLEDGED"))
+				.andExpect(jsonPath("$.acknowledgedAt").value(JsonPath.<String>read(acknowledged, "$.acknowledgedAt")));
 	}
 
 	@ParameterizedTest(name = "TC-US-08b: Cannot acknowledge incident in {0} status")

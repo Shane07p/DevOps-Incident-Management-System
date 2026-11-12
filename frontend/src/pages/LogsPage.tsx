@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
 import { listServiceChoices } from '@/api/incidents'
-import { fetchLogs, extractJsonFields, TIME_RANGES, type LogsQueryParams } from '@/api/logs'
+import { fetchLogs, LOG_LEVELS, type LogEntry, type LogLevel, type LogsQuery } from '@/api/telemetry'
 import { LoadingState } from '@/components/app/LoadingState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,13 @@ import { cn } from '@/lib/utils'
 // Constants
 // ---------------------------------------------------------------------------
 
-const LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'] as const
+// The server allows at most 24 hours; a range always has an end, so there is no "All time".
+const TIME_RANGES = [
+  { id: '15m', label: 'Last 15 minutes', minutes: 15 },
+  { id: '1h', label: 'Last 1 hour', minutes: 60 },
+  { id: '6h', label: 'Last 6 hours', minutes: 360 },
+  { id: '24h', label: 'Last 24 hours', minutes: 1440 },
+] as const
 
 /** Minimum polling interval for live tail (ms). Must not hammer Loki on free tier. */
 const LIVE_TAIL_INTERVAL_MS = 5000
@@ -34,12 +40,18 @@ const LEVEL_STYLE: Record<string, string> = {
   INFO: 'bg-status-open-bg text-status-open',
   WARN: 'bg-status-investigating-bg text-status-investigating',
   ERROR: 'bg-sev-1-bg text-sev-1-fg',
-  FATAL: 'bg-sev-1-bg text-sev-1-fg font-bold',
 }
 
 /** A chosen range's `from` is the moment of the request, minus the range; an explicit `from` stays. */
-function withWindow(params: LogsQueryParams, rangeMinutes: number): LogsQueryParams {
+function withWindow(params: LogsQuery, rangeMinutes: number): LogsQuery {
   return params.from ? params : { ...params, from: new Date(Date.now() - rangeMinutes * 60_000).toISOString() }
+}
+
+const asText = (value: unknown) => (typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value))
+
+/** The server has no field filter, so a clicked field narrows the lines already loaded. */
+function matchesField(log: LogEntry, filter: { key: string; value: string } | null) {
+  return filter === null || (filter.key in log.attributes && asText(log.attributes[filter.key]) === filter.value)
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +86,7 @@ export function LogsPage() {
   const [params, setParams] = useSearchParams()
 
   // ---- Read parameters from URL --------------------------------------------
-  const serviceId = params.get('serviceId') ?? ''
+  const chosenServiceId = params.get('serviceId') ?? ''
   const level = params.get('level') ?? ''
   const textParam = params.get('text') ?? ''
   const timeRangeParam = params.get('timeRange') ?? '1h'
@@ -83,9 +95,10 @@ export function LogsPage() {
 
   // ---- Controlled text input (debounced to URL) -----------------------------
   const [inputText, setInputText] = useState(textParam)
-  const prevTextParam = useRef(textParam)
-  if (prevTextParam.current !== textParam) {
-    prevTextParam.current = textParam
+  // The URL changed from outside the box (Clear filters, back): show its text.
+  const [shownTextParam, setShownTextParam] = useState(textParam)
+  if (shownTextParam !== textParam) {
+    setShownTextParam(textParam)
     setInputText(textParam)
   }
 
@@ -133,25 +146,24 @@ export function LogsPage() {
     queryKey: ['services-choices'],
     queryFn: listServiceChoices,
   })
+  // The server reads one service's logs at a time; until one is chosen, the first is shown.
+  const serviceId = chosenServiceId || (services.data?.[0] ? String(services.data[0].id) : '')
 
   // ---- Build query object --------------------------------------------------
-  // Field filter uses ?field=key:value (Loki label filter syntax proposed on #156).
-  // Text filter and field filter are independent query params. `from` is left out for a chosen
-  // range; withWindow adds it at request time.
+  // `from` is left out for a chosen range; withWindow adds it at request time.
   const request = useMemo(
     () => ({
       params: {
-        serviceId: serviceId || undefined,
-        level: level || undefined,
-        text: textParam || undefined,
-        field: fieldFilter ? `${fieldFilter.key}:${fieldFilter.value}` : undefined,
+        serviceId: Number(serviceId),
+        level: (LOG_LEVELS as readonly string[]).includes(level) ? (level as LogLevel) : undefined,
+        text: textParam.trim() || undefined,
         from: explicitFrom || undefined,
         to: explicitFrom ? explicitTo || undefined : undefined,
         limit: 100,
-      } satisfies LogsQueryParams,
+      } satisfies LogsQuery,
       rangeMinutes,
     }),
-    [serviceId, level, textParam, fieldFilter, explicitFrom, explicitTo, rangeMinutes],
+    [serviceId, level, textParam, explicitFrom, explicitTo, rangeMinutes],
   )
 
   // ---- Logs query with live tail polling (min 5 s to respect Loki limits) ---
@@ -161,6 +173,7 @@ export function LogsPage() {
   const logsQuery = useQuery({
     queryKey: ['telemetry-logs', request],
     queryFn: () => fetchLogs(withWindow(request.params, request.rangeMinutes)),
+    enabled: serviceId !== '',
     refetchInterval: liveTail ? LIVE_TAIL_INTERVAL_MS : false,
     placeholderData: (prev) => prev,
   })
@@ -175,9 +188,8 @@ export function LogsPage() {
   }, [request])
 
   // ---- Clickable JSON field handler ----------------------------------------
-  // Recognized structural fields (level, serviceId) are routed to their
-  // dedicated filters. All other fields are sent as ?field=key:value (Loki
-  // label filter syntax proposed to Dhruva on issue #156).
+  // A level goes to the level filter, which the server applies. Any other field narrows the lines
+  // already loaded: the server has no field filter.
   const handleJsonFieldClick = (key: string, val: string) => {
     const kLower = key.toLowerCase()
     if (kLower === 'level') {
@@ -187,11 +199,6 @@ export function LogsPage() {
         return
       }
     }
-    if (kLower === 'serviceid' || kLower === 'service_id') {
-      setFilters({ serviceId: val })
-      return
-    }
-    // General attribute: set field filter chip — query sends ?field=key:val
     setFieldFilter({ key, value: val })
   }
 
@@ -201,7 +208,7 @@ export function LogsPage() {
 
   // ---- Clear all filters ---------------------------------------------------
   const hasActiveFilters = Boolean(
-    serviceId || level || textParam || (timeRangeParam && timeRangeParam !== '1h') || fieldFilter || explicitFrom,
+    chosenServiceId || level || textParam || (timeRangeParam && timeRangeParam !== '1h') || fieldFilter || explicitFrom,
   )
 
   const clearAllFilters = () => {
@@ -224,6 +231,8 @@ export function LogsPage() {
     logsQuery.error instanceof ApiRequestError &&
     logsQuery.error.status === 503
 
+  const shown = logsQuery.data?.filter((log) => matchesField(log, fieldFilter)) ?? []
+
   return (
     <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
       {/* Header */}
@@ -233,7 +242,7 @@ export function LogsPage() {
             Logs Explorer
           </h1>
           <p className="text-muted-foreground">
-            Search and live tail logs across your services. Times are IST.
+            Search and live tail a service&apos;s logs. Times are IST.
           </p>
         </div>
 
@@ -251,7 +260,7 @@ export function LogsPage() {
             <span
               className={cn(
                 'size-2 rounded-full transition-colors',
-                liveTail ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground',
+                liveTail ? 'bg-health-operational motion-safe:animate-pulse' : 'bg-muted-foreground',
               )}
               aria-hidden="true"
             />
@@ -279,15 +288,11 @@ export function LogsPage() {
             <Label htmlFor={serviceIdAttr} className="text-sm font-medium">
               Service
             </Label>
-            <Select
-              value={serviceId}
-              onValueChange={(val) => setFilters({ serviceId: val === '_all' ? '' : val })}
-            >
+            <Select value={serviceId} onValueChange={(val) => setFilters({ serviceId: val })}>
               <SelectTrigger id={serviceIdAttr} aria-label="Service" className="w-full">
-                <SelectValue placeholder="All services" />
+                <SelectValue placeholder={services.isPending ? 'Loading services' : 'Choose a service'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="_all">All services</SelectItem>
                 {services.data?.map((svc) => (
                   <SelectItem key={svc.id} value={String(svc.id)}>
                     {svc.name}
@@ -374,6 +379,7 @@ export function LogsPage() {
                   <span>
                     Field: <strong className="font-mono">{fieldFilter.key}</strong> ={' '}
                     <span className="font-mono">{fieldFilter.value}</span>
+                    <span className="text-muted-foreground"> (in the lines loaded)</span>
                   </span>
                   <button
                     type="button"
@@ -402,7 +408,16 @@ export function LogsPage() {
       </div>
 
       {/* Main Results / States */}
-      {logsQuery.isPending ? (
+      {services.isSuccess && services.data.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border bg-card py-16 text-center">
+          <p className="font-semibold">No services yet</p>
+          <p className="text-sm text-muted-foreground">Logs are read per service. An Admin adds services on the Services page.</p>
+        </div>
+      ) : services.isError ? (
+        <div role="alert" className="rounded-lg border bg-card p-6 text-center text-sm">
+          Services could not be loaded: {services.error.message}
+        </div>
+      ) : logsQuery.isPending ? (
         <LoadingState message="Loading logs…" />
       ) : is503 ? (
         /* Grafana 503 Unavailable State */
@@ -412,10 +427,8 @@ export function LogsPage() {
         >
           <CircleAlert className="size-8" aria-hidden="true" />
           <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold">Log store unavailable</p>
-            <p className="text-sm">
-              The backend could not reach Grafana Loki (503). The log store may be slow or temporarily down. Other Settle services remain fully operational.
-            </p>
+            <p className="text-base font-semibold">Logs unavailable</p>
+            <p className="text-sm">{logsQuery.error.message}. The rest of Settle keeps working.</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => logsQuery.refetch()}>
             Try again
@@ -436,7 +449,7 @@ export function LogsPage() {
             Try again
           </Button>
         </div>
-      ) : logsQuery.data?.length === 0 ? (
+      ) : shown.length === 0 ? (
         /* Empty State */
         <div className="flex flex-col items-center gap-4 rounded-lg border bg-card py-20 text-center">
           <span className="grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
@@ -445,7 +458,7 @@ export function LogsPage() {
           <div className="flex flex-col gap-1">
             <p className="font-semibold">No logs found</p>
             <p className="text-sm text-muted-foreground">
-              No logs match the current filters and time range.
+              {fieldFilter ? 'No line loaded has this field value.' : 'No logs match the current filters and time range.'}
             </p>
           </div>
           {hasActiveFilters && (
@@ -458,14 +471,14 @@ export function LogsPage() {
         /* Log List */
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{logsQuery.data.length} log entries</span>
-            {liveTail && <span className="text-emerald-500 font-medium">● Polling active</span>}
+            <span>{fieldFilter ? `${shown.length} of ${logsQuery.data.length} log entries` : `${shown.length} log entries`}</span>
+            {liveTail && <span className="font-medium text-health-operational-fg">● Polling active</span>}
           </div>
 
           <div className="overflow-hidden rounded-lg border bg-card font-mono text-xs">
             <div className="divide-y divide-border">
-              {logsQuery.data.map((log) => {
-                const fields = extractJsonFields(log)
+              {shown.map((log) => {
+                const fields = Object.keys(log.attributes).length > 0 ? log.attributes : null
                 return (
                   <div
                     key={log.id}
@@ -476,11 +489,9 @@ export function LogsPage() {
                     <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
                       <span className="text-[11px] tnum">{formatIst(log.timestamp)}</span>
                       <LevelBadge level={log.level} />
-                      {log.service && (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-sans font-medium text-foreground">
-                          {log.service}
-                        </span>
-                      )}
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-sans font-medium text-foreground">
+                        {log.serviceName}
+                      </span>
                     </div>
 
                     {/* Log message */}
@@ -492,7 +503,7 @@ export function LogsPage() {
                     {fields && (
                       <div className="mt-1 flex flex-wrap gap-1.5 pt-0.5">
                         {Object.entries(fields).map(([k, v]) => {
-                          const valStr = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)
+                          const valStr = asText(v)
                           return (
                             <button
                               key={k}

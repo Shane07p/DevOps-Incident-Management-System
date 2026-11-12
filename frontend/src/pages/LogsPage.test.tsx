@@ -2,10 +2,9 @@
  * LogsPage.test.tsx
  * Tests for Issue #163 — Logs Explorer (US-28 / TC-FR-26.1b).
  *
- * Contract with Dhruva (Issue #156):
- *   GET /api/telemetry/logs → { logs: LogEntry[], total?: number }
- *   Field filter: ?field=key:value  (Loki label filter)
- *   No "All time" — from/to always present in requests.
+ * The API from #156: GET /api/telemetry/logs?serviceId=&level=&text=&from=&to=&limit= answers a list of
+ * LogEntryResponse. It reads one service at a time and has no field filter, so a clicked JSON field
+ * narrows the lines already loaded.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -18,10 +17,9 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
 import { devOrg, mockFetch } from '@/test/fetchMock'
-import { extractJsonFields } from '@/api/logs'
 
 // ---------------------------------------------------------------------------
-// Shared fixtures — use canonical envelope response shape from Issue #156
+// Shared fixtures in the shape of LogEntryResponse
 // ---------------------------------------------------------------------------
 
 const viewer = { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' }
@@ -31,37 +29,46 @@ const services = [
   { id: 2, name: 'Checkout' },
 ]
 
-/** Backend uses `service` field (Loki stream label). No `serviceName` from server. */
 const sampleLogEntries = [
   {
-    id: 'log-1',
+    id: '1761642000000000000:0',
     timestamp: '2026-10-28T09:00:00Z',
-    service: 'Payments',
     serviceId: 1,
+    serviceName: 'Payments',
     level: 'ERROR',
-    message: '{"event":"payment.failed","order_id":"ord-123","error":"gateway timeout"}',
-    attributes: { event: 'payment.failed', order_id: 'ord-123', error: 'gateway timeout' },
+    message: 'payment.failed',
+    attributes: { order_id: 'ord-123', error: 'gateway timeout' },
   },
   {
-    id: 'log-2',
+    id: '1761641700000000000:1',
     timestamp: '2026-10-28T08:55:00Z',
-    service: 'Payments',
     serviceId: 1,
+    serviceName: 'Payments',
     level: 'INFO',
     message: 'Payment processed successfully for user 456',
+    attributes: {},
   },
   {
-    id: 'log-3',
+    id: '1761641400000000000:2',
     timestamp: '2026-10-28T08:50:00Z',
-    service: 'Checkout',
-    serviceId: 2,
+    serviceId: 1,
+    serviceName: 'Payments',
     level: 'WARN',
+    // A line that is not JSON comes back whole, with no attributes.
     message: '{"broken json: true',
+    attributes: {},
   },
 ]
 
-/** Envelope response shape proposed to Dhruva on Issue #156. */
-const sampleLogsResponse = { logs: sampleLogEntries, total: 3 }
+const sampleLogsResponse = sampleLogEntries
+
+/** The query each logs request carried. */
+function logRequests(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((url) => url.startsWith('/api/telemetry/logs'))
+    .map((url) => new URL(url, 'http://localhost').searchParams)
+}
 
 type ExtraRoutes = Parameters<typeof mockFetch>[0]
 
@@ -139,6 +146,30 @@ describe('LogsPage — rendering', () => {
     expect(screen.getByText('3 log entries')).toBeInTheDocument()
   })
 
+  it('reads the first service until one is chosen, since the server reads one service at a time', async () => {
+    const { fetchMock } = renderLogs('/logs')
+
+    expect(await screen.findByText('3 log entries')).toBeInTheDocument()
+    expect(logRequests(fetchMock)[0].get('serviceId')).toBe('1')
+    expect(screen.getByRole('combobox', { name: 'Service' })).toHaveTextContent('Payments')
+  })
+
+  it('offers only the levels the server filters on', async () => {
+    renderLogs('/logs')
+    await screen.findByText('3 log entries')
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Level' }))
+    expect(await screen.findByRole('option', { name: 'ERROR' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'FATAL' })).not.toBeInTheDocument()
+  })
+
+  it('says so when the org has no services yet', async () => {
+    const { fetchMock } = renderLogs('/logs', { 'GET /api/services': { body: [] } })
+
+    expect(await screen.findByText('No services yet')).toBeInTheDocument()
+    expect(logRequests(fetchMock)).toHaveLength(0)
+  })
+
   it('does not show "All time" option in the time range selector', async () => {
     renderLogs('/logs')
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -155,18 +186,16 @@ describe('LogsPage — rendering', () => {
 // ---------------------------------------------------------------------------
 describe('LogsPage — service filter', () => {
   it('applies service filter and queries logs for that service', async () => {
-    const { router } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogsResponse },
-      'GET /api/telemetry/logs?serviceId=1&limit=100': { body: { logs: [sampleLogEntries[0], sampleLogEntries[1]], total: 2 } },
-    })
+    const { router, fetchMock } = renderLogs('/logs')
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByText('3 log entries')
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Service' }))
-    await userEvent.click(await screen.findByRole('option', { name: 'Payments' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Checkout' }))
 
     await waitFor(() => {
-      expect(router.state.location.search).toContain('serviceId=1')
+      expect(router.state.location.search).toContain('serviceId=2')
+      expect(logRequests(fetchMock).at(-1)?.get('serviceId')).toBe('2')
     })
   })
 })
@@ -178,7 +207,6 @@ describe('LogsPage — level filter', () => {
   it('applies level filter and updates query', async () => {
     const { router } = renderLogs('/logs', {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
-      'GET /api/telemetry/logs?level=ERROR&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -199,7 +227,6 @@ describe('LogsPage — text search filter', () => {
   it('debounces and applies text search filter', async () => {
     const { router } = renderLogs('/logs', {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
-      'GET /api/telemetry/logs?text=timeout&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
     })
 
     await screen.findByRole('heading', { name: 'Logs Explorer' })
@@ -237,7 +264,7 @@ describe('LogsPage — time-range filter', () => {
 
   it('respects explicit from and to query params', async () => {
     renderLogs('/logs?from=2026-10-28T08:00:00Z&to=2026-10-28T09:00:00Z', {
-      'GET /api/telemetry/logs?from=2026-10-28T08:00:00Z&to=2026-10-28T09:00:00Z&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
+      'GET /api/telemetry/logs?serviceId=1&from=2026-10-28T08:00:00Z&to=2026-10-28T09:00:00Z&limit=100': { body: [sampleLogEntries[0]] },
     })
 
     expect(await screen.findByText('1 log entries')).toBeInTheDocument()
@@ -256,63 +283,35 @@ describe('LogsPage — combined filters', () => {
     await screen.findByRole('heading', { name: 'Logs Explorer' })
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Service' }))
-    await userEvent.click(await screen.findByRole('option', { name: 'Payments' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Checkout' }))
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Level' }))
     await userEvent.click(await screen.findByRole('option', { name: 'ERROR' }))
 
     await waitFor(() => {
-      expect(router.state.location.search).toContain('serviceId=1')
+      expect(router.state.location.search).toContain('serviceId=2')
       expect(router.state.location.search).toContain('level=ERROR')
     })
   })
 })
 
 // ---------------------------------------------------------------------------
-// 7. Clickable JSON field sends ?field=key:value (TC-FR-26.1b)
+// 7. A clicked JSON field narrows the lines loaded (TC-FR-26.1b)
 // ---------------------------------------------------------------------------
 describe('LogsPage — clickable JSON fields (TC-FR-26.1b)', () => {
-  it('clicking a JSON field badge sends ?field=key:value and shows filter chip', async () => {
-    const { fetchMock } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogsResponse },
-    })
+  it('clicking a JSON field keeps only the lines with that value and shows a filter chip', async () => {
+    const { fetchMock } = renderLogs('/logs')
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Filter by order_id: ord-123' }))
 
-    // Find clickable JSON field button
-    const orderBtn = await screen.findByRole('button', { name: 'Filter by order_id: ord-123' })
-    expect(orderBtn).toBeInTheDocument()
-
-    await userEvent.click(orderBtn)
-
-    // Active field filter badge appears
     expect(await screen.findByText(/Field:/)).toBeInTheDocument()
-    expect(screen.getByText('order_id')).toBeInTheDocument()
-    expect(screen.getAllByText('ord-123').length).toBeGreaterThanOrEqual(1)
-
-    // Query was triggered with the structured field filter parameter
-    await waitFor(() => {
-      const calls = fetchMock.mock.calls.map(([req]) => String(req))
-      // Must use ?field=order_id:ord-123, NOT just ?text=ord-123
-      expect(calls.some((url) => url.includes('field=order_id%3Aord-123') || url.includes('field=order_id:ord-123'))).toBe(true)
-    })
-  })
-
-  it('clicking a JSON field does NOT simply inject the value as a plain text search', async () => {
-    const { fetchMock } = renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: sampleLogsResponse },
-    })
-
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
-    const orderBtn = await screen.findByRole('button', { name: 'Filter by order_id: ord-123' })
-    await userEvent.click(orderBtn)
-
-    await waitFor(() => {
-      const calls = fetchMock.mock.calls.map(([req]) => String(req))
-      // text= should NOT be the only way ord-123 is passed
-      const textOnlyCalls = calls.filter((url) => url.includes('text=ord-123') && !url.includes('field='))
-      expect(textOnlyCalls.length).toBe(0)
-    })
+    expect(screen.getByText('1 of 3 log entries')).toBeInTheDocument()
+    expect(screen.getAllByTestId('log-entry')).toHaveLength(1)
+    expect(screen.queryByText('Payment processed successfully for user 456')).not.toBeInTheDocument()
+    // The server has no field filter: nothing new is asked for, and the value never becomes text.
+    expect(logRequests(fetchMock)).toHaveLength(1)
+    expect(logRequests(fetchMock)[0].has('field')).toBe(false)
+    expect(logRequests(fetchMock)[0].has('text')).toBe(false)
   })
 })
 
@@ -341,7 +340,6 @@ describe('LogsPage — clearing filters', () => {
 
   it('clicking Clear filters button resets all parameters', async () => {
     const { router } = renderLogs('/logs?serviceId=1&level=ERROR', {
-      'GET /api/telemetry/logs?serviceId=1&level=ERROR&limit=100': { body: { logs: [sampleLogEntries[0]], total: 1 } },
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
@@ -395,7 +393,7 @@ describe('LogsPage — live tail', () => {
 describe('LogsPage — empty state', () => {
   it('shows useful empty state when no logs match', async () => {
     renderLogs('/logs', {
-      'GET /api/telemetry/logs': { body: { logs: [], total: 0 } },
+      'GET /api/telemetry/logs': { body: [] },
     })
 
     expect(await screen.findByText('No logs found')).toBeInTheDocument()
@@ -407,19 +405,18 @@ describe('LogsPage — empty state', () => {
 // 12. API 503 Grafana unavailable — only real 503 triggers the state
 // ---------------------------------------------------------------------------
 describe('LogsPage — 503 unavailable state', () => {
-  it('displays clear log store unavailable message when API returns 503', async () => {
+  it('shows the server message when logs are unavailable, and the page keeps working', async () => {
     renderLogs('/logs', {
       'GET /api/telemetry/logs': {
         status: 503,
-        body: { status: 503, message: 'Grafana Loki unavailable' },
+        body: { status: 503, message: 'Logs are not set up on this server', errors: {} },
       },
     })
 
-    expect(await screen.findByText('Log store unavailable')).toBeInTheDocument()
-    expect(
-      screen.getByText(/The backend could not reach Grafana Loki \(503\)/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Logs unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Logs are not set up on this server. The rest of Settle keeps working.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Service' })).toBeEnabled()
   })
 
   it('does NOT show "log store unavailable" for a 500 error whose message mentions 503', async () => {
@@ -432,8 +429,8 @@ describe('LogsPage — 503 unavailable state', () => {
     })
 
     expect(await screen.findByText('Failed to load logs')).toBeInTheDocument()
-    // Must NOT show the Loki-specific unavailable message
-    expect(screen.queryByText('Log store unavailable')).not.toBeInTheDocument()
+    // Must NOT show the unavailable message
+    expect(screen.queryByText('Logs unavailable')).not.toBeInTheDocument()
   })
 })
 
@@ -469,49 +466,6 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
 
     // Malformed JSON message
     expect(screen.getByText('{"broken json: true')).toBeInTheDocument()
-  })
-
-  it('extractJsonFields safely handles various inputs', () => {
-    expect(
-      extractJsonFields({
-        id: '1',
-        timestamp: '2026-10-28T09:00:00Z',
-        service: 'Test',
-        level: 'INFO',
-        message: 'plain text',
-      }),
-    ).toBeNull()
-
-    expect(
-      extractJsonFields({
-        id: '2',
-        timestamp: '2026-10-28T09:00:00Z',
-        service: 'Test',
-        level: 'INFO',
-        message: '{ bad json',
-      }),
-    ).toBeNull()
-
-    expect(
-      extractJsonFields({
-        id: '3',
-        timestamp: '2026-10-28T09:00:00Z',
-        service: 'Test',
-        level: 'INFO',
-        message: '{"valid":"json","num":42}',
-      }),
-    ).toEqual({ valid: 'json', num: 42 })
-
-    expect(
-      extractJsonFields({
-        id: '4',
-        timestamp: '2026-10-28T09:00:00Z',
-        service: 'Test',
-        level: 'INFO',
-        message: 'ignored',
-        attributes: { explicit: 'attr' },
-      }),
-    ).toEqual({ explicit: 'attr' })
   })
 })
 

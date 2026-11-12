@@ -16,6 +16,8 @@ public record ServiceResponse(
         Map<Severity, SlaTargetDto> targets,
         boolean publicVisible,
         String publicName,
+        // The value this service has in the org's telemetry (D49): the saved one, or the default.
+        String telemetryLabel,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -38,6 +40,7 @@ public record ServiceResponse(
                 targetMap,
                 service.isPublicVisible(),
                 service.getPublicName(),
+                service.telemetryLabel(),
                 service.getCreatedAt(),
                 service.getUpdatedAt()
         );

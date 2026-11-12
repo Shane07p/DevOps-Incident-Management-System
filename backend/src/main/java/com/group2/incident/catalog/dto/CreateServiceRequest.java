@@ -29,5 +29,10 @@ public record CreateServiceRequest(
         Boolean publicVisible,
 
         @Size(max = 100, message = "Public name must be at most 100 characters")
-        String publicName
+        String publicName,
+
+        // Optional (D49): the value of the org's service label for this service in its own telemetry.
+        // Left out on create: the default; left out on update: unchanged; blank: back to the default.
+        @Size(max = 100, message = "Telemetry label must be at most 100 characters")
+        String telemetryLabel
 ) {}

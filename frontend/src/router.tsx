@@ -3,6 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { AREAS, ADMIN_PAGES } from '@/app/navigation'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
+import { AccessTokensPage } from '@/pages/AccessTokensPage'
 import { AlertsPage } from '@/pages/AlertsPage'
 import { AuditLogPage } from '@/pages/AuditLogPage'
 import { EscalationPage } from '@/pages/EscalationPage'
@@ -29,6 +30,7 @@ const SCREENS: Record<string, ReactNode> = {
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
   '/runbooks': <RunbooksPage />,
+  '/tokens': <AccessTokensPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.

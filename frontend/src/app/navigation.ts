@@ -82,12 +82,16 @@ export const ADMIN_PAGES: NavPage[] = [
   { path: '/audit', label: 'Audit log', description: 'Every configuration change, newest first' },
 ]
 
+export const ACCOUNT_PAGES: NavPage[] = [
+  { path: '/tokens', label: 'Access tokens', description: 'Personal access tokens for AI tools and scripts' },
+]
+
 export function findArea(pathname: string) {
   return AREAS.find((area) => area.pages.some((page) => pathname === page.path || pathname.startsWith(`${page.path}/`)))
 }
 
 export function findPage(pathname: string) {
-  return [...AREAS.flatMap((area) => area.pages), ...ADMIN_PAGES].find(
+  return [...AREAS.flatMap((area) => area.pages), ...ADMIN_PAGES, ...ACCOUNT_PAGES].find(
     (page) => pathname === page.path || pathname.startsWith(`${page.path}/`),
   )
 }

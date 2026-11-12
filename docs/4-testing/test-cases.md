@@ -245,8 +245,8 @@ The monitor raises an alert after N = 3 consecutive failures.
 | TC-FR-22.1f | Negative | A monitor URL on our own network: loopback, private ranges, `169.254.169.254`, IPv6 local | Refused on save with a field error, and never contacted by a check | `MonitorTargetGuardTest`, `HttpProbeTest.refusedTargetIsNotContacted`, `MonitorControllerTest.internalUrlIsRefused` | Automated |
 | TC-FR-22.1g | State transition | A monitor in an outage is moved to another service | The count starts again; the new service gets its own alert at the threshold; its pass does not recover the old service's alert | `MonitorCheckTest.movingToAnotherServiceStartsAfresh` (Testcontainers) | Automated |
 | TC-FR-22.1h | Boundary value | A target that answers at once and then keeps sending its body | The check ends with the status, well within its 10-second deadline | `HttpProbeTest.streamingBodyDoesNotHoldTheCheck` | Automated |
-| TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Planned (Manush) |
-| TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Planned (Manush) |
+| TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Automated |
+| TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Automated |
 
 ---
 
@@ -433,7 +433,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Automated |
-| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Planned (Het) |
+| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Automated |
 | TC-FR-23.1c | Decision table | Create duplicate active token name (same org) vs revoked name vs different org | Duplicate active is 409; revoked name can be reused (201); separate orgs can use same name | `PersonalAccessTokenTest`, `PersonalAccessTokenRaceTest` | Automated |
 | TC-FR-23.1d | Concurrency | Two requests to create the same token name at the same moment | One succeeds (201), one gets 409 Conflict | `PersonalAccessTokenRaceTest` | Automated |
 | TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Automated |

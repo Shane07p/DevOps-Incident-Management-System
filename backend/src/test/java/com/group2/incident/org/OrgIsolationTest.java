@@ -120,6 +120,8 @@ class OrgIsolationTest {
 		long deployOfB = JsonPath.<Number>read(deployJson, "$.id").longValue();
 		long monitorOfB = TestOrgs.id(send(b, post("/api/monitors"), """
 				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": %d, "failureThreshold": 3, "enabled": true}""".formatted(serviceOfB)));
+		long heartbeatOfB = TestOrgs.id(send(b, post("/api/heartbeats"), """
+				{"name": "Backup", "intervalSeconds": 60, "graceSeconds": 15, "serviceId": %d, "enabled": true}""".formatted(serviceOfB)));
 		// The fallback contact becomes the assignee and gets a notification.
 		String incidentJson = orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing");
 		long incidentOfB = TestOrgs.id(incidentJson);
@@ -133,6 +135,7 @@ class OrgIsolationTest {
 		idsOfB.put("toolId", toolOfB);
 		idsOfB.put("deployId", deployOfB);
 		idsOfB.put("monitorId", monitorOfB);
+		idsOfB.put("heartbeatId", heartbeatOfB);
 		idsOfB.put("incidentId", incidentOfB);
 		jdbcTemplate.update(
 				"update incident set embedding = cast(? as incident.vector), embedding_retry_at = null where id = ? and org_id = ?",
@@ -197,6 +200,9 @@ class OrgIsolationTest {
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
 				Arguments.of("PUT /api/monitors/{id}", HttpMethod.PUT, "/api/monitors/{monitorId}", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),
+				Arguments.of("GET /api/heartbeats/{id}", HttpMethod.GET, "/api/heartbeats/{heartbeatId}", null),
+				Arguments.of("PUT /api/heartbeats/{id}", HttpMethod.PUT, "/api/heartbeats/{heartbeatId}", """
+						{"name": "Backup", "intervalSeconds": 60, "graceSeconds": 15, "serviceId": {serviceOfA}, "enabled": true}"""),
 				Arguments.of("POST /api/notifications/{id}/read", HttpMethod.POST, "/api/notifications/{notificationId}/read", null),
 				Arguments.of("DELETE /api/me/tokens/{id}", HttpMethod.DELETE, "/api/me/tokens/{tokenId}", null),
 				Arguments.of("GET /api/services/{id}/runbooks", HttpMethod.GET, "/api/services/{serviceId}/runbooks", null),
@@ -242,7 +248,9 @@ class OrgIsolationTest {
 				Arguments.of("PUT dependencies on B's service", HttpMethod.PUT, "/api/services/{serviceOfA}/dependencies",
 						"{\"dependsOn\": [{serviceId}]}"),
 				Arguments.of("POST /api/monitors on B's service", HttpMethod.POST, "/api/monitors", """
-						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""));
+						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""),
+				Arguments.of("POST /api/heartbeats on B's service", HttpMethod.POST, "/api/heartbeats", """
+						{"name": "Backup", "intervalSeconds": 60, "graceSeconds": 15, "serviceId": {serviceId}, "enabled": true}"""));
 	}
 
 	/**
@@ -267,6 +275,7 @@ class OrgIsolationTest {
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
 				Arguments.of("GET /api/monitors", "/api/monitors", "$[*].id", "monitorId"),
+				Arguments.of("GET /api/heartbeats", "/api/heartbeats", "$[*].id", "heartbeatId"),
 				Arguments.of("GET /api/users", "/api/users", "$[*].id", "userId"),
 				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"),
 				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"));

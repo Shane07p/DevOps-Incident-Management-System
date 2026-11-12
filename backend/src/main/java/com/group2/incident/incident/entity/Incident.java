@@ -84,6 +84,9 @@ public class Incident {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	@Column(name = "acknowledged_at")
+	private Instant acknowledgedAt;
+
 	@Column(name = "response_target_minutes", nullable = false, updatable = false)
 	private int responseTargetMinutes;
 
@@ -120,6 +123,19 @@ public class Incident {
 
 	public void assignTo(AppUser assignee) {
 		this.assignee = assignee;
+	}
+
+	/**
+	 * Acknowledges the incident (US-08, FR-06, FR-16.2).
+	 * Sets status to ACKNOWLEDGED, makes the acknowledger the assignee, and records the acknowledgement time.
+	 */
+	public void acknowledge(AppUser acknowledger, Instant now) {
+		if (this.status != IncidentStatus.OPEN) {
+			throw new IllegalStateException("Only OPEN incidents can be acknowledged, but status was " + this.status);
+		}
+		this.status = IncidentStatus.ACKNOWLEDGED;
+		this.assignee = acknowledger;
+		this.acknowledgedAt = now;
 	}
 
 	/** Gives Comms or Ops to a person. The Lead is the assignee, changed only through {@link #assignTo}. */

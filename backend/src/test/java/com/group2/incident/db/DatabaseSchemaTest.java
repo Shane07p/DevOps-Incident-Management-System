@@ -97,6 +97,15 @@ class DatabaseSchemaTest {
 	}
 
 	@Test
+	void incidentHasAcknowledgedAtColumn() {
+		assertThat(jdbc.queryForObject("""
+				select count(*) from information_schema.columns
+				where table_schema = 'incident' and table_name = 'incident'
+				  and column_name = 'acknowledged_at'
+				""", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
 	void personalAccessTokenHasOrgUserActivePartialUniqueIndex() {
 		assertThat(jdbc.queryForObject("""
 				select count(*) from pg_indexes

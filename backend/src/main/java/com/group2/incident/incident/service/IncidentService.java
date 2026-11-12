@@ -17,6 +17,7 @@ import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.deploy.dto.DeployResponse;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.incident.dto.AcknowledgeRequest;
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
@@ -491,6 +492,52 @@ public class IncidentService {
 				clock.instant()
 		));
 		return toTimelineEntryResponse(timelineEntry);
+	}
+
+	/**
+	 * Acknowledges an OPEN incident (US-08, FR-06, FR-07.4, FR-16.2).
+	 * Sets status to ACKNOWLEDGED, makes the acknowledger the assignee, records the timeline entry,
+	 * stops the response clock, and cancels pending escalation.
+	 */
+	@Transactional
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+		if (request == null || request.expectedVersion() == null) {
+			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+
+		if (incident.getStatus() != IncidentStatus.OPEN) {
+			throw new ConflictException("Cannot acknowledge an incident in " + incident.getStatus() + " status");
+		}
+
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+
+		incident.acknowledge(actor, now);
+
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		}
+		catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+
+		escalationService.cancelTaskForIncident(incidentId, now);
+
+		String details = "Acknowledged by " + actor.getDisplayName();
+		TimelineEntry timelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.ACKNOWLEDGED,
+				details,
+				now
+		);
+		timelineEntryRepository.save(timelineEntry);
+
+		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, timeline);
 	}
 
 	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */

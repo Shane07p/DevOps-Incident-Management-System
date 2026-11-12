@@ -37,6 +37,7 @@ import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
@@ -82,6 +83,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private JdbcTemplate jdbc;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@Autowired
 	private AppUserRepository users;
@@ -436,6 +440,13 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/acknowledge",
+						HttpMethod.POST,
+						"/api/incidents/{id}/acknowledge",
+						"{\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
@@ -732,6 +743,14 @@ public class SecurityMatrixTest {
 		}
 		if (path.equals("/api/incidents/duplicate-check")) {
 			req.queryParam("title", "SecurityMatrix incident");
+		}
+		if (path.endsWith("/acknowledge")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'OPEN', assignee_id = NULL, acknowledged_at = NULL WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/assignee")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET assignee_id = NULL WHERE id = ?", targetIncidentId);
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

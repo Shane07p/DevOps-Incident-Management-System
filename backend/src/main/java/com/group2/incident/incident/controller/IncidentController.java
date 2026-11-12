@@ -1,5 +1,6 @@
 package com.group2.incident.incident.controller;
 
+import com.group2.incident.incident.dto.AcknowledgeRequest;
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CommentRequest;
 import com.group2.incident.incident.dto.EvidenceRequest;
@@ -106,6 +107,15 @@ public class IncidentController {
 			@Valid @RequestBody ReassignRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
 		return incidentService.reassignIncident(id, request, Long.parseLong(jwt.getSubject()));
+	}
+
+	@PostMapping("/{id}/acknowledge")
+	@Operation(summary = "Acknowledge an incident")
+	public IncidentResponse acknowledge(
+			@PathVariable Long id,
+			@Valid @RequestBody AcknowledgeRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.acknowledgeIncident(id, request, Long.parseLong(jwt.getSubject()));
 	}
 
 	@PutMapping("/{id}/roles")

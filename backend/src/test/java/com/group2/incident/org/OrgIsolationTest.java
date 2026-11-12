@@ -183,6 +183,8 @@ class OrgIsolationTest {
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
 				Arguments.of("GET /api/incidents/{id}/similar", HttpMethod.GET, "/api/incidents/{incidentId}/similar", null),
+				Arguments.of("POST /api/incidents/{id}/acknowledge", HttpMethod.POST, "/api/incidents/{incidentId}/acknowledge",
+						"{\"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
 						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",

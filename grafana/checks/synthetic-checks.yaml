@@ -1,78 +1,73 @@
-# Grafana Synthetic Monitoring HTTP Checks (D35)
-# -----------------------------------------------
-# Three demo-shop endpoints checked from 2 locations every 2-5 minutes.
-# Stays within the Grafana Cloud free tier (< 10 000 executions/month).
+# Grafana Synthetic Monitoring HTTP checks (D35)
+# ----------------------------------------------
+# One check per demo-shop endpoint, from 2 locations, every 2 to 5 minutes.
 #
-# Import: Grafana UI → Synthetic Monitoring → Import, or via Terraform/API.
+# Executions a month (one per check, per location): payments 8,640 x 2 = 17,280,
+# checkout 21,600 x 2 = 43,200, search 17,280; about 78k in all, inside the free
+# tier's 100k API test executions a month.
+#
+# Synthetic Monitoring has no import for this file: it records the checks so they can
+# be reviewed and created again in Grafana Cloud (Testing & synthetics > Synthetics >
+# Checks). Replace DEMO_SHOP_BASE_URL with the deployed demo shop's URL. The `job`
+# names and frequencies are what alerts/alert-rules.yaml queries and counts.
+#
+# The bodies follow demo-shop/demo_shop/models.py (PaymentRequest, CheckoutRequest);
+# anything else gets 422 and the check fails every time.
 
 checks:
-  - name: demo-shop-payments
+  - job: demo-shop-payments
+    target: "${DEMO_SHOP_BASE_URL}/payments/authorize"
     type: http
     enabled: true
-    target: "${DEMO_SHOP_BASE_URL}/payments/authorize"
-    job: demo-shop-payments
-    frequency: 300000          # every 5 minutes (ms)
-    timeout: 10000             # 10 s
+    frequency: 5m
+    timeout: 10s
     probes:
       - Frankfurt
-      - NewYork
+      - New York
     settings:
       http:
         method: POST
-        body: '{"amount": 1, "currency": "EUR"}'
         headers:
-          - name: Content-Type
-            value: application/json
-        failIfNotSSL: false
-        failIfSSL: false
-        validStatusCodes: [200, 201]
-        validHTTPVersions: ["HTTP/1.1", "HTTP/2"]
+          - "Content-Type: application/json"
+        body: '{"order_id": "sm-probe", "amount": 1.0, "currency": "USD", "card_token": "tok_probe_0000"}'
+        validStatusCodes: [200]
     labels:
       service: payments
       team: group2
 
-  - name: demo-shop-checkout
+  - job: demo-shop-checkout
+    target: "${DEMO_SHOP_BASE_URL}/checkout"
     type: http
     enabled: true
-    target: "${DEMO_SHOP_BASE_URL}/checkout"
-    job: demo-shop-checkout
-    frequency: 120000          # every 2 minutes (ms)
-    timeout: 10000
+    frequency: 2m
+    timeout: 10s
     probes:
       - Frankfurt
-      - NewYork
+      - New York
     settings:
       http:
         method: POST
-        body: '{"items": [{"id": 1, "qty": 1}]}'
         headers:
-          - name: Content-Type
-            value: application/json
-        failIfNotSSL: false
-        failIfSSL: false
-        validStatusCodes: [200, 201]
-        validHTTPVersions: ["HTTP/1.1", "HTTP/2"]
+          - "Content-Type: application/json"
+        body: '{"customer_email": "probe@example.com", "items": [{"product_id": "prod-101", "quantity": 1, "unit_price": 1.0}], "payment_method": "credit_card"}'
+        validStatusCodes: [200]
     labels:
       service: checkout
       team: group2
 
-  - name: demo-shop-search
+  - job: demo-shop-search
+    target: "${DEMO_SHOP_BASE_URL}/search?q=widget"
     type: http
     enabled: true
-    target: "${DEMO_SHOP_BASE_URL}/search?q=widget"
-    job: demo-shop-search
-    frequency: 300000          # every 5 minutes (ms)
-    timeout: 10000
+    frequency: 5m
+    timeout: 10s
     probes:
       - Frankfurt
-      - NewYork
+      - New York
     settings:
       http:
         method: GET
-        failIfNotSSL: false
-        failIfSSL: false
         validStatusCodes: [200]
-        validHTTPVersions: ["HTTP/1.1", "HTTP/2"]
     labels:
       service: search
       team: group2

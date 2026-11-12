@@ -1,83 +1,121 @@
-# Grafana Contact Point and Notification Policy (D36)
-# ----------------------------------------------------
-# A custom webhook contact point posts alerts into our /webhooks/alerts
-# endpoint using the alert format: source, eventId, service, correlationKey.
+# Grafana contact points, payload template, and notification policy (D36)
+# ------------------------------------------------------------------------
+# In Grafana's file-provisioning format (contactPoints, templates, policies).
 #
-# Each rule gets its own tool token, set in the GRAFANA_TOOL_TOKEN_* env vars
-# at deploy time. The payload template below transforms the Grafana alert
-# into our AlertRequest shape.
+# One webhook contact point per rule type, each with its own tool token: register
+# three tools in Settle (POST /api/tools) and put each token in its own variable. Grafana
+# sends the token in the Authorization header, never in the URL.
+#
+# The "settle.alert" template turns one firing alert into our AlertRequest:
+#   source          grafana-down | grafana-degraded | grafana-error_rate
+#   eventId         gf-<fingerprint>-<startsAt, Unix seconds>: the same while one outage
+#                   lasts (repeats are counted once), new for the next outage
+#   service         the rule's `service` label; a Settle service of that name must exist
+#   correlationKey  grafana-<rule_type>-<service>: alerts of one outage join one incident
+# Nothing in the body changes between repeats (no values, no times other than startsAt),
+# because intake answers 409 when a known eventId comes back with a different body.
+#
+# Resolved notifications are not sent (disableResolveMessage): Settle resolves incidents
+# through its own status flow, not from Grafana.
 
 apiVersion: 1
 
+templates:
+  - orgId: 1
+    name: settle-alert
+    template: |
+      {{ define "settle.alert" -}}
+      {{- range $i, $alert := .Alerts.Firing -}}
+      {{- if eq $i 0 -}}
+      {{- $severity := "SEV3" -}}
+      {{- if eq $alert.Labels.severity "critical" }}{{ $severity = "SEV1" }}{{ else if eq $alert.Labels.severity "warning" }}{{ $severity = "SEV2" }}{{ end -}}
+      {{- coll.Dict
+            "source" (printf "grafana-%s" $alert.Labels.rule_type)
+            "eventId" (printf "gf-%s-%d" $alert.Fingerprint $alert.StartsAt.Unix)
+            "service" $alert.Labels.service
+            "title" $alert.Annotations.summary
+            "description" $alert.Annotations.description
+            "severity" $severity
+            "correlationKey" (printf "grafana-%s-%s" $alert.Labels.rule_type $alert.Labels.service)
+            "details" (coll.Dict "rule" $alert.Labels.alertname "ruleType" $alert.Labels.rule_type "fingerprint" $alert.Fingerprint)
+          | data.ToJSON -}}
+      {{- end -}}
+      {{- end -}}
+      {{- end }}
+
 contactPoints:
   - orgId: 1
-    name: incident-webhook
+    name: settle-down
     receivers:
-      - uid: incident-webhook-receiver
+      - uid: settle-down
         type: webhook
+        disableResolveMessage: true
         settings:
-          # The webhook URL of our backend's alert intake.
-          url: "${INCIDENT_BACKEND_URL}/webhooks/alerts"
+          url: "${SETTLE_BACKEND_URL}/webhooks/alerts"
           httpMethod: POST
-          # Authorization header carries the tool token registered in our backend.
           authorization_scheme: Bearer
-          authorization_credentials: "${GRAFANA_TOOL_TOKEN}"
-          # Maximum 1 attempt; retries are handled by Grafana's built-in retry.
-          maxAlerts: 10
-        # Custom payload template transforms Grafana alert JSON into our format.
-        # Grafana sends an array of alerts; we post each one individually.
-        # The template iterates over alerts and builds our AlertRequest shape.
-        secureSettings: {}
+          authorization_credentials: "${SETTLE_DOWN_TOOL_TOKEN}"
+          payload:
+            template: '{{ template "settle.alert" . }}'
 
-# The payload template is defined below as a Go template string.
-# Grafana's webhook contact point sends this to our endpoint.
-#
-# Template rendering variables (Grafana Alerting):
-#   .Alerts          — array of firing/resolved alerts
-#   .Alert.Labels    — labels map (service, severity, rule_type, etc.)
-#   .Alert.Annotations — annotation map (summary, description)
-#   .Alert.Fingerprint — stable identifier for dedup
-#   .Alert.Status    — "firing" or "resolved"
-
-messageTemplates:
   - orgId: 1
-    name: incident-alert-payload
-    template: |
-      {{ define "incident.webhook.payload" }}
-      {
-        "source": "grafana-{{ .Labels.rule_type | default "alert" }}",
-        "eventId": "gf-{{ .Fingerprint }}",
-        "service": "{{ .Labels.service | title }}",
-        "title": "{{ .Labels.alertname | default .Summary }}",
-        "description": "{{ .Annotations.description | default .Annotations.summary }}",
-        "severity": "{{ if eq .Labels.severity "critical" }}SEV1{{ else if eq .Labels.severity "warning" }}SEV2{{ else }}SEV3{{ end }}",
-        "correlationKey": "grafana-{{ .Labels.rule_type }}-{{ .Labels.service }}",
-        "details": {
-          "grafana_fingerprint": "{{ .Fingerprint }}",
-          "grafana_status": "{{ .Status }}",
-          "rule_type": "{{ .Labels.rule_type }}",
-          "grafana_rule_uid": "{{ .Labels.rule_uid | default "" }}"
-        }
-      }
-      {{ end }}
+    name: settle-degraded
+    receivers:
+      - uid: settle-degraded
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "${SETTLE_BACKEND_URL}/webhooks/alerts"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "${SETTLE_DEGRADED_TOOL_TOKEN}"
+          payload:
+            template: '{{ template "settle.alert" . }}'
 
-notificationPolicies:
   - orgId: 1
-    receiver: incident-webhook
-    group_by:
-      - alertname
-      - service
-    group_wait: 30s
-    group_interval: 5m
-    repeat_interval: 4h
+    name: settle-error-rate
+    receivers:
+      - uid: settle-error-rate
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "${SETTLE_BACKEND_URL}/webhooks/alerts"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "${SETTLE_ERROR_RATE_TOOL_TOKEN}"
+          payload:
+            template: '{{ template "settle.alert" . }}'
+
+# Importing `policies` replaces the org's whole notification policy tree. The root keeps
+# Grafana's default email contact point; only the demo-shop rules (team=group2) go to Settle.
+# Grouping by alertname (one rule each) puts one alert in each notification, which is what
+# the template posts.
+policies:
+  - orgId: 1
+    receiver: grafana-default-email
+    group_by: [grafana_folder, alertname]
     routes:
-      # All demo-shop alerts go through our webhook contact point.
-      - receiver: incident-webhook
-        matchers:
-          - team = group2
-        group_by:
-          - alertname
-          - service
+      - receiver: settle-down
+        object_matchers:
+          - [team, "=", group2]
+          - [rule_type, "=", down]
+        group_by: [alertname]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+      - receiver: settle-degraded
+        object_matchers:
+          - [team, "=", group2]
+          - [rule_type, "=", degraded]
+        group_by: [alertname]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+      - receiver: settle-error-rate
+        object_matchers:
+          - [team, "=", group2]
+          - [rule_type, "=", error_rate]
+        group_by: [alertname]
         group_wait: 30s
         group_interval: 5m
         repeat_interval: 4h

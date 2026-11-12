@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.group2.incident.alert.dto.CreateToolRequest;
-import com.group2.incident.alert.dto.CreateToolResponse;
 import com.group2.incident.alert.repository.AlertRepository;
 import com.group2.incident.alert.service.ToolService;
 import com.group2.incident.auth.entity.AppUser;
@@ -15,6 +14,7 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
@@ -26,115 +26,64 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * TC-D36g: Intake test with a recorded Grafana alerting payload.
- *
- * Verifies that a realistic Grafana Cloud alert, transformed by the custom
- * payload template defined in grafana/contact-points/webhook-contact-point.yaml,
- * is accepted by /webhooks/alerts and creates or correlates to an incident.
+ * Grafana alerts into intake (#88, D36). The bodies are what the "settle.alert" template in
+ * grafana/contact-points/webhook-contact-point.yaml makes of a firing alert.
  */
 @IntegrationTest
 class GrafanaAlertIntakeTest {
 
 	/**
-	 * Recorded Grafana webhook payload after payload-template transformation.
-	 * This is what our contact point sends after evaluating the Go template
-	 * against a real "Down" firing alert for the Payments endpoint.
+	 * Recorded on 2026-11-12 from Grafana 12.2.0: the provisioned "Checkout is down" rule fired with both
+	 * locations failing, and the settle-down contact point posted this body, unchanged.
 	 */
-	private static final String GRAFANA_DOWN_ALERT_PAYLOAD = """
-			{
-				"source": "grafana-down",
-				"eventId": "gf-abc123def456",
-				"service": "Payments",
-				"title": "Payments endpoint is down",
-				"description": "Synthetic monitoring probes in Frankfurt and New York both failed to reach the payments authorization endpoint.",
-				"severity": "SEV1",
-				"correlationKey": "grafana-down-payments",
-				"details": {
-					"grafana_fingerprint": "abc123def456",
-					"grafana_status": "firing",
-					"rule_type": "down",
-					"grafana_rule_uid": "demo-shop-down-payments"
-				}
-			}
-			""";
+	private static final String RECORDED_CHECKOUT_DOWN = """
+			{"correlationKey":"grafana-down-checkout","description":"At least 2 locations failed the checkout check on 2 checks in a row.","details":{"fingerprint":"04764fbbc0a18b6b","rule":"Checkout is down","ruleType":"down"},"eventId":"gf-04764fbbc0a18b6b-1794485960","service":"checkout","severity":"SEV1","source":"grafana-down","title":"Checkout is down"}""";
 
-	/**
-	 * A second "Down" firing event for the same service, same correlation key.
-	 * This must join the same incident as the first one.
-	 */
-	private static final String GRAFANA_DOWN_ALERT_REPEAT = """
-			{
-				"source": "grafana-down",
-				"eventId": "gf-abc123def789",
-				"service": "Payments",
-				"title": "Payments endpoint is down",
-				"description": "Synthetic monitoring probes still failing for the payments endpoint.",
-				"severity": "SEV1",
-				"correlationKey": "grafana-down-payments",
-				"details": {
-					"grafana_fingerprint": "abc123def789",
-					"grafana_status": "firing",
-					"rule_type": "down",
-					"grafana_rule_uid": "demo-shop-down-payments"
-				}
-			}
-			""";
+	/** The same rule firing again later: a new start time, so a new eventId, and the same correlation key. */
+	private static final String CHECKOUT_DOWN_NEXT_OUTAGE = RECORDED_CHECKOUT_DOWN
+			.replace("gf-04764fbbc0a18b6b-1794485960", "gf-04764fbbc0a18b6b-1794489560");
 
-	/**
-	 * A "Degraded" warning alert for Checkout — different service, different
-	 * correlation key, so it must create a separate incident.
-	 */
-	private static final String GRAFANA_DEGRADED_ALERT_PAYLOAD = """
-			{
-				"source": "grafana-degraded",
-				"eventId": "gf-deg456checkout",
-				"service": "Checkout",
-				"title": "Checkout endpoint is degraded (slow)",
-				"description": "Synthetic probes are seeing elevated latency on the checkout endpoint.",
-				"severity": "SEV2",
-				"correlationKey": "grafana-degraded-checkout",
-				"details": {
-					"grafana_fingerprint": "deg456checkout",
-					"grafana_status": "firing",
-					"rule_type": "degraded",
-					"grafana_rule_uid": "demo-shop-degraded-checkout"
-				}
-			}
-			""";
+	/** The template's body for the payments Degraded rule. */
+	private static final String PAYMENTS_DEGRADED = """
+			{"correlationKey":"grafana-degraded-payments","description":"At least 2 locations took longer than 2 s on the payments check, 3 checks in a row.","details":{"fingerprint":"7d1f3a0c9b2e4f61","rule":"Payments is slow","ruleType":"degraded"},"eventId":"gf-7d1f3a0c9b2e4f61-1794485960","service":"payments","severity":"SEV2","source":"grafana-degraded","title":"Payments is slow"}""";
 
-	/**
-	 * An "Error Rate" warning alert for Payments.
-	 */
-	private static final String GRAFANA_ERROR_RATE_ALERT_PAYLOAD = """
-			{
-				"source": "grafana-error_rate",
-				"eventId": "gf-err789payments",
-				"service": "Payments",
-				"title": "Payments error rate above 5 %%",
-				"description": "The ratio of 5xx responses to total requests on the payments service exceeds the threshold.",
-				"severity": "SEV2",
-				"correlationKey": "grafana-error_rate-payments",
-				"details": {
-					"grafana_fingerprint": "err789payments",
-					"grafana_status": "firing",
-					"rule_type": "error_rate",
-					"grafana_rule_uid": "demo-shop-error-rate-payments"
-				}
-			}
-			""";
+	/** The template's body for the payments Error rate rule. */
+	private static final String PAYMENTS_ERROR_RATE = """
+			{"correlationKey":"grafana-error_rate-payments","description":"More than 5% of payments requests returned 5xx for 5 minutes.","details":{"fingerprint":"c2a95e7d41b08f33","rule":"Payments error rate above 5%","ruleType":"error_rate"},"eventId":"gf-c2a95e7d41b08f33-1794485960","service":"payments","severity":"SEV2","source":"grafana-error_rate","title":"Payments error rate above 5%"}""";
 
-	@Autowired private TestAccounts accounts;
-	@Autowired private MockMvc mvc;
-	@Autowired private ToolService toolService;
-	@Autowired private ServiceRepository services;
-	@Autowired private AlertRepository alerts;
-	@Autowired private IncidentRepository incidents;
-	@Autowired private PasswordEncoder passwordEncoder;
-	@Autowired private Clock clock;
+	@Autowired
+	private TestAccounts accounts;
 
-	private String toolToken;
+	@Autowired
+	private MockMvc mvc;
+
+	@Autowired
+	private ToolService toolService;
+
+	@Autowired
+	private ServiceRepository services;
+
+	@Autowired
+	private AlertRepository alerts;
+
+	@Autowired
+	private IncidentRepository incidents;
+
+	@Autowired
+	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private Clock clock;
+
+	// One tool, and one token, per rule type, as in the contact points.
+	private String downToken;
+
+	private String degradedToken;
+
+	private String errorRateToken;
 
 	@BeforeEach
 	void setUp() {
@@ -143,88 +92,73 @@ class GrafanaAlertIntakeTest {
 						passwordEncoder.encode("DevPassw0rd!"), clock.instant()),
 				Role.ADMIN);
 
-		ServiceEntity payments = new ServiceEntity("Payments", "Payment service", admin, Criticality.HIGH, clock.instant());
-		payments.putTarget(Severity.SEV1, 15, 120);
-		payments.putTarget(Severity.SEV2, 30, 240);
-		services.saveAndFlush(payments);
+		for (String name : new String[] {"Payments", "Checkout"}) {
+			ServiceEntity service = new ServiceEntity(name, name + " service", admin, Criticality.HIGH, clock.instant());
+			service.putTarget(Severity.SEV1, 15, 120);
+			service.putTarget(Severity.SEV2, 30, 240);
+			services.saveAndFlush(service);
+		}
 
-		ServiceEntity checkout = new ServiceEntity("Checkout", "Checkout service", admin, Criticality.HIGH, clock.instant());
-		checkout.putTarget(Severity.SEV1, 15, 120);
-		checkout.putTarget(Severity.SEV2, 30, 240);
-		services.saveAndFlush(checkout);
-
-		CreateToolResponse tool = toolService.createTool(
-				new CreateToolRequest("Grafana Alerting"), admin.getId());
-		toolToken = tool.token();
+		downToken = toolService.createTool(new CreateToolRequest("Grafana Down"), admin.getId()).token();
+		degradedToken = toolService.createTool(new CreateToolRequest("Grafana Degraded"), admin.getId()).token();
+		errorRateToken = toolService.createTool(new CreateToolRequest("Grafana Error rate"), admin.getId()).token();
 	}
 
 	@Test
-	void grafanaDownAlert_isAcceptedAndCreatesIncident() throws Exception {
-		mvc.perform(post("/webhooks/alerts")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_DOWN_ALERT_PAYLOAD))
+	void recordedDownAlertOpensASev1Incident() throws Exception {
+		send(downToken, RECORDED_CHECKOUT_DOWN)
 				.andExpect(status().isAccepted())
 				.andExpect(jsonPath("$.status").value("ACCEPTED"))
-				.andExpect(jsonPath("$.eventId").value("gf-abc123def456"))
+				.andExpect(jsonPath("$.eventId").value("gf-04764fbbc0a18b6b-1794485960"))
 				.andExpect(jsonPath("$.source").value("grafana-down"));
+
+		assertThat(alerts.count()).isEqualTo(1);
+		assertThat(incidents.findAll())
+				.singleElement()
+				.satisfies(incident -> {
+					assertThat(incident.getSeverity()).isEqualTo(Severity.SEV1);
+					assertThat(incident.getService().getName()).isEqualTo("Checkout");
+				});
+	}
+
+	/** TC-D36g: Grafana repeats a firing alert with the same body every repeat_interval. */
+	@Test
+	void sameFiringAlertPostedTwiceIsCountedOnce() throws Exception {
+		send(downToken, RECORDED_CHECKOUT_DOWN).andExpect(status().isAccepted());
+		send(downToken, RECORDED_CHECKOUT_DOWN).andExpect(status().isAccepted());
 
 		assertThat(alerts.count()).isEqualTo(1);
 		assertThat(incidents.count()).isEqualTo(1);
 	}
 
 	@Test
-	void repeatedGrafanaDownAlert_joinsExistingIncident() throws Exception {
-		// First alert creates the incident.
-		mvc.perform(post("/webhooks/alerts")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_DOWN_ALERT_PAYLOAD))
-				.andExpect(status().isAccepted());
-
-		// Second alert with the same correlation key joins the same incident.
-		mvc.perform(post("/webhooks/alerts")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_DOWN_ALERT_REPEAT))
-				.andExpect(status().isAccepted());
+	void nextOutageWhileTheIncidentIsOpenJoinsIt() throws Exception {
+		send(downToken, RECORDED_CHECKOUT_DOWN).andExpect(status().isAccepted());
+		send(downToken, CHECKOUT_DOWN_NEXT_OUTAGE).andExpect(status().isAccepted());
 
 		assertThat(alerts.count()).isEqualTo(2);
+		Incident incident = incidents.findAll().getFirst();
 		assertThat(incidents.count()).isEqualTo(1);
 		assertThat(alerts.findAll())
-				.extracting(a -> a.getIncident().getId())
-				.containsOnly(incidents.findAll().getFirst().getId());
+				.extracting(alert -> alert.getIncident().getId())
+				.containsOnly(incident.getId());
 	}
 
 	@Test
-	void grafanaDegradedAlertForDifferentService_createsSeparateIncident() throws Exception {
-		// Down alert for Payments.
-		mvc.perform(post("/webhooks/alerts")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_DOWN_ALERT_PAYLOAD))
-				.andExpect(status().isAccepted());
-
-		// Degraded alert for Checkout — different source, different service.
-		mvc.perform(post("/webhooks/alerts")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_DEGRADED_ALERT_PAYLOAD))
-				.andExpect(status().isAccepted());
+	void degradedAlertForAnotherServiceOpensItsOwnIncident() throws Exception {
+		send(downToken, RECORDED_CHECKOUT_DOWN).andExpect(status().isAccepted());
+		send(degradedToken, PAYMENTS_DEGRADED).andExpect(status().isAccepted());
 
 		assertThat(alerts.count()).isEqualTo(2);
-		assertThat(incidents.count()).isEqualTo(2);
+		assertThat(incidents.findAll())
+				.extracting(Incident::getSeverity)
+				.containsExactlyInAnyOrder(Severity.SEV1, Severity.SEV2);
 	}
 
 	@Test
-	void grafanaErrorRateAlert_isAccepted() throws Exception {
-		mvc.perform(post("/webhooks/alerts")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_ERROR_RATE_ALERT_PAYLOAD))
+	void errorRateAlertIsAccepted() throws Exception {
+		send(errorRateToken, PAYMENTS_ERROR_RATE)
 				.andExpect(status().isAccepted())
-				.andExpect(jsonPath("$.status").value("ACCEPTED"))
-				.andExpect(jsonPath("$.eventId").value("gf-err789payments"))
 				.andExpect(jsonPath("$.source").value("grafana-error_rate"));
 
 		assertThat(alerts.count()).isEqualTo(1);
@@ -232,13 +166,20 @@ class GrafanaAlertIntakeTest {
 	}
 
 	@Test
-	void grafanaAlertWithoutToken_returns401() throws Exception {
+	void alertWithoutAToolTokenIsRefused() throws Exception {
 		mvc.perform(post("/webhooks/alerts")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content(GRAFANA_DOWN_ALERT_PAYLOAD))
+						.content(RECORDED_CHECKOUT_DOWN))
 				.andExpect(status().isUnauthorized());
 
-		assertThat(alerts.count()).isEqualTo(0);
-		assertThat(incidents.count()).isEqualTo(0);
+		assertThat(alerts.count()).isZero();
+		assertThat(incidents.count()).isZero();
+	}
+
+	private ResultActions send(String token, String body) throws Exception {
+		return mvc.perform(post("/webhooks/alerts")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body));
 	}
 }

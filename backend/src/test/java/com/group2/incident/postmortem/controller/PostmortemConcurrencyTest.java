@@ -63,7 +63,7 @@ class PostmortemConcurrencyTest {
 				write(path, "{\"summary\":\"Winner\",\"expectedVersion\":" + version + "}").andExpect(status().isOk());
 				Future<MvcResult> pending = contender.submit(() -> write(path,
 						"{\"summary\":\"Loser\",\"expectedVersion\":" + version + "}").andReturn());
-				awaitPostmortemLock();
+				awaitPostmortemLock(pending);
 				return pending;
 			} catch (Exception ex) {
 				throw new IllegalStateException(ex);
@@ -85,8 +85,14 @@ class PostmortemConcurrencyTest {
 				.contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 
-	private void awaitPostmortemLock() throws InterruptedException {
+	private void awaitPostmortemLock(Future<MvcResult> pending) throws Exception {
 		for (int attempt = 0; attempt < 100; attempt++) {
+			if (pending.isDone()) {
+				throw new IllegalStateException("The competing write returned before the winner committed: "
+						+ pending.get().getResponse().getStatus());
+			}
+			// pg_stat_activity otherwise reuses the first statistics snapshot in this transaction.
+			jdbc.execute("SELECT pg_stat_clear_snapshot()");
 			Integer blocked = jdbc.queryForObject("""
 					SELECT count(*) FROM pg_stat_activity
 					WHERE wait_event_type = 'Lock' AND query LIKE '%postmortem%'

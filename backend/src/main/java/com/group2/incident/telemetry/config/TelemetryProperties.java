@@ -4,72 +4,27 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * Configuration for Grafana Cloud Prometheus and Loki read-only telemetry queries (D34, Issue #156).
+ * Server settings for reading each org's own Grafana (D49, #260). Where the stores are and the tokens are per
+ * org, in the database; only these stay in the environment.
+ *
+ * @param secretKey base64 AES-256 key that encrypts each org's read token ({@code TELEMETRY_SECRET_KEY})
+ * @param allowPrivateTargets lets an org point at private addresses and plain http, for local runs against a
+ *        Grafana in Docker; production leaves it off
+ * @param timeoutSeconds how long one call to Prometheus or Loki may take, from connecting to the last byte
  */
-@ConfigurationProperties(prefix = "grafana")
+@ConfigurationProperties(prefix = "app.telemetry")
 public record TelemetryProperties(
-		@DefaultValue PrometheusConfig prometheus,
-		@DefaultValue LokiConfig loki,
-		@DefaultValue("") String readToken,
+		@DefaultValue("") String secretKey,
+		@DefaultValue("false") boolean allowPrivateTargets,
 		@DefaultValue("5") int timeoutSeconds
 ) {
 
 	public TelemetryProperties {
-		if (prometheus == null) {
-			prometheus = new PrometheusConfig("", "");
-		}
-		if (loki == null) {
-			loki = new LokiConfig("", "");
-		}
-		if (readToken == null) {
-			readToken = "";
+		if (secretKey == null) {
+			secretKey = "";
 		}
 		if (timeoutSeconds <= 0) {
 			timeoutSeconds = 5;
 		}
-	}
-
-	public record PrometheusConfig(
-			@DefaultValue("") String url,
-			@DefaultValue("") String user
-	) {
-		public PrometheusConfig {
-			if (url == null) {
-				url = "";
-			}
-			if (user == null) {
-				user = "";
-			}
-		}
-	}
-
-	public record LokiConfig(
-			@DefaultValue("") String url,
-			@DefaultValue("") String user
-	) {
-		public LokiConfig {
-			if (url == null) {
-				url = "";
-			}
-			if (user == null) {
-				user = "";
-			}
-		}
-	}
-
-	public String prometheusUrl() {
-		return prometheus != null ? prometheus.url() : "";
-	}
-
-	public String prometheusUser() {
-		return prometheus != null ? prometheus.user() : "";
-	}
-
-	public String lokiUrl() {
-		return loki != null ? loki.url() : "";
-	}
-
-	public String lokiUser() {
-		return loki != null ? loki.user() : "";
 	}
 }

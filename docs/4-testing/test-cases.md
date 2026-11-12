@@ -478,8 +478,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Automated |
 | TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Automated |
 | TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
-| TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not set up) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
+| TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not connected) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
+
+### Each org's own Grafana (D49, #260)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-D49a | Org isolation | Two orgs, each with a service named Payments and its own Grafana, read logs and metrics | Each org's requests reach only its own Grafana, with its own token | `TelemetryConnectionTest.eachOrgReadsLogsAndMetricsOnlyFromItsOwnGrafana` (Testcontainers) | In review |
+| TC-D49b | Negative | An org with no connection reads logs | 503 "Telemetry isn't connected for your organization"; no Grafana is called | `TelemetryConnectionTest.withoutItsOwnConnectionAnOrgGets503AndNeverAnotherOrgsData`, `TelemetryServiceTest` | In review |
+| TC-D49c | Negative | Save a connection, then read it, the database row, and the audit log | The token is never returned, stored in the clear, or audited; a ciphertext moved to another org does not decrypt | `TelemetryConnectionTest.theTokenIsNeverReturnedStoredInTheClearOrAudited`, `TokenCipherTest` | In review |
+| TC-D49d | Equivalence (invalid) | A URL that is http, has no host, has user info, or points at loopback, private, link-local, or another internal address | 400 on that field | `TelemetryHttpTest` | In review |
+| TC-D49e | Negative | A name that passed the check resolves to our own machine when the call is made | Refused while connecting; the request never leaves | `TelemetryHttpTest.theConnectionItselfRefusesAnInternalAddressEvenIfTheCheckWasSkipped` | In review |
+| TC-D49f | Equivalence | The org names its label, counter, and status label; a service sets its own label value | The queries use those names and that value | `TelemetryConnectionTest.aServiceCanSayHowItIsLabelledAndTheOrgItsMetricNames` | In review |
+| TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | In review |
+| TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | In review |
 
 ### Evidence links (FR-09.3)
 

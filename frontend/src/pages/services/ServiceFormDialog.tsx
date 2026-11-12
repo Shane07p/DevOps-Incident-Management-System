@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { showRequestErrors } from '@/lib/forms'
 import { SlaTargetGrid } from './SlaTargetGrid'
-import { emptyValues, FIELD_NAMES, serviceFormSchema, toRequest, valuesFrom, type ServiceFormValues } from './serviceForm'
+import { defaultTelemetryLabel, emptyValues, FIELD_NAMES, serviceFormSchema, toRequest, valuesFrom, type ServiceFormValues } from './serviceForm'
 
 const CRITICALITIES: Criticality[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 
@@ -38,6 +38,7 @@ export function ServiceFormDialog({
   const { org } = useAuth()
   const form = useForm<ServiceFormValues>({ resolver: zodResolver(serviceFormSchema), defaultValues: emptyValues() })
   const publicVisible = useWatch({ control: form.control, name: 'publicVisible' })
+  const name = useWatch({ control: form.control, name: 'name' })
   // Owners are users; the list is Admin-only, like this form.
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: open })
   // A service's dependencies come from the map; they are edited here and saved after the service (US-26).
@@ -225,6 +226,23 @@ export function ServiceFormDialog({
                 )}
               />
             </fieldset>
+            <FormField
+              control={form.control}
+              name="telemetryLabel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Telemetry label</FormLabel>
+                  <FormControl>
+                    <Input placeholder={defaultTelemetryLabel(name || 'Service name')} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    The value of your service label for this service in your Grafana. Leave it empty to use the name in
+                    lower case with hyphens.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <SlaTargetGrid control={form.control} />
             {service && (
               <fieldset className="flex flex-col gap-2">

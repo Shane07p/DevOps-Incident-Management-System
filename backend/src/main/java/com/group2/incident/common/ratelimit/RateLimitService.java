@@ -27,6 +27,7 @@ public class RateLimitService {
 	// of turning callers away, and a bucket idle for its whole window would be full again anyway.
 	private final Cache<String, Bucket> loginBuckets;
 	private final Cache<Long, Bucket> webhookBuckets;
+	private final Cache<Long, Bucket> patBuckets;
 
 	public RateLimitService(RateLimitProperties properties, Clock clock) {
 		this.properties = properties;
@@ -44,6 +45,7 @@ public class RateLimitService {
 		};
 		this.loginBuckets = cache(properties.login().duration());
 		this.webhookBuckets = cache(properties.webhook().duration());
+		this.patBuckets = cache(properties.pat().duration());
 	}
 
 	/**
@@ -80,6 +82,23 @@ public class RateLimitService {
 	 */
 	public void checkWebhook(Long toolId) {
 		throwIfRejected(tryConsumeWebhook(toolId));
+	}
+
+	/**
+	 * Tries to consume a token for a request authenticated via Personal Access Token by token ID.
+	 */
+	public RateLimitResult tryConsumePat(Long patId) {
+		if (patId == null) {
+			return RateLimitResult.permitted();
+		}
+		return consume(patBuckets.get(patId, id -> createBucket(properties.pat())));
+	}
+
+	/**
+	 * Throws {@link RateLimitExceededException} if the personal access token rate limit is exceeded.
+	 */
+	public void checkPat(Long patId) {
+		throwIfRejected(tryConsumePat(patId));
 	}
 
 	private static RateLimitResult consume(Bucket bucket) {

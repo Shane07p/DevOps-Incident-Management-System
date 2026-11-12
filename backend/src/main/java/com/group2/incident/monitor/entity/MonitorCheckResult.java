@@ -1,5 +1,6 @@
 package com.group2.incident.monitor.entity;
 
+import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.monitor.service.ProbeOutcome;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,6 +37,11 @@ public class MonitorCheckResult {
 	@JoinColumn(name = "monitor_id", nullable = false, updatable = false)
 	private UptimeMonitor monitor;
 
+	// The service the monitor watched when it ran: moving the monitor later keeps this result with it (#160).
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "service_id", nullable = false, updatable = false)
+	private ServiceEntity service;
+
 	@Column(name = "checked_at", nullable = false, updatable = false)
 	private Instant checkedAt;
 
@@ -53,6 +59,7 @@ public class MonitorCheckResult {
 
 	public MonitorCheckResult(UptimeMonitor monitor, Instant checkedAt, ProbeOutcome outcome) {
 		this.monitor = monitor;
+		this.service = monitor.getService();
 		this.checkedAt = checkedAt;
 		this.success = outcome.success();
 		this.statusCode = outcome.statusCode();

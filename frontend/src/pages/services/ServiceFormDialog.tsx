@@ -1,16 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { ApiRequestError } from '@/api/client'
 import type { Criticality } from '@/api/schemas'
+import { getServiceMap, updateDependencies } from '@/api/serviceMap'
 import { createService, updateService, type Service } from '@/api/services'
 import { listUsers } from '@/api/users'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { showRequestErrors } from '@/lib/forms'
@@ -33,6 +36,24 @@ export function ServiceFormDialog({
   const form = useForm<ServiceFormValues>({ resolver: zodResolver(serviceFormSchema), defaultValues: emptyValues() })
   // Owners are users; the list is Admin-only, like this form.
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: open })
+  // A service's dependencies come from the map; they are edited here and saved after the service (US-26).
+  const map = useQuery({ queryKey: ['service-map'], queryFn: getServiceMap, enabled: open && service !== null })
+  const savedDependsOn = service && map.data
+    ? map.data.edges.filter((edge) => edge.from === service.id).map((edge) => edge.to).toSorted((a, b) => a - b)
+    : null
+  // Null until the Admin changes something; cleared whenever the dialog closes.
+  const [editedDependsOn, setEditedDependsOn] = useState<number[] | null>(null)
+  const dependsOn = editedDependsOn ?? savedDependsOn
+
+  const close = (next: boolean) => {
+    if (!next) setEditedDependsOn(null)
+    onOpenChange(next)
+  }
+
+  const toggleDependency = (id: number, checked: boolean) => {
+    const current = dependsOn ?? []
+    setEditedDependsOn(checked ? [...current, id].toSorted((a, b) => a - b) : current.filter((other) => other !== id))
+  }
 
   // Start from the chosen service, or from the defaults, each time the dialog opens.
   useEffect(() => {
@@ -42,9 +63,22 @@ export function ServiceFormDialog({
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       const saved = service ? await updateService(service.id, toRequest(values)) : await createService(toRequest(values))
+      if (service && editedDependsOn && savedDependsOn && editedDependsOn.join() !== savedDependsOn.join()) {
+        try {
+          await updateDependencies(service.id, editedDependsOn)
+        } catch (error) {
+          await queryClient.invalidateQueries({ queryKey: ['services'] })
+          form.setError('root', {
+            message: `${saved.name} is saved, but its dependencies are not: ${error instanceof Error ? error.message : 'try again'}.`,
+          })
+          return
+        }
+        await queryClient.invalidateQueries({ queryKey: ['service-map'] })
+        await queryClient.invalidateQueries({ queryKey: ['blast-radius'] })
+      }
       toast.success(service ? `${saved.name} is updated.` : `${saved.name} is in the catalog.`)
       await queryClient.invalidateQueries({ queryKey: ['services'] })
-      onOpenChange(false)
+      close(false)
     } catch (error) {
       if (!(error instanceof ApiRequestError)) {
         form.setError('root', { message: 'The service was not saved. Try again.' })
@@ -59,7 +93,7 @@ export function ServiceFormDialog({
   })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{service ? `Edit ${service.name}` : 'New service'}</DialogTitle>
@@ -191,13 +225,45 @@ export function ServiceFormDialog({
               )}
             />
             <SlaTargetGrid control={form.control} />
+            {service && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm font-medium">Depends on</legend>
+                <p className="text-sm text-muted-foreground">
+                  The services {service.name} needs. The service map and blast radius use these.
+                </p>
+                {map.isPending ? (
+                  <p className="text-sm text-muted-foreground">Loading services</p>
+                ) : map.isError ? (
+                  <p className="text-sm text-muted-foreground">Dependencies could not be loaded: {map.error.message}</p>
+                ) : map.data.nodes.length <= 1 ? (
+                  <p className="text-sm text-muted-foreground">No other services yet.</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {map.data.nodes
+                      .filter((node) => node.id !== service.id)
+                      .map((node) => (
+                        <div key={node.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`depends-on-${node.id}`}
+                            checked={dependsOn?.includes(node.id) ?? false}
+                            onCheckedChange={(checked) => toggleDependency(node.id, checked === true)}
+                          />
+                          <Label htmlFor={`depends-on-${node.id}`} className="font-normal">
+                            {node.name}
+                          </Label>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </fieldset>
+            )}
             {form.formState.errors.root && (
               <p role="alert" className="text-sm font-medium text-destructive">
                 {form.formState.errors.root.message}
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => close(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>

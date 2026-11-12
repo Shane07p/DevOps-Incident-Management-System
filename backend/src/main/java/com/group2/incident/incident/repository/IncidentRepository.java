@@ -19,7 +19,7 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
 	@EntityGraph(attributePaths = "service")
 	List<Incident> findAllByOrderByCreatedAtDescIdDesc();
 
-	@EntityGraph(attributePaths = { "service", "reporter", "assignee" })
+	@EntityGraph(attributePaths = { "service", "reporter", "assignee", "comms", "ops" })
 	Optional<Incident> findWithDetailsById(Long id);
 
 	/**
@@ -165,6 +165,10 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
 			@Param("severity") String severity,
 			@Param("status") String status,
 			Pageable pageable);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select i from Incident i where i.id = :id")
+	Optional<Incident> findByIdForUpdate(@Param("id") Long id);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""

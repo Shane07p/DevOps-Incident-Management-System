@@ -23,5 +23,11 @@ public record CreateServiceRequest(
         Criticality criticality,
 
         @NotNull(message = "Targets are required")
-        Map<Severity, @Valid SlaTargetDto> targets
+        Map<Severity, @Valid SlaTargetDto> targets,
+
+        // Optional (D45). Left out on create: hidden; left out on update: unchanged.
+        Boolean publicVisible,
+
+        @Size(max = 100, message = "Public name must be at most 100 characters")
+        String publicName
 ) {}

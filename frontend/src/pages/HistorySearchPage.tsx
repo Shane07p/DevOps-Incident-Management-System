@@ -151,19 +151,13 @@ export function HistorySearchPage() {
   )
 
   // ---- debounced keyword search ------------------------------------------------
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Restarts whenever the URL changes too: a timer kept from an older render would write the keyword
+  // over the URL as it was then, and drop a filter picked while it waited (FR-17.1).
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      if (inputValue !== q) {
-        setFilters({ q: inputValue })
-      }
-    }, 400)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputValue])
+    if (inputValue === q) return
+    const timer = setTimeout(() => setFilters({ q: inputValue }), 400)
+    return () => clearTimeout(timer)
+  }, [inputValue, q, setFilters])
 
   // ---- service list for filter dropdown ----------------------------------------
   const services = useQuery({

@@ -87,6 +87,11 @@ public class ApiExceptionHandler {
 				.body(new ApiError(HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage(), Map.of()));
 	}
 
+	@ExceptionHandler(ServiceUnavailableException.class)
+	ResponseEntity<ApiError> serviceUnavailable(ServiceUnavailableException ex) {
+		return respond(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), Map.of());
+	}
+
 	private static ResponseEntity<ApiError> respond(HttpStatus status, String message, Map<String, String> errors) {
 		return ResponseEntity.status(status).body(new ApiError(status.value(), message, errors));
 	}

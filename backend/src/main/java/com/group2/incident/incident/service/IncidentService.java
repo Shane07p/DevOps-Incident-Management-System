@@ -14,6 +14,9 @@ import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.deploy.dto.DeployResponse;
+import com.group2.incident.deploy.entity.Deployment;
+import com.group2.incident.deploy.repository.DeploymentRepository;
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
@@ -34,15 +37,23 @@ import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.IncidentSearchRow;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.deploy.entity.IncidentDeployment;
+import com.group2.incident.deploy.repository.IncidentDeploymentRepository;
 import com.group2.incident.org.entity.Membership;
 import com.group2.incident.org.repository.OrganizationRepository;
 import com.group2.incident.org.service.OrgMembers;
 import java.net.URI;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,6 +66,8 @@ public class IncidentService {
 
 	private static final int SEARCH_PAGE_SIZE = 20;
 
+	private static final String STALE_CHANGE = "This record was changed by another request; reload and try again";
+
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final ServiceCatalogService serviceCatalogService;
@@ -65,6 +78,8 @@ public class IncidentService {
 	private final NotificationService notificationService;
 	private final OrganizationRepository orgs;
 	private final OrgMembers orgMembers;
+	private final DeploymentRepository deploymentRepository;
+	private final IncidentDeploymentRepository incidentDeploymentRepository;
 	private final Clock clock;
 
 	@Transactional
@@ -174,7 +189,31 @@ public class IncidentService {
 		Incident incident = incidentRepository.findWithDetailsById(id)
 				.orElseThrow(() -> new NotFoundException("Incident " + id + " not found"));
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(id);
-		return toResponse(incident, timeline);
+
+		// Explicitly linked deployments are always visible regardless of the 2-hour window (Issue #152)
+		List<Deployment> linkedDeploys = incidentDeploymentRepository.findDeploymentsByIncidentId(id);
+
+		// Candidate deployments within the 2-hour window [createdAt - 2h, createdAt] for the incident's service
+		Instant windowStart = incident.getCreatedAt().minus(Duration.ofHours(2));
+		Instant windowEnd = incident.getCreatedAt();
+		List<Deployment> candidateDeploys = deploymentRepository
+				.findInWindow(incident.getService().getId(), windowStart, windowEnd);
+
+		Map<Long, Deployment> combined = new LinkedHashMap<>();
+		for (Deployment d : linkedDeploys) {
+			combined.put(d.getId(), d);
+		}
+		for (Deployment d : candidateDeploys) {
+			combined.putIfAbsent(d.getId(), d);
+		}
+
+		List<DeployResponse> deploys = combined.values().stream()
+				.sorted(Comparator.comparing(Deployment::getDeployedAt, Comparator.reverseOrder())
+						.thenComparing(Deployment::getId, Comparator.reverseOrder()))
+				.map(DeployResponse::from)
+				.toList();
+
+		return toResponse(incident, timeline, deploys);
 	}
 
 	@Transactional(readOnly = true)
@@ -246,7 +285,7 @@ public class IncidentService {
 		}
 		return new IncidentSearchResult(
 				row.getIncidentId(),
-				"INC-" + row.getIncidentNumber(),
+				Incident.reference(row.getIncidentNumber()),
 				row.getServiceId(),
 				row.getTitle(),
 				row.getServiceName(),
@@ -258,15 +297,13 @@ public class IncidentService {
 
 	/** Maps an incident and its append-only timeline, including correction links, to API data. */
 	private static IncidentResponse toResponse(Incident incident, List<TimelineEntry> timeline) {
-		return toResponse(incident, timeline, null, null, null);
+		return toResponse(incident, timeline, List.of());
 	}
 
 	private static IncidentResponse toResponse(
 			Incident incident,
 			List<TimelineEntry> timeline,
-			IncidentRole assignedRole,
-			IncidentUserDto assignedUser,
-			String warning
+			List<DeployResponse> deploys
 	) {
 		IncidentServiceDto serviceDto = new IncidentServiceDto(
 				incident.getService().getId(),
@@ -274,10 +311,7 @@ public class IncidentService {
 		);
 		IncidentUserDto reporterDto = toUserDto(incident.getReporter());
 		IncidentUserDto assigneeDto = toUserDto(incident.getAssignee());
-		IncidentUserDto leadDto = toUserDto(incident.getLead());
-		IncidentUserDto commsDto = toUserDto(incident.getComms());
-		IncidentUserDto opsDto = toUserDto(incident.getOps());
-		IncidentRolesDto rolesDto = new IncidentRolesDto(leadDto, commsDto, opsDto);
+		IncidentRolesDto rolesDto = new IncidentRolesDto(toUserDto(incident.getComms()), toUserDto(incident.getOps()));
 
 		List<TimelineEntryResponse> timelineResponses = timeline.stream()
 				.map(t -> new TimelineEntryResponse(
@@ -298,22 +332,53 @@ public class IncidentService {
 				serviceDto,
 				incident.getSeverity(),
 				incident.getStatus(),
+				incident.getVersion(),
 				reporterDto,
 				assigneeDto,
-				leadDto,
-				commsDto,
-				opsDto,
 				rolesDto,
-				assignedRole,
-				assignedUser,
-				warning,
+				roleWarning(incident),
 				incident.getCreatedAt(),
 				incident.getResponseTargetMinutes(),
 				incident.getResolutionTargetMinutes(),
 				incident.getResponseDueAt(),
 				incident.getResolutionDueAt(),
-				timelineResponses
+				timelineResponses,
+				deploys != null ? deploys : List.of()
 		);
+	}
+
+	/**
+	 * Warns, without refusing, while one person holds more than one incident role on a SEV1 or SEV2
+	 * incident (FR-05.5). Worked out from the incident as it stands, so a reassignment that makes the
+	 * Lead also Comms or Ops shows it too. Null when there is nothing to warn about.
+	 */
+	private static String roleWarning(Incident incident) {
+		if (incident.getSeverity() != Severity.SEV1 && incident.getSeverity() != Severity.SEV2) {
+			return null;
+		}
+		for (IncidentRole role : IncidentRole.values()) {
+			AppUser person = incident.getRoleUser(role);
+			if (person == null) {
+				continue;
+			}
+			List<String> held = Arrays.stream(IncidentRole.values())
+					.filter(r -> incident.getRoleUser(r) != null && incident.getRoleUser(r).getId().equals(person.getId()))
+					.map(IncidentService::roleName)
+					.toList();
+			if (held.size() > 1) {
+				String roles = held.size() == 2 ? held.get(0) + " and " + held.get(1) : "Lead, Comms and Ops";
+				return "%s holds %s on this %s incident".formatted(person.getDisplayName(), roles, incident.getSeverity());
+			}
+		}
+		return null;
+	}
+
+	private static String roleName(IncidentRole role) {
+		return switch (role) {
+			case LEAD -> "Lead";
+			case COMMS -> "Comms";
+			case OPS -> "Ops";
+		};
 	}
 
 	private static IncidentUserDto toUserDto(AppUser user) {
@@ -381,6 +446,53 @@ public class IncidentService {
 		return toTimelineEntryResponse(correction);
 	}
 
+	/** Links a deployment to an incident, persisting the relationship and writing a timeline entry (#152). */
+	@Transactional
+	public TimelineEntryResponse linkDeployment(Long incidentId, Long deployId, Long actorId) {
+		Incident incident = requireIncidentForUpdate(incidentId);
+		AppUser actor = requireActor(actorId);
+		Deployment deployment = deploymentRepository.findById(deployId)
+				.orElseThrow(() -> new NotFoundException("Deployment " + deployId + " not found"));
+
+		String details = "Linked deployment " + deployment.getVersion() + " (" + deployment.getCommit() + ") for "
+				+ deployment.getService().getName();
+
+		// Duplicate detection: query the actual persisted relationship instead of comparing timeline text
+		if (incidentDeploymentRepository.existsByIncidentIdAndDeploymentId(incidentId, deployId)) {
+			List<TimelineEntry> existing = timelineEntryRepository
+					.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+			for (TimelineEntry entry : existing) {
+				if (entry.getEventType() == TimelineEventType.DEPLOY_LINKED && details.equals(entry.getDetails())) {
+					return toTimelineEntryResponse(entry);
+				}
+			}
+		}
+
+		try {
+			incidentDeploymentRepository.saveAndFlush(new IncidentDeployment(incident, deployment, clock.instant()));
+		}
+		catch (DataIntegrityViolationException ex) {
+			// Catch concurrent duplicate insertion caught by (incident_id, deployment_id) unique constraint
+		}
+
+		List<TimelineEntry> existing = timelineEntryRepository
+				.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		for (TimelineEntry entry : existing) {
+			if (entry.getEventType() == TimelineEventType.DEPLOY_LINKED && details.equals(entry.getDetails())) {
+				return toTimelineEntryResponse(entry);
+			}
+		}
+
+		TimelineEntry timelineEntry = timelineEntryRepository.save(new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.DEPLOY_LINKED,
+				details,
+				clock.instant()
+		));
+		return toTimelineEntryResponse(timelineEntry);
+	}
+
 	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */
 	@Transactional
 	public IncidentResponse reassignIncident(Long incidentId, ReassignRequest request, Long actorId) {
@@ -389,6 +501,7 @@ public class IncidentService {
 		}
 
 		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
 
 		if (incident.getStatus() == IncidentStatus.CLOSED) {
 			throw new ConflictException("Cannot reassign a closed incident");
@@ -417,7 +530,7 @@ public class IncidentService {
 			incident = incidentRepository.saveAndFlush(incident);
 		}
 		catch (OptimisticLockingFailureException ex) {
-			throw new ConflictException("This record was changed by another request; reload and try again");
+			throw new ConflictException(STALE_CHANGE);
 		}
 
 		Instant now = clock.instant();
@@ -442,30 +555,25 @@ public class IncidentService {
 	}
 
 	/**
-	 * Assigns an incident role (LEAD, COMMS, OPS) to an eligible user (D39, FR-05.4).
-	 * Role assignments are independent of the incident's assignee and never restart clocks.
-	 * If one user holds multiple roles on a SEV1 or SEV2 incident, a warning is returned (FR-05.5).
+	 * Gives Comms or Ops to an enabled member of the org (D39, FR-05.4). The Lead is the assignee, so
+	 * it changes through {@link #reassignIncident}. Never restarts a clock. The response carries the
+	 * FR-05.5 warning when one person now holds more than one role on a SEV1 or SEV2 incident.
 	 */
 	@Transactional
 	public IncidentResponse assignRole(Long incidentId, AssignRoleRequest request, Long actorId) {
-		if (request == null || request.role() == null) {
-			throw new FieldValidationException("role", "Role is required");
-		}
-		if (request.userId() != null && request.assigneeId() != null
-				&& !request.userId().equals(request.assigneeId())) {
-			throw new FieldValidationException("userId", "Conflicting userId and assigneeId provided");
-		}
-		if (request.targetUserId() == null) {
-			throw new FieldValidationException("userId", "User is required");
+		if (request.role() == IncidentRole.LEAD) {
+			throw new FieldValidationException("role",
+					"The Lead is the assignee: change it with PUT /api/incidents/" + incidentId + "/assignee");
 		}
 
 		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
 
 		if (incident.getStatus() == IncidentStatus.CLOSED) {
 			throw new ConflictException("Cannot change roles on a closed incident");
 		}
 
-		Membership targetMember = orgMembers.find(request.targetUserId())
+		Membership targetMember = orgMembers.find(request.userId())
 				.orElseThrow(() -> new FieldValidationException("userId", "User not found"));
 
 		if (!targetMember.isEnabled()) {
@@ -477,33 +585,18 @@ public class IncidentService {
 
 		AppUser previousUser = incident.getRoleUser(request.role());
 		if (previousUser != null && previousUser.getId().equals(newRoleUser.getId())) {
-			String field = request.userId() != null ? "userId" : "assigneeId";
-			throw new FieldValidationException(field, "Already assigned to this role");
+			throw new FieldValidationException("userId", "Already assigned to this role");
 		}
 
 		String previousName = previousUser != null ? previousUser.getDisplayName() : null;
 
 		incident.assignRole(request.role(), newRoleUser);
 
-		// Check for multiple roles on the incident (FR-05.5, D39)
-		int roleCount = 0;
-		if (incident.getLead() != null && incident.getLead().getId().equals(newRoleUser.getId())) roleCount++;
-		if (incident.getComms() != null && incident.getComms().getId().equals(newRoleUser.getId())) roleCount++;
-		if (incident.getOps() != null && incident.getOps().getId().equals(newRoleUser.getId())) roleCount++;
-
-		boolean hasMultipleRoles = roleCount > 1;
-
-		String warning = null;
-		if (hasMultipleRoles && (incident.getSeverity() == Severity.SEV1 || incident.getSeverity() == Severity.SEV2)) {
-			warning = "User " + newRoleUser.getDisplayName() + " holds multiple incident roles on a "
-					+ incident.getSeverity() + " incident";
-		}
-
 		try {
 			incident = incidentRepository.saveAndFlush(incident);
 		}
 		catch (OptimisticLockingFailureException ex) {
-			throw new ConflictException("This record was changed by another request; reload and try again");
+			throw new ConflictException(STALE_CHANGE);
 		}
 
 		Instant now = clock.instant();
@@ -527,11 +620,27 @@ public class IncidentService {
 		);
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
-		return toResponse(incident, timeline, request.role(), toUserDto(newRoleUser), warning);
+		return toResponse(incident, timeline);
+	}
+
+	/**
+	 * Refuses a change made from an older view of the incident, rather than applying it over a change
+	 * committed since (NFR-11.2, architecture.md section 7). The row's own version check still catches
+	 * two changes that overlap in time.
+	 */
+	private static void requireVersion(Incident incident, long expectedVersion) {
+		if (incident.getVersion() != expectedVersion) {
+			throw new ConflictException(STALE_CHANGE);
+		}
 	}
 
 	private Incident requireIncident(Long incidentId) {
 		return incidentRepository.findById(incidentId)
+				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
+	}
+
+	private Incident requireIncidentForUpdate(Long incidentId) {
+		return incidentRepository.findByIdForUpdate(incidentId)
 				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
 	}
 

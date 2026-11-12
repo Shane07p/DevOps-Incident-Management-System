@@ -27,14 +27,19 @@ type ShiftFormValues = z.infer<typeof shiftFormSchema>
 
 const EMPTY: ShiftFormValues = { responderId: '', startTime: '', endTime: '' }
 
-/** Admins add one shift; `onAdd` saves the whole schedule and throws the server's error if it refuses. */
+/**
+ * Admins add one shift; `onAdd` saves the whole schedule and throws the server's error if it refuses.
+ * `saving` is true while any other change to this schedule is being saved.
+ */
 export function AddShiftForm({
   schedule,
   users,
+  saving,
   onAdd,
 }: {
   schedule: OnCallSchedule
   users: User[]
+  saving: boolean
   onAdd: (shift: ShiftRequest) => Promise<unknown>
 }) {
   const form = useForm<ShiftFormValues>({ resolver: zodResolver(shiftFormSchema), defaultValues: EMPTY })
@@ -126,7 +131,7 @@ export function AddShiftForm({
           </p>
         )}
         <div className="flex justify-end">
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" disabled={form.formState.isSubmitting || saving}>
             Add shift
           </Button>
         </div>

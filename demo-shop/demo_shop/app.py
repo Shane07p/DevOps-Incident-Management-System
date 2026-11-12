@@ -76,6 +76,24 @@ app = FastAPI(
 )
 
 
+# The Settle service each route belongs to. Settle queries metrics by this `service` label
+# (backend TelemetryService), so it matches the service names in the scenarios.
+ROUTE_SERVICES = (
+    ("/payments", "payments"),
+    ("/checkout", "checkout"),
+    ("/search", "search"),
+    ("/products", "search"),
+)
+
+
+def service_of(path: str) -> str:
+    """The service a request path belongs to; demo-shop itself for health, faults and traffic."""
+    for prefix, service in ROUTE_SERVICES:
+        if path == prefix or path.startswith(prefix + "/"):
+            return service
+    return "demo-shop"
+
+
 # ---------------------------------------------------------------------------
 # Middleware: Request Correlation ID, Telemetry Metrics & Access Logs
 # ---------------------------------------------------------------------------
@@ -112,10 +130,11 @@ async def telemetry_middleware(request: Request, call_next):
     # Normalise high-cardinality paths (use matched route template with fallback)
     route = request.scope.get("route")
     endpoint_label = getattr(route, "path", "unmatched")
+    service = service_of(path)
     telemetry.http_requests_total.add(
         1,
         {
-            "service": "demo-shop",
+            "service": service,
             "method": method,
             "endpoint": endpoint_label,
             "status": str(status_code),
@@ -124,7 +143,7 @@ async def telemetry_middleware(request: Request, call_next):
     )
     telemetry.http_request_duration_seconds.record(
         duration,
-        {"service": "demo-shop", "endpoint": endpoint_label},
+        {"service": service, "endpoint": endpoint_label},
     )
 
     response.headers["X-Request-Id"] = req_id
@@ -291,3 +310,19 @@ async def stop_traffic() -> dict:
 @app.get("/traffic/status", response_model=TrafficStatusResponse, summary="Get traffic generator progress")
 def traffic_status() -> TrafficStatusResponse:
     return traffic_generator.get_status()
+
+
+# ---------------------------------------------------------------------------
+# Structured Telemetry Logs Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/telemetry/logs", summary="Get recorded structured logs")
+def get_telemetry_logs(since: Optional[str] = None) -> List[dict]:
+    return StructuredLogger.get_logs(since=since)
+
+
+@app.post("/telemetry/logs/clear", summary="Clear structured logs buffer")
+def clear_telemetry_logs() -> dict:
+    StructuredLogger.clear_logs()
+    return {"status": "ok"}
+

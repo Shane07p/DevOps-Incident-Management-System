@@ -5,5 +5,9 @@ public enum AuditItemType {
     SERVICE,
     INCIDENT,
     TOOL,
-    ORG
+    ORG,
+    MONITOR,
+    TOKEN,
+    RUNBOOK,
+    HEARTBEAT
 }

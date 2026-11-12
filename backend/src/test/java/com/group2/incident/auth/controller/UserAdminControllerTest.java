@@ -29,6 +29,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @IntegrationTest
 class UserAdminControllerTest {
@@ -290,6 +291,12 @@ class UserAdminControllerTest {
 							.contentType(MediaType.APPLICATION_JSON)
 							.content("{\"role\":\"ADMIN\"}"))
 					.andExpect(status().isForbidden());
+
+			mvc.perform(put("/api/users/" + admin.getId() + "/enabled")
+							.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+							.contentType(MediaType.APPLICATION_JSON)
+							.content("{\"enabled\":false}"))
+					.andExpect(status().isForbidden());
 		}
 
 		// Unauthenticated
@@ -301,6 +308,10 @@ class UserAdminControllerTest {
 		mvc.perform(put("/api/users/" + admin.getId() + "/role")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"role\":\"ADMIN\"}"))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(put("/api/users/" + admin.getId() + "/enabled")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"enabled\":false}"))
 				.andExpect(status().isUnauthorized());
 	}
 
@@ -348,6 +359,105 @@ class UserAdminControllerTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"role\":\"ADMIN\"}"))
 				.andExpect(status().isNotFound());
+		mvc.perform(put("/api/users/{id}/enabled", outsider.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"enabled\":false}"))
+				.andExpect(status().isNotFound());
+	}
+
+	// TC-FR-01.6e: State transition: disable a member, then reuse their token and log in (both 401); enable, then log in.
+	@Test
+	void disablingEndsSessionsAndRefusesSignInUntilEnabledAgain() throws Exception {
+		AppUser member = createUser("paused", Role.ENGINEER);
+		String oldToken = tokenFor("paused", DEFAULT_PASSWORD);
+
+		mvc.perform(enabled(member.getId(), false))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.enabled").value(false))
+				.andExpect(jsonPath("$.role").value("ENGINEER"));
+
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + oldToken))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"paused@test.local\",\"password\":\"%s\"}".formatted(DEFAULT_PASSWORD)))
+				.andExpect(status().isUnauthorized());
+
+		mvc.perform(enabled(member.getId(), true))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.enabled").value(true));
+
+		String newToken = tokenFor("paused", DEFAULT_PASSWORD);
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + newToken))
+				.andExpect(status().isOk());
+		// Enabling does not bring the old session back.
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + oldToken))
+				.andExpect(status().isUnauthorized());
+	}
+
+	// TC-FR-01.6f: Negative: an Admin disables their own account.
+	@Test
+	void anAdminCannotDisableThemselves() throws Exception {
+		createUser("second_admin", Role.ADMIN);
+
+		mvc.perform(enabled(admin.getId(), false))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("You can't disable your own account"));
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk());
+	}
+
+	// TC-FR-01.6g: each change writes one audit entry; asking for the state a member is already in changes nothing.
+	@Test
+	void disablingAndEnablingEachWriteOneAuditEntry() throws Exception {
+		AppUser member = createUser("audited", Role.VIEWER);
+
+		mvc.perform(enabled(member.getId(), false)).andExpect(status().isOk());
+		mvc.perform(enabled(member.getId(), false)).andExpect(status().isOk());
+		mvc.perform(enabled(member.getId(), true)).andExpect(status().isOk());
+		mvc.perform(enabled(member.getId(), true)).andExpect(status().isOk());
+
+		List<AuditEntry> entries = auditEntries.findAll().stream()
+				.filter(e -> e.getItemType() == AuditItemType.USER && e.getItemId() == member.getId())
+				.filter(e -> e.getAction() == AuditAction.USER_DISABLED || e.getAction() == AuditAction.USER_ENABLED)
+				.toList();
+		assertThat(entries).extracting(AuditEntry::getAction)
+				.containsExactly(AuditAction.USER_DISABLED, AuditAction.USER_ENABLED);
+		assertThat(entries).allSatisfy(e -> {
+			assertThat(e.getActor().getId()).isEqualTo(admin.getId());
+			assertThat(e.getDetails()).isEqualTo("email: audited@test.local");
+		});
+	}
+
+	@Test
+	void theMemberListShowsWhoIsDisabled() throws Exception {
+		AppUser member = createUser("listed_off", Role.VIEWER);
+		mvc.perform(enabled(member.getId(), false)).andExpect(status().isOk());
+
+		mvc.perform(get("/api/users").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.email == 'listed_off@test.local')].enabled").value(Matchers.contains(false)))
+				.andExpect(jsonPath("$[?(@.email == 'admin@test.local')].enabled").value(Matchers.contains(true)));
+	}
+
+	@Test
+	void aMissingEnabledFlagIsRefused() throws Exception {
+		AppUser member = createUser("no_flag", Role.VIEWER);
+
+		mvc.perform(put("/api/users/{id}/enabled", member.getId())
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.enabled").value("Enabled is required"));
+		mvc.perform(enabled(999_999L, false)).andExpect(status().isNotFound());
+	}
+
+	private MockHttpServletRequestBuilder enabled(long userId, boolean enabled) {
+		return put("/api/users/{id}/enabled", userId)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"enabled\":" + enabled + "}");
 	}
 
 	private AppUser createUser(String username, Role role) {

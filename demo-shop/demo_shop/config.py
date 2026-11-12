@@ -25,6 +25,11 @@ class Config:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
+    # Incident backend deployment webhook settings (FR-20.1, AC-5)
+    BACKEND_URL: str = os.getenv("BACKEND_URL", os.getenv("INCIDENT_BACKEND_URL", "http://localhost:8080")).rstrip("/")
+    TOOL_TOKEN: str = os.getenv("TOOL_TOKEN", os.getenv("BACKEND_TOOL_TOKEN", "")).strip()
+    DEPLOY_SERVICE_NAME: str = os.getenv("DEPLOY_SERVICE_NAME", "checkout").strip()
+
     ALLOWED_TRAFFIC_ORIGINS: tuple[str, ...] = tuple(
         origin.strip().rstrip("/")
         for origin in os.getenv(

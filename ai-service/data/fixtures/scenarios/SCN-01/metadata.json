@@ -1,0 +1,10 @@
+{
+  "scenario_id": "SCN-01",
+  "switch": "slow_gateway",
+  "service": "payments",
+  "fault_started_at": "2026-10-27T08:16:07.630911+00:00",
+  "baseline_seconds": 10,
+  "fault_seconds": 15,
+  "rate": 3.0,
+  "recorded_at": "2026-11-06T17:25:42.989643+00:00"
+}

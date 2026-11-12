@@ -92,8 +92,8 @@ class UserAdminServiceTest {
 		List<UserResponse> result = userAdminService.listUsers();
 
 		assertThat(result).containsExactly(
-				new UserResponse(10L, "user1@test.local", "User One", Role.ENGINEER),
-				new UserResponse(20L, "user2@test.local", "User Two", Role.VIEWER));
+				new UserResponse(10L, "user1@test.local", "User One", Role.ENGINEER, true),
+				new UserResponse(20L, "user2@test.local", "User Two", Role.VIEWER, true));
 	}
 
 	@Test
@@ -111,7 +111,7 @@ class UserAdminServiceTest {
 
 		UserResponse response = userAdminService.createUser(request, 1L);
 
-		assertThat(response).isEqualTo(new UserResponse(42L, "asha@example.com", "Asha Patel", Role.ENGINEER));
+		assertThat(response).isEqualTo(new UserResponse(42L, "asha@example.com", "Asha Patel", Role.ENGINEER, true));
 		ArgumentCaptor<Membership> membership = ArgumentCaptor.forClass(Membership.class);
 		verify(memberships).save(membership.capture());
 		assertThat(membership.getValue().getOrg()).isSameAs(adminMembership.getOrg());
@@ -153,7 +153,9 @@ class UserAdminServiceTest {
 
 		assertThat(response.role()).isEqualTo(Role.ADMIN);
 		assertThat(targetMembership.getRole()).isEqualTo(Role.ADMIN);
-		assertThat(target.getTokenVersion()).isEqualTo(1);
+		// One SQL increment, never a write of the loaded user (D21).
+		verify(users).revokeTokens(50L);
+		assertThat(target.getTokenVersion()).isZero();
 		verify(auditService).record(eq(admin), eq(AuditAction.USER_ROLE_CHANGED), eq(AuditItemType.USER), eq(50L),
 				eq("role: VIEWER → ADMIN"));
 	}

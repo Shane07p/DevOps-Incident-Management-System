@@ -1,0 +1,78 @@
+# Grafana Synthetic Monitoring HTTP Checks (D35)
+# -----------------------------------------------
+# Three demo-shop endpoints checked from 2 locations every 2-5 minutes.
+# Stays within the Grafana Cloud free tier (< 10 000 executions/month).
+#
+# Import: Grafana UI → Synthetic Monitoring → Import, or via Terraform/API.
+
+checks:
+  - name: demo-shop-payments
+    type: http
+    enabled: true
+    target: "${DEMO_SHOP_BASE_URL}/payments/authorize"
+    job: demo-shop-payments
+    frequency: 300000          # every 5 minutes (ms)
+    timeout: 10000             # 10 s
+    probes:
+      - Frankfurt
+      - NewYork
+    settings:
+      http:
+        method: POST
+        body: '{"amount": 1, "currency": "EUR"}'
+        headers:
+          - name: Content-Type
+            value: application/json
+        failIfNotSSL: false
+        failIfSSL: false
+        validStatusCodes: [200, 201]
+        validHTTPVersions: ["HTTP/1.1", "HTTP/2"]
+    labels:
+      service: payments
+      team: group2
+
+  - name: demo-shop-checkout
+    type: http
+    enabled: true
+    target: "${DEMO_SHOP_BASE_URL}/checkout"
+    job: demo-shop-checkout
+    frequency: 120000          # every 2 minutes (ms)
+    timeout: 10000
+    probes:
+      - Frankfurt
+      - NewYork
+    settings:
+      http:
+        method: POST
+        body: '{"items": [{"id": 1, "qty": 1}]}'
+        headers:
+          - name: Content-Type
+            value: application/json
+        failIfNotSSL: false
+        failIfSSL: false
+        validStatusCodes: [200, 201]
+        validHTTPVersions: ["HTTP/1.1", "HTTP/2"]
+    labels:
+      service: checkout
+      team: group2
+
+  - name: demo-shop-search
+    type: http
+    enabled: true
+    target: "${DEMO_SHOP_BASE_URL}/search?q=widget"
+    job: demo-shop-search
+    frequency: 300000          # every 5 minutes (ms)
+    timeout: 10000
+    probes:
+      - Frankfurt
+      - NewYork
+    settings:
+      http:
+        method: GET
+        failIfNotSSL: false
+        failIfSSL: false
+        validStatusCodes: [200]
+        validHTTPVersions: ["HTTP/1.1", "HTTP/2"]
+    labels:
+      service: search
+      team: group2

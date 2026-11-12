@@ -1,0 +1,487 @@
+# Grafana Alert Rules (D36)
+# -------------------------
+# Down, Degraded, and Error Rate rules for demo-shop services.
+# Each rule posts to /webhooks/alerts through the "incident-webhook" contact point.
+#
+# Import: Grafana UI → Alerting → Alert rules → Import, or via Terraform/Provisioning API.
+
+apiVersion: 1
+
+groups:
+  # ---- Down Rule (D36 — critical) ----
+  # At least 2 probe locations fail on 2 consecutive checks.
+  - orgId: 1
+    name: demo-shop-down
+    folder: Demo Shop Alerts
+    interval: 2m
+    rules:
+      - uid: demo-shop-down-payments
+        title: "Payments endpoint is down"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-sm
+            model:
+              expr: >
+                probe_success{job="demo-shop-payments"}
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 10
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+        for: 4m             # 2 consecutive checks (5-min interval → 2 × 2m eval ≈ 4m)
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          service: payments
+          rule_type: down
+        annotations:
+          summary: >
+            Payments endpoint is down from at least 2 probe locations
+            for 2 consecutive checks.
+          description: >
+            Synthetic monitoring probes in Frankfurt and New York both
+            failed to reach the payments authorization endpoint.
+
+      - uid: demo-shop-down-checkout
+        title: "Checkout endpoint is down"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-sm
+            model:
+              expr: >
+                probe_success{job="demo-shop-checkout"}
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 10
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+        for: 4m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          service: checkout
+          rule_type: down
+        annotations:
+          summary: "Checkout endpoint is down from at least 2 probe locations for 2 consecutive checks."
+          description: "Synthetic monitoring probes both failed to reach the checkout endpoint."
+
+      - uid: demo-shop-down-search
+        title: "Search endpoint is down"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-sm
+            model:
+              expr: >
+                probe_success{job="demo-shop-search"}
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 10
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+        for: 10m            # 2 consecutive checks at 5-min interval
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          service: search
+          rule_type: down
+        annotations:
+          summary: "Search endpoint is down from at least 2 probe locations for 2 consecutive checks."
+          description: "Synthetic monitoring probes both failed to reach the search endpoint."
+
+  # ---- Degraded Rule (D36 — warning) ----
+  # At least 2 probe locations respond slower than 2 s on 3 consecutive checks.
+  - orgId: 1
+    name: demo-shop-degraded
+    folder: Demo Shop Alerts
+    interval: 2m
+    rules:
+      - uid: demo-shop-degraded-payments
+        title: "Payments endpoint is degraded (slow)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-sm
+            model:
+              expr: >
+                probe_duration_seconds{job="demo-shop-payments"}
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 15
+          - refId: B
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [2]
+                    type: gt
+        for: 6m             # 3 consecutive checks at 2-min eval
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: payments
+          rule_type: degraded
+        annotations:
+          summary: "Payments endpoint response time exceeds 2 s from at least 2 locations for 3 consecutive checks."
+          description: "Synthetic probes are seeing elevated latency on the payments authorization endpoint."
+
+      - uid: demo-shop-degraded-checkout
+        title: "Checkout endpoint is degraded (slow)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-sm
+            model:
+              expr: >
+                probe_duration_seconds{job="demo-shop-checkout"}
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 15
+          - refId: B
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [2]
+                    type: gt
+        for: 6m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: checkout
+          rule_type: degraded
+        annotations:
+          summary: "Checkout endpoint response time exceeds 2 s from at least 2 locations for 3 consecutive checks."
+          description: "Synthetic probes are seeing elevated latency on the checkout endpoint."
+
+      - uid: demo-shop-degraded-search
+        title: "Search endpoint is degraded (slow)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-sm
+            model:
+              expr: >
+                probe_duration_seconds{job="demo-shop-search"}
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 15
+          - refId: B
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [2]
+                    type: gt
+        for: 10m            # 3 consecutive at 5-min interval → need ~10 min
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: search
+          rule_type: degraded
+        annotations:
+          summary: "Search endpoint response time exceeds 2 s from at least 2 locations for 3 consecutive checks."
+          description: "Synthetic probes are seeing elevated latency on the search endpoint."
+
+  # ---- Error Rate Rule ----
+  # Error rate above 5 % for 5 minutes.
+  - orgId: 1
+    name: demo-shop-error-rate
+    folder: Demo Shop Alerts
+    interval: 1m
+    rules:
+      - uid: demo-shop-error-rate-payments
+        title: "Payments error rate above 5 %"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: >
+                sum(rate(demo_http_requests_total{service="payments",status=~"5.."}[5m]))
+                / sum(rate(demo_http_requests_total{service="payments"}[5m]))
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 10
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0.05]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: payments
+          rule_type: error_rate
+        annotations:
+          summary: "Payments error rate is above 5 % for 5 minutes."
+          description: "The ratio of 5xx responses to total requests on the payments service exceeds the threshold."
+
+      - uid: demo-shop-error-rate-checkout
+        title: "Checkout error rate above 5 %"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: >
+                sum(rate(demo_http_requests_total{service="checkout",status=~"5.."}[5m]))
+                / sum(rate(demo_http_requests_total{service="checkout"}[5m]))
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 10
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0.05]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: checkout
+          rule_type: error_rate
+        annotations:
+          summary: "Checkout error rate is above 5 % for 5 minutes."
+          description: "The ratio of 5xx responses to total requests on the checkout service exceeds the threshold."
+
+      - uid: demo-shop-error-rate-search
+        title: "Search error rate above 5 %"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: >
+                sum(rate(demo_http_requests_total{service="search",status=~"5.."}[5m]))
+                / sum(rate(demo_http_requests_total{service="search"}[5m]))
+              instant: false
+              range: true
+              intervalMs: 60000
+              maxDataPoints: 10
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0.05]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: search
+          rule_type: error_rate
+        annotations:
+          summary: "Search error rate is above 5 % for 5 minutes."
+          description: "The ratio of 5xx responses to total requests on the search service exceeds the threshold."

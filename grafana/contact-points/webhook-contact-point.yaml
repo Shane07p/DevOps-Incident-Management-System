@@ -1,0 +1,83 @@
+# Grafana Contact Point and Notification Policy (D36)
+# ----------------------------------------------------
+# A custom webhook contact point posts alerts into our /webhooks/alerts
+# endpoint using the alert format: source, eventId, service, correlationKey.
+#
+# Each rule gets its own tool token, set in the GRAFANA_TOOL_TOKEN_* env vars
+# at deploy time. The payload template below transforms the Grafana alert
+# into our AlertRequest shape.
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: incident-webhook
+    receivers:
+      - uid: incident-webhook-receiver
+        type: webhook
+        settings:
+          # The webhook URL of our backend's alert intake.
+          url: "${INCIDENT_BACKEND_URL}/webhooks/alerts"
+          httpMethod: POST
+          # Authorization header carries the tool token registered in our backend.
+          authorization_scheme: Bearer
+          authorization_credentials: "${GRAFANA_TOOL_TOKEN}"
+          # Maximum 1 attempt; retries are handled by Grafana's built-in retry.
+          maxAlerts: 10
+        # Custom payload template transforms Grafana alert JSON into our format.
+        # Grafana sends an array of alerts; we post each one individually.
+        # The template iterates over alerts and builds our AlertRequest shape.
+        secureSettings: {}
+
+# The payload template is defined below as a Go template string.
+# Grafana's webhook contact point sends this to our endpoint.
+#
+# Template rendering variables (Grafana Alerting):
+#   .Alerts          — array of firing/resolved alerts
+#   .Alert.Labels    — labels map (service, severity, rule_type, etc.)
+#   .Alert.Annotations — annotation map (summary, description)
+#   .Alert.Fingerprint — stable identifier for dedup
+#   .Alert.Status    — "firing" or "resolved"
+
+messageTemplates:
+  - orgId: 1
+    name: incident-alert-payload
+    template: |
+      {{ define "incident.webhook.payload" }}
+      {
+        "source": "grafana-{{ .Labels.rule_type | default "alert" }}",
+        "eventId": "gf-{{ .Fingerprint }}",
+        "service": "{{ .Labels.service | title }}",
+        "title": "{{ .Labels.alertname | default .Summary }}",
+        "description": "{{ .Annotations.description | default .Annotations.summary }}",
+        "severity": "{{ if eq .Labels.severity "critical" }}SEV1{{ else if eq .Labels.severity "warning" }}SEV2{{ else }}SEV3{{ end }}",
+        "correlationKey": "grafana-{{ .Labels.rule_type }}-{{ .Labels.service }}",
+        "details": {
+          "grafana_fingerprint": "{{ .Fingerprint }}",
+          "grafana_status": "{{ .Status }}",
+          "rule_type": "{{ .Labels.rule_type }}",
+          "grafana_rule_uid": "{{ .Labels.rule_uid | default "" }}"
+        }
+      }
+      {{ end }}
+
+notificationPolicies:
+  - orgId: 1
+    receiver: incident-webhook
+    group_by:
+      - alertname
+      - service
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      # All demo-shop alerts go through our webhook contact point.
+      - receiver: incident-webhook
+        matchers:
+          - team = group2
+        group_by:
+          - alertname
+          - service
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h

@@ -39,6 +39,11 @@ from mcp_server import (
 )
 
 
+def registered_tool_names() -> set[str]:
+    """The tools the server lists, through FastMCP's public API (its internals change between versions)."""
+    return {tool.name for tool in asyncio.run(mcp.list_tools())}
+
+
 def _mock_response(status_code: int = 200, json_data=None, text=""):
     """Helper creating a mock httpx.Response."""
     request = httpx.Request("GET", "http://localhost:8080")
@@ -54,7 +59,7 @@ def _mock_response(status_code: int = 200, json_data=None, text=""):
 
 # 1. Registered tools check (all 8 read tools registered now that #154 and #155 merged)
 def test_each_registered_mcp_tool_exists_with_expected_name():
-    tool_names = set(mcp._tool_manager._tools.keys())
+    tool_names = registered_tool_names()
     expected_read_tools = {
         "list_incidents",
         "get_incident",
@@ -486,7 +491,7 @@ def test_no_token_leaks_in_tool_output_or_error_messages(caplog):
 
 # 18. No write tools are exposed
 def test_no_write_tools_exposed():
-    tool_names = set(mcp._tool_manager._tools.keys())
+    tool_names = registered_tool_names()
 
     prohibited_write_tools = {
         "add_comment",

@@ -30,23 +30,22 @@ export function SimilarIncidentsPanel({ incidentId }: { incidentId: number }) {
     <section aria-labelledby="similar-incidents-heading" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-amber-500" aria-hidden="true" />
+          <Sparkles className="size-4 text-accent-foreground" aria-hidden="true" />
           <h2 id="similar-incidents-heading" className="text-lg font-semibold">
             Similar past incidents
           </h2>
         </div>
         <span
           data-testid="ai-label"
-          className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:text-amber-200"
+          className="inline-flex items-center gap-1 rounded-full border border-ring bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground"
         >
-          <Sparkles className="size-3 text-amber-500" aria-hidden="true" />
+          <Sparkles className="size-3" aria-hidden="true" />
           AI-generated suggestion
         </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         {displayed.map((item: SimilarIncident) => {
-          const fixText = item.fix || 'No fix details recorded'
           return (
             <div
               key={item.id}
@@ -76,10 +75,12 @@ export function SimilarIncidentsPanel({ incidentId }: { incidentId: number }) {
                   {item.status && <StatusBadge status={item.status} />}
                 </div>
 
-                <div className="mt-1 flex flex-col gap-0.5 border-t pt-2 text-xs">
-                  <span className="font-medium text-muted-foreground">Fix:</span>
-                  <p className="text-foreground/90 line-clamp-3">{fixText}</p>
-                </div>
+                {item.fix && (
+                  <div data-testid="similar-incident-fix" className="mt-1 flex flex-col gap-0.5 border-t pt-2 text-xs">
+                    <span className="font-medium text-muted-foreground">Fix:</span>
+                    <p className="text-foreground/90 line-clamp-3">{item.fix}</p>
+                  </div>
+                )}
               </div>
 
               <Link

@@ -48,20 +48,20 @@ export function DuplicateIncidentWarning({
       role="status"
       aria-live="polite"
       data-testid="duplicate-warning"
-      className="flex items-start justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-foreground transition-all"
+      className="flex items-start justify-between gap-3 rounded-lg border border-health-degraded/40 bg-sev-3-bg p-4 text-sm text-foreground transition-all"
     >
       <div className="flex items-start gap-2.5">
-        <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" aria-hidden="true" />
+        <AlertTriangle className="size-4 shrink-0 text-health-degraded-fg mt-0.5" aria-hidden="true" />
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-amber-900 dark:text-amber-200">
+            <span className="font-semibold text-health-degraded-fg">
               Likely open duplicate
             </span>
             <span
               data-testid="ai-label"
-              className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-900 dark:text-amber-200"
+              className="inline-flex items-center gap-1 rounded bg-health-degraded/20 px-1.5 py-0.5 text-[10.5px] font-medium text-health-degraded-fg"
             >
-              <Sparkles className="size-3 text-amber-500" aria-hidden="true" />
+              <Sparkles className="size-3" aria-hidden="true" />
               AI
             </span>
           </div>

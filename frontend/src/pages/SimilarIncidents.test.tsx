@@ -194,6 +194,17 @@ describe('Similar Incidents on Incident Detail Page (AI-1 / Issue #170)', () => 
     expect(screen.queryByText('INC-4')).not.toBeInTheDocument()
   })
 
+  it('leaves out the Fix line when the past incident has no fix recorded', async () => {
+    const withoutFix = mockSimilarIncidents.slice(0, 2).map((item, index) => (index === 1 ? { ...item, fix: undefined } : item))
+    renderApp('/incidents/7', {
+      'GET /api/incidents/7/similar': { body: withoutFix },
+    })
+
+    expect(await screen.findAllByTestId('similar-incident-card')).toHaveLength(2)
+    expect(screen.getAllByTestId('similar-incident-fix')).toHaveLength(1)
+    expect(screen.queryByText(/No fix details recorded/)).not.toBeInTheDocument()
+  })
+
   it('clicking a similar incident link navigates to its detail page', async () => {
     renderApp('/incidents/7', {
       'GET /api/incidents/7/similar': { body: mockSimilarIncidents },

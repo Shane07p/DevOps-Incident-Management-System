@@ -21,7 +21,7 @@ public class TestOrgs {
 	public static final String PASSWORD = "DevPassw0rd!";
 
 	// Every table with org_id; service_sla_target goes with its service.
-	private static final List<String> ORG_TABLES = List.of("public_update", "incident_deployment", "deployment", "personal_access_token", "notification", "outbox", "monitor_check_result", "uptime_monitor", "alert", "timeline_entry", "audit_entry",
+	private static final List<String> ORG_TABLES = List.of("public_update", "heartbeat", "incident_deployment", "deployment", "personal_access_token", "notification", "outbox", "monitor_check_result", "uptime_monitor", "alert", "timeline_entry", "audit_entry",
 			"escalation_task_step", "escalation_task", "escalation_step", "escalation_policy", "on_call_shift", "service_dependency", "incident",
 			"monitoring_tool", "service");
 

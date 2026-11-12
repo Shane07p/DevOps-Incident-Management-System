@@ -14,8 +14,8 @@
 # Change a check's frequency in synthetic-checks.yaml and these change with it.
 #
 # grafanacloud-prom is the stack's Prometheus data source, which holds both the
-# Synthetic Monitoring metrics and the demo shop's metrics. The demo shop labels every
-# request service="demo-shop" and puts the route in `endpoint`, so Error rate filters on both.
+# Synthetic Monitoring metrics and the demo shop's metrics. The demo shop labels each request
+# with the service its route belongs to (service_of in demo_shop/app.py), as Error rate uses.
 # Generated for #88; edit the numbers above and the rules together.
 
 apiVersion: 1
@@ -301,7 +301,7 @@ groups:
               to: 0
             datasourceUid: grafanacloud-prom
             model:
-              expr: 'sum(rate(demo_http_requests_total{service="demo-shop",endpoint="/payments/authorize",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="demo-shop",endpoint="/payments/authorize"}[5m]))'
+              expr: 'sum(rate(demo_http_requests_total{service="payments",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="payments"}[5m]))'
               instant: true
               range: false
               intervalMs: 60000
@@ -343,7 +343,7 @@ groups:
               to: 0
             datasourceUid: grafanacloud-prom
             model:
-              expr: 'sum(rate(demo_http_requests_total{service="demo-shop",endpoint="/checkout",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="demo-shop",endpoint="/checkout"}[5m]))'
+              expr: 'sum(rate(demo_http_requests_total{service="checkout",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="checkout"}[5m]))'
               instant: true
               range: false
               intervalMs: 60000
@@ -385,7 +385,7 @@ groups:
               to: 0
             datasourceUid: grafanacloud-prom
             model:
-              expr: 'sum(rate(demo_http_requests_total{service="demo-shop",endpoint="/search",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="demo-shop",endpoint="/search"}[5m]))'
+              expr: 'sum(rate(demo_http_requests_total{service="search",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="search"}[5m]))'
               instant: true
               range: false
               intervalMs: 60000

@@ -107,6 +107,11 @@ export function correctTimelineEntry(incidentId: number, entryId: number, detail
   })
 }
 
+/** Admins and Engineers only. Recorded on the timeline as "label: url"; CLOSED incidents take evidence too. */
+export function addEvidence(incidentId: number, evidence: { label: string; url: string }) {
+  return apiFetch(`/incidents/${incidentId}/evidence`, timelineEntrySchema, { method: 'POST', body: evidence })
+}
+
 /** Links an existing deployment to an incident. Admins and Engineers only. */
 export function linkDeploy(incidentId: number, deployId: number) {
   return apiFetch(`/incidents/${incidentId}/deploys/${deployId}`, timelineEntrySchema, { method: 'POST' })

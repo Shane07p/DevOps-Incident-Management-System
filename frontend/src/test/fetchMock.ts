@@ -3,11 +3,14 @@ import { vi } from 'vitest'
 type Route = { status?: number; body: unknown }
 type Handler = Route | ((init: RequestInit | undefined) => Route)
 
-/** Stubs fetch with responses keyed by "METHOD /api/path"; returns the mock so tests can inspect calls. */
+/**
+ * Stubs fetch with responses keyed by "METHOD /api/path"; returns the mock so tests can inspect calls. A key
+ * with its query string wins; a key without one also answers that path with any query (such as a time window).
+ */
 export function mockFetch(routes: Record<string, Handler>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const key = `${init?.method ?? 'GET'} ${String(input)}`
-    const handler = routes[key]
+    const handler = routes[key] ?? routes[key.split('?')[0]]
     if (!handler) return new Response(JSON.stringify({ status: 404, message: `No mock for ${key}` }), { status: 404 })
     const route = typeof handler === 'function' ? handler(init) : handler
     // A 204 must have no body, or the Response constructor throws.

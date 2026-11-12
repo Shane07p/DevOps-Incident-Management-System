@@ -477,7 +477,8 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Automated |
 | TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Automated |
 | TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Automated |
-| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentPage.test.tsx` | Planned (Bhakti) |
+| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
+| TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not set up) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
 
 ### Evidence links (FR-09.3)
@@ -487,6 +488,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `IncidentControllerTest.invalidEvidenceUrlReturns400` (Testcontainers) | Automated |
 | TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceConcurrencyTest.twoConcurrentEvidenceLinksAreSavedWithoutChangingVersion` (Testcontainers) | Automated |
 | TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest.evidenceAllowedOnClosedIncident` (Testcontainers) | Automated |
+| TC-FR-09.3d | Equivalence (invalid) | Incident page: a `javascript:` link, then an https link | The first is refused before anything is sent; the second is sent and listed as a link that opens in a new tab | `IncidentEvidence.test.tsx` | Automated |
 
 ### History search (FR-17)
 

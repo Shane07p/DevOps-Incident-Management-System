@@ -11,6 +11,9 @@ import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import { formatIst, formatMinutes } from '@/lib/time'
+import { IncidentDeploys } from './incident/IncidentDeploys'
+import { IncidentEvidence } from './incident/IncidentEvidence'
+import { IncidentTelemetry } from './incident/IncidentTelemetry'
 import { IncidentTimeline } from './incident/IncidentTimeline'
 import { PublicUpdates } from './incident/PublicUpdateForm'
 
@@ -148,6 +151,12 @@ export function IncidentDetailPage() {
               />
             </div>
           </section>
+
+          <IncidentDeploys incident={incident.data} />
+
+          <IncidentTelemetry serviceId={incident.data.service.id} createdAt={incident.data.createdAt} />
+
+          <IncidentEvidence incidentId={incident.data.id} timeline={incident.data.timeline} />
 
           <IncidentRunbooks serviceId={incident.data.service.id} />
 

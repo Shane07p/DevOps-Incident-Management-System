@@ -380,6 +380,43 @@ def test_404_becomes_readable_tool_error():
         set_request_token(None)
 
 
+# 14a. 429 from the access token rate limit says when to try again
+def test_429_becomes_rate_limit_tool_error():
+    set_request_token("pat_busy_token")
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            response = _mock_response(429, {"status": 429, "message": "Too many requests", "errors": {}})
+            response.headers["Retry-After"] = "42"
+            mock_req.return_value = response
+
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(list_incidents())
+
+            err_msg = str(exc_info.value)
+            assert "Rate limit reached" in err_msg
+            assert "42 seconds" in err_msg
+            assert "pat_busy_token" not in err_msg
+    finally:
+        set_request_token(None)
+
+
+# 14b. Any other non-2xx answer is an error, never returned as data
+def test_other_error_status_is_a_tool_error_not_data():
+    set_request_token("pat_token")
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(409, {"status": 409, "message": "Version conflict", "errors": {}})
+
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(get_incident(incident_id=1))
+
+            err_msg = str(exc_info.value)
+            assert "HTTP 409" in err_msg
+            assert "Version conflict" in err_msg
+    finally:
+        set_request_token(None)
+
+
 # 15. Backend timeout becomes readable tool error
 def test_backend_timeout_becomes_readable_tool_error():
     set_request_token("pat_token")

@@ -99,7 +99,7 @@ In Cursor:
 When starting or configuring Claude Code:
 
 ```bash
-claude mcp add settle http://localhost:8001/mcp --header "Authorization=Bearer pat_YOUR_PERSONAL_ACCESS_TOKEN"
+claude mcp add --transport http settle http://localhost:8001/mcp --header "Authorization: Bearer pat_YOUR_PERSONAL_ACCESS_TOKEN"
 ```
 
 Or configure via `.claude.json`:

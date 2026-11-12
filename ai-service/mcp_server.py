@@ -100,6 +100,18 @@ def get_caller_token() -> str:
     )
 
 
+def _with_detail(msg: str, resp: httpx.Response) -> str:
+    """Append the backend's own error message, when it sent one, to a tool error."""
+    detail = ""
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            detail = body.get("message") or body.get("detail") or str(body)
+    except Exception:
+        detail = resp.text[:200]
+    return f"{msg}: {detail}" if detail else msg
+
+
 async def _call_backend_api(
     endpoint: str,
     method: str = "GET",
@@ -146,19 +158,16 @@ async def _call_backend_api(
     elif resp.status_code == 404:
         raise ToolError(f"Resource not found: {clean_endpoint} returned HTTP 404")
     elif resp.status_code in (400, 422):
-        detail = ""
-        try:
-            body = resp.json()
-            if isinstance(body, dict):
-                detail = body.get("message") or body.get("detail") or str(body)
-        except Exception:
-            detail = resp.text[:200]
-        msg = f"Invalid request parameters for {clean_endpoint} (HTTP {resp.status_code})"
-        if detail:
-            msg += f": {detail}"
-        raise ToolError(msg)
+        raise ToolError(_with_detail(f"Invalid request parameters for {clean_endpoint} (HTTP {resp.status_code})", resp))
+    elif resp.status_code == 429:
+        retry_after = resp.headers.get("Retry-After", "")
+        wait = f"{retry_after} seconds" if retry_after.isdigit() else "a minute"
+        raise ToolError(f"Rate limit reached for this access token (HTTP 429). Try again in {wait}.")
     elif resp.status_code >= 500:
         raise ToolError(f"Backend server error: {clean_endpoint} returned HTTP {resp.status_code}")
+    elif not resp.is_success:
+        # Any other answer (409, a redirect, ...) is not data the caller asked for.
+        raise ToolError(_with_detail(f"Backend refused {clean_endpoint} (HTTP {resp.status_code})", resp))
 
     try:
         return resp.json()

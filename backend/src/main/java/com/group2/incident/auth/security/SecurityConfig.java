@@ -1,5 +1,6 @@
 package com.group2.incident.auth.security;
 
+import com.group2.incident.auth.service.PersonalAccessTokenService;
 import com.group2.incident.common.tenancy.OrgContextFilter;
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -50,30 +52,67 @@ class SecurityConfig {
 
 	@Bean
 	@Order(2)
-	SecurityFilterChain securityFilterChain(HttpSecurity http, JwtUserConverter jwtUserConverter) throws Exception {
+	SecurityFilterChain securityFilterChain(
+			HttpSecurity http,
+			JwtUserConverter jwtUserConverter,
+			PersonalAccessTokenService personalAccessTokenService
+	) throws Exception {
 		http.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
 						.requestMatchers("/error", "/actuator/health/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
+						// The public status page is for customers, who have no account (D45).
+						.requestMatchers(HttpMethod.GET, "/api/public/status/*").permitAll()
+						// Public heartbeats ping needs no login (FR-22).
+						.requestMatchers("/api/public/heartbeats/**").permitAll()
 						// The permissions table in the Sprint 1 plan; anything not listed needs any logged-in user.
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
 						.requestMatchers("/api/audit/**").hasRole("ADMIN")
+						// Runbooks are written by Engineers too (FR-25), so their rule comes before the Admin-only one.
+						.requestMatchers(HttpMethod.POST, "/api/services/*/runbooks").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.DELETE, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/timeline/*/corrections")
 						.hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/evidence")
+						.hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/deploys/*")
+						.hasAnyRole("ADMIN", "ENGINEER")
+						// PublicUpdateService narrows Engineers to the incident's Lead and Comms (D45).
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/public-updates").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
+						.bearerTokenResolver(request -> {
+							// A logged-in browser may send an expired token to the public page; it needs none.
+							if (request.getRequestURI().startsWith("/api/public/")) {
+								return null;
+							}
+							String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+							if (header != null && header.startsWith("Bearer ")) {
+								String token = header.substring(7).trim();
+								if (token.startsWith("pat_")) {
+									return null;
+								}
+								return token;
+							}
+							return null;
+						})
 						.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtUserConverter)));
+		// Intercept and authenticate personal access tokens before standard Bearer JWT filter.
+		http.addFilterBefore(new PersonalAccessTokenFilter(personalAccessTokenService), BearerTokenAuthenticationFilter.class);
 		// After the token is checked, the request works for the org in the token (D48).
 		http.addFilterAfter(new OrgContextFilter(), BearerTokenAuthenticationFilter.class);
 		return http.build();

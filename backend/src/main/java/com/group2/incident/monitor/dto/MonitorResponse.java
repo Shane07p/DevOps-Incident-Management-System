@@ -16,6 +16,7 @@ public record MonitorResponse(
 		int consecutiveFailures,
 		Instant outageStartedAt,
 		Long activeAlertId,
+		Instant lastCheckedAt,
 		Instant nextCheckAt,
 		Instant createdAt,
 		Instant updatedAt
@@ -35,6 +36,7 @@ public record MonitorResponse(
 				monitor.getConsecutiveFailures(),
 				monitor.getOutageStartedAt(),
 				monitor.getActiveAlertId(),
+				monitor.getLastCheckedAt(),
 				monitor.getNextCheckAt(),
 				monitor.getCreatedAt(),
 				monitor.getUpdatedAt()

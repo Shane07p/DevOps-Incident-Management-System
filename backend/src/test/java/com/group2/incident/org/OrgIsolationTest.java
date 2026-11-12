@@ -1,26 +1,35 @@
 package com.group2.incident.org;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.closeTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.group2.incident.common.ratelimit.RateLimitService;
+import com.group2.incident.incident.service.AiEmbeddingClient;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestOrgs;
 import com.group2.incident.support.TestOrgs.SignedUp;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.jayway.jsonpath.JsonPath;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -31,6 +40,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -59,6 +70,12 @@ class OrgIsolationTest {
 	private RateLimitService rateLimitService;
 
 	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@MockitoBean
+	private AiEmbeddingClient aiEmbeddingClient;
+
+	@Autowired
 	@Qualifier("requestMappingHandlerMapping")
 	private RequestMappingHandlerMapping handlerMapping;
 
@@ -70,6 +87,13 @@ class OrgIsolationTest {
 	private final Map<String, Long> idsOfB = new HashMap<>();
 
 	private long serviceOfA;
+
+	private long sourceIncidentOfA;
+
+	@BeforeEach
+	void resetAiClient() {
+		reset(aiEmbeddingClient);
+	}
 
 	@BeforeAll
 	void createBothOrgs() throws Exception {
@@ -83,20 +107,48 @@ class OrgIsolationTest {
 		send(b, put("/api/services/{id}/on-call", serviceOfB), "{\"fallbackContactId\": %d, \"shifts\": []}".formatted(b.adminId()));
 		send(b, put("/api/services/{id}/escalation-policy", serviceOfB),
 				"{\"steps\": [{\"stepNumber\": 1, \"responderId\": %d, \"waitMinutes\": 15}]}".formatted(b.adminId()));
-		long toolOfB = TestOrgs.id(send(b, post("/api/tools"), "{\"name\":\"Prometheus\"}"));
+		String toolJson = send(b, post("/api/tools"), "{\"name\":\"Prometheus\"}");
+		long toolOfB = TestOrgs.id(toolJson);
+		String toolTokenOfB = JsonPath.read(toolJson, "$.token");
+		String deployJson = mvc.perform(post("/webhooks/deploys")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolTokenOfB)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"service": "Payments", "version": "v1.0.0", "commit": "b0b0b0", "author": "CI", "deployedAt": "2026-11-09T10:00:00Z"}"""))
+				.andExpect(status().isAccepted())
+				.andReturn().getResponse().getContentAsString();
+		long deployOfB = JsonPath.<Number>read(deployJson, "$.id").longValue();
 		long monitorOfB = TestOrgs.id(send(b, post("/api/monitors"), """
 				{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": %d, "failureThreshold": 3, "enabled": true}""".formatted(serviceOfB)));
+		long heartbeatOfB = TestOrgs.id(send(b, post("/api/heartbeats"), """
+				{"name": "Backup", "intervalSeconds": 60, "graceSeconds": 15, "serviceId": %d, "enabled": true}""".formatted(serviceOfB)));
 		// The fallback contact becomes the assignee and gets a notification.
-		long incidentOfB = TestOrgs.id(orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing"));
+		String incidentJson = orgs.declareIncident(b.adminToken(), serviceOfB, "Checkout failing");
+		long incidentOfB = TestOrgs.id(incidentJson);
+		sourceIncidentOfA = TestOrgs.id(orgs.declareIncident(a.adminToken(), serviceOfA, "Checkout service latency"));
+		long timelineEntryOfB = JsonPath.<Number>read(incidentJson, "$.timeline[0].id").longValue();
 		String notifications = send(b, get("/api/notifications"), null);
 		long notificationOfB = JsonPath.<Number>read(notifications, "$.notifications[0].id").longValue();
 
 		idsOfB.put("serviceId", serviceOfB);
 		idsOfB.put("userId", b.adminId());
 		idsOfB.put("toolId", toolOfB);
+		idsOfB.put("deployId", deployOfB);
 		idsOfB.put("monitorId", monitorOfB);
+		idsOfB.put("heartbeatId", heartbeatOfB);
 		idsOfB.put("incidentId", incidentOfB);
+		jdbcTemplate.update(
+				"update incident set embedding = cast(? as incident.vector), embedding_retry_at = null where id = ? and org_id = ?",
+				vector(0.8, 0.6), sourceIncidentOfA, a.orgId());
+		jdbcTemplate.update(
+				"update incident set embedding = cast(? as incident.vector), embedding_retry_at = null where id = ? and org_id = ?",
+				vector(1, 0), incidentOfB, b.orgId());
+		idsOfB.put("entryId", timelineEntryOfB);
 		idsOfB.put("notificationId", notificationOfB);
+		long tokenOfB = TestOrgs.id(send(b, post("/api/me/tokens"), "{\"name\":\"TokenOfB\"}"));
+		idsOfB.put("tokenId", tokenOfB);
+		idsOfB.put("runbookId", TestOrgs.id(send(b, post("/api/services/{id}/runbooks", serviceOfB),
+				"{\"title\": \"Restart\", \"steps\": [\"Restart the service\"]}")));
 		// Sign-up and the service each wrote an audit entry in B.
 		idsOfB.put("auditId", JsonPath.<Number>read(send(b, get("/api/audit"), null), "$.content[0].id").longValue());
 	}
@@ -123,22 +175,47 @@ class OrgIsolationTest {
 				Arguments.of("PUT /api/services/{id}/on-call", HttpMethod.PUT, "/api/services/{serviceId}/on-call",
 						"{\"fallbackContactId\": {userId}, \"shifts\": []}"),
 				Arguments.of("GET /api/services/{id}/escalation-policy", HttpMethod.GET, "/api/services/{serviceId}/escalation-policy", null),
+				Arguments.of("PUT /api/services/{id}/dependencies", HttpMethod.PUT, "/api/services/{serviceId}/dependencies",
+						"{\"dependsOn\": []}"),
+				Arguments.of("GET /api/services/{id}/blast-radius", HttpMethod.GET, "/api/services/{serviceId}/blast-radius", null),
+				Arguments.of("GET /api/services/{id}/deploys", HttpMethod.GET, "/api/services/{serviceId}/deploys", null),
 				Arguments.of("PUT /api/services/{id}/escalation-policy", HttpMethod.PUT, "/api/services/{serviceId}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
+				Arguments.of("GET /api/incidents/{id}/similar", HttpMethod.GET, "/api/incidents/{incidentId}/similar", null),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
-						"{\"assigneeId\": {adminOfA}}"),
+						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",
-						"{\"role\":\"COMMS\",\"userId\": {adminOfA}}"),
+						"{\"role\":\"COMMS\",\"userId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("POST /api/incidents/{id}/comments", HttpMethod.POST, "/api/incidents/{incidentId}/comments",
 						"{\"comment\":\"x\"}"),
+				Arguments.of("POST /api/incidents/{id}/public-updates", HttpMethod.POST, "/api/incidents/{incidentId}/public-updates",
+						"{\"status\":\"INVESTIGATING\",\"message\":\"x\"}"),
+				Arguments.of("POST /api/incidents/{id}/evidence", HttpMethod.POST, "/api/incidents/{incidentId}/evidence",
+						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
+				Arguments.of("POST /api/incidents/{id}/deploys/{deployId}", HttpMethod.POST,
+						"/api/incidents/{incidentId}/deploys/{deployId}", null),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
-						"/api/incidents/{incidentId}/timeline/{incidentId}/corrections", "{\"details\":\"x\"}"),
+						"/api/incidents/{incidentId}/timeline/{entryId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
 				Arguments.of("PUT /api/monitors/{id}", HttpMethod.PUT, "/api/monitors/{monitorId}", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceOfA}, "failureThreshold": 3, "enabled": true}"""),
+				Arguments.of("GET /api/heartbeats/{id}", HttpMethod.GET, "/api/heartbeats/{heartbeatId}", null),
+				Arguments.of("PUT /api/heartbeats/{id}", HttpMethod.PUT, "/api/heartbeats/{heartbeatId}", """
+						{"name": "Backup", "intervalSeconds": 60, "graceSeconds": 15, "serviceId": {serviceOfA}, "enabled": true}"""),
 				Arguments.of("POST /api/notifications/{id}/read", HttpMethod.POST, "/api/notifications/{notificationId}/read", null),
-				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"));
+				Arguments.of("DELETE /api/me/tokens/{id}", HttpMethod.DELETE, "/api/me/tokens/{tokenId}", null),
+				Arguments.of("GET /api/services/{id}/runbooks", HttpMethod.GET, "/api/services/{serviceId}/runbooks", null),
+				Arguments.of("POST /api/services/{id}/runbooks", HttpMethod.POST, "/api/services/{serviceId}/runbooks",
+						"{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
+				Arguments.of("PUT /api/runbooks/{id}", HttpMethod.PUT, "/api/runbooks/{runbookId}", "{\"title\": \"Stolen\", \"steps\": [\"x\"]}"),
+				Arguments.of("DELETE /api/runbooks/{id}", HttpMethod.DELETE, "/api/runbooks/{runbookId}", null),
+				Arguments.of("PUT /api/users/{id}/role", HttpMethod.PUT, "/api/users/{userId}/role", "{\"role\":\"ADMIN\"}"),
+				Arguments.of("PUT /api/users/{id}/enabled", HttpMethod.PUT, "/api/users/{userId}/enabled", "{\"enabled\":false}"),
+				// Grafana holds every org's telemetry, so another org's service must be refused before any query.
+				Arguments.of("GET /api/telemetry/logs with B's service", HttpMethod.GET, "/api/telemetry/logs?serviceId={serviceId}", null),
+				Arguments.of("GET /api/telemetry/metrics with B's service", HttpMethod.GET,
+						"/api/telemetry/metrics?serviceId={serviceId}&metric=errorRate", null));
 	}
 
 	/** Every endpoint, called as A's Admin with B's ids, answers 404: never 403, never B's data. */
@@ -168,8 +245,12 @@ class OrgIsolationTest {
 								+ "\"startTime\": \"2026-11-04T00:00:00Z\", \"endTime\": \"2026-11-05T00:00:00Z\"}]}"),
 				Arguments.of("PUT escalation policy with B's Admin", HttpMethod.PUT, "/api/services/{serviceOfA}/escalation-policy",
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
+				Arguments.of("PUT dependencies on B's service", HttpMethod.PUT, "/api/services/{serviceOfA}/dependencies",
+						"{\"dependsOn\": [{serviceId}]}"),
 				Arguments.of("POST /api/monitors on B's service", HttpMethod.POST, "/api/monitors", """
-						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""));
+						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""),
+				Arguments.of("POST /api/heartbeats on B's service", HttpMethod.POST, "/api/heartbeats", """
+						{"name": "Backup", "intervalSeconds": 60, "graceSeconds": 15, "serviceId": {serviceId}, "enabled": true}"""));
 	}
 
 	/**
@@ -188,10 +269,13 @@ class OrgIsolationTest {
 	Stream<Arguments> listEndpoints() {
 		return Stream.of(
 				Arguments.of("GET /api/services", "/api/services", "$[*].id", "serviceId"),
+				Arguments.of("GET /api/service-map", "/api/service-map", "$.nodes[*].id", "serviceId"),
 				Arguments.of("GET /api/incidents", "/api/incidents", "$[*].id", "incidentId"),
+				Arguments.of("GET /api/incidents/search", "/api/incidents/search?q=Checkout", "$.content[*].id", "incidentId"),
 				Arguments.of("GET /api/alerts", "/api/alerts", "$[*].incidentId", "incidentId"),
 				Arguments.of("GET /api/tools", "/api/tools", "$[*].id", "toolId"),
 				Arguments.of("GET /api/monitors", "/api/monitors", "$[*].id", "monitorId"),
+				Arguments.of("GET /api/heartbeats", "/api/heartbeats", "$[*].id", "heartbeatId"),
 				Arguments.of("GET /api/users", "/api/users", "$[*].id", "userId"),
 				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"),
 				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"));
@@ -207,6 +291,32 @@ class OrgIsolationTest {
 		assertThat(ids).extracting(n -> n == null ? null : n.longValue()).doesNotContain(idsOfB.get(keyOfB));
 	}
 
+	@Test
+	void similarSearchNeverReturnsAnEquallySimilarIncidentFromAnotherOrg() throws Exception {
+		when(aiEmbeddingClient.isEnabled()).thenReturn(true);
+
+		String response = mvc.perform(get("/api/incidents/{id}/similar", sourceIncidentOfA)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + a.adminToken()))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		assertThat(response).isEqualTo("[]");
+	}
+
+	@Test
+	void duplicateCheckDoesNotReturnAMoreSimilarIncidentFromAnotherOrg() throws Exception {
+		when(aiEmbeddingClient.isEnabled()).thenReturn(true);
+		when(aiEmbeddingClient.embedQuery(anyString())).thenReturn(Optional.of(embedding(1, 0)));
+
+		mvc.perform(get("/api/incidents/duplicate-check")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + a.adminToken())
+						.queryParam("title", "Checkout service outage"))
+				.andExpect(status().isOk())
+						.andExpect(jsonPath("$.duplicate").value(true))
+						.andExpect(jsonPath("$.incident.id").value(sourceIncidentOfA))
+						.andExpect(jsonPath("$.incident.score").value(closeTo(0.8, 0.002)));
+	}
+
 	/** Keeps idEndpoints() complete, as SecurityMatrixTest does for roles. */
 	@Test
 	void everyEndpointWithAnIdIsCovered() {
@@ -214,6 +324,8 @@ class OrgIsolationTest {
 		Set<String> missing = new TreeSet<>();
 		handlerMapping.getHandlerMethods().forEach((info, method) -> info.getPatternValues().stream()
 				.filter(pattern -> pattern.contains("{"))
+				// The public status page is open to every org by its slug; PublicStatusTest checks it shows one org only.
+				.filter(pattern -> !pattern.startsWith("/api/public/"))
 				.forEach(pattern -> info.getMethodsCondition().getMethods()
 						.forEach(verb -> {
 							String key = verb.name() + " " + pattern;
@@ -230,6 +342,17 @@ class OrgIsolationTest {
 			result = result.replace("{" + id.getKey() + "}", id.getValue().toString());
 		}
 		return result;
+	}
+
+	private static String vector(double x, double y) {
+		return "[" + x + "," + y + "," + "0,".repeat(765) + "0]";
+	}
+
+	private static List<Double> embedding(double x, double y) {
+		List<Double> values = new ArrayList<>(java.util.Collections.nCopies(768, 0.0));
+		values.set(0, x);
+		values.set(1, y);
+		return values;
 	}
 
 	private String send(SignedUp as, MockHttpServletRequestBuilder request, String body) throws Exception {

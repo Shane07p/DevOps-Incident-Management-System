@@ -58,6 +58,9 @@ public class UptimeMonitor {
 	@Column(name = "next_check_at", nullable = false)
 	private Instant nextCheckAt;
 
+	@Column(name = "last_checked_at")
+	private Instant lastCheckedAt;
+
 	@Column(name = "consecutive_failures", nullable = false)
 	private int consecutiveFailures;
 
@@ -85,9 +88,20 @@ public class UptimeMonitor {
 		this.createdAt = now;
 	}
 
-	/** An Admin's edit. The next check runs at once, against the new settings. */
+	/**
+	 * An Admin's edit. The next check runs at once, against the new settings. Pointing the monitor at
+	 * another service or address starts a new observation: the failure count, outage, and alert start
+	 * afresh, so the new service gets an alert of its own, and its first pass cannot recover the old
+	 * service's alert. That alert stays as it was, for a person to resolve.
+	 */
 	public void change(ServiceEntity service, String name, String url, int expectedStatus, int intervalSeconds,
 			int failureThreshold, boolean enabled, Instant now) {
+		if (!this.service.getId().equals(service.getId()) || !this.url.equals(url)) {
+			consecutiveFailures = 0;
+			outageStartedAt = null;
+			activeAlertId = null;
+			lastCheckedAt = null;
+		}
 		apply(service, name, url, expectedStatus, intervalSeconds, failureThreshold, enabled, now);
 	}
 
@@ -100,6 +114,7 @@ public class UptimeMonitor {
 			outageStartedAt = checkedAt;
 		}
 		consecutiveFailures++;
+		lastCheckedAt = checkedAt;
 		nextCheckAt = checkedAt.plusSeconds(intervalSeconds);
 		return consecutiveFailures >= failureThreshold && activeAlertId == null;
 	}
@@ -117,6 +132,7 @@ public class UptimeMonitor {
 		consecutiveFailures = 0;
 		outageStartedAt = null;
 		activeAlertId = null;
+		lastCheckedAt = checkedAt;
 		nextCheckAt = checkedAt.plusSeconds(intervalSeconds);
 		return recovered;
 	}

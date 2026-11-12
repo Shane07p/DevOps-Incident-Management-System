@@ -7,4 +7,4 @@ Closes #
 
 ## Checklist
 - [ ] Tests for this change are included
-- [ ] Docs are updated (`docs/`, and `TRACEABILITY.csv` if a check now runs)
+- [ ] Docs are updated (`docs/`, and `traceability.csv` if a check now runs)

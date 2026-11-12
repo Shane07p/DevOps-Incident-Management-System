@@ -164,6 +164,46 @@ describe('ServicesPage', () => {
     expect(callsWith(fetchMock, 'PUT')).toHaveLength(0)
   })
 
+  it('saves the services this one depends on from the edit form (US-26)', async () => {
+    const checkout = { id: 2, name: 'Checkout', criticality: 'HIGH', health: 'OPERATIONAL' }
+    const search = { id: 3, name: 'Search', criticality: 'LOW', health: 'OPERATIONAL' }
+    const fetchMock = renderServices('ADMIN', {
+      'PUT /api/services/1': { body: payments },
+      'GET /api/service-map': {
+        body: { nodes: [{ id: 1, name: 'Payments', criticality: 'CRITICAL', health: 'OPERATIONAL' }, checkout, search], edges: [{ from: 1, to: 3 }] },
+      },
+      'PUT /api/services/1/dependencies': { body: { serviceId: 1, dependsOn: [2, 3] } },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Payments' })
+
+    // Search is already a dependency; Checkout is added.
+    expect(await within(dialog).findByRole('checkbox', { name: 'Search' })).toBeChecked()
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Checkout' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(callsWith(fetchMock, 'PUT').map(([url]) => url)).toEqual(['/api/services/1', '/api/services/1/dependencies']))
+    const [, init] = callsWith(fetchMock, 'PUT')[1]
+    expect(JSON.parse(String(init?.body))).toEqual({ dependsOn: [2, 3] })
+  })
+
+  it('sends no dependency change when the boxes are left as they were', async () => {
+    const fetchMock = renderServices('ADMIN', {
+      'PUT /api/services/1': { body: payments },
+      'GET /api/service-map': {
+        body: { nodes: [{ id: 1, name: 'Payments', criticality: 'CRITICAL', health: 'OPERATIONAL' }, { id: 2, name: 'Checkout', criticality: 'HIGH', health: 'OPERATIONAL' }], edges: [] },
+      },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Payments' })
+    await within(dialog).findByRole('checkbox', { name: 'Checkout' })
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(callsWith(fetchMock, 'PUT').map(([url]) => url)).toEqual(['/api/services/1'])
+  })
+
   it('shows an empty submit as field errors and sends nothing', async () => {
     const fetchMock = renderServices('ADMIN')
     const dialog = await openNewServiceDialog()

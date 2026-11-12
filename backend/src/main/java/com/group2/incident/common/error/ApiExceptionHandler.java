@@ -8,8 +8,10 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import com.group2.incident.common.ratelimit.RateLimitExceededException;
 import org.springframework.dao.OptimisticLockingFailureException;
 
@@ -27,6 +29,18 @@ public class ApiExceptionHandler {
 			errors.putIfAbsent(error.getField(), error.getDefaultMessage());
 		}
 		return respond(HttpStatus.BAD_REQUEST, "Validation failed", errors);
+	}
+
+	@ExceptionHandler(MissingServletRequestParameterException.class)
+	ResponseEntity<ApiError> missingRequestParameter(MissingServletRequestParameterException ex) {
+		return respond(HttpStatus.BAD_REQUEST, "Validation failed",
+				Map.of(ex.getParameterName(), "is required"));
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	ResponseEntity<ApiError> invalidRequestParameter(MethodArgumentTypeMismatchException ex) {
+		return respond(HttpStatus.BAD_REQUEST, "Validation failed",
+				Map.of(ex.getName(), "has an invalid value"));
 	}
 
 	// A body that isn't valid JSON, or a value of the wrong type, such as severity "SEV5".
@@ -71,6 +85,11 @@ public class ApiExceptionHandler {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
 				.header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
 				.body(new ApiError(HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage(), Map.of()));
+	}
+
+	@ExceptionHandler(ServiceUnavailableException.class)
+	ResponseEntity<ApiError> serviceUnavailable(ServiceUnavailableException ex) {
+		return respond(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), Map.of());
 	}
 
 	private static ResponseEntity<ApiError> respond(HttpStatus status, String message, Map<String, String> errors) {

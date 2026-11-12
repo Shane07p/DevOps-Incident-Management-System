@@ -59,7 +59,9 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
   const [fallbackError, setFallbackError] = useState<string | null>(null)
   const [removing, setRemoving] = useState<Shift | null>(null)
 
-  // The server replaces every shift on each save, so every change sends the whole schedule.
+  // The server replaces every shift on each save, so every change sends the whole schedule. One save at
+  // a time: a second change started meanwhile would send the schedule from before the first, and undo
+  // it when it lands (NFR-11.2). Every action waits until the saved schedule is back.
   const save = useMutation({
     mutationFn: (request: OnCallScheduleRequest) => updateOnCall(serviceId, request),
     onSuccess: (saved) => queryClient.setQueryData(['on-call', serviceId], saved),
@@ -162,6 +164,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
                           size="sm"
                           aria-label={`Remove ${shift.responderName}'s shift from ${formatIst(shift.startTime)}`}
                           onClick={() => setRemoving(shift)}
+                          disabled={save.isPending}
                         >
                           <Trash2 aria-hidden="true" />
                           Remove
@@ -212,6 +215,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
             <AddShiftForm
               schedule={data}
               users={users.data ?? []}
+              saving={save.isPending}
               onAdd={(shift) =>
                 save
                   .mutateAsync({

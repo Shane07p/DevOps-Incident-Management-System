@@ -31,6 +31,7 @@ export const AREAS: NavArea[] = [
     pages: [
       { path: '/incidents', label: 'Incidents', description: 'Active and past incidents' },
       { path: '/alerts', label: 'Alerts', description: 'Grouped alerts waiting for triage' },
+      { path: '/history', label: 'History', description: 'Search historical incidents by keyword, service, severity, or status' },
       { path: '/follow-ups', label: 'Follow-ups', description: 'Actions from every incident' },
     ],
   },
@@ -78,6 +79,11 @@ export const AREAS: NavArea[] = [
 export const ADMIN_PAGES: NavPage[] = [
   { path: '/users', label: 'Members', description: 'People in your org and their roles' },
   { path: '/tools', label: 'Tools', description: 'Monitoring tools and their tokens' },
+  { path: '/audit', label: 'Audit log', description: 'Every configuration change, newest first' },
+]
+
+export const ACCOUNT_PAGES: NavPage[] = [
+  { path: '/tokens', label: 'Access tokens', description: 'Personal access tokens for AI tools and scripts' },
 ]
 
 export function findArea(pathname: string) {
@@ -85,7 +91,7 @@ export function findArea(pathname: string) {
 }
 
 export function findPage(pathname: string) {
-  return [...AREAS.flatMap((area) => area.pages), ...ADMIN_PAGES].find(
+  return [...AREAS.flatMap((area) => area.pages), ...ADMIN_PAGES, ...ACCOUNT_PAGES].find(
     (page) => pathname === page.path || pathname.startsWith(`${page.path}/`),
   )
 }

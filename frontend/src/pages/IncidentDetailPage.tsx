@@ -3,18 +3,14 @@ import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
-import { getIncident, type TimelineEntry } from '@/api/incidents'
+import { getIncident } from '@/api/incidents'
+import { listRunbooks } from '@/api/runbooks'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import { formatIst, formatMinutes } from '@/lib/time'
-
-// "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
-const eventLabel = (eventType: string) => {
-  const words = eventType.toLowerCase().replaceAll('_', ' ')
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
+import { IncidentTimeline } from './incident/IncidentTimeline'
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -35,26 +31,65 @@ function SlaDue({ label, dueAt, targetMinutes }: { label: string; dueAt: string;
   )
 }
 
-function Timeline({ entries }: { entries: TimelineEntry[] }) {
-  if (entries.length === 0) return <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
+/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
+// Show runbooks belonging to the incident's service.
+function IncidentRunbooks({
+  serviceId,
+}: {
+  serviceId: number
+}) {
+  const runbooks = useQuery({
+    queryKey: ['runbooks', serviceId],
+    queryFn: () => listRunbooks(serviceId),
+  })
+
   return (
-    <ol className="flex flex-col gap-4 border-l pl-5">
-      {entries.map((entry) => (
-        <li key={entry.id} className="relative flex flex-col gap-0.5">
-          <span aria-hidden="true" className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-foreground" />
-          <span className="text-sm">
-            <span className="font-semibold">{eventLabel(entry.eventType)}</span>
-            <span className="text-muted-foreground"> · {entry.actor ?? 'System'}</span>
-          </span>
-          {entry.details && <span className="text-sm">{entry.details}</span>}
-          <span className="font-mono text-xs text-muted-foreground tnum">{formatIst(entry.recordedAt)}</span>
-        </li>
-      ))}
-    </ol>
+    <section
+      aria-labelledby="incident-runbooks-heading"
+      className="flex flex-col gap-3"
+    >
+      <h2
+        id="incident-runbooks-heading"
+        className="text-lg font-semibold"
+      >
+        Suggested runbooks
+      </h2>
+
+      {runbooks.isPending ? (
+        <LoadingState message="Loading runbooks" />
+      ) : runbooks.isError ? (
+        <ErrorState
+          message={runbooks.error.message}
+          onRetry={() => void runbooks.refetch()}
+        />
+      ) : runbooks.data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No runbooks available for this service.
+        </p>
+      ) : (
+        <div className="grid gap-4">
+          {runbooks.data.map((runbook) => (
+            <article
+              key={runbook.id}
+              className="rounded-lg border bg-card p-4"
+            >
+              <h3 className="font-semibold">
+                {runbook.title}
+              </h3>
+
+              <ol className="mt-3 list-decimal space-y-2 pl-6 text-sm">
+                {runbook.steps.map((step, index) => (
+                  <li key={index}>{step}</li>
+                ))}
+              </ol>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
-/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
 export function IncidentDetailPage() {
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
@@ -111,13 +146,15 @@ export function IncidentDetailPage() {
             </div>
           </section>
 
+          <IncidentRunbooks serviceId={incident.data.service.id} />
+
           <SimilarIncidentsPanel incidentId={incident.data.id} />
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">
               Timeline
             </h2>
-            <Timeline entries={incident.data.timeline} />
+            <IncidentTimeline incidentId={incident.data.id} entries={incident.data.timeline} />
           </section>
         </>
       )}

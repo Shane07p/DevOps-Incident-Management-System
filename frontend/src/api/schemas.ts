@@ -21,6 +21,11 @@ export const userSchema = z.object({
 
 export type User = z.infer<typeof userSchema>
 
+/** A person in the Admin's member list: as a user, plus whether they may sign in to this org. */
+export const memberSchema = userSchema.extend({ enabled: z.boolean() })
+
+export type Member = z.infer<typeof memberSchema>
+
 // Everyone works inside one org; another org's data never reaches them (D48).
 export const orgSchema = z.object({ id: z.number(), name: z.string(), slug: z.string() })
 

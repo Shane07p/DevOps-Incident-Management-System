@@ -1,6 +1,7 @@
 package com.group2.incident.catalog.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -216,6 +217,59 @@ public class ServiceControllerTest {
     }
 
     @Test
+    void adminPutsServiceOnTheStatusPageUnderAPublicName() throws Exception {
+        long id = createService("billing-api-prod", admin.getId(), "MEDIUM", targets(15, 240));
+        mvc.perform(get("/api/services/" + id).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicVisible").value(false))
+                .andExpect(jsonPath("$.publicName").value(nullValue()));
+
+        mvc.perform(put("/api/services/" + id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withPublication(body("billing-api-prod", admin.getId(), "MEDIUM", targets(15, 240)),
+                                "true", "\" Billing \"")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicVisible").value(true))
+                .andExpect(jsonPath("$.publicName").value("Billing"));
+
+        // A form written before #160 sends neither field: the service stays on the page.
+        mvc.perform(put("/api/services/" + id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("billing-api", admin.getId(), "MEDIUM", targets(15, 240))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicVisible").value(true))
+                .andExpect(jsonPath("$.publicName").value("Billing"));
+
+        assertThat(auditEntries.findAll().stream()
+                .filter(e -> e.getItemType() == AuditItemType.SERVICE && e.getItemId() == id
+                        && e.getAction() == AuditAction.SERVICE_UPDATED)
+                .map(AuditEntry::getDetails))
+                .anySatisfy(details -> assertThat(details)
+                        .contains("shown on the status page")
+                        .contains("public name: none → Billing"));
+    }
+
+    @Test
+    void aServiceOnTheStatusPageNeedsAPublicName() throws Exception {
+        mvc.perform(post("/api/services")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withPublication(body("Ledger", admin.getId(), "LOW", targets(15, 240)), "true", "\"  \"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.publicName").isNotEmpty());
+
+        long id = createService("Ledger", admin.getId(), "LOW", targets(15, 240));
+        mvc.perform(put("/api/services/" + id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withPublication(body("Ledger", admin.getId(), "LOW", targets(15, 240)), "true", "null")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.publicName").isNotEmpty());
+    }
+
+    @Test
     void engineerCannotCreateOrUpdate() throws Exception {
         long id = createService("Billing", admin.getId(), "MEDIUM", targets(15, 240));
 
@@ -276,6 +330,12 @@ public class ServiceControllerTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(response, "$.token");
+    }
+
+    /** Adds the status page fields (D45) to a body from {@link #body}; both values are raw JSON. */
+    private static String withPublication(String body, String publicVisible, String publicName) {
+        return body.strip().replaceFirst("}$",
+                ", \"publicVisible\": " + publicVisible + ", \"publicName\": " + publicName + "}");
     }
 
     private static String body(String name, long ownerId, String criticality, String targets) {

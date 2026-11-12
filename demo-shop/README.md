@@ -48,11 +48,26 @@ uvicorn demo_shop.app:app --host 0.0.0.0 --port 8001 --reload
 ```
 Interactive Swagger docs: `http://localhost:8001/docs`
 
+### Control token for a public demo
+
+Set `DEMO_SHOP_CONTROL_TOKEN` to a private value in the server's environment before exposing the
+shop through a tunnel. Send `Authorization: Bearer <token>` on every `/faults`, `/traffic`,
+and `/telemetry/logs` control request, including reads. Missing or incorrect credentials return HTTP 401. Keep the token
+out of source control and logs. The payment, checkout, search, products, health, and readiness
+routes stay open so probes and generated traffic can use them.
+
+With `ENVIRONMENT=production`, the server refuses to start without a control token. An empty
+token is allowed in other environments for local development. Export the same token in the
+shell running the `curl` examples below as `DEMO_SHOP_CONTROL_TOKEN`.
+
 ---
 
 ## 4. Running via Docker Compose
 
 The Demo Shop runs under the optional `demo` profile so it does not interfere with the default database workflow:
+
+Set `DEMO_SHOP_CONTROL_TOKEN` in the repository root `.env` before exposing a Compose instance.
+Set `ENVIRONMENT=production` there to require the token at startup; Compose forwards both settings.
 
 ```bash
 # Start Demo Shop
@@ -70,14 +85,15 @@ docker compose logs -f demo-shop
 ```bash
 # Start 30 seconds of traffic at 3 requests/sec
 curl -X POST http://localhost:8001/traffic/start \
+  -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"rate": 3.0, "duration_seconds": 30, "target_url": "http://localhost:8001"}'
 
 # Check status
-curl http://localhost:8001/traffic/status
+curl http://localhost:8001/traffic/status -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN"
 
 # Stop traffic early
-curl -X POST http://localhost:8001/traffic/stop
+curl -X POST http://localhost:8001/traffic/stop -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN"
 ```
 
 ### Via CLI
@@ -91,23 +107,25 @@ python -m demo_shop.traffic --rate 2.0 --duration 30 --url http://localhost:8001
 
 ```bash
 # Inspect all switches
-curl http://localhost:8001/faults
+curl http://localhost:8001/faults -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN"
 
 # Enable Slow Gateway
 curl -X POST http://localhost:8001/faults/slow_gateway \
+  -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
 
 # Enable Bad Deploy (emits deploy event)
 curl -X POST http://localhost:8001/faults/bad_deploy \
+  -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
 
 # Retrieve last deploy event
-curl http://localhost:8001/faults/deploy-event
+curl http://localhost:8001/faults/deploy-event -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN"
 
 # Reset all faults to healthy baseline
-curl -X POST http://localhost:8001/faults/reset
+curl -X POST http://localhost:8001/faults/reset -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN"
 ```
 
 ---

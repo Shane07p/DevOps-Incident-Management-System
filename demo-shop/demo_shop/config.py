@@ -23,6 +23,7 @@ class Config:
     ).strip()
 
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    CONTROL_TOKEN: str = os.getenv("DEMO_SHOP_CONTROL_TOKEN", "").strip()
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
     # Incident backend deployment webhook settings (FR-20.1, AC-5)

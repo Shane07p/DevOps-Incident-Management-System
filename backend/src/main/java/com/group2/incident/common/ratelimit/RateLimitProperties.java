@@ -13,6 +13,7 @@ import org.springframework.boot.convert.DurationUnit;
 public record RateLimitProperties(
 		@DefaultValue LimitConfig login,
 		@DefaultValue LimitConfig webhook,
+		@DefaultValue LimitConfig pat,
 		@DefaultValue("10000") int maxBuckets
 ) {
 
@@ -22,6 +23,9 @@ public record RateLimitProperties(
 		}
 		if (webhook == null) {
 			webhook = new LimitConfig(50, Duration.ofSeconds(1));
+		}
+		if (pat == null) {
+			pat = new LimitConfig(60, Duration.ofSeconds(60));
 		}
 		if (maxBuckets <= 0) {
 			maxBuckets = 10_000;

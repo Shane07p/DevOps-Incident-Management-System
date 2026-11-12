@@ -14,6 +14,8 @@ public record ServiceResponse(
         OwnerDto owner,
         Criticality criticality,
         Map<Severity, SlaTargetDto> targets,
+        boolean publicVisible,
+        String publicName,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -34,6 +36,8 @@ public record ServiceResponse(
                 ownerDto,
                 service.getCriticality(),
                 targetMap,
+                service.isPublicVisible(),
+                service.getPublicName(),
                 service.getCreatedAt(),
                 service.getUpdatedAt()
         );

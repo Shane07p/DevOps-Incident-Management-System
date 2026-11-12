@@ -30,6 +30,16 @@ export const timelineEntrySchema = z.object({
 
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>
 
+export const deploySchema = z.object({
+  id: z.number(),
+  version: z.string(),
+  commit: z.string(),
+  author: z.string(),
+  deployedAt: timestamp,
+})
+
+export type Deploy = z.infer<typeof deploySchema>
+
 export const incidentSchema = z.object({
   id: z.number(),
   reference: z.string(),
@@ -48,14 +58,7 @@ export const incidentSchema = z.object({
   responseDueAt: timestamp,
   resolutionDueAt: timestamp,
   timeline: z.array(timelineEntrySchema),
-  
-deploys: z.array(z.object({
-  id: z.number(),
-  version: z.string(),
-  commit: z.string(),
-  author: z.string(),
-  deployedAt: timestamp,
-})).optional(),
+  deploys: z.array(deploySchema).default([]),
 })
 
 export type Incident = z.infer<typeof incidentSchema>
@@ -89,36 +92,20 @@ export function createIncident(incident: NewIncident) {
   return apiFetch('/incidents', incidentSchema, { method: 'POST', body: incident })
 }
 
-export const evidenceLinkSchema = z.object({
-  url: z.string().url(),
-  label: z.string(),
-})
-
-export type EvidenceLink = z.infer<typeof evidenceLinkSchema>
-
-/** Engineers and Admins can attach evidence to an incident. */
-export function addIncidentEvidence(
-  incidentId: number,
-  evidence: EvidenceLink,
-) {
-  return apiFetch(
-    `/incidents/${incidentId}/evidence`,
-    z.unknown(),
-    {
-      method: 'POST',
-      body: evidence,
-    },
-  )
+/** Admins and Engineers only. A comment is its own timeline entry: it needs no incident version, and CLOSED incidents take them too. */
+export function addComment(incidentId: number, comment: string) {
+  return apiFetch(`/incidents/${incidentId}/comments`, timelineEntrySchema, { method: 'POST', body: { comment } })
 }
 
-/** Engineers and Admins can link a deployment to an incident. */
-export function linkIncidentDeploy(
-  incidentId: number,
-  deployId: number,
-) {
-  return apiFetch(
-    `/incidents/${incidentId}/deploys/${deployId}`,
-    z.unknown(),
-    { method: 'POST' },
-  )
+/** Admins and Engineers only. Adds a new entry linked to the one it corrects; the original never changes. */
+export function correctTimelineEntry(incidentId: number, entryId: number, details: string) {
+  return apiFetch(`/incidents/${incidentId}/timeline/${entryId}/corrections`, timelineEntrySchema, {
+    method: 'POST',
+    body: { details },
+  })
+}
+
+/** Links an existing deployment to an incident. Admins and Engineers only. */
+export function linkDeploy(incidentId: number, deployId: number) {
+  return apiFetch(`/incidents/${incidentId}/deploys/${deployId}`, timelineEntrySchema, { method: 'POST' })
 }

@@ -66,10 +66,7 @@ public class Incident {
 	@JoinColumn(name = "assignee_id")
 	private AppUser assignee;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "lead_id")
-	private AppUser lead;
-
+	// The Lead is the assignee (D39); Comms and Ops are held separately.
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "comms_id")
 	private AppUser comms;
@@ -125,9 +122,10 @@ public class Incident {
 		this.assignee = assignee;
 	}
 
+	/** Gives Comms or Ops to a person. The Lead is the assignee, changed only through {@link #assignTo}. */
 	public void assignRole(IncidentRole role, AppUser user) {
 		switch (role) {
-			case LEAD -> this.lead = user;
+			case LEAD -> throw new IllegalArgumentException("The Lead is the assignee; use assignTo");
 			case COMMS -> this.comms = user;
 			case OPS -> this.ops = user;
 		}
@@ -135,7 +133,7 @@ public class Incident {
 
 	public AppUser getRoleUser(IncidentRole role) {
 		return switch (role) {
-			case LEAD -> this.lead;
+			case LEAD -> this.assignee;
 			case COMMS -> this.comms;
 			case OPS -> this.ops;
 		};
@@ -150,6 +148,11 @@ public class Incident {
 	}
 
 	public String getReference() {
+		return reference(number);
+	}
+
+	/** How users see an incident's number, for code that has the number but not the entity (search rows). */
+	public static String reference(Long number) {
 		return "INC-" + number;
 	}
 

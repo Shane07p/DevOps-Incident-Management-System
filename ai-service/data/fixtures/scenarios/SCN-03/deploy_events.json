@@ -1,0 +1,12 @@
+[
+  {
+    "service": "checkout",
+    "version": "v1.0.1-broken",
+    "previous_version": "v1.0.0",
+    "timestamp": "2026-11-08T15:22:51.243380+00:00",
+    "commit": "a1b2c3d",
+    "author": "ci-bot",
+    "status": "completed",
+    "message": "Deployed v1.0.1-broken to checkout service"
+  }
+]

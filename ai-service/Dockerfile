@@ -12,6 +12,7 @@ COPY agent_loop.py .
 COPY agent_tools.py .
 COPY providers.py .
 COPY log_patterns.py .
+COPY mcp_server.py .
 
 # Copy runtime data (recorded Demo Shop fixtures used by evidence tools)
 COPY data/ ./data/

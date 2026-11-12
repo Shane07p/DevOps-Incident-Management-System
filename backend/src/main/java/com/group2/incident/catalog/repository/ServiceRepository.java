@@ -15,6 +15,11 @@ public interface ServiceRepository extends JpaRepository<ServiceEntity, Long> {
 
     List<ServiceEntity> findAllByOrderByNameAsc();
 
+    // The services on the public status page (D45), in the order customers see them.
+    List<ServiceEntity> findAllByPublicVisibleTrueOrderByPublicNameAscIdAsc();
+
+    Optional<ServiceEntity> findByNameIgnoreCase(String name);
+
     boolean existsByNameIgnoreCase(String name);
 
     boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);

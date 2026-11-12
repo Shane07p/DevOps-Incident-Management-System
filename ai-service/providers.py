@@ -53,8 +53,12 @@ class LlmProvider(ABC):
         messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]],
         timeout: float = 10.0,
+        max_output_tokens: Optional[int] = None,
     ) -> ModelTurnResponse:
-        """Execute one model turn given the conversation history and registered tools."""
+        """
+        Execute one model turn given the conversation history and registered tools. The model may
+        generate at most ``max_output_tokens`` tokens, when given.
+        """
         pass
 
 
@@ -88,8 +92,11 @@ class MockProvider(LlmProvider):
         messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]],
         timeout: float = 10.0,
+        max_output_tokens: Optional[int] = None,
     ) -> ModelTurnResponse:
-        self.call_history.append({"messages": messages, "tools": tools, "timeout": timeout})
+        self.call_history.append(
+            {"messages": messages, "tools": tools, "timeout": timeout, "max_output_tokens": max_output_tokens}
+        )
 
         if self._delay > 0:
             if self._delay >= timeout:
@@ -151,6 +158,7 @@ class OllamaProvider(LlmProvider):
         messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]],
         timeout: float = 10.0,
+        max_output_tokens: Optional[int] = None,
     ) -> ModelTurnResponse:
         client = await self._get_client()
 
@@ -161,6 +169,9 @@ class OllamaProvider(LlmProvider):
         }
         if tools:
             payload["tools"] = tools
+        if max_output_tokens is not None:
+            # Ollama stops generating after num_predict tokens.
+            payload["options"] = {"num_predict": max_output_tokens}
 
         try:
             resp = await client.post(

@@ -1,0 +1,16 @@
+{
+  "baseline": {
+    "demo_http_request_duration_seconds": {
+      "p99": 8.5,
+      "p50": 3.2,
+      "unit": "ms"
+    }
+  },
+  "fault": {
+    "demo_http_request_duration_seconds": {
+      "p99": 2001.93,
+      "p50": 2000.5,
+      "unit": "ms"
+    }
+  }
+}

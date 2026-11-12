@@ -160,6 +160,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Broken links or anchors, Passed rows without a date and commit, unknown test case IDs (docs/README.md).
+      - name: Docs are consistent
+        run: python3 scripts/check_docs.py
+
       # Flyway checksums every applied migration, so editing one breaks every database that ran it.
       - name: Applied migrations are unchanged
         run: |

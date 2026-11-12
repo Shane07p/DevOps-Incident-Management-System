@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+from collections import deque
 from typing import Any, Dict, Optional
 
 from demo_shop.telemetry import StructuredLogger, telemetry
@@ -24,11 +25,20 @@ class OrderQueue:
         self._worker_task: Optional[asyncio.Task] = None
         self._running: bool = False
         self._processed_count: int = 0
-        self._oldest_enqueue_time: Optional[datetime.datetime] = None
+        # When each waiting order was enqueued, oldest first, in the queue's own order.
+        self._enqueue_times: deque[datetime.datetime] = deque()
 
     @property
     def size(self) -> int:
         return self._queue.qsize()
+
+    @property
+    def is_full(self) -> bool:
+        return self._queue.full()
+
+    def _lag_seconds(self, now: datetime.datetime) -> float:
+        """How long the oldest order still waiting has waited: the queue's processing lag (SCN-04)."""
+        return (now - self._enqueue_times[0]).total_seconds() if self._enqueue_times else 0.0
 
     @property
     def is_paused(self) -> bool:
@@ -53,12 +63,10 @@ class OrderQueue:
         }
         try:
             self._queue.put_nowait(item)
-            if self._oldest_enqueue_time is None:
-                self._oldest_enqueue_time = now
+            self._enqueue_times.append(now)
 
             depth = self._queue.qsize()
-            lag = (now - self._oldest_enqueue_time).total_seconds()
-            telemetry.update_queue_metrics(depth=depth, lag_seconds=lag)
+            telemetry.update_queue_metrics(depth=depth, lag_seconds=self._lag_seconds(now))
 
             StructuredLogger.info(
                 service="order-fulfillment",
@@ -83,7 +91,7 @@ class OrderQueue:
 
                 if self._paused:
                     # When paused, compute growing lag without processing
-                    lag = (now - self._oldest_enqueue_time).total_seconds() if self._oldest_enqueue_time else 0.0
+                    lag = self._lag_seconds(now)
                     telemetry.update_queue_metrics(depth=depth, lag_seconds=lag)
 
                     if depth > 0:
@@ -101,18 +109,13 @@ class OrderQueue:
                 else:
                     if depth > 0:
                         item = await self._queue.get()
+                        self._enqueue_times.popleft()
                         self._processed_count += 1
                         self._queue.task_done()
 
-                        # Update oldest timestamp
+                        # The lag is now the wait of the next order, not of the one just fulfilled.
                         remaining = self._queue.qsize()
-                        if remaining == 0:
-                            self._oldest_enqueue_time = None
-                            lag = 0.0
-                        else:
-                            lag = (now - self._oldest_enqueue_time).total_seconds() if self._oldest_enqueue_time else 0.0
-
-                        telemetry.update_queue_metrics(depth=remaining, lag_seconds=lag)
+                        telemetry.update_queue_metrics(depth=remaining, lag_seconds=self._lag_seconds(now))
 
                         StructuredLogger.info(
                             service="order-fulfillment",
@@ -125,7 +128,6 @@ class OrderQueue:
                         # Fast processing delay to drain queue smoothly
                         await asyncio.sleep(0.02)
                     else:
-                        self._oldest_enqueue_time = None
                         telemetry.update_queue_metrics(depth=0, lag_seconds=0.0)
                         await asyncio.sleep(0.1)
 

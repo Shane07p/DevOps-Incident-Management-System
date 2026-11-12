@@ -26,7 +26,7 @@ reviews:
     - "!**/package-lock.json"
     - "!frontend/src/components/ui/**"
     - "!frontend/src/components/effects/**"
-    - "!docs/diagrams/**"
+    - "!docs/2-design/diagrams/**"
     - "!**/*.png"
 
   path_instructions:
@@ -56,7 +56,7 @@ reviews:
         Style with the design tokens from index.css, not raw colours. Every API response goes through
         apiFetch with a Zod schema. Form inputs use the field name as their id. The UI only hides
         controls; the server checks permissions.
-    - path: "docs/TRACEABILITY.csv"
+    - path: "docs/4-testing/traceability.csv"
       instructions: >-
         A row may say Passed only after its test ran and passed, with the date and a commit on main.
         Flag Passed rows whose test fails in this PR's CI.

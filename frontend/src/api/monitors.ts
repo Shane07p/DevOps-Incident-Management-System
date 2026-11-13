@@ -17,6 +17,9 @@ export const monitorSchema = z.object({
   consecutiveFailures: z.number(),
   outageStartedAt: timestamp.nullable(),
   activeAlertId: z.number().nullable(),
+  // Null until the first check has run.
+  lastCheckedAt: timestamp.nullable(),
+  nextCheckAt: timestamp.nullable(),
   createdAt: timestamp,
   updatedAt: timestamp,
 })

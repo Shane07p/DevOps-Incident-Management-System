@@ -115,4 +115,19 @@ class IncidentTest {
 				.hasMessageContaining("Only OPEN incidents can be acknowledged");
 	}
 
+	@Test
+	@DisplayName("transitionTo updates incident status")
+	void transitionToUpdatesStatus() {
+		Instant created = Instant.parse("2026-10-19T10:00:00Z");
+		AppUser user = new AppUser("user@test.local", "User", "hash", created);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, created);
+		Incident incident = new Incident("Checkout failing", "Timeouts", service, Severity.SEV2, IncidentStatus.ACKNOWLEDGED, user, created, 60, 480);
+
+		incident.transitionTo(IncidentStatus.INVESTIGATING);
+		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.INVESTIGATING);
+
+		incident.transitionTo(IncidentStatus.IDENTIFIED);
+		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.IDENTIFIED);
+	}
+
 }

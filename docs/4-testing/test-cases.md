@@ -271,10 +271,10 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Planned (Utsav B) |
-| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Planned (Utsav B) |
+| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Automated |
+| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Automated |
+| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Automated |
+| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Automated |
 
 ### Acknowledgement (FR-06, FR-07.4, FR-16.2, US-08)
 

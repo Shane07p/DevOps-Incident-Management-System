@@ -138,6 +138,14 @@ public class Incident {
 		this.acknowledgedAt = now;
 	}
 
+	/**
+	 * Transitions the incident to a new status (FR-06, US-10).
+	 * Allowed transitions are verified by {@code TransitionPolicy}.
+	 */
+	public void transitionTo(IncidentStatus newStatus) {
+		this.status = newStatus;
+	}
+
 	/** Gives Comms or Ops to a person. The Lead is the assignee, changed only through {@link #assignTo}. */
 	public void assignRole(IncidentRole role, AppUser user) {
 		switch (role) {

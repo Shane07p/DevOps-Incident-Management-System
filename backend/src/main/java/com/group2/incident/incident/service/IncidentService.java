@@ -29,6 +29,7 @@ import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.IncidentUserDto;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
+import com.group2.incident.incident.dto.TransitionRequest;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentRole;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -81,6 +82,7 @@ public class IncidentService {
 	private final OrgMembers orgMembers;
 	private final DeploymentRepository deploymentRepository;
 	private final IncidentDeploymentRepository incidentDeploymentRepository;
+	private final TransitionPolicy transitionPolicy;
 	private final Clock clock;
 
 	@Transactional
@@ -539,6 +541,72 @@ public class IncidentService {
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		return toResponse(incident, timeline);
+	}
+
+	/**
+	 * Transitions an incident to a new legal status (FR-06, US-10).
+	 * Enforces legal transitions, optimistic locking, non-blank recovery notes for RESOLVED,
+	 * appends a timeline entry with authenticated actor and timestamp, and returns the updated incident.
+	 */
+	@Transactional
+	public IncidentResponse transitionIncident(Long incidentId, TransitionRequest request, Long actorId) {
+		if (request == null || request.expectedVersion() == null) {
+			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
+		}
+		if (request.status() == null) {
+			throw new FieldValidationException("status", "Status is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+
+		IncidentStatus currentStatus = incident.getStatus();
+		IncidentStatus newStatus = request.status();
+
+		if (!transitionPolicy.isLegal(currentStatus, newStatus)) {
+			throw new ConflictException("Cannot transition incident from " + currentStatus + " to " + newStatus);
+		}
+
+		if (newStatus == IncidentStatus.RESOLVED) {
+			if (request.recoveryNote() == null || request.recoveryNote().isBlank()) {
+				throw new FieldValidationException("recoveryNote", "A recovery note is required to resolve an incident");
+			}
+		}
+
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+
+		if (currentStatus == IncidentStatus.OPEN && newStatus == IncidentStatus.ACKNOWLEDGED) {
+			incident.acknowledge(actor, now);
+			escalationService.cancelTaskForIncident(incidentId, now);
+		} else {
+			incident.transitionTo(newStatus);
+		}
+
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		} catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+
+		String transitionDetails;
+		if (newStatus == IncidentStatus.RESOLVED && request.recoveryNote() != null && !request.recoveryNote().isBlank()) {
+			transitionDetails = "Status changed from " + currentStatus + " to " + newStatus + ": " + request.recoveryNote().trim();
+		} else {
+			transitionDetails = "Status changed from " + currentStatus + " to " + newStatus;
+		}
+
+		TimelineEntry statusTimelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.STATUS_CHANGED,
+				transitionDetails,
+				now
+		);
+		timelineEntryRepository.save(statusTimelineEntry);
+
+		List<TimelineEntry> updatedTimeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, updatedTimeline);
 	}
 
 	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */

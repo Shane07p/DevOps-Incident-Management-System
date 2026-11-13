@@ -13,6 +13,7 @@ import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.SimilarIncidentResponse;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
+import com.group2.incident.incident.dto.TransitionRequest;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.incident.service.IncidentSimilarityService;
 import com.group2.incident.catalog.entity.Severity;
@@ -116,6 +117,15 @@ public class IncidentController {
 			@Valid @RequestBody AcknowledgeRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
 		return incidentService.acknowledgeIncident(id, request, Long.parseLong(jwt.getSubject()));
+	}
+
+	@PostMapping("/{id}/transitions")
+	@Operation(summary = "Transition an incident to a new status")
+	public IncidentResponse transition(
+			@PathVariable Long id,
+			@Valid @RequestBody TransitionRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.transitionIncident(id, request, Long.parseLong(jwt.getSubject()));
 	}
 
 	@PutMapping("/{id}/roles")

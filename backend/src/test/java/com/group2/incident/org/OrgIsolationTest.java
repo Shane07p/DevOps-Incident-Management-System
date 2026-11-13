@@ -189,6 +189,8 @@ class OrgIsolationTest {
 				Arguments.of("GET /api/incidents/{id}/similar", HttpMethod.GET, "/api/incidents/{incidentId}/similar", null),
 				Arguments.of("POST /api/incidents/{id}/acknowledge", HttpMethod.POST, "/api/incidents/{incidentId}/acknowledge",
 						"{\"expectedVersion\": 0}"),
+				Arguments.of("POST /api/incidents/{id}/transitions", HttpMethod.POST, "/api/incidents/{incidentId}/transitions",
+						"{\"status\":\"INVESTIGATING\", \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
 						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",

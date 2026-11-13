@@ -51,9 +51,9 @@ export function SlaClock({
   )
 }
 
-/** The running clock of a listed incident, compact: "Response · 12 min left". */
-export function SlaBadge({ name, dueAt, now }: { name: string; dueAt: string; now: number }) {
-  const state = slaState(dueAt, null, now)
+/** One clock of a listed incident, compact: "Response · 12 min left", or "Response · Met" once it stopped. */
+export function SlaBadge({ name, dueAt, now, stoppedAt = null }: { name: string; dueAt: string; now: number; stoppedAt?: string | null }) {
+  const state = slaState(dueAt, stoppedAt, now)
   const look = LOOK[state.kind]
   return (
     <span className={cn('inline-flex items-center gap-1.5 font-mono text-xs whitespace-nowrap tnum', look.text)}>

@@ -47,10 +47,11 @@ const VIEWS = [
 // Radix Select has no empty value, so "everything" is a value of its own here and '' in the URL.
 const ALL = 'all'
 
-function TimeLeft({ incident, now }: { incident: IncidentSummary; now: number }) {
+function TimeLeft({ incident, now, wrap }: { incident: IncidentSummary; now: number; wrap?: boolean }) {
   const clock = runningClock(incident)
   if (clock === null) return <span className="text-xs text-muted-foreground">Clocks stopped</span>
-  return <SlaBadge name={clock.name} dueAt={clock.dueAt} now={now} />
+  // A board card is narrow: there the clock may wrap instead of running past the card's edge.
+  return <SlaBadge name={clock.name} dueAt={clock.dueAt} now={now} className={wrap ? 'items-start whitespace-normal' : undefined} />
 }
 
 function Lead({ incident, compact }: { incident: IncidentSummary; compact?: boolean }) {
@@ -197,9 +198,9 @@ function IncidentBoard({ incidents, now, onPeek }: { incidents: IncidentSummary[
                   </Link>
                   <span className="text-[12px] text-muted-foreground">{incident.serviceName}</span>
                   <StatusBadge status={incident.status} />
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2.5">
+                  <div className="flex flex-col items-start gap-1.5 border-t pt-2.5">
                     <Lead incident={incident} compact />
-                    <TimeLeft incident={incident} now={now} />
+                    <TimeLeft incident={incident} now={now} wrap />
                   </div>
                   <Button variant="outline" size="sm" className="self-start" onClick={() => onPeek(incident)}>
                     <Eye aria-hidden="true" />

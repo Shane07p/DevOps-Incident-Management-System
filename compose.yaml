@@ -34,6 +34,8 @@ services:
       # Migrations only, unless .env opts in to the dev seed (D27).
       FLYWAY_LOCATIONS: ${FLYWAY_LOCATIONS:-classpath:db/migration}
       JWT_SECRET: ${JWT_SECRET:-}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-}
+      AI_SERVICE_TIMEOUT: ${AI_SERVICE_TIMEOUT:-5s}
       # Empty: events wait in the outbox. With the queue profile: amqp://settle:<password>@rabbitmq:5672
       RABBITMQ_URL: ${RABBITMQ_URL:-}
       TZ: UTC
@@ -104,6 +106,8 @@ services:
     container_name: incident-demo-shop
     environment:
       PORT: 8001
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEMO_SHOP_CONTROL_TOKEN: ${DEMO_SHOP_CONTROL_TOKEN:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
     ports:

@@ -3,6 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { AREAS, ADMIN_PAGES } from '@/app/navigation'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
+import { AccessTokensPage } from '@/pages/AccessTokensPage'
 import { AlertsPage } from '@/pages/AlertsPage'
 import { AuditLogPage } from '@/pages/AuditLogPage'
 import { EscalationPage } from '@/pages/EscalationPage'
@@ -10,7 +11,9 @@ import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
+import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { LogsPage } from '@/pages/LogsPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
@@ -21,18 +24,29 @@ import { ServicesPage } from '@/pages/ServicesPage'
 import { RunbooksPage } from '@/pages/RunbooksPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
+import { MonitorsPage } from '@/pages/MonitorsPage'
+import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
   '/escalation': <EscalationPage />,
+  '/logs': <LogsPage />,
   '/schedules': <SchedulesPage />,
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
   '/runbooks': <RunbooksPage />,
+  '/tokens': <AccessTokensPage />,
+  '/monitors': <MonitorsPage />,
+  '/heartbeats': <HeartbeatsPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.
-const ADMIN_SCREENS: Record<string, ReactNode> = { '/audit': <AuditLogPage />, '/tools': <ToolsPage />, '/users': <UsersPage /> }
+const ADMIN_SCREENS: Record<string, ReactNode> = {
+  '/audit': <AuditLogPage />,
+  '/integrations': <IntegrationsPage />,
+  '/tools': <ToolsPage />,
+  '/users': <UsersPage />,
+}
 
 // Response screens: incidents and alerts. Open to every role; they rank above the /incidents/* and /alerts/*
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.
@@ -55,7 +69,9 @@ export const routes: RouteObject[] = [
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  // Each org's public page (D45); without a slug the page says how to find one.
   { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
+  { path: '/status/:slug', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
   {
     element: <RequireAuth />,
     children: [

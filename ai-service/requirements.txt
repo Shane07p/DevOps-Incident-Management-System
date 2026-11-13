@@ -4,3 +4,7 @@ uvicorn[standard]==0.54.0
 
 # Sprint 2 runtime dependencies (Ollama integration)
 httpx==0.28.1
+
+# Sprint 4 runtime dependencies (MCP server with read tools, Issue #162)
+fastmcp==3.4.11
+mcp==1.30.0

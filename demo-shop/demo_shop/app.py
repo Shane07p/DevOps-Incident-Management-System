@@ -6,12 +6,13 @@ Exposes payments, checkout, search, fault control switches, and traffic generato
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import hmac
 import time
 import urllib.parse
 import uuid
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from demo_shop.config import Config
@@ -43,6 +44,8 @@ fault_manager.register_queue(order_queue)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if Config.ENVIRONMENT == "production" and not Config.CONTROL_TOKEN:
+        raise RuntimeError("DEMO_SHOP_CONTROL_TOKEN must be set when ENVIRONMENT=production")
     # Startup: ensure queue worker is running
     order_queue.start()
     StructuredLogger.info(
@@ -74,6 +77,24 @@ app = FastAPI(
     version=Config.DEFAULT_VERSION,
     lifespan=lifespan,
 )
+
+
+# The Settle service each route belongs to. Settle queries metrics by this `service` label
+# (backend TelemetryService), so it matches the service names in the scenarios.
+ROUTE_SERVICES = (
+    ("/payments", "payments"),
+    ("/checkout", "checkout"),
+    ("/search", "search"),
+    ("/products", "search"),
+)
+
+
+def service_of(path: str) -> str:
+    """The service a request path belongs to; demo-shop itself for health, faults and traffic."""
+    for prefix, service in ROUTE_SERVICES:
+        if path == prefix or path.startswith(prefix + "/"):
+            return service
+    return "demo-shop"
 
 
 # ---------------------------------------------------------------------------
@@ -112,10 +133,11 @@ async def telemetry_middleware(request: Request, call_next):
     # Normalise high-cardinality paths (use matched route template with fallback)
     route = request.scope.get("route")
     endpoint_label = getattr(route, "path", "unmatched")
+    service = service_of(path)
     telemetry.http_requests_total.add(
         1,
         {
-            "service": "demo-shop",
+            "service": service,
             "method": method,
             "endpoint": endpoint_label,
             "status": str(status_code),
@@ -124,7 +146,7 @@ async def telemetry_middleware(request: Request, call_next):
     )
     telemetry.http_request_duration_seconds.record(
         duration,
-        {"service": "demo-shop", "endpoint": endpoint_label},
+        {"service": service, "endpoint": endpoint_label},
     )
 
     response.headers["X-Request-Id"] = req_id
@@ -218,12 +240,25 @@ async def checkout(request: Request, checkout_req: CheckoutRequest) -> CheckoutR
 # Fault Switches Control Endpoints (SCN-01 to SCN-05)
 # ---------------------------------------------------------------------------
 
-@app.get("/faults", response_model=FaultsStatusResponse, summary="List status of all 5 fault switches")
+def require_control_token(authorization: Optional[str] = Header(default=None)) -> None:
+    if not Config.CONTROL_TOKEN:
+        return
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(
+        token.encode("utf-8"), Config.CONTROL_TOKEN.encode("utf-8"),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A valid control token is required",
+        )
+
+
+@app.get("/faults", response_model=FaultsStatusResponse, summary="List status of all 5 fault switches", dependencies=[Depends(require_control_token)])
 def list_faults() -> FaultsStatusResponse:
     return fault_manager.get_status()
 
 
-@app.post("/faults/reset", summary="Disable all faults and restore healthy baseline")
+@app.post("/faults/reset", summary="Disable all faults and restore healthy baseline", dependencies=[Depends(require_control_token)])
 def reset_faults() -> dict:
     fault_manager.reset()
     return {
@@ -233,12 +268,12 @@ def reset_faults() -> dict:
     }
 
 
-@app.get("/faults/deploy-event", response_model=Optional[DeployEvent], summary="Get last deploy event")
+@app.get("/faults/deploy-event", response_model=Optional[DeployEvent], summary="Get last deploy event", dependencies=[Depends(require_control_token)])
 def get_last_deploy_event() -> Optional[DeployEvent]:
     return fault_manager.get_last_deploy_event()
 
 
-@app.post("/faults/{fault_name}", summary="Enable or disable a specific fault switch")
+@app.post("/faults/{fault_name}", summary="Enable or disable a specific fault switch", dependencies=[Depends(require_control_token)])
 def toggle_fault(fault_name: str, payload: FaultToggleRequest) -> dict:
     try:
         if payload.enabled:
@@ -259,7 +294,7 @@ def toggle_fault(fault_name: str, payload: FaultToggleRequest) -> dict:
 # Traffic Generator Endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/traffic/start", summary="Start bounded traffic generation")
+@app.post("/traffic/start", summary="Start bounded traffic generation", dependencies=[Depends(require_control_token)])
 async def start_traffic(payload: TrafficStartRequest) -> dict:
     parsed = urllib.parse.urlsplit(payload.target_url)
     origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
@@ -282,13 +317,13 @@ async def start_traffic(payload: TrafficStartRequest) -> dict:
     }
 
 
-@app.post("/traffic/stop", summary="Stop traffic generator cleanly")
+@app.post("/traffic/stop", summary="Stop traffic generator cleanly", dependencies=[Depends(require_control_token)])
 async def stop_traffic() -> dict:
     await traffic_generator.stop()
     return {"status": "stopped"}
 
 
-@app.get("/traffic/status", response_model=TrafficStatusResponse, summary="Get traffic generator progress")
+@app.get("/traffic/status", response_model=TrafficStatusResponse, summary="Get traffic generator progress", dependencies=[Depends(require_control_token)])
 def traffic_status() -> TrafficStatusResponse:
     return traffic_generator.get_status()
 
@@ -297,12 +332,12 @@ def traffic_status() -> TrafficStatusResponse:
 # Structured Telemetry Logs Endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/telemetry/logs", summary="Get recorded structured logs")
+@app.get("/telemetry/logs", summary="Get recorded structured logs", dependencies=[Depends(require_control_token)])
 def get_telemetry_logs(since: Optional[str] = None) -> List[dict]:
     return StructuredLogger.get_logs(since=since)
 
 
-@app.post("/telemetry/logs/clear", summary="Clear structured logs buffer")
+@app.post("/telemetry/logs/clear", summary="Clear structured logs buffer", dependencies=[Depends(require_control_token)])
 def clear_telemetry_logs() -> dict:
     StructuredLogger.clear_logs()
     return {"status": "ok"}

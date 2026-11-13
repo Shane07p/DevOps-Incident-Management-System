@@ -3,19 +3,20 @@ import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
-import { getIncident, type TimelineEntry } from '@/api/incidents'
+import { getIncident } from '@/api/incidents'
 import { listRunbooks } from '@/api/runbooks'
+import { useAuth } from '@/auth/AuthProvider'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import { formatIst } from '@/lib/time'
+import { IncidentDeploys } from './incident/IncidentDeploys'
+import { IncidentEvidence } from './incident/IncidentEvidence'
+import { IncidentTelemetry } from './incident/IncidentTelemetry'
+import { IncidentTimeline } from './incident/IncidentTimeline'
+import { PublicUpdates } from './incident/PublicUpdateForm'
 import { SlaClocks } from './incident/SlaClocks'
-
-// "INCIDENT_CREATED" → "Incident created"; unknown types from later sprints still read sensibly.
-const eventLabel = (eventType: string) => {
-  const words = eventType.toLowerCase().replaceAll('_', ' ')
-  return words.charAt(0).toUpperCase() + words.slice(1)
-}
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -26,26 +27,7 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Timeline({ entries }: { entries: TimelineEntry[] }) {
-  if (entries.length === 0) return <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
-  return (
-    <ol className="flex flex-col gap-4 border-l pl-5">
-      {entries.map((entry) => (
-        <li key={entry.id} className="relative flex flex-col gap-0.5">
-          <span aria-hidden="true" className="absolute top-1.5 -left-[25px] size-2 rounded-full bg-foreground" />
-          <span className="text-sm">
-            <span className="font-semibold">{eventLabel(entry.eventType)}</span>
-            <span className="text-muted-foreground"> · {entry.actor ?? 'System'}</span>
-          </span>
-          {entry.details && <span className="text-sm">{entry.details}</span>}
-          <span className="font-mono text-xs text-muted-foreground tnum">{formatIst(entry.recordedAt)}</span>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
+/** One incident: what it is, both SLA clocks, and its timeline. */
 // Show runbooks belonging to the incident's service.
 function IncidentRunbooks({
   serviceId,
@@ -105,6 +87,7 @@ function IncidentRunbooks({
 }
 
 export function IncidentDetailPage() {
+  const { user, org } = useAuth()
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
   const incident = useQuery({ queryKey: ['incident', id], queryFn: () => getIncident(id), enabled: valid })
@@ -153,13 +136,32 @@ export function IncidentDetailPage() {
             <SlaClocks incident={incident.data} />
           </section>
 
+          <IncidentDeploys incident={incident.data} />
+
+          <IncidentTelemetry serviceId={incident.data.service.id} createdAt={incident.data.createdAt} />
+
+          <IncidentEvidence incidentId={incident.data.id} timeline={incident.data.timeline} />
+
           <IncidentRunbooks serviceId={incident.data.service.id} />
+
+          <SimilarIncidentsPanel incidentId={incident.data.id} />
+
+          {user && user.role !== 'VIEWER' && (
+            <PublicUpdates
+              incidentId={incident.data.id}
+              orgSlug={org?.slug}
+              // The same rule as the server's: an Admin, or this incident's Lead or Comms.
+              mayPublish={
+                user.role === 'ADMIN' || incident.data.assignee?.id === user.id || incident.data.roles?.comms?.id === user.id
+              }
+            />
+          )}
 
           <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
             <h2 id="timeline-heading" className="text-lg font-semibold">
               Timeline
             </h2>
-            <Timeline entries={incident.data.timeline} />
+            <IncidentTimeline incidentId={incident.data.id} entries={incident.data.timeline} />
           </section>
         </>
       )}

@@ -21,6 +21,8 @@ import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.heartbeat.entity.Heartbeat;
+import com.group2.incident.heartbeat.repository.HeartbeatRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
 import com.group2.incident.incident.entity.EscalationStep;
 import com.group2.incident.incident.entity.Incident;
@@ -33,7 +35,9 @@ import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
+import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
@@ -66,6 +70,9 @@ public class SecurityMatrixTest {
 	private UptimeMonitorRepository monitors;
 
 	@Autowired
+	private HeartbeatRepository heartbeats;
+
+	@Autowired
 	private TestAccounts accounts;
 
 	@Autowired
@@ -76,6 +83,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private JdbcTemplate jdbc;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@Autowired
 	private AppUserRepository users;
@@ -131,6 +141,8 @@ public class SecurityMatrixTest {
 	private Long targetIncidentId;
 	private Long targetDeployId;
 	private Long targetMonitorId;
+	private Long targetHeartbeatId;
+	private String targetHeartbeatToken;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
@@ -337,6 +349,48 @@ public class SecurityMatrixTest {
 						200, 403, 403, 401
 				),
 				new MatrixRow(
+						"GET /api/heartbeats",
+						HttpMethod.GET,
+						"/api/heartbeats",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/heartbeats/{id}",
+						HttpMethod.GET,
+						"/api/heartbeats/{id}",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/heartbeats",
+						HttpMethod.POST,
+						"/api/heartbeats",
+						"{\"name\":\"HB_${RANDOM}\",\"serviceId\":${SERVICE_ID},\"intervalSeconds\":60,\"graceSeconds\":10,\"enabled\":true}",
+						201, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/heartbeats/{id}",
+						HttpMethod.PUT,
+						"/api/heartbeats/{id}",
+						"{\"name\":\"HB_${RANDOM}\",\"serviceId\":${SERVICE_ID},\"intervalSeconds\":60,\"graceSeconds\":10,\"enabled\":true}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/public/heartbeats/ping/{token}",
+						HttpMethod.POST,
+						"/api/public/heartbeats/ping/{token}",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
+						"GET /api/public/heartbeats/ping/{token}",
+						HttpMethod.GET,
+						"/api/public/heartbeats/ping/{token}",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
 						"GET /api/incidents",
 						HttpMethod.GET,
 						"/api/incidents",
@@ -347,6 +401,20 @@ public class SecurityMatrixTest {
 						"GET /api/incidents/search",
 						HttpMethod.GET,
 						"/api/incidents/search",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/{id}/similar",
+						HttpMethod.GET,
+						"/api/incidents/{id}/similar",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/duplicate-check",
+						HttpMethod.GET,
+						"/api/incidents/duplicate-check",
 						null,
 						200, 200, 200, 401
 				),
@@ -370,6 +438,27 @@ public class SecurityMatrixTest {
 						"/api/incidents",
 						"{\"title\":\"Sec incident\",\"description\":\"Desc\",\"serviceId\":${SERVICE_ID},\"severity\":\"SEV2\"}",
 						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/acknowledge",
+						HttpMethod.POST,
+						"/api/incidents/{id}/acknowledge",
+						"{\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/transitions",
+						HttpMethod.POST,
+						"/api/incidents/{id}/transitions",
+						"{\"status\":\"INVESTIGATING\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/severity",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/severity",
+						"{\"severity\":\"SEV1\",\"reason\":\"Customers can't pay\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
 				),
 				new MatrixRow(
 						"PUT /api/incidents/{id}/assignee",
@@ -455,6 +544,14 @@ public class SecurityMatrixTest {
 						null,
 						204, 204, 403, 401
 				),
+				// Enabling a member who is already enabled changes nothing, so the row repeats safely.
+				new MatrixRow(
+						"PUT /api/users/{id}/enabled",
+						HttpMethod.PUT,
+						"/api/users/{id}/enabled",
+						"{\"enabled\":true}",
+						200, 403, 403, 401
+				),
 				new MatrixRow(
 						"GET /api/audit",
 						HttpMethod.GET,
@@ -482,6 +579,67 @@ public class SecurityMatrixTest {
 						"/api/me/tokens/{id}",
 						null,
 						204, 204, 204, 401
+				),
+				// Customers have no account, so everyone reads the page, logged in or not (D45).
+				new MatrixRow(
+						"GET /api/public/status/{slug}",
+						HttpMethod.GET,
+						"/api/public/status/{slug}",
+						null,
+						200, 200, 200, 200
+				),
+				// The matrix Engineer is neither the incident's Lead nor its Comms (D45, TC-FR-21.2a).
+				new MatrixRow(
+						"POST /api/incidents/{id}/public-updates",
+						HttpMethod.POST,
+						"/api/incidents/{id}/public-updates",
+						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
+						201, 403, 403, 401
+				),
+				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
+				new MatrixRow(
+						"GET /api/telemetry/logs",
+						HttpMethod.GET,
+						"/api/telemetry/logs",
+						null,
+						400, 400, 400, 401
+				),
+				new MatrixRow(
+						"GET /api/telemetry/metrics",
+						HttpMethod.GET,
+						"/api/telemetry/metrics",
+						null,
+						400, 400, 400, 401
+				),
+				// The org's own Grafana connection (#260): Admin only. The Admin's PUT has no URL (400), and
+				// the test call finds no connection (503).
+				new MatrixRow(
+						"GET /api/settings/telemetry",
+						HttpMethod.GET,
+						"/api/settings/telemetry",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/settings/telemetry",
+						HttpMethod.PUT,
+						"/api/settings/telemetry",
+						"{}",
+						400, 403, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/settings/telemetry",
+						HttpMethod.DELETE,
+						"/api/settings/telemetry",
+						null,
+						204, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/settings/telemetry/test",
+						HttpMethod.POST,
+						"/api/settings/telemetry/test",
+						null,
+						503, 403, 403, 401
 				)
 		);
 	}
@@ -508,6 +666,7 @@ public class SecurityMatrixTest {
 		service.putTarget(Severity.SEV2, 60, 480);
 		service.putTarget(Severity.SEV3, 240, 2880);
 		service.putTarget(Severity.SEV4, 1440, 10080);
+		service.publishAs(true, "Matrix service", clock.instant());
 		ServiceEntity savedService = services.saveAndFlush(service);
 		targetServiceId = savedService.getId();
 
@@ -547,6 +706,18 @@ public class SecurityMatrixTest {
 		adminRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Admin runbook", List.of("Step"), clock.instant())).getId();
 		engineerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Engineer runbook", List.of("Step"), clock.instant())).getId();
 		viewerRunbookId = runbooks.saveAndFlush(new Runbook(savedService, "Viewer runbook", List.of("Step"), clock.instant())).getId();
+
+		Heartbeat targetHeartbeat = heartbeats.saveAndFlush(new Heartbeat(
+				savedService,
+				"Matrix heartbeat",
+				60,
+				10,
+				UUID.randomUUID().toString().replace("-", ""),
+				true,
+				clock.instant()
+		));
+		targetHeartbeatId = targetHeartbeat.getId();
+		targetHeartbeatToken = targetHeartbeat.getToken();
 	}
 
 	@Test
@@ -598,11 +769,14 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
 				: pathTemplate.startsWith("/api/notifications/") ? notificationId.toString()
 				: pathTemplate.startsWith("/api/monitors/") ? targetMonitorId.toString()
+				: pathTemplate.startsWith("/api/heartbeats/") ? targetHeartbeatId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
+				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
 				.replace("{entryId}", "999999999")
+				.replace("{token}", targetHeartbeatToken != null ? targetHeartbeatToken : "dummy_token")
 				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999");
 	}
 
@@ -610,6 +784,25 @@ public class SecurityMatrixTest {
 		MockHttpServletRequestBuilder req = request(method, path);
 		if (path.equals("/api/incidents/search")) {
 			req.queryParam("q", "SecurityMatrix");
+		}
+		if (path.equals("/api/incidents/duplicate-check")) {
+			req.queryParam("title", "SecurityMatrix incident");
+		}
+		if (path.endsWith("/acknowledge")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'OPEN', assignee_id = NULL, acknowledged_at = NULL WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/severity")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET severity = 'SEV2', status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/transitions")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/assignee")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET assignee_id = NULL WHERE id = ?", targetIncidentId);
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

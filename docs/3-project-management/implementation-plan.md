@@ -137,7 +137,7 @@ blocks starts.
 | Dedup and grouping: `(source, event_id)` is unique; an explicit correlation key joins an active incident; otherwise a new incident through the normal creation flow | Manan | US-04, [§6](../2-design/architecture.md#6-create-and-group-incidents) | Testcontainers: a repeated event is ignored; two alerts with the same key at once make one incident; linking does not reset either clock | #72: Done (PR #123) |
 | On-call schedules per service in the project time zone; a new incident is assigned to whoever is on call, or the fallback contact; the assignment goes on the timeline | Utsav B | US-06, FR-15, FR-05.1 | JUnit with a controlled `Clock` at shift boundaries; creation picks the right person or the fallback | #71: Done (PR #112) |
 | Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
-| Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73, #74: Open |
+| Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73: Done (PR #174). #74: In review |
 | On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: inbox merged (PR #125); open for the count and "routed to me", whose fields arrived with #123 |
 | Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79: moved to Manush on 2 Nov; waits on #73 and #74 |
 | Grafana Cloud account; its settings on Render | Shane | D34 | | #75: Open |
@@ -158,11 +158,11 @@ blocks starts.
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Done (PR #203; Lead made the assignee in the fixes PR) |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Open |
 | Grafana Cloud checks from 2 to 3 locations; alert rules for Down and Degraded, and on the demo shop's error rate, post into intake | Manush | D35, D36 | One failing location raises nothing; two in a row do; two slow ones raise Degraded | #88: Open |
-| Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Open |
+| Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: timeline with comments and corrections in PR #230; the actions follow, waiting for #83 and #84 |
 | Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Done (PR #177) |
 | Agent tool loop on demo data | Himanshu | [AI/ML roadmap](../2-design/ai-ml-roadmap.md) | pytest | #91: Done (PR #181) |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |
-| Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Open |
+| Recorded demo-shop telemetry for the five scenarios | Dhruva | AI/ML roadmap | pytest | #142: Done (PR #214, #215) |
 | Metric-baseline and deploy-window evidence | Dhruva | AI/ML roadmap | pytest | #93: Open |
 
 **Cut first if late:** the third check location. (RabbitMQ is in: the outbox relay publishes since #82.)
@@ -179,28 +179,28 @@ FR-28 in [srs.md](../1-requirements/srs.md). Each item's test cases are in
 | Orgs and sign-up: backend (merges with #198) | Shane | D48 | `OrgIsolationTest` | #197: Open |
 | Orgs and sign-up: frontend | Shlok | D48 | Vitest | #198: Open |
 | pgvector in every environment | Manan | D44 | `DatabaseSchemaTest` | #150: Open |
-| Personal access tokens | Het | US-25, FR-23, D38 | TC-FR-23.1a to 23.4a | #151: Open |
+| Personal access tokens | Het | US-25, FR-23, D38 | TC-FR-23.1a to 23.4a | #151: Done (PR #219) |
 | Deploy tracking | Het | US-19, FR-20.1 | TC-FR-20.1a to d | #152: Open |
 | Audit log API | Utsav B | US-17, FR-13 | Its own cases (PR #179) | #153: In review (PR #179) |
 | Service map: dependencies and blast radius | Utsav B | US-26, FR-14.2, FR-24 | Its own cases (PR #180) | #154: In review (PR #180) |
-| Runbooks per service | Shane | US-27, FR-25 | TC-FR-25.1a to d | #155: In review |
+| Runbooks per service | Shane | US-27, FR-25 | TC-FR-25.1a to d | #155: Done (PR #220) |
 | Logs and metrics API through the backend | Dhruva | US-28, US-29, FR-26, FR-27, D34 | TC-FR-26.1a to 27.1a | #156: Open |
 | Evidence links on an incident | Bhakti | FR-09.3 | TC-FR-09.3a to c | #157: Open |
 | History search | Manan | US-15, FR-17 | TC-FR-17.1a to d | #158: Open |
 | AI-1 Find similar in the backend | Manan | US-18, FR-18, D44 | TC-FR-18.1a, 18.4a | #159: Open |
-| Public status page and customer updates | Shane | US-20, FR-21, D45 | TC-FR-21.1a to 21.2a | #160: Open |
+| Public status page and customer updates | Shane | US-20, FR-21, D45 | TC-FR-21.1a to 21.2a | #160: In review (PR #233) |
 | AI-1 retrieval evaluation | Bhakti | AI/ML roadmap | pytest | #161: Done (PR #175) |
 | MCP server with read tools | Himanshu | US-30, FR-28, D38 | TC-FR-28.1a to 28.2a | #162: Open |
 | Logs explorer and metrics dashboards | Himanshu | US-28, US-29 | TC-FR-26.1b, 27.3a | #163: Open |
 | Public status page on real data, and posting updates | Bhakti | US-20, D45 | TC-FR-21.1c | #164: Open |
 | Access tokens page | Het | US-25 | TC-FR-23.1b | #165: Open |
-| Audit log page | Shane | US-17 | TC-US-17a, b | #166: Open |
-| Service map page | Shane | US-26 | TC-US-26a, b | #167: Open |
+| Audit log page | Shane | US-17 | TC-US-17a, b | #166: Done (PR #221) |
+| Service map page | Shane | US-26 | TC-US-26a, b | #167: Done (PR #222) |
 | History search page | Himanshu | US-15 | TC-FR-17.1e | #168: Open |
 | Incident page: deploys, logs and charts, and evidence links | Bhakti | FR-09, FR-27.2 | TC-FR-27.2a | #169: Open |
 | Similar incidents and the duplicate warning | Himanshu | US-18 | TC-FR-18.2a | #170: Open |
-| SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: draft PR, waiting for the clock fields from #83 and #84 |
-| Runbooks pages | Bhakti | US-27, FR-25.2 | TC-FR-25.2a | #172: Open |
+| SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: in review as PR #232 |
+| Runbooks pages | Bhakti | US-27, FR-25.2 | TC-FR-25.2a | #172: Done (PR #205) |
 
 **Cut first if late:** log patterns and saved views in the logs explorer; then the "by meaning" mode
 of history search.

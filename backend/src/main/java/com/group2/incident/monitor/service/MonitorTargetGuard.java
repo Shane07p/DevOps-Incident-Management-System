@@ -1,6 +1,7 @@
 package com.group2.incident.monitor.service;
 
 import com.group2.incident.common.error.FieldValidationException;
+import com.group2.incident.common.net.InternalAddresses;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -40,7 +41,7 @@ public class MonitorTargetGuard {
 			throw new FieldValidationException("url", "The host " + uri.getHost() + " could not be found");
 		}
 		for (InetAddress address : addresses) {
-			if (isInternal(address)) {
+			if (InternalAddresses.isInternal(address)) {
 				throw new FieldValidationException("url", "The URL must not point to a private or local network address");
 			}
 		}
@@ -64,25 +65,5 @@ public class MonitorTargetGuard {
 			throw new FieldValidationException("url", "The URL must not contain a user name or password");
 		}
 		return uri;
-	}
-
-	/** True for any address that is not a public unicast one. */
-	static boolean isInternal(InetAddress address) {
-		if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
-				|| address.isSiteLocalAddress() || address.isMulticastAddress()) {
-			return true;
-		}
-		byte[] bytes = address.getAddress();
-		int first = bytes[0] & 0xff;
-		if (bytes.length == 4) {
-			int second = bytes[1] & 0xff;
-			return first == 0 // "this network", 0.0.0.0/8
-					|| (first == 100 && second >= 64 && second <= 127) // shared address space, 100.64.0.0/10
-					|| (first == 192 && second == 0 && (bytes[2] & 0xff) == 0) // IETF protocol assignments, 192.0.0.0/24
-					|| (first == 198 && (second == 18 || second == 19)) // benchmarking, 198.18.0.0/15
-					|| first >= 240; // reserved and broadcast
-		}
-		// IPv6 unique local addresses, fc00::/7; isSiteLocalAddress covers only the retired fec0::/10.
-		return (first & 0xfe) == 0xfc;
 	}
 }

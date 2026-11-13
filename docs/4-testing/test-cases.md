@@ -245,8 +245,11 @@ The monitor raises an alert after N = 3 consecutive failures.
 | TC-FR-22.1f | Negative | A monitor URL on our own network: loopback, private ranges, `169.254.169.254`, IPv6 local | Refused on save with a field error, and never contacted by a check | `MonitorTargetGuardTest`, `HttpProbeTest.refusedTargetIsNotContacted`, `MonitorControllerTest.internalUrlIsRefused` | Automated |
 | TC-FR-22.1g | State transition | A monitor in an outage is moved to another service | The count starts again; the new service gets its own alert at the threshold; its pass does not recover the old service's alert | `MonitorCheckTest.movingToAnotherServiceStartsAfresh` (Testcontainers) | Automated |
 | TC-FR-22.1h | Boundary value | A target that answers at once and then keeps sending its body | The check ends with the status, well within its 10-second deadline | `HttpProbeTest.streamingBodyDoesNotHoldTheCheck` | Automated |
-| TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Planned (Manush) |
-| TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Planned (Manush) |
+| TC-FR-22.1i | Equivalence | Monitors page with a healthy and a down monitor | Each shows its real state (Up; Down since …); no uptime bars or figures are invented; a Viewer has no New monitor button | `MonitorsPage.test.tsx` | In review |
+| TC-FR-22.1j | Boundary value | Monitor form: an `ftp://` URL and a 10-second interval, then a URL the server refuses | Both are refused before the request with the server's own messages; the server's URL error shows on the URL field; create and edit send the server's body | `MonitorsPage.test.tsx` | In review |
+| TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Automated |
+| TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Automated |
+| TC-HBc | Equivalence | Heartbeats page: on time, late, missed, waiting, paused | Each status is read from the job's own fields; a missed job is named at the top; no sample data | `HeartbeatsPage.test.tsx` | In review |
 
 ---
 
@@ -271,27 +274,27 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Planned (Utsav B) |
-| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Planned (Utsav B) |
+| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | In review |
+| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | In review |
+| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | In review |
+| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | In review |
 
 ### Acknowledgement (FR-06, FR-07.4, FR-16.2, US-08)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeTest` (Testcontainers) | Planned (Utsav B) |
-| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Planned (Utsav B) |
+| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Automated |
+| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Automated |
+| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Automated |
+| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeRaceTest` (Testcontainers) | Automated |
+| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Automated |
 
 ### Severity (FR-04.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | Planned (Utsav B) |
-| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | Planned (Utsav B) |
+| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | In review |
+| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | In review |
 
 ### Escalation (FR-07.3 to FR-07.7): decision table
 
@@ -385,6 +388,14 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-AI-91j | Boundary value | A provider that keeps answering past the deadline; a budget of 100 tokens | Stopped at the deadline with `status: timeout`; each turn may generate only the tokens left | `test_agent_robustness.py` | Automated |
 | TC-AI-91k | Equivalence | Metric anomalies for one incident's time range, a range with none, and a time that is not one | Only that scenario's evidence; nothing; refused | `test_agent_robustness.py` | Automated |
 
+### Metric-baseline and deploy-window evidence (Issue #93)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-93a | Equivalence | Compare metric values against baseline levels (e.g. error rate, latency, queue depth, cert expiry) | Correct anomaly ratio, deviation delta, severity classification, and PromQL Grafana Explore URL | `test_metric_baseline.py` | Automated |
+| TC-AI-93b | Boundary value | Deploys in lookback window (default 2h), on window boundaries, and outside window | Recent deploys returned with `minutes_before_incident`; outside excluded | `test_deploy_window.py` | Automated |
+| TC-AI-93c | Scenario | Service dependency deploys and rollback detection | Dependencies included when requested with `relevance: dependency`; rollbacks flagged | `test_deploy_window.py` | Automated |
+
 ## Sprint 4
 
 The service map API (#154) brings its own cases in its pull request (#180).
@@ -410,6 +421,12 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-01.6b | Boundary | Demote the last enabled Admin | 409 "An org needs at least one Admin" | `UserAdminControllerTest`, `UserAdminServiceTest` | Automated |
 | TC-FR-01.6c | Negative | Change the role of someone in another org | 404 | `UserAdminControllerTest` | Automated |
 | TC-FR-01.6d | Concurrency | Two Admins demote each other at the same moment | The second waits for the first, then gets 409; one Admin remains | `LastAdminRaceTest` | Automated |
+| TC-FR-01.6e | State transition | Disable a member, reuse their token, log in; enable them, log in | 401 and 401 while disabled; login works once enabled; the old token stays dead | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6f | Negative | An Admin disables their own account | 409 "You can't disable your own account" | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6g | Equivalence | Disable, disable again, enable, enable again | One `USER_DISABLED` and one `USER_ENABLED` audit entry; repeats change nothing | `UserAdminControllerTest` | Automated |
+| TC-FR-01.6h | Concurrency | Two Admins disable each other at the same moment | The second waits for the first, then gets 409; one enabled Admin remains | `LastAdminRaceTest` | Automated |
+| TC-FR-01.6i | Decision table | An Admin's member list: another member's row, their own row, a disabled member | Disable and Enable send nothing until confirmed; no Disable on your own row; a disabled member is marked; the server's 409 shows in the dialog | `UsersPage.test.tsx` | Automated |
+| TC-FR-01.6j | Concurrency | An Admin is disabled, or demoted, while their own request waits for the org lock | 403; their request changes nothing | `LastAdminRaceTest` | Automated |
 | TC-FR-01.4h | Concurrency | A slug or an email taken between the check and the insert | A taken slug is looked for again (up to 3 times); a taken email is 409 | `SignupServiceTest` | Automated |
 | TC-FR-01.5h | Equivalence | Alert inbox in an org whose incident ids differ from its numbers | Each alert shows its incident's reference (INC-1), not its id | `AlertGroupingTest`, `AlertsPage.test.tsx` | Automated |
 | TC-FR-01.4g | Equivalence | Sign-up page and sign in by email | The org is created and the app opens; the header shows the org; a taken email shows on its field; sign-in posts `email` | `SignupPage.test.tsx`, `LoginPage.test.tsx`, `TopBar.test.tsx` | Automated |
@@ -419,7 +436,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-23.1a | Equivalence | Create a token named "Cursor" | 201 with the token (`pat_…`) once; only its SHA-256 hash is stored | `PersonalAccessTokenTest` | Automated |
-| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Planned (Het) |
+| TC-FR-23.1b | Equivalence | Access tokens page: create a token, then close the dialog | The token is gone from the page; revoking sends nothing until it is confirmed | `AccessTokensPage.test.tsx` | Automated |
 | TC-FR-23.1c | Decision table | Create duplicate active token name (same org) vs revoked name vs different org | Duplicate active is 409; revoked name can be reused (201); separate orgs can use same name | `PersonalAccessTokenTest`, `PersonalAccessTokenRaceTest` | Automated |
 | TC-FR-23.1d | Concurrency | Two requests to create the same token name at the same moment | One succeeds (201), one gets 409 Conflict | `PersonalAccessTokenRaceTest` | Automated |
 | TC-FR-23.2a | Equivalence | The token calls `GET /api/incidents` | 200, as its owner | `PersonalAccessTokenTest` | Automated |
@@ -455,14 +472,30 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-26.1a | Equivalence | Each combination of service, level, text, and time range, against a stubbed Loki | The query is built from those parameters only; text from the user never becomes query syntax | `TelemetryServiceTest` | Planned (Dhruva) |
-| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the filters; the field becomes a filter | `LogsPage.test.tsx` | Planned (Himanshu) |
-| TC-FR-26.1c | Negative | Run a query, then read the captured logs | The read token is in no log line | `TelemetryServiceTest` | Planned (Dhruva) |
-| TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Planned (Dhruva) |
-| TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Planned (Dhruva) |
-| TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Planned (Dhruva) |
-| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentPage.test.tsx` | Planned (Bhakti) |
+| TC-FR-26.1a | Equivalence | Each combination of service, level, text, and time range, against a stubbed Loki | The query is built from those parameters only; text from the user never becomes query syntax | `TelemetryServiceTest` | Automated |
+| TC-FR-26.1b | Equivalence | Logs page: set the filters, then click a field in a JSON line | The request carries the service, level, text, and time range; the clicked field keeps only the loaded lines with that value, and sends nothing new | `LogsPage.test.tsx` | Automated |
+| TC-FR-26.1d | Concurrency | Logs page: a level is set while the typed text still waits its 400 ms | Both the text and the level end up in the URL | `LogsPage.test.tsx` | Automated |
+| TC-FR-26.1e | Boundary value | Logs page: "Last 15 minutes", asked again an hour later | The second request asks from 15 minutes before it, so the window never grows past the range | `LogsPage.test.tsx` | Automated |
+| TC-FR-26.1c | Negative | Run a query, then read the captured logs | The read token is in no log line | `TelemetryServiceTest` | Automated |
+| TC-FR-26.2a | Boundary value | A time range of exactly 24 hours, and of 24 hours and 1 second | Accepted; 400 | `TelemetryServiceTest` | Automated |
+| TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Automated |
+| TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Automated |
+| TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
+| TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not connected) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
+
+### Each org's own Grafana (D49, #260)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-D49a | Org isolation | Two orgs, each with a service named Payments and its own Grafana, read logs and metrics | Each org's requests reach only its own Grafana, with its own token | `TelemetryConnectionTest.eachOrgReadsLogsAndMetricsOnlyFromItsOwnGrafana` (Testcontainers) | In review |
+| TC-D49b | Negative | An org with no connection reads logs | 503 "Telemetry isn't connected for your organization"; no Grafana is called | `TelemetryConnectionTest.withoutItsOwnConnectionAnOrgGets503AndNeverAnotherOrgsData`, `TelemetryServiceTest` | In review |
+| TC-D49c | Negative | Save a connection, then read it, the database row, and the audit log | The token is never returned, stored in the clear, or audited; a ciphertext moved to another org does not decrypt | `TelemetryConnectionTest.theTokenIsNeverReturnedStoredInTheClearOrAudited`, `TokenCipherTest` | In review |
+| TC-D49d | Equivalence (invalid) | A URL that is http, has no host, has user info, or points at loopback, private, link-local, or another internal address | 400 on that field | `TelemetryHttpTest` | In review |
+| TC-D49e | Negative | A name that passed the check resolves to our own machine when the call is made | Refused while connecting; the request never leaves | `TelemetryHttpTest.theConnectionItselfRefusesAnInternalAddressEvenIfTheCheckWasSkipped` | In review |
+| TC-D49f | Equivalence | The org names its label, counter, and status label; a service sets its own label value | The queries use those names and that value | `TelemetryConnectionTest.aServiceCanSayHowItIsLabelledAndTheOrgItsMetricNames` | In review |
+| TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | In review |
+| TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | In review |
 
 ### Evidence links (FR-09.3)
 
@@ -471,6 +504,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-09.3a | Equivalence (invalid) | A `javascript:` link, and an `ftp:` link | 400 | `IncidentControllerTest.invalidEvidenceUrlReturns400` (Testcontainers) | Automated |
 | TC-FR-09.3b | Concurrency | Two people add evidence to one incident at once | Both are saved; no version conflict | `EvidenceConcurrencyTest.twoConcurrentEvidenceLinksAreSavedWithoutChangingVersion` (Testcontainers) | Automated |
 | TC-FR-09.3c | Equivalence | Add evidence to a CLOSED incident | Accepted; the incident stays CLOSED | `IncidentControllerTest.evidenceAllowedOnClosedIncident` (Testcontainers) | Automated |
+| TC-FR-09.3d | Equivalence (invalid) | Incident page: a `javascript:` link, then an https link | The first is refused before anything is sent; the second is sent and listed as a link that opens in a new tab | `IncidentEvidence.test.tsx` | Automated |
 
 ### History search (FR-17)
 
@@ -482,32 +516,42 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-17.1d | Equivalence | A word that matches nothing | 200 with no results | `IncidentSearchTest` | Automated |
 | TC-FR-17.1e | Equivalence | Search page: set the filters, then reload | The filters stay in the URL; an empty result shows the empty state | `HistorySearchPage.test.tsx` | Automated |
 | TC-FR-17.1f | Concurrency | A filter is set while the typed keyword still waits its 400 ms | Both the keyword and the filter end up in the URL | `HistorySearchPage.test.tsx` | Automated |
+| TC-FR-17.1g | Equivalence | Search by meaning with service, severity, status, and page filters | Returns ranked results with the same filters and pagination | `IncidentSimilarityTest.semanticSearchAppliesFiltersAndPagination` (Testcontainers with pgvector) | Automated |
+| TC-FR-17.1h | Equivalence | Semantic mode with a blank query and active filters | Returns the filtered keyword results without an AI request | `IncidentSimilarityTest.blankSemanticQueryFallsBackToFilteredKeywordSearch` | Automated |
 
 ### AI-1 Find similar (FR-18, D44)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | In review (Manan) |
-| TC-FR-18.1a | Equivalence | A stubbed AI service returns fixed embeddings | Up to 3 past incidents above the threshold, highest score first, labelled as AI | `SimilarIncidentsTest`, against PostgreSQL with pgvector | Planned (Manan) |
-| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Planned (Himanshu) |
-| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset | The incident is still created; similar incidents come back empty, never as an error | `SimilarIncidentsTest` | Planned (Manan) |
+| TC-D44a | Equivalence | Store and read back a 768-dimension vector in the `incident` schema | 768 dimensions and the same values | `DatabaseSchemaTest.pgvectorExtensionStoresAndReads768DimensionVectorsInIncidentSchema` | Automated |
+| TC-D44b | Equivalence | A new incident, then the background worker receives a valid embedding from `POST /embed` | Creation does not call the AI service; the worker stores the 768-value embedding on the incident | `IncidentEmbeddingTest.creationQueuesEmbeddingForBackgroundWorker`, `IncidentEmbeddingTest.retryStoresPreviouslyUnavailableEmbedding` (Testcontainers) | Automated |
+| TC-FR-18.1a | Equivalence | Older and newer incidents include four above-threshold candidates and one below-threshold candidate | Only incidents created before the source are returned; the top 3 above-threshold incidents are returned in score order | `IncidentSimilarityTest.similarIncidentsAreThresholdedOrderedAndCapped` (Testcontainers with pgvector) | Automated |
+| TC-FR-18.1b | Equivalence | Similarity query on a title with open and resolved candidates | The closest open candidate is a warning; no incident is merged or created | `IncidentSimilarityTest.duplicateCheckReturnsOnlyOpenMatches` (Testcontainers with pgvector) | Automated |
+| TC-FR-18.1c | Org isolation | An equally similar incident exists in another organization | Neither similar-incidents nor duplicate-check returns the other org's incident | `OrgIsolationTest.similarSearchNeverReturnsAnEquallySimilarIncidentFromAnotherOrg`, `OrgIsolationTest.duplicateCheckDoesNotReturnAMoreSimilarIncidentFromAnotherOrg` | Automated |
+| TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Automated |
+| TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset during incident creation | The incident is created; failed embeddings remain retryable and the client respects its timeout | `AiEmbeddingClientTest`, `IncidentEmbeddingTest` (Testcontainers) | Automated |
+| TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | Automated |
+| TC-FR-18.4c | Transaction boundary | Duplicate-check and semantic-search requests embed a query before database access | The AI embedding request runs without an open database transaction | `IncidentSimilarityTransactionTest` | Automated |
 
 ### Public status page (FR-21, D45): decision table on who may publish
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-21.1a | Negative | `GET /api/public/status` for an incident with internal notes, comments, and names | None of them in the response | `PublicStatusTest` | Planned (Shane) |
-| TC-FR-21.1b | Equivalence | Fixed monitor results over 90 days | The uptime percentage computed from them | `PublicStatusTest` | Planned (Shane) |
-| TC-FR-21.1c | Equivalence | The status page with each health state; the incident page as a Viewer | Each state renders; the Viewer sees no posting form | `StatusPage.test.tsx` | Planned (Bhakti) |
-| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry; 403 for the other two. Until #86 lands: accepted for Engineers and Admins | `PublicStatusTest`, `SecurityMatrixTest` | Planned (Shane) |
+| TC-FR-21.1a | Negative | `GET /api/public/status/{slug}` for an incident with an internal title, a comment, and named people; a second org's services and updates; a service an Admin did not publish | None of them in the response; only the published updates, under the service's public name | `PublicStatusTest` | Automated |
+| TC-FR-21.1b | Equivalence | Fixed monitor results today, 10 days ago, and 100 days ago | 90-day uptime from the first two only (75.00%), each day's percentage, and null for a day with no check | `PublicStatusTest` | Automated |
+| TC-FR-21.1c | Equivalence | `/status/{slug}` with each health state, an active incident, and a past one | Each service under its public name with its health and 90-day bars; the banner follows the worst service or an open incident; updates newest first | `StatusPage.test.tsx` | Automated |
+| TC-FR-21.1d | Negative | `/status/{slug}` for a slug no org uses, and `/status` alone | "Status page not found"; the bare address says how to find a page; the page is read with no token | `StatusPage.test.tsx` | Automated |
+| TC-FR-21.1e | Equivalence | An Admin ticks "Show this service on the status page" with no public name, then adds one | Refused with the server's message and nothing sent; then sent with the public name | `ServicesPage.test.tsx` | Automated |
+| TC-FR-21.2b | Decision table | The incident page for a Viewer, another Engineer, the Lead, the Comms, and an Admin | No section for the Viewer; a note and the status page link for the other Engineer; the form for the rest, which posts the update; a 409 shows the server's reason | `IncidentsPage.test.tsx` | Automated |
+| TC-FR-21.2a | Decision table | The incident's Lead, its Comms, an Admin, another Engineer, and a Viewer post a public update | Accepted for the first three, with a timeline entry naming each; 403 for the other two | `PublicStatusTest`, `SecurityMatrixTest` | Automated |
 
 ### MCP server (FR-28, D38)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Planned (Himanshu) |
-| TC-FR-28.1b | Negative | The API answers 401 or 403 | A readable tool error | `test_mcp_server.py` | Planned (Himanshu) |
-| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Planned (Himanshu) |
+| TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Automated |
+| TC-FR-28.1b | Negative | The API answers 401, 403, 429, or any other error status | A readable tool error, never data; a 429 says when to try again | `test_mcp_server.py` | Automated |
+| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Automated |
 
 ### Pages: audit log, service map, SLA clocks
 
@@ -551,7 +595,7 @@ Two rule methods get basis path testing, done by their owners once the code exis
 
 | Method | Owner |
 | --- | --- |
-| The transition check (`from`, `to` → allowed or the reason it is not) | Utsav D |
+| The transition check (`from`, `to` → allowed or the reason it is not) | Utsav B (#84) |
 | The SLA check (target, start, stop, now → running, met, or breached) | Utsav D and Manan |
 
 For each one:
@@ -560,3 +604,23 @@ For each one:
 3. List V(G) independent paths, and write one test per path. Name them here as `TC-WB-…`.
 4. Check that JaCoCo shows every branch of the method covered.
 5. Run PIT on the class and record the mutation score in the sprint's test report.
+
+### The transition check: `TransitionPolicy.isLegal(from, to)` (#84)
+
+![Control-flow graph of TransitionPolicy.isLegal](transition-policy-cfg.svg)
+
+Ten decisions: the two null checks, six branches of the seven-case `switch (from)`, and the two short-circuit ORs (INVESTIGATING and MONITORING), so V(G) = 10 + 1 = 11. The tests are in `TransitionPolicyTest.BasisPathTests` (Utsav B); the paths below are the basis set they cover.
+
+| ID | Path | Expected | Test | Status |
+| --- | --- | --- | --- | --- |
+| TC-WB-01 | `from` is null | false | `path1_nullFromReturnsFalse` | In review |
+| TC-WB-02 | `to` is null | false | `path2_nullToReturnsFalse` | In review |
+| TC-WB-03 | OPEN | `to == ACKNOWLEDGED` | `path3_openToAcknowledgedReturnsTrue`, `path4_openToOtherReturnsFalse` | In review |
+| TC-WB-04 | ACKNOWLEDGED | `to == INVESTIGATING` | `path5_acknowledgedToInvestigatingReturnsTrue`, `path6_acknowledgedToOtherReturnsFalse` | In review |
+| TC-WB-05 | INVESTIGATING, `to == IDENTIFIED` | true, without the second test | `path7_investigatingToIdentifiedReturnsTrue` | In review |
+| TC-WB-06 | INVESTIGATING, `to != IDENTIFIED` | `to == MONITORING` | `path8_investigatingToMonitoringReturnsTrue`, `path9_investigatingToOtherReturnsFalse` | In review |
+| TC-WB-07 | IDENTIFIED | `to == MONITORING` | `path10_identifiedToMonitoringReturnsTrue`, `path11_identifiedToOtherReturnsFalse` | In review |
+| TC-WB-08 | MONITORING, `to == INVESTIGATING` | true, without the second test | `path12_monitoringToInvestigatingReturnsTrue` | In review |
+| TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | In review |
+| TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | In review |
+| TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | In review |

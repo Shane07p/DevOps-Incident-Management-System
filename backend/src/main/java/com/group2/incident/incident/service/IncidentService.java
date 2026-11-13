@@ -17,6 +17,7 @@ import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.deploy.dto.DeployResponse;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.incident.dto.AcknowledgeRequest;
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
@@ -28,6 +29,8 @@ import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.IncidentUserDto;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
+import com.group2.incident.incident.dto.SeverityChangeRequest;
+import com.group2.incident.incident.dto.TransitionRequest;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentRole;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -80,6 +83,7 @@ public class IncidentService {
 	private final OrgMembers orgMembers;
 	private final DeploymentRepository deploymentRepository;
 	private final IncidentDeploymentRepository incidentDeploymentRepository;
+	private final TransitionPolicy transitionPolicy;
 	private final Clock clock;
 
 	@Transactional
@@ -342,6 +346,8 @@ public class IncidentService {
 				incident.getResolutionTargetMinutes(),
 				incident.getResponseDueAt(),
 				incident.getResolutionDueAt(),
+				incident.getAcknowledgedAt(),
+				incident.getResolvedAt(),
 				timelineResponses,
 				deploys != null ? deploys : List.of()
 		);
@@ -491,6 +497,147 @@ public class IncidentService {
 				clock.instant()
 		));
 		return toTimelineEntryResponse(timelineEntry);
+	}
+
+	/**
+	 * Acknowledges an OPEN incident (US-08, FR-06, FR-07.4, FR-16.2).
+	 * Sets status to ACKNOWLEDGED, makes the acknowledger the assignee, records the timeline entry,
+	 * stops the response clock, and cancels pending escalation.
+	 */
+	@Transactional
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+		if (request == null || request.expectedVersion() == null) {
+			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+
+		if (incident.getStatus() != IncidentStatus.OPEN) {
+			throw new ConflictException("Cannot acknowledge an incident in " + incident.getStatus() + " status");
+		}
+
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+
+		incident.acknowledge(actor, now);
+
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		}
+		catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+
+		escalationService.cancelTaskForIncident(incidentId, now);
+
+		String details = "Acknowledged by " + actor.getDisplayName();
+		TimelineEntry timelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.ACKNOWLEDGED,
+				details,
+				now
+		);
+		timelineEntryRepository.save(timelineEntry);
+
+		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, timeline);
+	}
+
+	/**
+	 * Transitions an incident to a new legal status (FR-06, US-10).
+	 * Enforces legal transitions, optimistic locking, non-blank recovery notes for RESOLVED,
+	 * appends a timeline entry with authenticated actor and timestamp, and returns the updated incident.
+	 */
+	@Transactional
+	public IncidentResponse transitionIncident(Long incidentId, TransitionRequest request, Long actorId) {
+		if (request == null || request.expectedVersion() == null) {
+			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
+		}
+		if (request.status() == null) {
+			throw new FieldValidationException("status", "Status is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+
+		IncidentStatus currentStatus = incident.getStatus();
+		IncidentStatus newStatus = request.status();
+
+		// OPEN -> ACKNOWLEDGED is legal, but only through POST /acknowledge (#83), which makes the acknowledger the
+		// Lead, stops the response clock, and cancels escalation; one path keeps those rules in one place.
+		if (newStatus == IncidentStatus.ACKNOWLEDGED) {
+			throw new ConflictException("Acknowledge the incident instead");
+		}
+
+		if (!transitionPolicy.isLegal(currentStatus, newStatus)) {
+			throw new ConflictException("Cannot transition incident from " + currentStatus + " to " + newStatus);
+		}
+
+		if (newStatus == IncidentStatus.RESOLVED) {
+			if (request.note() == null || request.note().isBlank()) {
+				throw new FieldValidationException("note", "A recovery note is required to resolve an incident");
+			}
+		}
+
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+
+		incident.transitionTo(newStatus, now);
+
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		} catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+
+		// The note goes on the timeline with any move, not only RESOLVED.
+		String transitionDetails = "Status changed from " + currentStatus + " to " + newStatus;
+		if (request.note() != null && !request.note().isBlank()) {
+			transitionDetails += ": " + request.note().trim();
+		}
+
+		TimelineEntry statusTimelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.STATUS_CHANGED,
+				transitionDetails,
+				now
+		);
+		timelineEntryRepository.save(statusTimelineEntry);
+
+		List<TimelineEntry> updatedTimeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, updatedTimeline);
+	}
+
+	/**
+	 * Changes an incident's severity with a reason (FR-04.2). The SLA targets and due times copied at creation stay as
+	 * they were; the change and its reason go on the timeline.
+	 */
+	@Transactional
+	public IncidentResponse changeSeverity(Long incidentId, SeverityChangeRequest request, Long actorId) {
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+		if (incident.getStatus() == IncidentStatus.CLOSED) {
+			throw new ConflictException("Cannot change severity on a closed incident");
+		}
+		Severity previous = incident.getSeverity();
+		if (previous == request.severity()) {
+			throw new ConflictException("The incident is already " + previous);
+		}
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+		incident.changeSeverity(request.severity());
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		}
+		catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+		timelineEntryRepository.save(new TimelineEntry(incident, actor, TimelineEventType.SEVERITY_CHANGED,
+				"Severity changed from " + previous + " to " + request.severity() + ": " + request.reason().trim(), now));
+		return toResponse(incident, timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId));
 	}
 
 	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */

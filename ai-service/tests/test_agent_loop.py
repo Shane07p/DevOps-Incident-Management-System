@@ -98,13 +98,13 @@ def test_tool_registry_dispatches_query_deploy_events():
 def test_query_deploy_events_time_bounds_filter():
     registry = build_default_tool_registry()
 
-    # 1. Matching range includes checkout deploy (timestamp is 2026-10-27T08:16:00Z)
+    # 1. Matching range includes the recorded SCN-03 checkout deploy (2026-11-08T15:22:51.243380Z)
     res_match = registry.execute(
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T08:00:00Z",
-            "end_time": "2026-10-27T08:30:00Z",
+            "start_time": "2026-11-08T15:00:00Z",
+            "end_time": "2026-11-08T15:30:00Z",
         },
     )
     assert res_match.success is True
@@ -117,7 +117,7 @@ def test_query_deploy_events_time_bounds_filter():
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T09:00:00Z",
+            "start_time": "2026-11-08T15:30:00Z",
         },
     )
     assert res_before.success is True
@@ -129,20 +129,20 @@ def test_query_deploy_events_time_bounds_filter():
         "query_deploy_events",
         {
             "service": "checkout",
-            "end_time": "2026-10-27T08:00:00Z",
+            "end_time": "2026-11-08T15:00:00Z",
         },
     )
     assert res_after.success is True
     assert len(res_after.data["deploys"]) == 0
     assert len(res_after.evidence_items) == 0
 
-    # 4. Inclusive start and end boundaries (exact match at 08:16:00Z)
+    # 4. Inclusive start and end boundaries (exact match at the recorded deploy time)
     res_inclusive = registry.execute(
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T08:16:00Z",
-            "end_time": "2026-10-27T08:16:00Z",
+            "start_time": "2026-11-08T15:22:51.243380Z",
+            "end_time": "2026-11-08T15:22:51.243380Z",
         },
     )
     assert res_inclusive.success is True
@@ -150,13 +150,13 @@ def test_query_deploy_events_time_bounds_filter():
     assert len(res_inclusive.evidence_items) == 1
 
     # 5. Timezone offsets correctly converted to UTC
-    # 08:16:00Z is 13:46:00+05:30 and 03:16:00-05:00
+    # 15:22:51Z is 20:52:51+05:30
     res_offset_match = registry.execute(
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T13:46:00+05:30",
-            "end_time": "2026-10-27T14:00:00+05:30",
+            "start_time": "2026-11-08T20:50:00+05:30",
+            "end_time": "2026-11-08T21:00:00+05:30",
         },
     )
     assert res_offset_match.success is True
@@ -167,8 +167,8 @@ def test_query_deploy_events_time_bounds_filter():
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T08:16:00+05:30",  # 02:46:00 UTC
-            "end_time": "2026-10-27T08:30:00+05:30",    # 03:00:00 UTC, before deploy at 08:16 UTC
+            "start_time": "2026-11-08T15:22:00+05:30",  # 09:52:00 UTC
+            "end_time": "2026-11-08T15:30:00+05:30",    # 10:00:00 UTC, before the deploy at 15:22 UTC
         },
     )
     assert res_offset_exclude.success is True
@@ -180,8 +180,8 @@ def test_query_deploy_events_time_bounds_filter():
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T08:16:00",
-            "end_time": "2026-10-27T08:20:00",
+            "start_time": "2026-11-08T15:22:00",
+            "end_time": "2026-11-08T15:25:00",
         },
     )
     assert res_naive_match.success is True
@@ -192,7 +192,7 @@ def test_query_deploy_events_time_bounds_filter():
         "query_deploy_events",
         {
             "service": "checkout",
-            "start_time": "2026-10-27T09:00:00",
+            "start_time": "2026-11-08T15:30:00",
         },
     )
     assert res_naive_exclude.success is True

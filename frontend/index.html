@@ -9,8 +9,9 @@
     <script>
       // Apply the saved theme before the app loads, so the page never flashes the wrong colours.
       try {
+        // No saved choice means the system preference decides, as in ThemeProvider.
         var t = localStorage.getItem('settle-theme')
-        if (t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark')
+        if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark')
       } catch (e) {}
     </script>
   </head>

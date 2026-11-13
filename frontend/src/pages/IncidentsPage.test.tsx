@@ -95,7 +95,7 @@ describe('Incident list', () => {
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows.map((row) => within(row).getAllByRole('cell')[0].textContent)).toEqual(['INC-7', 'INC-6', 'INC-5'])
     expect(within(rows[0]).getByText('SEV2')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('OPEN')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Open')).toBeInTheDocument()
     expect(within(rows[0]).getByText('20 Oct, 14:00 IST')).toBeInTheDocument()
   })
 

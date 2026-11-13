@@ -193,6 +193,28 @@ function monoMark(body) {
     return `${prop}${eq}${paper ? hex : 'currentColor'}`;
   });
 }
+// An icon file's <svg>, parsed as XML and cleaned in the DOM rather than with patterns (Settle change, #277):
+// no scripts, embedded documents, titles or comments, no event handler attributes, no javascript: or data:
+// links. A file that does not parse as one <svg> gives '' and the slot shows its letter.
+function cleanSvg(text) {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const svg = doc.documentElement;
+  if (!svg || svg.localName !== 'svg' || doc.getElementsByTagName('parsererror').length) return '';
+  for (const tag of ['script', 'foreignObject', 'iframe', 'object', 'embed', 'title']) {
+    for (const el of [...svg.getElementsByTagName(tag)]) el.remove();
+  }
+  const comments = doc.createTreeWalker(svg, NodeFilter.SHOW_COMMENT);
+  const dropped = [];
+  while (comments.nextNode()) dropped.push(comments.currentNode);
+  for (const node of dropped) node.remove();
+  for (const el of [svg, ...svg.getElementsByTagName('*')]) {
+    for (const { name, value } of [...el.attributes]) {
+      const lower = name.toLowerCase();
+      if (lower.startsWith('on') || (lower.endsWith('href') && /^\s*(javascript|data):/i.test(value))) el.removeAttribute(name);
+    }
+  }
+  return new XMLSerializer().serializeToString(svg);
+}
 // what is known of an icon before it is drawn (a wordmark needs a wide slot): base|spec -> { wide }
 const iconMeta = new Map();
 const letter = (span, text) => { span.classList.add('dg-ic--text', 'dg-ic--missing'); span.textContent = (text || '?').trim().slice(0, 1).toUpperCase(); };
@@ -210,10 +232,11 @@ function putIcon(span, spec, color, fallbackText, base, onWide) {
       im.onerror = () => { im.remove(); letter(span, fallbackText); };
       return;
     }
-    // the file's own <svg>, cleaned, its ids made unique on the page
+    // the file's own <svg>, cleaned in the DOM (cleanSvg), its ids made unique on the page
+    const clean = cleanSvg(d.svg);
+    if (!clean) return letter(span, fallbackText);
     const id = 'dgi' + (++uid);
-    let t = d.svg.replace(/<\?xml[\s\S]*?\?>|<!--[\s\S]*?-->|<title>[\s\S]*?<\/title>|<script[\s\S]*?<\/script>/gi, '')
-      .replace(/\son[a-z]+="[^"]*"/gi, '')
+    let t = clean
       .replace(/\sid="([^"]+)"/g, ` id="$1-${id}"`)
       .replace(/url\(#([^)]+)\)/g, `url(#$1-${id})`)
       .replace(/href="#([^"]+)"/g, `href="#$1-${id}"`);

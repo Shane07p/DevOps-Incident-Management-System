@@ -91,17 +91,17 @@ describe('Keyboard shortcuts', () => {
     expect(router.state.location.pathname).toBe('/services')
   })
 
-  it('declares an incident with C for an Engineer, and does nothing for a Viewer', async () => {
-    const { router, unmount } = renderShell(engineer)
+  it('opens the declare dialog with C for an Engineer, and does nothing for a Viewer', async () => {
+    const { unmount } = renderShell(engineer)
     await sidebar()
     await userEvent.keyboard('c')
-    expect(router.state.location.pathname).toBe('/incidents/new')
+    expect(await screen.findByRole('dialog', { name: 'Declare an incident' })).toBeInTheDocument()
     unmount()
 
-    const asViewer = renderShell(viewer)
+    renderShell(viewer)
     await sidebar()
     await userEvent.keyboard('c')
-    expect(asViewer.router.state.location.pathname).toBe('/home')
+    expect(screen.queryByRole('dialog', { name: 'Declare an incident' })).not.toBeInTheDocument()
   })
 
   it('lists the shortcuts on ?, without declaring for a Viewer', async () => {

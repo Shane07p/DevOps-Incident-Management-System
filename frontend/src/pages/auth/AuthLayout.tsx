@@ -22,7 +22,7 @@ function Wordmark() {
  */
 export function AuthLayout({ children, wall }: { children: ReactNode; wall: Wall }) {
   return (
-    <div className="auth-page">
+    <div className="auth-page dark">
       <div className="login-v2">
         <section className="login-brand-side">
           <a className="brand" href="/" aria-label="Settle home">

@@ -234,8 +234,12 @@ class IncidentControllerTest {
 				.andExpect(jsonPath("$[0].id").value(second.getId()))
 				.andExpect(jsonPath("$[0].reference").value("INC-902"))
 				.andExpect(jsonPath("$[0].serviceName").value("Payments"))
+				// The board sorts by time left, so each row carries both due times (TC-FR-16.3f).
+				.andExpect(jsonPath("$[0].responseDueAt").value(second.getResponseDueAt().toString()))
+				.andExpect(jsonPath("$[0].resolutionDueAt").value(second.getResolutionDueAt().toString()))
 				.andExpect(jsonPath("$[1].id").value(first.getId()))
-				.andExpect(jsonPath("$[1].reference").value("INC-901"));
+				.andExpect(jsonPath("$[1].reference").value("INC-901"))
+				.andExpect(jsonPath("$[1].responseDueAt").value(first.getResponseDueAt().toString()));
 	}
 
 	@Test

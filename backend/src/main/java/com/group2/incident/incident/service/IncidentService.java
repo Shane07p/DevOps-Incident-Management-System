@@ -231,7 +231,9 @@ public class IncidentService {
 						i.getService().getName(),
 						i.getSeverity(),
 						i.getStatus(),
-						i.getCreatedAt()
+						i.getCreatedAt(),
+						i.getResponseDueAt(),
+						i.getResolutionDueAt()
 				))
 				.toList();
 	}

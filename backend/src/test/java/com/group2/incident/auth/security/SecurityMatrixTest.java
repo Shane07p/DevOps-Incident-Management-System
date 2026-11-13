@@ -21,6 +21,9 @@ import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.followup.entity.FollowUp;
+import com.group2.incident.followup.entity.FollowUpKind;
+import com.group2.incident.followup.repository.FollowUpRepository;
 import com.group2.incident.heartbeat.entity.Heartbeat;
 import com.group2.incident.heartbeat.repository.HeartbeatRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
@@ -39,6 +42,7 @@ import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -124,6 +128,9 @@ public class SecurityMatrixTest {
 	@Autowired
 	private DeploymentRepository deployments;
 
+	@Autowired
+	private FollowUpRepository followUps;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -142,6 +149,7 @@ public class SecurityMatrixTest {
 	private Long targetDeployId;
 	private Long targetMonitorId;
 	private Long targetHeartbeatId;
+	private Long targetFollowUpId;
 	private String targetHeartbeatToken;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
@@ -596,6 +604,34 @@ public class SecurityMatrixTest {
 						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
 						201, 403, 403, 401
 				),
+				new MatrixRow(
+						"GET /api/incidents/{id}/follow-ups",
+						HttpMethod.GET,
+						"/api/incidents/{id}/follow-ups",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/follow-ups",
+						HttpMethod.POST,
+						"/api/incidents/{id}/follow-ups",
+						"{\"title\":\"Matrix follow-up\",\"kind\":\"CORRECTIVE\",\"ownerId\":${OWNER_ID},\"dueDate\":\"2099-12-31\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/follow-ups/{id}",
+						HttpMethod.PUT,
+						"/api/follow-ups/{id}",
+						"{\"status\":\"IN_PROGRESS\"}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/follow-ups",
+						HttpMethod.GET,
+						"/api/follow-ups",
+						null,
+						200, 200, 200, 401
+				),
 				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
 				new MatrixRow(
 						"GET /api/telemetry/logs",
@@ -680,6 +716,8 @@ public class SecurityMatrixTest {
 		unsaved.assignNumber(990_001L);
 		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
+		targetFollowUpId = followUps.saveAndFlush(new FollowUp(incident, "Matrix follow-up", FollowUpKind.CORRECTIVE, admin,
+				LocalDate.of(2099, 12, 31), clock.instant())).getId();
 
 		// A documentation-only address (RFC 5737): nothing is ever contacted, since the worker is off in tests.
 		targetMonitorId = monitors.saveAndFlush(new UptimeMonitor(savedService, "Matrix monitor", "https://203.0.113.10/health",
@@ -772,6 +810,7 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/heartbeats/") ? targetHeartbeatId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
+				: pathTemplate.startsWith("/api/follow-ups/") ? targetFollowUpId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
 				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)

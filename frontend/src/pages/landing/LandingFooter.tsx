@@ -1,70 +1,121 @@
-import { ArrowRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { Wordmark } from '@/components/shell/Wordmark'
-import { Container } from './parts'
-
-const COLUMNS = [
-  { title: 'Product', links: [{ label: 'Incident board', href: '#product' }, { label: 'Workflow', href: '#flow' }] },
-  { title: 'Monitoring', links: [{ label: 'Uptime checks', href: '#monitoring' }, { label: 'Integrations', href: '#tools' }] },
-  { title: 'Help', links: [{ label: 'Questions', href: '#questions' }, { label: 'The record', href: '#settled' }] },
-  { title: 'Account', links: [{ label: 'Sign in', to: '/login' }, { label: 'Create a workspace', to: '/signup' }] },
-]
-
-const link = 'text-sm text-foreground/90 hover:text-foreground hover:underline'
-
-/** The closing call to action and the site links. */
+// The redesign preview's markup for this part of the landing, styled and animated by the kit in
+// public/landing (see LandingPage). Classes and data attributes are the kit's; keep them as they are.
 export function LandingFooter() {
   return (
-    <footer id="contact" aria-labelledby="close-heading" className="border-t border-border bg-background pt-24 pb-10">
-      <Container>
-        <h2 id="close-heading" className="max-w-[34rem] text-[clamp(2.25rem,4vw+0.5rem,3.25rem)] leading-[1.05] font-medium tracking-[-0.035em]">
-          Create a workspace for your team
-        </h2>
-        <p className="mt-5 max-w-[42rem] text-lg leading-relaxed text-foreground/90">
-          Sign-up creates your organisation. Add services, on-call schedules and your monitoring tools next.
-        </p>
-        <Link
-          to="/signup"
-          className="mt-10 flex h-20 items-center justify-between rounded-lg bg-primary px-8 text-[clamp(1.5rem,2vw+0.75rem,2rem)] font-medium tracking-[-0.02em] text-primary-foreground hover:bg-primary/90 hover:no-underline sm:px-12"
-        >
-          Create a workspace
-          <ArrowRight aria-hidden="true" className="size-6" />
-        </Link>
-
-        <div className="mt-24 grid gap-10 sm:grid-cols-2 lg:grid-cols-12">
-          <div className="flex flex-col gap-5 lg:col-span-4">
-            <a href="#top" aria-label="Settle home" className="text-foreground hover:no-underline">
-              <Wordmark size={24} />
-            </a>
-            <p className="max-w-[20rem] text-lg leading-snug font-medium tracking-[-0.01em]">Incident response and monitoring for software teams.</p>
+    <footer className="footer closing footer--dark ground-inverse" id="contact" aria-labelledby="close-h">
+      <div className="wrap">
+        <div className="closing__cta close--type">
+          <div className="section-head">
+            <h2 id="close-h">
+              Create a workspace for your team
+            </h2>
+            <p>
+              Sign-up creates your organisation. Add services, on-call schedules and your monitoring tools next.
+            </p>
           </div>
-          {COLUMNS.map((column) => (
-            <nav key={column.title} aria-label={column.title} className="flex flex-col gap-4 lg:col-span-2">
-              <h3 className="text-sm text-muted-foreground">{column.title}</h3>
-              <ul className="flex flex-col gap-3">
-                {column.links.map((item) => (
-                  <li key={item.label}>
-                    {'to' in item && item.to ? (
-                      <Link to={item.to} className={link}>
-                        {item.label}
-                      </Link>
-                    ) : (
-                      <a href={'href' in item ? item.href : undefined} className={link}>
-                        {item.label}
-                      </a>
-                    )}
-                  </li>
-                ))}
+          <a className="btn btn--primary btn--xl btn--wide" href="/signup">
+            Create a workspace
+            <svg className="m-arrow" viewBox="0 0 12 12" aria-hidden="true">
+              <path className="m-arrow__stem" d="M1 6h8" />
+              <path className="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5" />
+            </svg>
+          </a>
+        </div>
+        <div className="closing__links">
+          <div className="grid">
+            <div className="span-4 stack-4">
+              <a className="nav__logo" href="#top" aria-label="Settle home">
+                <span className="wordmark">
+                  settle
+                  <svg viewBox="0 0 60 6" aria-hidden="true">
+                    <path d="M1.5 3 Q9 0.5 16.5 3 T31.5 3 T46.5 3 T58.5 3" />
+                  </svg>
+                </span>
+              </a>
+              <p className="footer__lede">
+                Incident response and monitoring for software teams.
+              </p>
+            </div>
+            <div className="span-2 footer__col">
+              <h3>
+                Product
+              </h3>
+              <ul>
+                <li>
+                  <a href="#product">
+                    Incident board
+                  </a>
+                </li>
+                <li>
+                  <a href="#flow">
+                    Workflow
+                  </a>
+                </li>
               </ul>
-            </nav>
-          ))}
+            </div>
+            <div className="span-2 footer__col">
+              <h3>
+                Monitoring
+              </h3>
+              <ul>
+                <li>
+                  <a href="#monitoring">
+                    Uptime checks
+                  </a>
+                </li>
+                <li>
+                  <a href="#tools">
+                    Integrations
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div className="span-2 footer__col">
+              <h3>
+                Help
+              </h3>
+              <ul>
+                <li>
+                  <a href="#questions">
+                    Questions
+                  </a>
+                </li>
+                <li>
+                  <a href="#settled">
+                    The record
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div className="span-2 footer__col">
+              <h3>
+                Account
+              </h3>
+              <ul>
+                <li>
+                  <a href="/login">
+                    Sign in
+                  </a>
+                </li>
+                <li>
+                  <a href="/signup">
+                    Create a workspace
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="footer__legal">
+            <span>
+              © 2026 Settle
+            </span>
+            <div className="socials" />
+            <span>
+              Product names and logos are trademarks of their owners
+            </span>
+          </div>
         </div>
-
-        <div className="mt-16 flex flex-wrap justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground">
-          <span>© 2026 Settle</span>
-          <span>Product names and logos are trademarks of their owners</span>
-        </div>
-      </Container>
+      </div>
     </footer>
   )
 }

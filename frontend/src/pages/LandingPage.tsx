@@ -1,34 +1,32 @@
-import { MotionConfig } from 'motion/react'
 import { FlowSection } from './landing/FlowSection'
 import { Hero } from './landing/Hero'
 import { IntegrationsSection } from './landing/IntegrationsSection'
+import { useLandingKit } from './landing/kit'
 import { LandingFooter } from './landing/LandingFooter'
-import { LandingHeader } from './landing/LandingHeader'
+import { LandingNav } from './landing/LandingNav'
 import { MonitoringSection } from './landing/MonitoringSection'
 import { ProductSection } from './landing/ProductSection'
 import { QuestionsSection } from './landing/QuestionsSection'
-import { RecordSection } from './landing/RecordSection'
+import { SettledSection } from './landing/SettledSection'
 
-/**
- * The public product page. It is always dark, like the design it follows, and calls no API: the
- * incidents and people on it are illustrations. Motion follows the visitor's reduced-motion setting.
- */
+/** The public product page. It calls no API; the incidents and people on it are illustrations. */
 export function LandingPage() {
+  const styled = useLandingKit()
+
   return (
-    <MotionConfig reducedMotion="user">
-      <div className="dark overflow-x-clip bg-background text-base text-foreground">
-        <LandingHeader />
-        <main>
-          <Hero />
-          <ProductSection />
-          <FlowSection />
-          <MonitoringSection />
-          <RecordSection />
-          <IntegrationsSection />
-          <QuestionsSection />
-        </main>
-        <LandingFooter />
-      </div>
-    </MotionConfig>
+    // Hidden until the kit's styles arrive, so the unstyled markup never flashes.
+    <div style={styled ? undefined : { visibility: 'hidden' }}>
+      <LandingNav />
+      <main id="top">
+        <Hero />
+        <ProductSection />
+        <FlowSection />
+        <MonitoringSection />
+        <SettledSection />
+        <IntegrationsSection />
+        <QuestionsSection />
+      </main>
+      <LandingFooter />
+    </div>
   )
 }

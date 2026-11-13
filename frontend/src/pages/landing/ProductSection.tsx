@@ -1,176 +1,396 @@
-import { FileText, GitBranch, Inbox, Search, Sparkles } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
-import { Container, Heading, Initials, Reveal, Section } from './parts'
-
-type Row = { who: string; initials: string; incident: string; status: string; clock: string; waiting?: boolean; done?: boolean }
-
-const ROWS: Row[] = [
-  { who: 'Paging Rohan Shah', initials: 'RS', incident: 'INC-1043 · UPI authorisations failing', status: 'Waiting', clock: '3m', waiting: true },
-  { who: 'Paging Dev Mehta', initials: 'DM', incident: 'INC-1040 · Order queue backlog', status: 'Waiting', clock: '3h 48m', waiting: true },
-  { who: 'Paging Kavya Iyer', initials: 'KI', incident: 'INC-1045 · Search results empty', status: 'Waiting', clock: '54m', waiting: true },
-  { who: 'Rohan Shah', initials: 'RS', incident: 'INC-1041 · Gateway latency, 30m over', status: 'Monitoring', clock: '+30m' },
-  { who: 'Asha Patel', initials: 'AP', incident: 'INC-1042 · Checkout failures after deploy', status: 'Investigating', clock: '3h 36m' },
-  { who: 'Dev Mehta', initials: 'DM', incident: 'INC-1036 · Invoice job missed heartbeat', status: 'Identified', clock: '5h 10m' },
-  { who: 'Kavya Iyer', initials: 'KI', incident: 'INC-1035 · Cache hit rate dropped', status: 'Monitoring', clock: '6h 02m' },
-  { who: 'Asha Patel', initials: 'AP', incident: 'INC-1033 · TLS certificate expires in 9 days', status: 'Identified', clock: '2d 4h' },
-  { who: 'Rohan Shah', initials: 'RS', incident: 'INC-1039 · Search indexing lag', status: 'Resolved', clock: '42m', done: true },
-]
-
-const SIDE = [
-  { label: 'Active', count: '9', on: true },
-  { label: 'Mine', count: '2' },
-  { label: 'Waiting', count: '3' },
-  { label: 'Resolved' },
-]
-
+// The redesign preview's markup for this part of the landing, styled and animated by the kit in
+// public/landing (see LandingPage). Classes and data attributes are the kit's; keep them as they are.
 export function ProductSection() {
   return (
-    <Section id="product" className="bg-card/40">
-      <Container>
-        <div className="grid items-start gap-6 lg:grid-cols-12">
-          <Heading id="product" className="lg:col-span-5">
+    <section className="section ground-surface" id="product" aria-labelledby="product-h">
+      <div className="wrap">
+        <div className="grid grid--top">
+          <h2 className="span-5" id="product-h">
             Every incident and its timeline
-          </Heading>
-          <p className="text-lg leading-relaxed text-muted-foreground lg:col-span-6 lg:col-start-7">
-            The list sorts by urgency: waiting for acknowledgement first, then the clock closest to its target. Open an incident
-            to read its alerts, deploys, notes and the AI's suggestion in order.
+          </h2>
+          <p className="span-6 start-7 muted">
+            The list sorts by urgency: waiting for acknowledgement first, then the clock closest to its target. Open an incident to read its alerts, deploys, notes and the AI's suggestion in order.
           </p>
         </div>
-
-        <Reveal className="mt-14">
-          <div
-            role="img"
-            aria-label="Settle with the open incidents listed on the left and the timeline of INC-1042 open on the right"
-            className="grid h-[560px] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl md:grid-cols-[5fr_7fr]"
-          >
-            <IncidentList />
-            <Timeline />
+        <div className="ui app fill" role="img" aria-label="Settle with the open incidents listed on the left and the timeline of INC-1042 open on the right" data-ui-pause-host="">
+          <div className="app__pane app__pane--list">
+            <div className="ui ui-panel ui-win" data-ui="window" data-open="Open" data-work="Investigating" data-done="Resolved">
+              <div className="ui-win__bar">
+                <span className="ui-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="ui-win__crumb">
+                  {"Incidents "}
+                  <i>
+                    /
+                  </i>
+                  {' '}
+                  <b>
+                    Active
+                  </b>
+                </span>
+                <span className="ui-spacer" />
+                <span className="ui-win__search" aria-hidden="true">
+                  <svg className="ui-icon" viewBox="0 0 16 16">
+                    <circle cx="7" cy="7" r="4.5" />
+                    <path d="m10.5 10.5 3 3" />
+                  </svg>
+                  <span className="ui-win__ph">
+                    Search
+                  </span>
+                  <span className="ui-kbd">
+                    /
+                  </span>
+                </span>
+              </div>
+              <div className="ui-win__body">
+                <nav className="ui-win__side" aria-hidden="true">
+                  <span className="ui-win__nav is-on">
+                    <svg className="ui-icon" viewBox="0 0 16 16">
+                      <path d="M2.5 9h3l1 1.5h3l1-1.5h3" />
+                      <path d="M2.5 9 4 3.5h8L13.5 9v3.5h-11z" />
+                    </svg>
+                    Active
+                    <em>
+                      9
+                    </em>
+                  </span>
+                  <span className="ui-win__nav">
+                    <svg className="ui-icon" viewBox="0 0 16 16">
+                      <circle cx="8" cy="6" r="2.5" />
+                      <path d="M3.5 13.5c.6-2.3 2.4-3.5 4.5-3.5s3.9 1.2 4.5 3.5" />
+                    </svg>
+                    Mine
+                    <em>
+                      2
+                    </em>
+                  </span>
+                  <span className="ui-win__nav">
+                    <svg className="ui-icon" viewBox="0 0 16 16">
+                      <circle cx="8" cy="8" r="5.5" />
+                      <path d="M8 5v3l2 1.5" />
+                    </svg>
+                    Waiting
+                    <em>
+                      3
+                    </em>
+                  </span>
+                  <span className="ui-win__nav">
+                    <svg className="ui-icon" viewBox="0 0 16 16">
+                      <path d="m3.5 8.4 2.8 2.8 6.2-6.4" />
+                    </svg>
+                    Resolved
+                  </span>
+                  <span className="ui-win__label">
+                    Services
+                  </span>
+                  <span className="ui-win__nav">
+                    <span className="ui-win__hash">
+                      #
+                    </span>
+                    Payments
+                  </span>
+                  <span className="ui-win__nav">
+                    <span className="ui-win__hash">
+                      #
+                    </span>
+                    Checkout
+                  </span>
+                </nav>
+                <div className="ui-win__main">
+                  <div className="ui-win__cols" aria-hidden="true">
+                    <span>
+                      Lead
+                    </span>
+                    <span>
+                      Incident
+                    </span>
+                    <span>
+                      Status
+                    </span>
+                    <span>
+                      Clock
+                    </span>
+                  </div>
+                  <ul className="ui-win__rows">
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="2">
+                        RS
+                      </span>
+                      <span className="ui-win__who">
+                        Paging Rohan Shah
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1043 · UPI authorisations failing
+                      </span>
+                      <span className="ui-win__st is-you" data-st="">
+                        Waiting
+                      </span>
+                      <span className="ui-win__age">
+                        3m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="4">
+                        DM
+                      </span>
+                      <span className="ui-win__who">
+                        Paging Dev Mehta
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1040 · Order queue backlog
+                      </span>
+                      <span className="ui-win__st is-you" data-st="">
+                        Waiting
+                      </span>
+                      <span className="ui-win__age">
+                        3h 48m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="5">
+                        KI
+                      </span>
+                      <span className="ui-win__who">
+                        Paging Kavya Iyer
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1045 · Search results empty
+                      </span>
+                      <span className="ui-win__st is-you" data-st="">
+                        Waiting
+                      </span>
+                      <span className="ui-win__age">
+                        54m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="3">
+                        RS
+                      </span>
+                      <span className="ui-win__who">
+                        Rohan Shah
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1041 · Gateway latency, 30m over
+                      </span>
+                      <span className="ui-win__st" data-st="">
+                        Monitoring
+                      </span>
+                      <span className="ui-win__age">
+                        +30m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="1">
+                        AP
+                      </span>
+                      <span className="ui-win__who">
+                        Asha Patel
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1042 · Checkout failures after deploy
+                      </span>
+                      <span className="ui-win__st" data-st="">
+                        Investigating
+                      </span>
+                      <span className="ui-win__age">
+                        3h 36m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="4">
+                        DM
+                      </span>
+                      <span className="ui-win__who">
+                        Dev Mehta
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1036 · Invoice job missed heartbeat
+                      </span>
+                      <span className="ui-win__st" data-st="">
+                        Identified
+                      </span>
+                      <span className="ui-win__age">
+                        5h 10m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="5">
+                        KI
+                      </span>
+                      <span className="ui-win__who">
+                        Kavya Iyer
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1035 · Cache hit rate dropped
+                      </span>
+                      <span className="ui-win__st" data-st="">
+                        Monitoring
+                      </span>
+                      <span className="ui-win__age">
+                        6h 02m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="1">
+                        AP
+                      </span>
+                      <span className="ui-win__who">
+                        Asha Patel
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1033 · TLS certificate expires in 9 days
+                      </span>
+                      <span className="ui-win__st" data-st="">
+                        Identified
+                      </span>
+                      <span className="ui-win__age">
+                        2d 4h
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="3">
+                        RS
+                      </span>
+                      <span className="ui-win__who">
+                        Rohan Shah
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1039 · Search indexing lag
+                      </span>
+                      <span className="ui-win__st is-done" data-st="">
+                        Resolved
+                      </span>
+                      <span className="ui-win__age">
+                        42m
+                      </span>
+                    </li>
+                    <li className="ui-win__row" data-row="">
+                      <span className="ui-avatar" data-tone="1">
+                        AP
+                      </span>
+                      <span className="ui-win__who">
+                        Asha Patel
+                      </span>
+                      <span className="ui-win__sub">
+                        INC-1038 · Connection pool exhausted
+                      </span>
+                      <span className="ui-win__st is-done" data-st="">
+                        Resolved
+                      </span>
+                      <span className="ui-win__age">
+                        58m
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
-        </Reveal>
-      </Container>
-    </Section>
-  )
-}
-
-function IncidentList() {
-  return (
-    <div className="relative hidden min-h-0 flex-col border-r border-border md:flex">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3 text-[13px]">
-        <span className="flex gap-1.5" aria-hidden="true">
-          <i className="size-2.5 rounded-full bg-secondary" />
-          <i className="size-2.5 rounded-full bg-secondary" />
-          <i className="size-2.5 rounded-full bg-secondary" />
-        </span>
-        <span className="text-muted-foreground">
-          Incidents <span className="px-1">/</span> <b className="font-medium text-foreground">Active</b>
-        </span>
-        <span className="ml-auto flex items-center gap-2 rounded-md border border-border px-2 py-1 text-muted-foreground">
-          <Search className="size-3.5" aria-hidden="true" />
-          Search
-          <kbd className="rounded border border-border px-1 font-mono text-[11px]">/</kbd>
-        </span>
-      </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[120px_1fr] xl:grid-cols-[136px_1fr]">
-        <div className="hidden flex-col gap-0.5 p-2 text-[13px] lg:flex">
-          {SIDE.map((item) => (
-            <span
-              key={item.label}
-              className={cn('flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground', item.on && 'bg-secondary font-medium text-foreground')}
-            >
-              {item.label === 'Active' && <Inbox className="size-3.5" aria-hidden="true" />}
-              {item.label}
-              {item.count && <em className="ml-auto text-xs not-italic">{item.count}</em>}
-            </span>
-          ))}
-          <span className="mt-3 px-2 text-xs text-muted-foreground">Services</span>
-          <span className="px-2 py-1.5 text-muted-foreground"># Payments</span>
-          <span className="px-2 py-1.5 text-muted-foreground"># Checkout</span>
+          <div className="app__pane app__pane--open" data-ui-loop="">
+            <div className="ui ui-panel ui-chat" data-ui="chat">
+              <div className="ui-head">
+                <span className="ui-agent" aria-hidden="true" />
+                <div className="ui-title">
+                  INC-1042 · Checkout failures
+                </div>
+                <span className="ui-chat__online">
+                  Investigating
+                </span>
+                <span className="ui-spacer" />
+              </div>
+              <div className="ui-chat__body">
+                <div className="ui-chat__day">
+                  31 Oct · IST · response met in 7m · 3h 36m left to resolve
+                </div>
+                <div className="ui-msg ui-msg--bot">
+                  <span className="ui-agent ui-msg__av" aria-hidden="true" />
+                  <span className="ui-msg__col">
+                    <span className="ui-chat__answer">
+                      {"14:02 · Prometheus: checkout 5xx above 5% for 3 minutes. "}
+                      <b>
+                        18 alerts
+                      </b>
+                      {" share this incident's correlation key."}
+                    </span>
+                  </span>
+                </div>
+                <div className="ui-msg ui-msg--me">
+                  <span className="ui-msg__text">
+                    14:09 · Acknowledged. I'm Lead. Escalation stopped.
+                  </span>
+                </div>
+                <div className="ui-msg ui-msg--bot">
+                  <span className="ui-agent ui-msg__av" aria-hidden="true" />
+                  <span className="ui-msg__col">
+                    <span className="ui-chat__answer">
+                      14:00 · Deploy a8f3c21 to checkout-api by Dev Mehta, two minutes before the first alert.
+                    </span>
+                  </span>
+                </div>
+                <div className="ui-msg ui-msg--me" data-chat-q="">
+                  <span className="ui-msg__text">
+                    The spike starts two minutes after deploy a8f3c21. Checking the connection pool changes against the last healthy release.
+                  </span>
+                </div>
+                <div className="ui-msg ui-msg--bot" data-chat-a="">
+                  <span className="ui-agent ui-msg__av" aria-hidden="true" />
+                  <span className="ui-msg__col">
+                    <span className="ui-chat__typing" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <span className="ui-chat__answer">
+                      {"Connection pool saturation may explain the failures. "}
+                      <b>
+                        a8f3c21 lowered the pool from 40 to 20
+                      </b>
+                      , and INC-1038 began the same way.
+                    </span>
+                    <span className="ui-chat__srcs">
+                      <span className="ui-chat__src">
+                        <svg className="ui-icon" viewBox="0 0 16 16">
+                          <circle cx="5" cy="4" r="1.5" />
+                          <circle cx="5" cy="12" r="1.5" />
+                          <circle cx="11" cy="6" r="1.5" />
+                          <path d="M5 5.5v5M11 7.5c0 2-2 2.5-6 3" />
+                        </svg>
+                        Deploy a8f3c21
+                      </span>
+                      <span className="ui-chat__src">
+                        <svg className="ui-icon" viewBox="0 0 16 16">
+                          <path d="M4 2.5h5l3 3v8H4z" />
+                          <path d="M9 2.5v3h3" />
+                        </svg>
+                        INC-1038
+                      </span>
+                    </span>
+                  </span>
+                </div>
+                <div className="ui-msg ui-msg--me">
+                  <span className="ui-msg__text">
+                    Rolling back a8f3c21 now. Error rate back under 1% at 14:31.
+                  </span>
+                </div>
+              </div>
+              <div className="ui-chat__input">
+                <span className="ui-chat__ph">
+                  Add an internal note
+                </span>
+                <span className="ui-chat__send" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14">
+                    <path d="M8 13V3.5M3.8 7.5 8 3.3l4.2 4.2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-        <ul className="col-span-2 min-h-0 overflow-hidden lg:col-span-1">
-          {ROWS.map((row) => (
-            <li key={row.incident} className={cn('flex items-center gap-3 border-b border-border px-3 py-2.5', row.done && 'opacity-50')}>
-              <Initials>{row.initials}</Initials>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[13px] font-medium">{row.who}</span>
-                <span className="truncate text-xs text-muted-foreground">{row.incident}</span>
-              </span>
-              <span
-                className={cn(
-                  'inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px]',
-                  row.waiting ? 'border-transparent bg-foreground text-background' : 'text-muted-foreground',
-                )}
-              >
-                <span className={cn('size-1 rounded-full', row.waiting ? 'bg-background' : 'bg-muted-foreground')} aria-hidden="true" />
-                {row.status}
-              </span>
-            </li>
-          ))}
-        </ul>
       </div>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-card" />
-    </div>
-  )
-}
-
-function Bot({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex max-w-[78%] gap-3">
-      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-foreground text-background" aria-hidden="true">
-        <Sparkles className="size-3" />
-      </span>
-      <span className="flex flex-col gap-2 leading-relaxed">{children}</span>
-    </div>
-  )
-}
-
-function Me({ children }: { children: ReactNode }) {
-  return <div className="ml-auto max-w-[62%] rounded-lg border border-border bg-secondary px-3 py-2 leading-relaxed">{children}</div>
-}
-
-function Timeline() {
-  return (
-    <div className="relative flex min-h-0 flex-col text-[13px]">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <span className="grid size-5 place-items-center rounded-full bg-foreground text-background" aria-hidden="true">
-          <Sparkles className="size-2.5" />
-        </span>
-        <b className="font-medium">INC-1042 · Checkout failures</b>
-        <span className="flex items-center gap-1 text-muted-foreground">
-          <span className="size-1 rounded-full bg-muted-foreground" aria-hidden="true" />
-          Investigating
-        </span>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden px-4 py-4">
-        <p className="text-center text-xs text-muted-foreground">31 Oct · IST · response met in 7m · 3h 36m left to resolve</p>
-        <Bot>
-          <span>
-            14:02 · Prometheus: checkout 5xx above 5% for 3 minutes. <b className="font-semibold">18 alerts</b> share this
-            incident's correlation key.
-          </span>
-        </Bot>
-        <Me>14:09 · Acknowledged. I'm Lead. Escalation stopped.</Me>
-        <Bot>
-          <span>14:00 · Deploy a8f3c21 to checkout-api by Dev Mehta, two minutes before the first alert.</span>
-        </Bot>
-        <Me>The spike starts two minutes after deploy a8f3c21. Checking the connection pool changes against the last healthy release.</Me>
-        <Bot>
-          <span>
-            Connection pool saturation may explain the failures. <b className="font-semibold">a8f3c21 lowered the pool from 40 to 20</b>,
-            and INC-1038 began the same way.
-          </span>
-          <span className="flex gap-2">
-            <span className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs">
-              <GitBranch className="size-3" aria-hidden="true" /> Deploy a8f3c21
-            </span>
-            <span className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs">
-              <FileText className="size-3" aria-hidden="true" /> INC-1038
-            </span>
-          </span>
-        </Bot>
-        <Me>Rolling back a8f3c21 now. Error rate back under 1% at 14:31.</Me>
-      </div>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-card" />
-    </div>
+    </section>
   )
 }

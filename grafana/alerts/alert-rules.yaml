@@ -1,0 +1,473 @@
+# Grafana alert rules (D36), in Grafana's file-provisioning format
+# ------------------------------------------------------------------
+# For each demo-shop check: Down (critical, SEV1), Degraded (warning, SEV2), and
+# Error rate (warning, SEV2). Each rule names its contact point in notification_settings
+# (contact-points/webhook-contact-point.yaml), which posts it to /webhooks/alerts. No
+# notification policy is needed, and the stack's policy tree is left as it is.
+#
+# Down and Degraded count locations: last_over_time(...[frequency + 1m]) keeps each
+# location's newest result until its next check, and `sum by (job)` counts the
+# locations that failed (or were slow). The rule fires when 2 or more do.
+#
+# `for:` sets how many checks in a row it takes, from the check's frequency:
+#   Down, 2 in a row:     for = 1 x frequency + 1m (6m for 5-minute checks, 3m for 2-minute)
+#   Degraded, 3 in a row: for = 2 x frequency + 1m (11m and 5m)
+# Change a check's frequency in synthetic-checks.yaml and these change with it.
+#
+# grafanacloud-prom is the stack's Prometheus data source, which holds both the
+# Synthetic Monitoring metrics and the demo shop's metrics. The demo shop labels each request
+# with the service its route belongs to (service_of in demo_shop/app.py), as Error rate uses.
+# Generated for #88; edit the numbers above and the rules together.
+
+apiVersion: 1
+
+groups:
+  # Down: at least 2 locations fail on 2 checks in a row (critical).
+  - orgId: 1
+    name: demo-shop-down
+    folder: Demo Shop Alerts
+    interval: 1m
+    rules:
+      - uid: demo-shop-down-payments
+        title: "Payments is down"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum by (job) (last_over_time(probe_success{job="demo-shop-payments"}[6m]) == bool 0)'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+        for: 6m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: critical
+          service: payments
+          rule_type: down
+          team: group2
+        annotations:
+          summary: "Payments is down"
+          description: "At least 2 locations failed the payments check on 2 checks in a row."
+        notification_settings:
+          receiver: settle-down
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: demo-shop-down-checkout
+        title: "Checkout is down"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum by (job) (last_over_time(probe_success{job="demo-shop-checkout"}[3m]) == bool 0)'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+        for: 3m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: critical
+          service: checkout
+          rule_type: down
+          team: group2
+        annotations:
+          summary: "Checkout is down"
+          description: "At least 2 locations failed the checkout check on 2 checks in a row."
+        notification_settings:
+          receiver: settle-down
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: demo-shop-down-search
+        title: "Search is down"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum by (job) (last_over_time(probe_success{job="demo-shop-search"}[6m]) == bool 0)'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+        for: 6m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: critical
+          service: search
+          rule_type: down
+          team: group2
+        annotations:
+          summary: "Search is down"
+          description: "At least 2 locations failed the search check on 2 checks in a row."
+        notification_settings:
+          receiver: settle-down
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+  # Degraded: at least 2 locations slower than 2 s on 3 checks in a row (warning).
+  - orgId: 1
+    name: demo-shop-degraded
+    folder: Demo Shop Alerts
+    interval: 1m
+    rules:
+      - uid: demo-shop-degraded-payments
+        title: "Payments is slow"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum by (job) (last_over_time(probe_duration_seconds{job="demo-shop-payments"}[6m]) > bool 2)'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+        for: 11m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: warning
+          service: payments
+          rule_type: degraded
+          team: group2
+        annotations:
+          summary: "Payments is slow"
+          description: "At least 2 locations took longer than 2 s on the payments check, 3 checks in a row."
+        notification_settings:
+          receiver: settle-degraded
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: demo-shop-degraded-checkout
+        title: "Checkout is slow"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum by (job) (last_over_time(probe_duration_seconds{job="demo-shop-checkout"}[3m]) > bool 2)'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: warning
+          service: checkout
+          rule_type: degraded
+          team: group2
+        annotations:
+          summary: "Checkout is slow"
+          description: "At least 2 locations took longer than 2 s on the checkout check, 3 checks in a row."
+        notification_settings:
+          receiver: settle-degraded
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: demo-shop-degraded-search
+        title: "Search is slow"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum by (job) (last_over_time(probe_duration_seconds{job="demo-shop-search"}[6m]) > bool 2)'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gt
+        for: 11m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: warning
+          service: search
+          rule_type: degraded
+          team: group2
+        annotations:
+          summary: "Search is slow"
+          description: "At least 2 locations took longer than 2 s on the search check, 3 checks in a row."
+        notification_settings:
+          receiver: settle-degraded
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+  # Error rate: more than 5% of requests return 5xx for 5 minutes (warning).
+  - orgId: 1
+    name: demo-shop-error-rate
+    folder: Demo Shop Alerts
+    interval: 1m
+    rules:
+      - uid: demo-shop-error-rate-payments
+        title: "Payments error rate above 5%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum(rate(demo_http_requests_total{service="payments",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="payments"}[5m]))'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0.05]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: warning
+          service: payments
+          rule_type: error_rate
+          team: group2
+        annotations:
+          summary: "Payments error rate above 5%"
+          description: "More than 5% of payments requests returned 5xx for 5 minutes."
+        notification_settings:
+          receiver: settle-error-rate
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: demo-shop-error-rate-checkout
+        title: "Checkout error rate above 5%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum(rate(demo_http_requests_total{service="checkout",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="checkout"}[5m]))'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0.05]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: warning
+          service: checkout
+          rule_type: error_rate
+          team: group2
+        annotations:
+          summary: "Checkout error rate above 5%"
+          description: "More than 5% of checkout requests returned 5xx for 5 minutes."
+        notification_settings:
+          receiver: settle-error-rate
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: demo-shop-error-rate-search
+        title: "Search error rate above 5%"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: 'sum(rate(demo_http_requests_total{service="search",status=~"5.."}[5m])) / sum(rate(demo_http_requests_total{service="search"}[5m]))'
+              instant: true
+              range: false
+              intervalMs: 60000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0.05]
+                    type: gt
+        for: 5m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          severity: warning
+          service: search
+          rule_type: error_rate
+          team: group2
+        annotations:
+          summary: "Search error rate above 5%"
+          description: "More than 5% of search requests returned 5xx for 5 minutes."
+        notification_settings:
+          receiver: settle-error-rate
+          group_by: [grafana_folder, alertname]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h

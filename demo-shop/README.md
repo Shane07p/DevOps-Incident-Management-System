@@ -144,7 +144,19 @@ OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp-gateway-prod-us-central-0.grafana.net/
 
 # Basic auth: Base64-encoded "<instance_id>:<token>"
 OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <BASE64_TOKEN>"
+
+# Optional: how often metrics are pushed, in milliseconds (default 60000)
+OTEL_METRIC_EXPORT_INTERVAL=60000
 ```
+
+The values on Grafana Cloud's OpenTelemetry page (stack > OpenTelemetry > Configure) work as
+pasted, including the `%20` in `Authorization=Basic%20...`. On a host's settings page, leave out the
+surrounding quotes.
+
+Metrics are pushed once a minute, gzipped. On a free host every push counts as outbound traffic, and
+Grafana Cloud's free tier counts one data point per series per minute; the alert rules look at
+5-minute windows, so a minute is enough. Lower `OTEL_METRIC_EXPORT_INTERVAL` only for a short local
+test.
 
 Metrics are delivered to Prometheus via OTLP; structured JSON logs can be collected by Promtail/Alloy or sent via OTLP.
 

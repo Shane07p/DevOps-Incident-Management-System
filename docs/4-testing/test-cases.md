@@ -345,17 +345,17 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 ### Checks from several locations (D35, D36): boundary values on failing locations and checks in a row
 
-The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated.
+The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated. The checks run from 2 locations (D35 allows 2 or 3), so "2 of 2" is the smallest failing set that counts.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 1 of 3 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36b | Boundary value | 2 of 3 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36c | Boundary value | 2 of 3 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36d | Boundary value | 2 of 3 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36e | Boundary value | 2 of 3 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
+| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | In review |
+| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | In review |
+| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | In review |
+| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | In review |
 
 ### Demo-shop scenario table (Issue #64)
 
@@ -591,6 +591,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-13.2l | Equivalence | System-generated audit record with null actor | 200 with null actorDisplayName, entry successfully returned | `AuditControllerTest.systemGeneratedEntryWithNullActorIsHandledCorrectly` | Automated |
 | TC-FR-13.2m | Ordering | Entries with identical recordedAt timestamps | Secondary sort by id DESC produces deterministic ordering | `AuditControllerTest.equalTimestampsDeterministicOrdering` | Automated |
 | TC-FR-13.3c | Negative | POST, PUT, DELETE requests to `/api/audit` | 405 Method Not Allowed; endpoint is strictly read-only | `AuditControllerTest.mutationMethodsAreNotExposed` | Automated |
+
+## Sprint 5
+
+### Follow-ups API (FR-11.3, #240): boundary values on the due date
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-11.3a | Equivalence | An Engineer adds a CORRECTIVE and an Admin a PREVENTIVE follow-up | 201 with owner, due date, OPEN, not overdue; a timeline entry for each | `FollowUpControllerTest.createsACorrectiveAndAPreventiveFollowUp` | In review |
+| TC-FR-11.3b | Boundary | Due date the day before today (UTC), then today (UTC) while it is already tomorrow in IST | 400 on `dueDate`, then 201 | `FollowUpControllerTest.aDueDateBeforeTodayInUtcIsRefusedAndTodayIsAccepted` | In review |
+| TC-FR-11.3c | Equivalence (invalid) | Owner from another org, or an id that does not exist | 400 on `ownerId`, nothing saved | `FollowUpControllerTest.anOwnerFromAnotherOrgOrNoOneIsRefused`, `OrgIsolationTest` | In review |
+| TC-FR-11.3d | Boundary | Clock at 23:59:59 UTC on the due date, then 00:00 the day after | `overdue` false, then true | `FollowUpControllerTest.overdueIsFalseOnTheDueDateAndTrueTheDayAfter` | In review |
+| TC-FR-11.3e | State | Status to DONE, DONE again, then IN_PROGRESS | `completedAt` set and one timeline entry; nothing more; cleared on reopening | `FollowUpControllerTest.doneSetsCompletedAtAddsATimelineEntryAndIsNeverOverdue` | In review |
+| TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | In review |
+| TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
+| TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | In review |
 
 ---
 

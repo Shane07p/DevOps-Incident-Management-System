@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { apiFetch } from './client'
-import { incidentStatusSchema, severitySchema, type Severity } from './schemas'
+import { incidentStatusSchema, severitySchema, type IncidentStatus, type Severity } from './schemas'
 
 const timestamp = z.iso.datetime({ offset: true })
 const personSchema = z.object({ id: z.number(), displayName: z.string() })
@@ -48,12 +48,16 @@ export const incidentSchema = z.object({
   service: z.object({ id: z.number(), name: z.string() }),
   severity: severitySchema,
   status: incidentStatusSchema,
+  // Sent back as expectedVersion on every change, so a change made from an out-of-date screen gets 409 (NFR-11.2).
+  version: z.number(),
   // Null for incidents the system opens.
   reporter: personSchema.nullable(),
   // Null until on-call assignment or an acknowledgement.
   assignee: personSchema.nullable(),
-  // Who holds Comms and Ops; the Lead is the assignee (D39).
-  roles: z.object({ comms: personSchema.nullable(), ops: personSchema.nullable() }).optional(),
+  // The Lead is the assignee (D39), so only Comms and Ops are here.
+  roles: z.object({ comms: personSchema.nullable(), ops: personSchema.nullable() }).default({ comms: null, ops: null }),
+  // Set while one person holds two roles on a SEV1 or SEV2 incident (FR-05.5).
+  roleWarning: z.string().nullable().default(null),
   createdAt: timestamp,
   responseTargetMinutes: z.number(),
   resolutionTargetMinutes: z.number(),
@@ -115,4 +119,31 @@ export function addEvidence(incidentId: number, evidence: { label: string; url: 
 /** Links an existing deployment to an incident. Admins and Engineers only. */
 export function linkDeploy(incidentId: number, deployId: number) {
   return apiFetch(`/incidents/${incidentId}/deploys/${deployId}`, timelineEntrySchema, { method: 'POST' })
+}
+
+// Every change below sends the version the screen showed; the server answers 409 if the incident changed since.
+
+/** Engineers and Admins, on an OPEN incident only. The acknowledger becomes the assignee and the response clock stops (#83). */
+export function acknowledgeIncident(incidentId: number, expectedVersion: number) {
+  return apiFetch(`/incidents/${incidentId}/acknowledge`, incidentSchema, { method: 'POST', body: { expectedVersion } })
+}
+
+/** Only the legal next statuses are accepted; RESOLVED needs a recovery note (#84). */
+export function changeStatus(incidentId: number, change: { status: IncidentStatus; note: string; expectedVersion: number }) {
+  return apiFetch(`/incidents/${incidentId}/transitions`, incidentSchema, { method: 'POST', body: change })
+}
+
+/** Needs a reason. The SLA targets stay as they were copied at creation (#84). */
+export function changeSeverity(incidentId: number, change: { severity: Severity; reason: string; expectedVersion: number }) {
+  return apiFetch(`/incidents/${incidentId}/severity`, incidentSchema, { method: 'PUT', body: change })
+}
+
+/** The new assignee is the Lead and is notified; neither clock restarts. */
+export function reassignIncident(incidentId: number, change: { assigneeId: number; expectedVersion: number }) {
+  return apiFetch(`/incidents/${incidentId}/assignee`, incidentSchema, { method: 'PUT', body: change })
+}
+
+/** Comms or Ops; the Lead changes through reassignment (D39). */
+export function assignIncidentRole(incidentId: number, change: { role: 'COMMS' | 'OPS'; userId: number; expectedVersion: number }) {
+  return apiFetch(`/incidents/${incidentId}/roles`, incidentSchema, { method: 'PUT', body: change })
 }

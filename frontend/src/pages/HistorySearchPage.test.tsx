@@ -353,6 +353,7 @@ describe('HistorySearchPage — incident navigation', () => {
           service: { id: 1, name: 'Payments' },
           severity: 'SEV2',
           status: 'OPEN',
+          version: 1,
           reporter: { id: 2, displayName: 'Dev Engineer' },
           assignee: null,
           createdAt: '2026-10-20T08:30:00Z',

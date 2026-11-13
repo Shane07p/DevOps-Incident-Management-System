@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import { formatIst } from '@/lib/time'
+import { IncidentActions } from './incident/IncidentActions'
 import { IncidentDeploys } from './incident/IncidentDeploys'
 import { IncidentEvidence } from './incident/IncidentEvidence'
 import { IncidentTelemetry } from './incident/IncidentTelemetry'
@@ -27,7 +28,7 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/** One incident: what it is, both SLA clocks, and its timeline. */
+/** One incident: what it is, what a responder can do to it, both SLA clocks, and its timeline. */
 // Show runbooks belonging to the incident's service.
 function IncidentRunbooks({
   serviceId,
@@ -128,6 +129,8 @@ export function IncidentDetailPage() {
               <span className="font-mono tnum">{formatIst(incident.data.createdAt)}</span>
             </Detail>
           </dl>
+
+          <IncidentActions incident={incident.data} />
 
           <section aria-labelledby="sla-heading" className="flex flex-col gap-3">
             <h2 id="sla-heading" className="text-lg font-semibold">

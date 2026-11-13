@@ -600,6 +600,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-11.3e | State | Status to DONE, DONE again, then IN_PROGRESS | `completedAt` set and one timeline entry; nothing more; cleared on reopening | `FollowUpControllerTest.doneSetsCompletedAtAddsATimelineEntryAndIsNeverOverdue` | In review |
 | TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | In review |
 | TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
+| TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | In review |
 
 ---
 

@@ -15,6 +15,8 @@ CREATE TABLE follow_up (
         CONSTRAINT follow_up_status_check CHECK (status IN ('OPEN', 'IN_PROGRESS', 'DONE')),
     completed_at timestamptz,
     created_at   timestamptz  NOT NULL,
+    -- Two saves at once: the second fails instead of silently undoing the first.
+    version      bigint       NOT NULL DEFAULT 0,
     -- Done, and only done, carries the time it was done.
     CONSTRAINT follow_up_completed_check CHECK ((status = 'DONE') = (completed_at IS NOT NULL))
 );

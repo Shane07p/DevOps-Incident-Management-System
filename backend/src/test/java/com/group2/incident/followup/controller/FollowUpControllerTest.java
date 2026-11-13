@@ -1,6 +1,7 @@
 package com.group2.incident.followup.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -13,6 +14,8 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.followup.dto.UpdateFollowUpRequest;
+import com.group2.incident.followup.repository.FollowUpRepository;
 import com.group2.incident.followup.service.FollowUpService;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -23,6 +26,7 @@ import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -68,6 +73,9 @@ class FollowUpControllerTest {
 
 	@Autowired
 	private FollowUpService followUpService;
+
+	@Autowired
+	private FollowUpRepository followUps;
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -198,6 +206,22 @@ class FollowUpControllerTest {
 		String reopened = update(engineerToken, id, "{\"status\":\"IN_PROGRESS\"}", 200);
 		assertThat(JsonPath.<Object>read(reopened, "$.completedAt")).isNull();
 		assertThat(JsonPath.<Boolean>read(reopened, "$.overdue")).isTrue();
+	}
+
+	@Test
+	void aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave() throws Exception {
+		long id = idOf(create(engineerToken, incidentId, "Document retries", "CORRECTIVE", engineer.getId(), "2026-11-20", 201));
+
+		// A rename reads the follow-up. Before it saves, another request marks it DONE and commits, which moves
+		// the row's version on, as Hibernate does.
+		followUps.findById(id).orElseThrow();
+		jdbc.update("UPDATE follow_up SET status = 'DONE', completed_at = ?, version = version + 1 WHERE id = ?",
+				Timestamp.from(NOW), id);
+		followUpService.update(id, new UpdateFollowUpRequest("Document the retries", null, null, null, null), admin.getId());
+
+		// Saving the rename would write back the OPEN status it read. It is refused instead (409 through the API).
+		assertThatThrownBy(followUps::flush).isInstanceOf(OptimisticLockingFailureException.class);
+		assertThat(jdbc.queryForObject("SELECT status FROM follow_up WHERE id = ?", String.class, id)).isEqualTo("DONE");
 	}
 
 	@Test

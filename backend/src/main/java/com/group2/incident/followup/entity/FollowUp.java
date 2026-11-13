@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.AccessLevel;
@@ -67,6 +68,12 @@ public class FollowUp {
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
+
+	// Two saves at once: the second fails (409) instead of silently undoing the first, such as a rename
+	// putting a follow-up that was just marked DONE back to OPEN.
+	@Version
+	@Column(nullable = false)
+	private long version;
 
 	public FollowUp(Incident incident, String title, FollowUpKind kind, AppUser owner, LocalDate dueDate, Instant createdAt) {
 		this.incident = incident;

@@ -271,10 +271,10 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Planned (Utsav B) |
-| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Planned (Utsav B) |
+| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | In review |
+| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | In review |
+| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | In review |
+| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | In review |
 
 ### Acknowledgement (FR-06, FR-07.4, FR-16.2, US-08)
 
@@ -290,8 +290,8 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | Planned (Utsav B) |
-| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | Planned (Utsav B) |
+| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | In review |
+| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | In review |
 
 ### Escalation (FR-07.3 to FR-07.7): decision table
 
@@ -592,7 +592,7 @@ Two rule methods get basis path testing, done by their owners once the code exis
 
 | Method | Owner |
 | --- | --- |
-| The transition check (`from`, `to` → allowed or the reason it is not) | Utsav D |
+| The transition check (`from`, `to` → allowed or the reason it is not) | Utsav B (#84) |
 | The SLA check (target, start, stop, now → running, met, or breached) | Utsav D and Manan |
 
 For each one:
@@ -601,3 +601,23 @@ For each one:
 3. List V(G) independent paths, and write one test per path. Name them here as `TC-WB-…`.
 4. Check that JaCoCo shows every branch of the method covered.
 5. Run PIT on the class and record the mutation score in the sprint's test report.
+
+### The transition check: `TransitionPolicy.isLegal(from, to)` (#84)
+
+![Control-flow graph of TransitionPolicy.isLegal](transition-policy-cfg.svg)
+
+Ten decisions: the two null checks, six branches of the seven-case `switch (from)`, and the two short-circuit ORs (INVESTIGATING and MONITORING), so V(G) = 10 + 1 = 11. The tests are in `TransitionPolicyTest.BasisPathTests` (Utsav B); the paths below are the basis set they cover.
+
+| ID | Path | Expected | Test | Status |
+| --- | --- | --- | --- | --- |
+| TC-WB-01 | `from` is null | false | `path1_nullFromReturnsFalse` | In review |
+| TC-WB-02 | `to` is null | false | `path2_nullToReturnsFalse` | In review |
+| TC-WB-03 | OPEN | `to == ACKNOWLEDGED` | `path3_openToAcknowledgedReturnsTrue`, `path4_openToOtherReturnsFalse` | In review |
+| TC-WB-04 | ACKNOWLEDGED | `to == INVESTIGATING` | `path5_acknowledgedToInvestigatingReturnsTrue`, `path6_acknowledgedToOtherReturnsFalse` | In review |
+| TC-WB-05 | INVESTIGATING, `to == IDENTIFIED` | true, without the second test | `path7_investigatingToIdentifiedReturnsTrue` | In review |
+| TC-WB-06 | INVESTIGATING, `to != IDENTIFIED` | `to == MONITORING` | `path8_investigatingToMonitoringReturnsTrue`, `path9_investigatingToOtherReturnsFalse` | In review |
+| TC-WB-07 | IDENTIFIED | `to == MONITORING` | `path10_identifiedToMonitoringReturnsTrue`, `path11_identifiedToOtherReturnsFalse` | In review |
+| TC-WB-08 | MONITORING, `to == INVESTIGATING` | true, without the second test | `path12_monitoringToInvestigatingReturnsTrue` | In review |
+| TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | In review |
+| TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | In review |
+| TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | In review |

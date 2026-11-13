@@ -447,6 +447,20 @@ public class SecurityMatrixTest {
 						200, 200, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/transitions",
+						HttpMethod.POST,
+						"/api/incidents/{id}/transitions",
+						"{\"status\":\"INVESTIGATING\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/severity",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/severity",
+						"{\"severity\":\"SEV1\",\"reason\":\"Customers can't pay\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
@@ -777,6 +791,14 @@ public class SecurityMatrixTest {
 		if (path.endsWith("/acknowledge")) {
 			entityManager.clear();
 			jdbc.update("UPDATE incident SET status = 'OPEN', assignee_id = NULL, acknowledged_at = NULL WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/severity")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET severity = 'SEV2', status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/transitions")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
 		}
 		if (path.endsWith("/assignee")) {
 			entityManager.clear();

@@ -97,6 +97,9 @@ class SecurityConfig {
 						.hasAnyRole("ADMIN", "ENGINEER")
 						// PublicUpdateService narrows Engineers to the incident's Lead and Comms (D45).
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/public-updates").hasAnyRole("ADMIN", "ENGINEER")
+						// Reading follow-ups is open to every role; adding and changing them is for responders (#240).
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/follow-ups").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/follow-ups/*").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.bearerTokenResolver(request -> {

@@ -191,6 +191,8 @@ class OrgIsolationTest {
 						"{\"expectedVersion\": 0}"),
 				Arguments.of("POST /api/incidents/{id}/transitions", HttpMethod.POST, "/api/incidents/{incidentId}/transitions",
 						"{\"status\":\"INVESTIGATING\", \"expectedVersion\": 0}"),
+				Arguments.of("PUT /api/incidents/{id}/severity", HttpMethod.PUT, "/api/incidents/{incidentId}/severity",
+						"{\"severity\":\"SEV1\", \"reason\": \"x\", \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
 						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",

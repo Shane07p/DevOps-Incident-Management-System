@@ -49,7 +49,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * - Illegal transitions are rejected with ConflictException without modifying the incident
  * - Version validation and optimistic locking failure return ConflictException
  * - Transition to RESOLVED requires a non-blank recovery note
- * - OPEN -> ACKNOWLEDGED transition sets acknowledgedAt, assignee and cancels escalation
+ * - OPEN -> ACKNOWLEDGED is refused here: acknowledging has its own endpoint (#83)
  * - Timeline persistence failure triggers transactional rollback
  */
 @ExtendWith(MockitoExtension.class)
@@ -173,22 +173,20 @@ class IncidentServiceTransitionTest {
 	}
 
 	@Test
-	@DisplayName("Legal transition: OPEN -> ACKNOWLEDGED sets acknowledgedAt, assigns actor, and cancels escalation")
-	void legalTransition_openToAcknowledged_setsAcknowledgedAtAndCancelsEscalation() {
+	@DisplayName("OPEN -> ACKNOWLEDGED through transitions is refused; acknowledging has its own endpoint")
+	void openToAcknowledged_isRefusedHere() {
 		Incident incident = createIncident(IncidentStatus.OPEN, 0L);
 		when(incidentRepository.findById(1L)).thenReturn(Optional.of(incident));
-		when(incidentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
 		TransitionRequest request = new TransitionRequest(IncidentStatus.ACKNOWLEDGED, 0L, null);
-		IncidentResponse response = incidentService.transitionIncident(1L, request, 101L);
 
-		assertThat(response.status()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
-		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
-		assertThat(incident.getAcknowledgedAt()).isEqualTo(T0);
-		assertThat(incident.getAssignee()).isEqualTo(engineer);
-
-		verify(escalationService).cancelTaskForIncident(1L, T0);
-		verify(timelineEntryRepository).save(any());
+		assertThatThrownBy(() -> incidentService.transitionIncident(1L, request, 101L))
+				.isInstanceOf(ConflictException.class)
+				.hasMessage("Acknowledge the incident instead");
+		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.OPEN);
+		assertThat(incident.getAcknowledgedAt()).isNull();
+		verify(escalationService, never()).cancelTaskForIncident(any(), any());
+		verify(timelineEntryRepository, never()).save(any());
 	}
 
 	@Test

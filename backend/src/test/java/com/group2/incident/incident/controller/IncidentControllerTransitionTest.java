@@ -112,6 +112,7 @@ class IncidentControllerTransitionTest {
 				T0.plusSeconds(3600),
 				T0.plusSeconds(28800),
 				T0,
+				null,
 				List.of(new TimelineEntryResponse(
 						10L,
 						TimelineEventType.STATUS_CHANGED,
@@ -181,7 +182,7 @@ class IncidentControllerTransitionTest {
 	@DisplayName("POST /api/incidents/{id}/transitions missing recovery note returns 400 Bad Request")
 	void missingRecoveryNoteReturns400() throws Exception {
 		when(incidentService.transitionIncident(eq(1L), any(TransitionRequest.class), eq(101L)))
-				.thenThrow(new FieldValidationException("recoveryNote", "A recovery note is required to resolve an incident"));
+				.thenThrow(new FieldValidationException("note", "A recovery note is required to resolve an incident"));
 
 		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":3}";
 
@@ -189,7 +190,7 @@ class IncidentControllerTransitionTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errors.recoveryNote").value("A recovery note is required to resolve an incident"));
+				.andExpect(jsonPath("$.errors.note").value("A recovery note is required to resolve an incident"));
 	}
 
 	@Test
@@ -228,7 +229,7 @@ class IncidentControllerTransitionTest {
 		when(incidentService.transitionIncident(eq(1L), any(TransitionRequest.class), eq(101L)))
 				.thenThrow(new ConflictException("Cannot transition incident from OPEN to RESOLVED"));
 
-		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":1,\"recoveryNote\":\"note\"}";
+		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":1,\"note\":\"note\"}";
 
 		mvc.perform(post("/api/incidents/1/transitions")
 						.contentType(MediaType.APPLICATION_JSON)

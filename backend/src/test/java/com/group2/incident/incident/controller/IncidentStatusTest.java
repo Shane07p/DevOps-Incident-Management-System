@@ -113,9 +113,9 @@ class IncidentStatusTest {
 		String token = tokenFor("status-engineer");
 		long currentVersion = incident.getVersion();
 
-		// Step 1: OPEN -> ACKNOWLEDGED
-		String bodyAck = "{\"status\":\"ACKNOWLEDGED\",\"expectedVersion\":%d}".formatted(currentVersion);
-		MvcResult resAck = mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
+		// Step 1: OPEN -> ACKNOWLEDGED, which happens only through acknowledgement (#83)
+		String bodyAck = "{\"expectedVersion\":%d}".formatted(currentVersion);
+		MvcResult resAck = mvc.perform(post("/api/incidents/" + incident.getId() + "/acknowledge")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(bodyAck))
@@ -162,7 +162,7 @@ class IncidentStatusTest {
 		currentVersion = JsonPath.<Number>read(resMon.getResponse().getContentAsString(), "$.version").longValue();
 
 		// Step 5: MONITORING -> RESOLVED (with non-blank recovery note)
-		String bodyRes = "{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"recoveryNote\":\"Applied hotfix to connection pool\"}".formatted(currentVersion);
+		String bodyRes = "{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"note\":\"Applied hotfix to connection pool\"}".formatted(currentVersion);
 		MvcResult resResolved = mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -170,6 +170,7 @@ class IncidentStatusTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("RESOLVED"))
 				.andExpect(jsonPath("$.version").value(currentVersion + 1))
+				.andExpect(jsonPath("$.resolvedAt").isNotEmpty())
 				.andReturn();
 		currentVersion = JsonPath.<Number>read(resResolved.getResponse().getContentAsString(), "$.version").longValue();
 
@@ -238,7 +239,7 @@ class IncidentStatusTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errors.recoveryNote").value("A recovery note is required to resolve an incident"));
+				.andExpect(jsonPath("$.errors.note").value("A recovery note is required to resolve an incident"));
 
 		Incident refreshed = incidents.findById(incident.getId()).orElseThrow();
 		assertThat(refreshed.getStatus()).isEqualTo(IncidentStatus.MONITORING);
@@ -250,14 +251,14 @@ class IncidentStatusTest {
 		Incident incident = createIncident(IncidentStatus.MONITORING, engineer);
 		String token = tokenFor("status-engineer");
 
-		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"recoveryNote\":\"   \"}".formatted(incident.getVersion());
+		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"note\":\"   \"}".formatted(incident.getVersion());
 
 		mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(body))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.errors.recoveryNote").value("A recovery note is required to resolve an incident"));
+				.andExpect(jsonPath("$.errors.note").value("A recovery note is required to resolve an incident"));
 
 		Incident refreshed = incidents.findById(incident.getId()).orElseThrow();
 		assertThat(refreshed.getStatus()).isEqualTo(IncidentStatus.MONITORING);
@@ -269,7 +270,7 @@ class IncidentStatusTest {
 		Incident incident = createIncident(IncidentStatus.OPEN, engineer);
 		String token = tokenFor("status-engineer");
 
-		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"recoveryNote\":\"fixed\"}".formatted(incident.getVersion());
+		String body = "{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"note\":\"fixed\"}".formatted(incident.getVersion());
 
 		mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -358,6 +359,66 @@ class IncidentStatusTest {
 						.content("{\"status\":\"INVESTIGATING\",\"expectedVersion\":0}"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.message").value("Incident 999999 not found"));
+	}
+
+	@Test
+	@DisplayName("A transition to ACKNOWLEDGED is refused: acknowledging has its own endpoint")
+	void acknowledgingThroughTransitionsIsRefused() throws Exception {
+		Incident incident = createIncident(IncidentStatus.OPEN, engineer);
+		long version = incident.getVersion();
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("status-engineer"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\":\"ACKNOWLEDGED\",\"expectedVersion\":%d}".formatted(version)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("Acknowledge the incident instead"));
+
+		Incident unchanged = incidents.findById(incident.getId()).orElseThrow();
+		assertThat(unchanged.getStatus()).isEqualTo(IncidentStatus.OPEN);
+		assertThat(unchanged.getVersion()).isEqualTo(version);
+	}
+
+	@Test
+	@DisplayName("FR-16.2: RESOLVED stops the resolution clock once; the due times stay as they were")
+	void resolvingStopsTheResolutionClockAndKeepsTheTargets() throws Exception {
+		Incident incident = createIncident(IncidentStatus.MONITORING, engineer);
+		String token = tokenFor("status-engineer");
+		String dueBefore = incident.getResolutionDueAt().toString();
+
+		String resolved = mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\":\"RESOLVED\",\"expectedVersion\":%d,\"note\":\"Rolled back\"}".formatted(incident.getVersion())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.resolvedAt").isNotEmpty())
+				.andReturn().getResponse().getContentAsString();
+		String resolvedAt = JsonPath.read(resolved, "$.resolvedAt");
+		assertThat(Instant.parse(JsonPath.read(resolved, "$.resolutionDueAt"))).isEqualTo(Instant.parse(dueBefore));
+
+		long version = JsonPath.<Number>read(resolved, "$.version").longValue();
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\":\"CLOSED\",\"expectedVersion\":%d}".formatted(version)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.resolvedAt").value(resolvedAt));
+	}
+
+	@Test
+	@DisplayName("A note sent with any move goes on the timeline")
+	void aNoteWithAnyMoveIsRecorded() throws Exception {
+		Incident incident = createIncident(IncidentStatus.ACKNOWLEDGED, engineer);
+
+		mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("status-engineer"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\":\"INVESTIGATING\",\"expectedVersion\":%d,\"note\":\"Checking the gateway\"}".formatted(incident.getVersion())))
+				.andExpect(status().isOk());
+
+		assertThat(timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId()))
+				.extracting(TimelineEntry::getDetails)
+				.contains("Status changed from ACKNOWLEDGED to INVESTIGATING: Checking the gateway");
 	}
 
 	private Incident createIncident(IncidentStatus status, AppUser assignee) {

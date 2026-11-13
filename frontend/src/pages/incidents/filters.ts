@@ -1,5 +1,5 @@
 import type { IncidentSummary } from '@/api/incidents'
-import type { IncidentStatus, Severity } from '@/api/schemas'
+import { incidentStatusSchema, severitySchema, type IncidentStatus, type Severity } from '@/api/schemas'
 
 export const FINISHED: IncidentStatus[] = ['RESOLVED', 'CLOSED']
 
@@ -31,9 +31,13 @@ export function readFilters(params: URLSearchParams): IncidentFilters {
     scope,
     q: params.get('q') ?? '',
     service: params.get('service') ?? '',
-    severity: (params.get('severity') as Severity | null) ?? '',
-    status: (params.get('status') as IncidentStatus | null) ?? '',
+    severity: oneOf(severitySchema.options, params.get('severity')),
+    status: oneOf(incidentStatusSchema.options, params.get('status')),
   }
+}
+
+function oneOf<T extends string>(values: readonly T[], value: string | null): T | '' {
+  return values.find((candidate) => candidate === value) ?? ''
 }
 
 /** Sets one filter in `params`, removing it when it goes back to "everything". */

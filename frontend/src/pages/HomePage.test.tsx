@@ -112,7 +112,7 @@ describe('Overview', () => {
     })
   })
 
-  it('says someone got there first after a 409, and reloads the list', async () => {
+  it('says the incident changed after a 409, and reloads the list', async () => {
     const fetchMock = renderOverview(engineer, {
       'POST /api/incidents/7/acknowledge': { status: 409, body: { status: 409, message: 'Incident INC-7 was changed by someone else' } },
     })
@@ -121,7 +121,7 @@ describe('Overview', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Acknowledge and take Lead: INC-7' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Someone else acknowledged INC-7 first')
+    expect(await screen.findByRole('alert')).toHaveTextContent('INC-7 changed after the list was loaded: someone acknowledged it, or it escalated.')
     await waitFor(() => expect(listReads(fetchMock)).toBe(2))
   })
 

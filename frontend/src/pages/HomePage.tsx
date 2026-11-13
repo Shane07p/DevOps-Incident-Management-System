@@ -35,8 +35,8 @@ function pastATarget(incident: IncidentSummary, now: number) {
 
 /**
  * Acknowledge from the overview: the caller becomes Lead and the response clock stops (#83). It sends the
- * version the list showed; if someone acknowledged first, the server answers 409, the page says so, and the
- * list is read again.
+ * version the list showed. If the incident changed since (someone acknowledged it, or an escalation step ran),
+ * the server answers 409, the page says so, and the list is read again.
  */
 function AcknowledgeButton({ incident, onConflict }: { incident: IncidentSummary; onConflict: (message: string) => void }) {
   const queryClient = useQueryClient()
@@ -49,7 +49,9 @@ function AcknowledgeButton({ incident, onConflict }: { incident: IncidentSummary
     },
     onError: async (error) => {
       if (error instanceof ApiRequestError && error.status === 409) {
-        onConflict(`Someone else acknowledged ${incident.reference} first, so you are not its Lead. The list is up to date again.`)
+        onConflict(
+          `${incident.reference} changed after the list was loaded: someone acknowledged it, or it escalated. The list is up to date again, so try again if it is still waiting.`,
+        )
       } else {
         toast.error(error instanceof Error ? error.message : `${incident.reference} was not acknowledged.`)
       }

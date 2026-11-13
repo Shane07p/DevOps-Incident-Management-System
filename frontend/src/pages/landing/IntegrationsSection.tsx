@@ -56,11 +56,11 @@ function FanIn() {
       </svg>
       <ul className="relative flex flex-col items-end gap-2.5">
         {SOURCES.map((source) => (
-          <li key={source.label} className="flex w-full max-w-[180px] items-center gap-2.5 rounded-lg border border-border bg-card px-2.5 py-2 text-card-foreground shadow-md">
+          <li key={source.label} className="flex items-center gap-2.5 rounded-lg border border-border bg-card p-1.5 text-card-foreground shadow-md sm:w-full sm:max-w-[180px] sm:px-2.5 sm:py-2">
             <span className="grid size-7 shrink-0 place-items-center rounded-md bg-secondary" aria-hidden="true">
               {source.logo ? <img src={source.logo} alt="" className="size-4" /> : source.icon}
             </span>
-            <span className="flex min-w-0 flex-col leading-tight">
+            <span className="hidden min-w-0 flex-col leading-tight sm:flex">
               <b className="truncate text-[13px] font-semibold">{source.label}</b>
               <small className="truncate text-[11px] text-muted-foreground">{source.sub}</small>
             </span>

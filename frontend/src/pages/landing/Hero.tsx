@@ -23,9 +23,9 @@ export function Hero() {
         <div className="flex flex-col gap-7 lg:col-span-5">
           <h1
             id="hero-heading"
-            className="text-[clamp(2.75rem,5.5vw+0.5rem,4.75rem)] leading-[0.98] font-medium tracking-[-0.04em] text-balance"
+            className="text-[clamp(2.75rem,5vw+0.5rem,4.4rem)] leading-[0.98] font-medium tracking-[-0.04em] text-balance"
           >
-            Incident management for on-call teams
+            Incident management for on‑call teams
           </h1>
           <p className="max-w-[34rem] text-lg leading-relaxed text-foreground/90 sm:text-xl">
             Alerts from Grafana and your own uptime checks open one incident, page whoever is on call and start two SLA clocks.

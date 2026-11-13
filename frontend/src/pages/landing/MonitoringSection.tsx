@@ -33,7 +33,7 @@ export function MonitoringSection() {
             <Reveal className="mt-4">
               <Ground
                 label="Settle's public status page: some services degraded, with Checkout, Payments and Order processing degraded and Search operational."
-                className="aspect-[16/9]"
+                className="py-10 sm:aspect-[16/9] sm:py-10"
               >
                 <StatusCard />
               </Ground>
@@ -95,11 +95,11 @@ function UptimeDiagram() {
       {LANES.map((lane) => (
         <Node key={lane.label} top={lane.top} icon={<Server aria-hidden="true" className={icon} />} className="left-[54%]">
           <b className="font-semibold">{lane.label}</b>
-          <code className="font-mono text-muted-foreground">{lane.meta}</code>
+          <code className="hidden font-mono text-muted-foreground sm:inline">{lane.meta}</code>
           {lane.ok && <CircleCheck aria-hidden="true" className="size-3.5 shrink-0 text-primary sm:size-4" />}
         </Node>
       ))}
-      <Node icon={<CircleCheck aria-hidden="true" className={icon} />} className="top-1/2 left-[86%]">
+      <Node icon={<CircleCheck aria-hidden="true" className={icon} />} className="top-1/2 right-[2%]">
         Up
       </Node>
     </div>

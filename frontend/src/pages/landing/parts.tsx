@@ -2,9 +2,9 @@ import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-/** One page width for every landing section, the same as the header's. */
+/** One content width for every landing section and the header: the page width, plus its side padding. */
 export function Container({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('mx-auto w-full max-w-[var(--page-max)] px-5 sm:px-8 lg:px-10', className)}>{children}</div>
+  return <div className={cn('mx-auto w-full max-w-[calc(var(--page-max)+5rem)] px-5 sm:px-8 lg:px-10', className)}>{children}</div>
 }
 
 /** A section on one screen's rhythm, with the anchor the header and footer link to. */

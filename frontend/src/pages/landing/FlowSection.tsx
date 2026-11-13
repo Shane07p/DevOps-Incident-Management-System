@@ -44,7 +44,7 @@ export function FlowSection() {
                 <p className="leading-relaxed text-foreground/85">{step.text}</p>
               </div>
               <Reveal>
-                <Ground label={step.label} className="aspect-[4/3]">
+                <Ground label={step.label} className="py-10 sm:aspect-[4/3] sm:py-10">
                   {step.picture}
                 </Ground>
               </Reveal>
@@ -72,7 +72,7 @@ function AcknowledgeCard() {
         <span className="text-muted-foreground">2</span>
       </div>
       {rows.map((row) => (
-        <div key={row.title} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-0">
+        <div key={row.title} className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border px-4 py-3 last:border-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
           <Pill className={row.sev === 'SEV1' ? 'bg-sev-1-bg text-sev-1-fg' : 'bg-sev-3-bg text-sev-3-fg'}>{row.sev}</Pill>
           <span className="flex min-w-0 flex-1 flex-col">
             <b className="truncate font-medium">{row.title}</b>
@@ -80,7 +80,7 @@ function AcknowledgeCard() {
               {row.meta} <em className="text-sla-at-risk-fg not-italic">{row.paging}</em>
             </span>
           </span>
-          <span className="flex flex-col items-end gap-1.5">
+          <span className="col-span-2 flex flex-wrap items-center justify-between gap-1.5 sm:col-span-1 sm:flex-col sm:items-end">
             <span className={cn('inline-flex items-center gap-1.5 text-xs', row.risk ? 'text-sla-at-risk-fg' : 'text-muted-foreground')}>
               {row.risk && <i className="size-1.5 rounded-full bg-sla-at-risk" aria-hidden="true" />}
               {row.risk ? 'At risk' : 'Response'}

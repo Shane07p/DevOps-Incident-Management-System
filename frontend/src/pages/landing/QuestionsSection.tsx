@@ -25,7 +25,7 @@ export function QuestionsSection() {
     <Section id="questions">
       <Container className="grid items-start gap-12 lg:grid-cols-2 lg:gap-6">
         <div>
-          <Heading id="questions">Questions on-call teams ask</Heading>
+          <Heading id="questions">Questions on‑call teams ask</Heading>
           <dl className="mt-10">
             {QUESTIONS.map((item) => (
               <div key={item.q} className="flex flex-col gap-2 border-b border-border py-6">
@@ -38,7 +38,7 @@ export function QuestionsSection() {
         <Reveal>
           <Ground
             label="An incident's SLA targets in Settle: response met in 5 minutes; resolution breached, 30 minutes over its 8 hour target."
-            className="aspect-[3/2] lg:aspect-[5/6]"
+            className="py-10 sm:aspect-[3/2] sm:py-10 lg:aspect-[5/6]"
           >
             <SlaCard
               large

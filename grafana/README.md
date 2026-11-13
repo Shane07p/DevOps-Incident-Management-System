@@ -171,7 +171,8 @@ Run TC-D36a to f in `docs/4-testing/test-cases.md` with the demo shop's fault sw
 | `slow_gateway` | payments takes 2 s longer, and so does checkout, which calls the payment service | d (Pending after 2 slow checks), e (Payments is slow, SEV2, about 14 minutes in); Checkout is slow fires first, as its check runs every 2 minutes |
 
 A fault switch fails every location at once, so TC-D36a (1 of 2 locations failing) cannot be run
-with one. The results of 13 November are in `docs/4-testing/test-report.md` (Sprint 3).
+with one. The results of 13 November are in `docs/4-testing/test-report.md` (Sprint 3), with the
+screenshots in `docs/4-testing/evidence/tc-d36/`.
 
 Switching a fault on and off:
 

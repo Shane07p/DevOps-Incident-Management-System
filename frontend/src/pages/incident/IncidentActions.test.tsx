@@ -40,6 +40,9 @@ const incident = {
 
 type Routes = Parameters<typeof mockFetch>[0]
 
+// No Grafana connected: the telemetry panel says so quietly, so the only alert is the one these tests check.
+const telemetryNotSetUp = { status: 503, body: { status: 503, message: 'Telemetry is not set up on this server', errors: {} } }
+
 // What differs from the incident above, such as its status, assignee, or roles.
 function renderIncident(role: Role, shown: Record<string, unknown> = {}, extraRoutes: Routes = {}) {
   writeToken('test-token')
@@ -48,6 +51,8 @@ function renderIncident(role: Role, shown: Record<string, unknown> = {}, extraRo
     'GET /api/incidents/7': { body: { ...incident, ...shown } },
     'GET /api/services/1/runbooks': { body: [] },
     'GET /api/users': { body: users },
+    'GET /api/telemetry/logs': telemetryNotSetUp,
+    'GET /api/telemetry/metrics': telemetryNotSetUp,
     ...extraRoutes,
   })
   const router = createMemoryRouter(routes, { initialEntries: ['/incidents/7'] })

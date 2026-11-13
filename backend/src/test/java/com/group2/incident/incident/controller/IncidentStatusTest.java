@@ -192,7 +192,9 @@ class IncidentStatusTest {
 		List<TimelineEntry> statusChanges = entries.stream()
 				.filter(e -> e.getEventType() == TimelineEventType.STATUS_CHANGED)
 				.toList();
-		assertThat(statusChanges).hasSize(6);
+		// Acknowledging records ACKNOWLEDGED (#83); the five moves after it record STATUS_CHANGED.
+		assertThat(statusChanges).hasSize(5);
+		assertThat(entries).filteredOn(e -> e.getEventType() == TimelineEventType.ACKNOWLEDGED).hasSize(1);
 
 		// Verify RESOLVED timeline entry contains recovery note
 		TimelineEntry resolvedEntry = statusChanges.stream()

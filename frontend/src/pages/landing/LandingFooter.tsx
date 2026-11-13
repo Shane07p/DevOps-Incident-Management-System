@@ -93,7 +93,7 @@ export function LandingFooter() {
               x="500"
               y="225"
               textAnchor="middle"
-              fontFamily="Archivo Variable"
+              fontFamily="Host Grotesk Variable"
               fontWeight="800"
               style={{ fontStretch: '62%' }}
               fontSize="290"

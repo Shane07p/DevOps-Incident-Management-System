@@ -109,3 +109,23 @@ def test_checkout_logs_hash_customer_email(client):
     log_output = captured.getvalue()
     assert "sensitive_user@example.com" not in log_output
     assert "customer_hash" in log_output
+
+
+def test_metrics_carry_the_service_each_route_belongs_to(client):
+    # Settle reads a service's metrics by this label, so it must name the service, not demo-shop.
+    client.post("/payments/authorize", json={"order_id": "ord-label-1", "amount": 10.0, "currency": "INR"})
+    client.get("/search", params={"q": "shoe"})
+    client.get("/health")
+
+    data = telemetry.in_memory_reader.get_metrics_data()
+    services = {}
+    for rm in data.resource_metrics:
+        for sm in rm.scope_metrics:
+            for m in sm.metrics:
+                if m.name == "demo_http_requests_total":
+                    for dp in m.data.data_points:
+                        services[dp.attributes.get("endpoint")] = dp.attributes.get("service")
+
+    assert services["/payments/authorize"] == "payments"
+    assert services["/search"] == "search"
+    assert services["/health"] == "demo-shop"

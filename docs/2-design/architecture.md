@@ -56,6 +56,12 @@ for every service class.
 
 Use REST endpoints under `/api`. Examples are `GET/POST /api/incidents`, `GET /api/incidents/search` (with an optional `q` and optional service, severity, status, and page filters), `POST /api/incidents/{id}/acknowledge`, and `POST /api/incidents/{id}/transitions`. Search covers incident titles, descriptions, and timeline text with PostgreSQL full-text indexes, and reports which fields matched when a keyword is supplied. Monitoring tools post alerts to `POST /webhooks/alerts`, outside `/api` and outside JWT login (D32). Define exact fields in OpenAPI as each feature is built. Use separate endpoints for status, assignment, and severity changes so their rules stay clear.
 
+AI-1 adds `GET /api/incidents/{id}/similar` for up to three advisory, same-org matches,
+`GET /api/incidents/duplicate-check` for a non-blocking open-incident warning, and
+`mode=semantic` on history search while retaining its filters and pagination. The provisional
+cosine-similarity threshold is 0.70; when the AI service is disabled, these searches return empty
+results rather than errors.
+
 ## 4. Low-level design: main records
 
 This is a starting data model, not a complete migration script. Use foreign keys and validate required fields.

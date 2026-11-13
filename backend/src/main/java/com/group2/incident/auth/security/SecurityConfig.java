@@ -63,10 +63,15 @@ class SecurityConfig {
 						.requestMatchers("/error", "/actuator/health/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
+						// The public status page is for customers, who have no account (D45).
+						.requestMatchers(HttpMethod.GET, "/api/public/status/*").permitAll()
+						// Public heartbeats ping needs no login (FR-22).
+						.requestMatchers("/api/public/heartbeats/**").permitAll()
 						// The permissions table in the Sprint 1 plan; anything not listed needs any logged-in user.
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
 						.requestMatchers("/api/audit/**").hasRole("ADMIN")
+						.requestMatchers("/api/settings/telemetry", "/api/settings/telemetry/**").hasRole("ADMIN")
 						// Runbooks are written by Engineers too (FR-25), so their rule comes before the Admin-only one.
 						.requestMatchers(HttpMethod.POST, "/api/services/*/runbooks").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
@@ -75,7 +80,12 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/acknowledge").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/transitions").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/severity").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")
@@ -85,9 +95,15 @@ class SecurityConfig {
 						.hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/deploys/*")
 						.hasAnyRole("ADMIN", "ENGINEER")
+						// PublicUpdateService narrows Engineers to the incident's Lead and Comms (D45).
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/public-updates").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.bearerTokenResolver(request -> {
+							// A logged-in browser may send an expired token to the public page; it needs none.
+							if (request.getRequestURI().startsWith("/api/public/")) {
+								return null;
+							}
 							String header = request.getHeader(HttpHeaders.AUTHORIZATION);
 							if (header != null && header.startsWith("Bearer ")) {
 								String token = header.substring(7).trim();

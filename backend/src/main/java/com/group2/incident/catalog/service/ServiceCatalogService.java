@@ -87,6 +87,10 @@ public class ServiceCatalogService {
         for (Map.Entry<Severity, SlaTargetDto> entry : resolvedTargets.entrySet()) {
             service.putTarget(entry.getKey(), entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
         }
+        boolean visible = Boolean.TRUE.equals(request.publicVisible());
+        String publicName = publicName(visible, clean(request.publicName()));
+        service.publishAs(visible, publicName, clock.instant());
+        service.labelTelemetryAs(clean(request.telemetryLabel()));
 
         ServiceEntity saved = saveService(service, name);
         AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
@@ -110,12 +114,27 @@ public class ServiceCatalogService {
         }
 
         String description = clean(request.description());
+        // Left out of the request: the service stays as it is on the status page.
+        boolean visible = request.publicVisible() != null ? request.publicVisible() : service.isPublicVisible();
+        String publicName = publicName(visible,
+                request.publicName() != null ? clean(request.publicName()) : service.getPublicName());
+
         List<String> changes = detectChanges(service, name, description, owner, request.criticality(), resolvedTargets);
+        changes.addAll(publicationChanges(service, visible, publicName));
+        // Left out: unchanged; blank: back to the default (clean gives null).
+        String telemetryLabel = request.telemetryLabel() != null
+                ? clean(request.telemetryLabel())
+                : service.getTelemetryLabel();
+        if (!java.util.Objects.equals(telemetryLabel, service.getTelemetryLabel())) {
+            changes.add("telemetry label: " + (telemetryLabel != null ? telemetryLabel : "default"));
+        }
         if (changes.isEmpty()) {
             return ServiceResponse.from(service);
         }
 
         service.update(name, description, owner, request.criticality(), clock.instant());
+        service.publishAs(visible, publicName, clock.instant());
+        service.labelTelemetryAs(telemetryLabel);
         for (Map.Entry<Severity, SlaTargetDto> entry : resolvedTargets.entrySet()) {
             service.putTarget(entry.getKey(), entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
         }
@@ -190,6 +209,26 @@ public class ServiceCatalogService {
         return minutes;
     }
 
+    /** A service shown on the status page needs the name customers see there (D45). */
+    private static String publicName(boolean visible, String publicName) {
+        if (visible && publicName == null) {
+            throw new FieldValidationException("publicName", "A public name is required to show the service on the status page");
+        }
+        return publicName;
+    }
+
+    private static List<String> publicationChanges(ServiceEntity before, boolean visible, String publicName) {
+        List<String> changes = new ArrayList<>();
+        if (before.isPublicVisible() != visible) {
+            changes.add(visible ? "shown on the status page" : "hidden from the status page");
+        }
+        if (!Objects.equals(before.getPublicName(), publicName)) {
+            changes.add("public name: " + (before.getPublicName() != null ? before.getPublicName() : "none")
+                    + " → " + (publicName != null ? publicName : "none"));
+        }
+        return changes;
+    }
+
     private static String clean(String text) {
         return text == null || text.isBlank() ? null : text.strip();
     }
@@ -201,6 +240,9 @@ public class ServiceCatalogService {
         for (Map.Entry<Severity, SlaTarget> entry : service.getTargets().entrySet()) {
             details.append(' ').append(entry.getKey()).append(' ')
                     .append(entry.getValue().getResponseMinutes()).append('/').append(entry.getValue().getResolutionMinutes()).append(" min");
+        }
+        if (service.isPublicVisible()) {
+            details.append("; on the status page as ").append(service.getPublicName());
         }
         return details.toString();
     }

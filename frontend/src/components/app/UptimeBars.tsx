@@ -1,25 +1,38 @@
 import { useState } from 'react'
-import { dayLabel, type DayState } from '@/data/statusSample'
+import { dayLabel, type DayState } from '@/lib/statusTypes'
 import { cn } from '@/lib/utils'
 
 const DAY_COLOR: Record<DayState, string> = {
   ok: 'bg-health-operational',
   degraded: 'bg-health-degraded',
   down: 'bg-health-down',
+  none: 'bg-muted',
 }
 
-const DAY_TEXT: Record<DayState, string> = { ok: 'no incidents', degraded: 'degraded', down: 'outage' }
+const DAY_TEXT: Record<DayState, string> = { ok: 'no incidents', degraded: 'degraded', down: 'outage', none: 'no checks' }
 
-/** 90 daily bars, oldest on the left. Hovering a bar names the day and what happened. */
+/** A day measured by the server: its label and what to say about it, such as "99.95% uptime". */
+export interface MeasuredDay {
+  label: string
+  state: DayState
+  detail: string
+}
+
+/**
+ * 90 daily bars, oldest on the left. Hovering a bar names the day and what happened. Give `days` for
+ * measured days (the status page), or `events` for a sample where unlisted days were fine (the landing page).
+ */
 export function UptimeBars({
   name,
-  events,
+  events = {},
+  days: measured,
   uptime,
   today,
   className,
 }: {
   name: string
-  events: Record<number, Exclude<DayState, 'ok'>>
+  events?: Record<number, Exclude<DayState, 'ok'>>
+  days?: MeasuredDay[]
   uptime?: string
   today?: Date
   className?: string
@@ -27,11 +40,13 @@ export function UptimeBars({
   const [hovered, setHovered] = useState<number | null>(null)
   const [mountedOn] = useState(() => new Date())
   const lastDay = today ?? mountedOn
-  const incidents = Object.keys(events).length
-  const days = Array.from({ length: 90 }, (_, index) => {
-    const state: DayState = events[index] ?? 'ok'
-    return { index, state, text: `${dayLabel(lastDay, index)}: ${DAY_TEXT[state]}` }
-  })
+  const days = measured
+    ? measured.map((day, index) => ({ index, state: day.state, text: `${day.label}: ${day.detail}` }))
+    : Array.from({ length: 90 }, (_, index) => {
+        const state: DayState = events[index] ?? 'ok'
+        return { index, state, text: `${dayLabel(lastDay, index)}: ${DAY_TEXT[state]}` }
+      })
+  const incidents = days.filter((day) => day.state === 'degraded' || day.state === 'down').length
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>

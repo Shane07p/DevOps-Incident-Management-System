@@ -8,6 +8,7 @@ import { ApiRequestError } from '@/api/client'
 import { createIncident, listServiceChoices } from '@/api/incidents'
 import { severitySchema, type Severity } from '@/api/schemas'
 import { SeverityBadge } from '@/components/app/badges'
+import { DuplicateIncidentWarning } from '@/components/app/DuplicateIncidentWarning'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -45,6 +46,8 @@ export function NewIncidentPage() {
   // Its own key under 'services', so saving a service refreshes it without sharing the catalog's cache.
   const services = useQuery({ queryKey: ['services', 'choices'], queryFn: listServiceChoices })
   const form = useForm<NewIncidentValues>({ resolver: zodResolver(newIncidentSchema), defaultValues: EMPTY })
+  const titleValue = form.watch('title')
+  const serviceIdValue = form.watch('serviceId')
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
@@ -92,6 +95,7 @@ export function NewIncidentPage() {
               </FormItem>
             )}
           />
+          <DuplicateIncidentWarning title={titleValue} serviceId={serviceIdValue} />
           <FormField
             control={form.control}
             name="description"

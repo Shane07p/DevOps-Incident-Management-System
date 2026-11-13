@@ -67,6 +67,17 @@ public class ServiceEntity {
     @MapKeyColumn(name = "severity", length = 10)
     private Map<Severity, SlaTarget> targets = new EnumMap<>(Severity.class);
 
+    // Shown on the org's public status page, under publicName (D45).
+    @Column(name = "public_visible", nullable = false)
+    private boolean publicVisible;
+
+    @Column(name = "public_name", length = 100)
+    private String publicName;
+
+    /** The value of the org's service label for this service (D49); null means {@link #defaultTelemetryLabel}. */
+    @Column(name = "telemetry_label", length = 100)
+    private String telemetryLabel;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -88,6 +99,28 @@ public class ServiceEntity {
         this.owner = owner;
         this.criticality = criticality;
         this.updatedAt = updatedAt;
+    }
+
+    /** Shows the service on the public status page under {@code publicName}, or hides it (D45). */
+    public void publishAs(boolean visible, String publicName, Instant updatedAt) {
+        this.publicVisible = visible;
+        this.publicName = publicName;
+        this.updatedAt = updatedAt;
+    }
+
+    /** The label value to query this service's logs and metrics by: the saved one, or the default. */
+    public String telemetryLabel() {
+        return telemetryLabel != null ? telemetryLabel : defaultTelemetryLabel(name);
+    }
+
+    /** Sets the label value; null goes back to the default. */
+    public void labelTelemetryAs(String telemetryLabel) {
+        this.telemetryLabel = telemetryLabel;
+    }
+
+    /** The name in lower case, words joined by hyphens: what the demo shop and many setups use. */
+    public static String defaultTelemetryLabel(String name) {
+        return name.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("\\s+", "-");
     }
 
     public void changeFallbackContact(AppUser fallbackContact) {

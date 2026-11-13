@@ -28,7 +28,7 @@ class DatabaseSchemaTest {
 			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
 					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency", "personal_access_token",
-					"deployment", "incident_deployment");
+					"deployment", "incident_deployment", "public_update", "heartbeat", "telemetry_connection");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -94,6 +94,15 @@ class DatabaseSchemaTest {
 				where table_schema = 'incident' and table_name = 'incident'
 				  and column_name in ('correlation_source', 'correlation_key')
 				""", Integer.class)).isEqualTo(2);
+	}
+
+	@Test
+	void incidentHasAcknowledgedAtColumn() {
+		assertThat(jdbc.queryForObject("""
+				select count(*) from information_schema.columns
+				where table_schema = 'incident' and table_name = 'incident'
+				  and column_name = 'acknowledged_at'
+				""", Integer.class)).isEqualTo(1);
 	}
 
 	@Test

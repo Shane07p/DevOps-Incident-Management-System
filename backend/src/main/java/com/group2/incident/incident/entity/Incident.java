@@ -84,6 +84,13 @@ public class Incident {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	@Column(name = "acknowledged_at")
+	private Instant acknowledgedAt;
+
+	/** When the first accepted resolution stopped the resolution clock (FR-16.2); stays set on closure. */
+	@Column(name = "resolved_at")
+	private Instant resolvedAt;
+
 	@Column(name = "response_target_minutes", nullable = false, updatable = false)
 	private int responseTargetMinutes;
 
@@ -120,6 +127,35 @@ public class Incident {
 
 	public void assignTo(AppUser assignee) {
 		this.assignee = assignee;
+	}
+
+	/**
+	 * Acknowledges the incident (US-08, FR-06, FR-16.2).
+	 * Sets status to ACKNOWLEDGED, makes the acknowledger the assignee, and records the acknowledgement time.
+	 */
+	public void acknowledge(AppUser acknowledger, Instant now) {
+		if (this.status != IncidentStatus.OPEN) {
+			throw new IllegalStateException("Only OPEN incidents can be acknowledged, but status was " + this.status);
+		}
+		this.status = IncidentStatus.ACKNOWLEDGED;
+		this.assignee = acknowledger;
+		this.acknowledgedAt = now;
+	}
+
+	/**
+	 * Transitions the incident to a new status (FR-06, US-10).
+	 * Allowed transitions are verified by {@code TransitionPolicy}.
+	 */
+	public void transitionTo(IncidentStatus newStatus, Instant now) {
+		this.status = newStatus;
+		if (newStatus == IncidentStatus.RESOLVED && this.resolvedAt == null) {
+			this.resolvedAt = now;
+		}
+	}
+
+	/** Changes severity; the SLA targets copied at creation stay as they were. */
+	public void changeSeverity(Severity newSeverity) {
+		this.severity = newSeverity;
 	}
 
 	/** Gives Comms or Ops to a person. The Lead is the assignee, changed only through {@link #assignTo}. */

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
 
 /*
- * The landing is the redesign preview's page, built on the taste-skill kit in public/landing: the
+ * The landing is the redesign preview's page, built on the taste-skill kit in public/landing (MIT,
+ * public/landing/assets/LICENSE; copied as it is, never edited): the
  * kit's stylesheets and scripts give it its layout, the fluted-glass hero, the pinned incident
  * chapters, the liquid type, the diagrams and the hover motion. This page adds them on arrival and
  * takes the stylesheets and page settings away again when it leaves, so the app never sees them.

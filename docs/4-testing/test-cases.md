@@ -349,12 +349,12 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Dhruva) |
-| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Planned (Dhruva) |
-| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Planned (Dhruva) |
-| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Dhruva) |
-| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Planned (Dhruva) |
-| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Dhruva) |
+| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | In review |
+| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | In review |
+| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | In review |
 | TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | In review |
 
 ### Demo-shop scenario table (Issue #64)

@@ -163,7 +163,17 @@ longer marked Unused.
 
 ### 6. Test
 
-Run TC-D36a to f in `docs/4-testing/test-cases.md` with the demo shop's fault switches, for example:
+Run TC-D36a to f in `docs/4-testing/test-cases.md` with the demo shop's fault switches:
+
+| Fault | What the checks see | Cases |
+| --- | --- | --- |
+| `bad_deploy` | every checkout answers 500 | b (Pending after one failing check), c (Checkout is down, SEV1), f (no second incident while it lasts); Checkout error rate fires too |
+| `slow_gateway` | payments takes 2 s longer, and so does checkout, which calls the payment service | d (Pending after 2 slow checks), e (Payments is slow, SEV2, about 14 minutes in); Checkout is slow fires first, as its check runs every 2 minutes |
+
+A fault switch fails every location at once, so TC-D36a (1 of 2 locations failing) cannot be run
+with one. The results of 13 November are in `docs/4-testing/test-report.md` (Sprint 3).
+
+Switching a fault on and off:
 
 ```bash
 curl -X POST https://settle-demo-shop.onrender.com/faults/error_spike \

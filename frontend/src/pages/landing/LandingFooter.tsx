@@ -1,123 +1,70 @@
-import { useRef, type MouseEvent } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useIstTime } from '@/components/app/IstClock'
 import { Wordmark } from '@/components/shell/Wordmark'
+import { Container } from './parts'
 
 const COLUMNS = [
-  {
-    title: 'Product',
-    links: [
-      { label: 'How it works', href: '#how' },
-      { label: 'Features', href: '#features' },
-      { label: 'Monitoring', href: '#monitoring' },
-      { label: 'Status page', href: '#status' },
-      { label: 'Incident replay', href: '#replay' },
-    ],
-  },
-  {
-    title: 'App',
-    links: [
-      { label: 'Log in', to: '/login' },
-      { label: 'Your dashboard', to: '/home' },
-      { label: 'Public status page', to: '/status' },
-    ],
-  },
+  { title: 'Product', links: [{ label: 'Incident board', href: '#product' }, { label: 'Workflow', href: '#flow' }] },
+  { title: 'Monitoring', links: [{ label: 'Uptime checks', href: '#monitoring' }, { label: 'Integrations', href: '#tools' }] },
+  { title: 'Help', links: [{ label: 'Questions', href: '#questions' }, { label: 'The record', href: '#settled' }] },
+  { title: 'Account', links: [{ label: 'Sign in', to: '/login' }, { label: 'Create a workspace', to: '/signup' }] },
 ]
 
-/** Footer with a large outlined wordmark that lights up under the pointer. */
+const link = 'text-sm text-foreground/90 hover:text-foreground hover:underline'
+
+/** The closing call to action and the site links. */
 export function LandingFooter() {
-  const { hhmmss } = useIstTime()
-  const glow = useRef<SVGRadialGradientElement>(null)
-
-  const onMove = (event: MouseEvent<HTMLDivElement>) => {
-    const svg = event.currentTarget.querySelector('svg')
-    if (!svg || !glow.current) return
-    const box = svg.getBoundingClientRect()
-    glow.current.setAttribute('cx', (((event.clientX - box.left) / box.width) * 1000).toFixed(0))
-    glow.current.setAttribute('cy', (((event.clientY - box.top) / box.height) * 250).toFixed(0))
-  }
-
   return (
-    <footer className="border-t bg-background">
-      <div className="mx-auto grid max-w-(--page-max) grid-cols-[minmax(min(100%,300px),2fr)_repeat(auto-fit,minmax(160px,1fr))] gap-10 px-4 pt-[72px] sm:px-8">
-        <div className="flex max-w-[340px] flex-col gap-3.5">
-          <Wordmark size={28} />
-          <p className="text-pretty text-muted-foreground">
-            Incident management for software teams. Register services, page on-call, track SLAs, and learn from every incident.
-          </p>
-          <Link to="/status" className="inline-flex h-[30px] items-center gap-2 self-start rounded-full border px-3 text-[13px] whitespace-nowrap text-foreground hover:no-underline">
-            <span className="size-[7px] rounded-full bg-health-operational" aria-hidden="true" />
-            All Settle systems operational
-          </Link>
-        </div>
-        {COLUMNS.map((column) => (
-          <div key={column.title} className="flex flex-col gap-3">
-            <span className="text-sm font-bold">{column.title}</span>
-            {column.links.map((link) =>
-              'to' in link ? (
-                <Link key={link.label} to={link.to} className="text-[14.5px] text-muted-foreground hover:text-foreground hover:no-underline">
-                  {link.label}
-                </Link>
-              ) : (
-                <a key={link.label} href={link.href} className="text-[14.5px] text-muted-foreground hover:text-foreground hover:no-underline">
-                  {link.label}
-                </a>
-              ),
-            )}
+    <footer id="contact" aria-labelledby="close-heading" className="border-t border-border bg-background pt-24 pb-10">
+      <Container>
+        <h2 id="close-heading" className="max-w-[34rem] text-[clamp(2.25rem,4vw+0.5rem,3.25rem)] leading-[1.05] font-medium tracking-[-0.035em]">
+          Create a workspace for your team
+        </h2>
+        <p className="mt-5 max-w-[42rem] text-lg leading-relaxed text-foreground/90">
+          Sign-up creates your organisation. Add services, on-call schedules and your monitoring tools next.
+        </p>
+        <Link
+          to="/signup"
+          className="mt-10 flex h-20 items-center justify-between rounded-lg bg-primary px-8 text-[clamp(1.5rem,2vw+0.75rem,2rem)] font-medium tracking-[-0.02em] text-primary-foreground hover:bg-primary/90 hover:no-underline sm:px-12"
+        >
+          Create a workspace
+          <ArrowRight aria-hidden="true" className="size-6" />
+        </Link>
+
+        <div className="mt-24 grid gap-10 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="flex flex-col gap-5 lg:col-span-4">
+            <a href="#top" aria-label="Settle home" className="text-foreground hover:no-underline">
+              <Wordmark size={24} />
+            </a>
+            <p className="max-w-[20rem] text-lg leading-snug font-medium tracking-[-0.01em]">Incident response and monitoring for software teams.</p>
           </div>
-        ))}
-      </div>
-
-      <div
-        className="mx-auto mt-10 max-w-(--page-max) px-4 sm:px-8"
-        onMouseMove={onMove}
-        onMouseLeave={() => glow.current?.setAttribute('cx', '-400')}
-      >
-        <svg viewBox="0 0 1000 250" className="block h-auto w-full" aria-hidden="true">
-          <defs>
-            <radialGradient ref={glow} id="wordGlow" gradientUnits="userSpaceOnUse" cx="-400" cy="125" r="260">
-              <stop offset="0%" stopColor="white" />
-              <stop offset="100%" stopColor="black" />
-            </radialGradient>
-            <mask id="wordMask">
-              <rect width="1000" height="250" fill="url(#wordGlow)" />
-            </mask>
-            <linearGradient id="wordFill" x1="0" x2="1">
-              <stop offset="0%" stopColor="var(--ring)" />
-              <stop offset="100%" stopColor="var(--glow)" />
-            </linearGradient>
-          </defs>
-          {['none', 'url(#wordFill)'].map((fill) => (
-            <text
-              key={fill}
-              x="500"
-              y="225"
-              textAnchor="middle"
-              fontFamily="Host Grotesk Variable"
-              fontWeight="800"
-              style={{ fontStretch: '62%' }}
-              fontSize="290"
-              letterSpacing="-4"
-              textLength="940"
-              lengthAdjust="spacingAndGlyphs"
-              fill={fill}
-              stroke={fill === 'none' ? 'var(--border)' : undefined}
-              strokeWidth={fill === 'none' ? 2 : undefined}
-              mask={fill === 'none' ? undefined : 'url(#wordMask)'}
-            >
-              SETTLE
-            </text>
+          {COLUMNS.map((column) => (
+            <nav key={column.title} aria-label={column.title} className="flex flex-col gap-4 lg:col-span-2">
+              <h3 className="text-sm text-muted-foreground">{column.title}</h3>
+              <ul className="flex flex-col gap-3">
+                {column.links.map((item) => (
+                  <li key={item.label}>
+                    {'to' in item && item.to ? (
+                      <Link to={item.to} className={link}>
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <a href={'href' in item ? item.href : undefined} className={link}>
+                        {item.label}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </nav>
           ))}
-        </svg>
-      </div>
-
-      <div className="border-t">
-        <div className="mx-auto flex max-w-(--page-max) flex-wrap justify-between gap-4 px-4 py-5 text-[13.5px] text-muted-foreground sm:px-8">
-          <span className="whitespace-nowrap">IT314 course project, Group 2</span>
-          <span className="whitespace-nowrap">Built with React, shadcn/ui, and Motion</span>
-          <span className="font-mono text-[12.5px] whitespace-nowrap tnum">Times in IST · {hhmmss}</span>
         </div>
-      </div>
+
+        <div className="mt-16 flex flex-wrap justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground">
+          <span>© 2026 Settle</span>
+          <span>Product names and logos are trademarks of their owners</span>
+        </div>
+      </Container>
     </footer>
   )
 }

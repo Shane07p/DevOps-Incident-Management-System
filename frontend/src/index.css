@@ -57,6 +57,10 @@
   --deep: #111213;
   --deep-foreground: #e9e9e0;
   --glow: #ee936b;
+  /* The landing's lit ground: the sand behind its product pictures, the same in both themes (#267). */
+  --ground: #d9ccb7;
+  --ground-surface: #e9e0d2;
+  --ground-accent: #a8794a;
 
   /* Severity: solid (rings, bars), fg (text), bg (tint), line (inset ring). Only SEV1 and SEV2 are coloured. */
   --sev-1: #b3261e;  --sev-1-fg: #b3261e;  --sev-1-bg: #b3261e0d; --sev-1-line: #b3261e3d;
@@ -187,6 +191,9 @@
   --color-criticality-medium-bg: var(--criticality-medium-bg);
   --color-deep: var(--deep);
   --color-deep-foreground: var(--deep-foreground);
+  --color-ground: var(--ground);
+  --color-ground-surface: var(--ground-surface);
+  --color-ground-accent: var(--ground-accent);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-foreground: var(--foreground);

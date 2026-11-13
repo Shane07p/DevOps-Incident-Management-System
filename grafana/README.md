@@ -1,26 +1,37 @@
 # Grafana checks and alerts (D35, D36)
 
 Grafana Cloud checks the demo shop from 2 locations, and its alert rules post into Settle's
-`/webhooks/alerts` (#88). These files record that setup so it can be reviewed and created again.
+`/webhooks/alerts` (#88). These files record that setup so it can be reviewed and created again;
+[Setting it up](#setting-it-up) lists the steps as they were run on 13 Nov 2026.
 
 ```
 grafana/
-├── checks/synthetic-checks.yaml            # Synthetic Monitoring HTTP checks
-├── alerts/alert-rules.yaml                 # Down, Degraded, Error rate rules
-└── contact-points/webhook-contact-point.yaml  # payload template, 3 contact points
+├── checks/synthetic-checks.yaml               # Synthetic Monitoring HTTP checks
+├── alerts/alert-rules.yaml                    # Down, Degraded, Error rate rules
+├── contact-points/webhook-contact-point.yaml  # payload template, 3 contact points
+└── scripts/create_rules.py                    # creates the rules in a stack from alert-rules.yaml
 ```
+
+## Where it runs
+
+| Part | Where |
+| --- | --- |
+| Settle backend | Render, the main workspace: `https://incident-backend-f340.onrender.com` |
+| Demo shop | Render, a workspace of its own: `https://settle-demo-shop.onrender.com` |
+| Checks, the shop's metrics, alert rules, contact points | Grafana Cloud stack, free tier |
 
 ## Checks (D35)
 
 | Check | Request | Every | Locations |
 | --- | --- | --- | --- |
-| `demo-shop-payments` | `POST /payments/authorize` | 5 min | Frankfurt, New York |
-| `demo-shop-checkout` | `POST /checkout` | 2 min | Frankfurt, New York |
-| `demo-shop-search` | `GET /search?q=widget` | 5 min | Frankfurt, New York |
+| `demo-shop-payments` | `POST /payments/authorize` | 5 min | Singapore, Mumbai |
+| `demo-shop-checkout` | `POST /checkout` | 2 min | Singapore, Mumbai |
+| `demo-shop-search` | `GET /search?q=widget` | 5 min | Singapore, Mumbai |
 
 One execution is one check from one location: 17,280 + 43,200 + 17,280, about 78k a month, inside
 the free tier's 100k API test executions a month. The request bodies match the demo shop's models;
-any other body gets 422 and the check fails every time.
+any other body gets 422 and the check fails every time. The probes are in Asia, where the shop
+and its users are; any two locations work, since the rules count locations, not names.
 
 ## Alert rules (D36)
 
@@ -34,6 +45,9 @@ Down and Degraded count locations in the query (`sum by (job)` over each locatio
 result), and `for:` sets the checks in a row from the check's frequency: Down waits 6 min on a
 5-minute check and 3 min on a 2-minute one, Degraded 11 and 5. Change a check's frequency and
 change those with it. The header of `alert-rules.yaml` explains the arithmetic.
+
+Error rate reads the shop's own metric, `demo_http_requests_total`, by its `service` and `status`
+labels. The shop pushes it over OTLP once a minute (`demo-shop/README.md`, section 7).
 
 ## Into Settle
 
@@ -59,25 +73,106 @@ point itself (Grafana's simplified routing), so no notification policy is needed
 - Alerts with the same `correlationKey` join the incident that is still open.
 - Resolved notifications are not sent; Settle resolves incidents through its own status flow.
 
-## Setting it up in Grafana Cloud
+## Setting it up
 
-1. In Settle, as an Admin, register three tools (`POST /api/tools`): "Grafana Down", "Grafana
-   Degraded", "Grafana Error rate". Each answers with a token once; keep each one.
-2. Make sure Settle has services named `payments`, `checkout`, and `search` (case does not matter):
-   an alert for a service Settle does not know is refused.
-3. Create the three checks from `checks/synthetic-checks.yaml`, with the demo shop's deployed URL.
-4. Create the template and the three contact points from `contact-points/webhook-contact-point.yaml`
-   (Alerting > Contact points > Notification templates, then each webhook contact point with
-   **Custom Payload** set to `{{ template "settle.alert" . }}`). Use Settle's backend URL and one
-   token per contact point in place of the `${...}` values. Never commit a token.
-5. Create the rules from `alerts/alert-rules.yaml`. In each rule's **Configure notifications**,
-   choose its contact point (`settle-down`, `settle-degraded`, or `settle-error-rate`), as its
-   `notification_settings` says. Leave the notification policies alone: the stack's tree also
-   routes Grafana's own rules, and importing a `policies` section would replace all of it.
-6. Check each case in `docs/4-testing/test-cases.md` (TC-D36a to f) with the demo shop's fault
-   switches, and attach a screenshot of each to the pull request.
+No secret goes in the repository or a chat: each token below is pasted only into the setting that
+uses it. Paste values without the surrounding quotes some pages show.
+
+### 1. The demo shop on Render
+
+Use a Render workspace of its own. A workspace gets 750 free instance hours a month; the backend
+stays awake (the uptime bot) and so does the shop (the checks), about 744 hours each, so together
+they would run out mid-month and Render would suspend both.
+
+New Web Service from this repository: branch `main`, root directory `demo-shop`, runtime Docker,
+Dockerfile `demo-shop/Dockerfile`, Free plan, health check path `/health`. With the root
+directory set, only changes under `demo-shop/` redeploy it.
+
+| Variable | Value |
+| --- | --- |
+| `PORT` | `8001` |
+| `ENVIRONMENT` | `production`: the shop then refuses to start without a control token |
+| `DEMO_SHOP_CONTROL_TOKEN` | `openssl rand -hex 32`; the fault, traffic, and log routes need it |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Cloud Portal > the stack > **OpenTelemetry** > **Configure**: the `https://otlp-gateway-….grafana.net/otlp` value |
+| `OTEL_EXPORTER_OTLP_HEADERS` | the same page, after **Generate now** for a token: `Authorization=Basic …` |
+
+Check it: `GET /search?q=widget` answers 200, `GET /faults` without the token answers 401, and in
+Grafana **Explore** on the `grafanacloud-…-prom` data source, `demo_http_requests_total` shows
+series with a `service` label within a couple of minutes.
+
+### 2. The three checks
+
+**Testing & synthetics > Synthetics > Checks > Add new check > API Endpoint**, once per check in
+`checks/synthetic-checks.yaml`:
+
+1. **Request:** the job name exactly as in the file (the rules find each check by it), the method,
+   and the URL on `https://settle-demo-shop.onrender.com`. For the two POST checks, **Request
+   options > Options**: header `Content-Type: application/json`; **Body**: the body from the file.
+2. **Uptime:** valid status code `200`; timeout 10 s.
+3. **Execution:** probes Singapore and Mumbai; the frequency from the table above.
+4. **Alerting:** untick **Failed Checks** and leave the email box empty. Our rules do the alerting,
+   and an email address there creates a contact point and a notification policy.
+5. **Test** answers 200; save.
+
+### 3. Settle
+
+As an Admin of the org, in production:
+
+- **Services** named `payments`, `checkout`, and `search` (case does not matter); an alert for a
+  service Settle does not know is refused. Leave **Telemetry label** empty: it defaults to the
+  name, which is the shop's `service` label. SLA targets used, in minutes (response / resolution):
+  SEV1 15 / 240, SEV2 60 / 480, SEV3 240 / 1440, SEV4 1440 / 4320.
+- **Tools** (`/tools`; Ctrl+K and "Tools" also finds it): "Grafana Down", "Grafana Degraded",
+  "Grafana Error rate". Each shows its token once.
+
+### 4. Template and contact points
+
+**Alerts & IRM > Alerting > Notification configuration**:
+
+1. **Templates:** add `settle-alert` with the `template` text from
+   `contact-points/webhook-contact-point.yaml`.
+2. **Contact points:** add `settle-down`, `settle-degraded`, and `settle-error-rate`, each with one
+   **Webhook** integration:
+   - URL `https://incident-backend-f340.onrender.com/webhooks/alerts`, method POST;
+   - **Optional Webhook settings:** Authorization Header, scheme `Bearer`, credentials the matching
+     tool token; **Custom Payload** on, template `{{ template "settle.alert" . }}`;
+   - **Notification settings:** tick **Disable resolved message**. The list then shows
+     "Delivering only firing notifications".
+
+Leave **Notification policies** alone: the stack's tree also routes Grafana's own rules.
+
+### 5. The rules
+
+`scripts/create_rules.py` creates the folder "Demo Shop Alerts" and the three rule groups from
+`alerts/alert-rules.yaml`, evaluated every minute, each rule sending to its contact point. Running
+it again replaces the same groups, and the rules stay editable in the UI.
+
+1. **Administration > Users and access > Service accounts:** add one with the Admin role (the
+   rule API needs it) and generate a token.
+2. In your own terminal (PowerShell shown; it needs PyYAML, `python -m pip install pyyaml`):
+   ```powershell
+   $env:GRAFANA_URL = "https://<stack>.grafana.net"
+   $env:GRAFANA_TOKEN = "<service account token>"
+   python grafana/scripts/create_rules.py
+   ```
+   It ends with `9 of 9 rules in place.`
+3. Delete the service account.
+
+**Alerting > Alert rules** then shows 9 rules in Demo Shop Alerts, and the contact points are no
+longer marked Unused.
+
+### 6. Test
+
+Run TC-D36a to f in `docs/4-testing/test-cases.md` with the demo shop's fault switches, for example:
+
+```bash
+curl -X POST https://settle-demo-shop.onrender.com/faults/error_spike \
+  -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN" \
+  -H "Content-Type: application/json" -d '{"enabled": true}'
+curl -X POST https://settle-demo-shop.onrender.com/faults/reset \
+  -H "Authorization: Bearer $DEMO_SHOP_CONTROL_TOKEN"
+```
 
 The files use Grafana's file-provisioning format, which is also what Alerting's export produces.
-`grafanacloud-prom` is the stack's Prometheus data source; change the UID if yours differs. After
-setting up, export the rules, contact points, and checks from Grafana Cloud and replace these
-files, so the repository holds what actually runs.
+`create_rules.py` finds the stack's Prometheus data source itself; the files say
+`grafanacloud-prom`, the usual UID.

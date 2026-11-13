@@ -8,22 +8,23 @@
 #
 # Synthetic Monitoring has no import for this file: it records the checks so they can
 # be reviewed and created again in Grafana Cloud (Testing & synthetics > Synthetics >
-# Checks). Replace DEMO_SHOP_BASE_URL with the deployed demo shop's URL. The `job`
-# names and frequencies are what alerts/alert-rules.yaml queries and counts.
+# Checks), as grafana/README.md describes. The targets are the deployed demo shop
+# (its own Render workspace). The `job` names and frequencies are what
+# alerts/alert-rules.yaml queries and counts. Probes: two in Asia, where the shop and its users are.
 #
 # The bodies follow demo-shop/demo_shop/models.py (PaymentRequest, CheckoutRequest);
 # anything else gets 422 and the check fails every time.
 
 checks:
   - job: demo-shop-payments
-    target: "${DEMO_SHOP_BASE_URL}/payments/authorize"
+    target: "https://settle-demo-shop.onrender.com/payments/authorize"
     type: http
     enabled: true
     frequency: 5m
     timeout: 10s
     probes:
-      - Frankfurt
-      - New York
+      - Singapore
+      - Mumbai
     settings:
       http:
         method: POST
@@ -36,14 +37,14 @@ checks:
       team: group2
 
   - job: demo-shop-checkout
-    target: "${DEMO_SHOP_BASE_URL}/checkout"
+    target: "https://settle-demo-shop.onrender.com/checkout"
     type: http
     enabled: true
     frequency: 2m
     timeout: 10s
     probes:
-      - Frankfurt
-      - New York
+      - Singapore
+      - Mumbai
     settings:
       http:
         method: POST
@@ -56,14 +57,14 @@ checks:
       team: group2
 
   - job: demo-shop-search
-    target: "${DEMO_SHOP_BASE_URL}/search?q=widget"
+    target: "https://settle-demo-shop.onrender.com/search?q=widget"
     type: http
     enabled: true
     frequency: 5m
     timeout: 10s
     probes:
-      - Frankfurt
-      - New York
+      - Singapore
+      - Mumbai
     settings:
       http:
         method: GET

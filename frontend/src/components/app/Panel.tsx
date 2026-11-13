@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import { useId, type ComponentProps, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -12,14 +12,18 @@ export function Panel({
   className,
   ...props
 }: { title?: ReactNode; action?: ReactNode; children: ReactNode } & Omit<ComponentProps<'section'>, 'title'>) {
+  const headingId = useId()
   return (
     <section
+      aria-labelledby={title ? headingId : undefined}
       className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-elev-1', className)}
       {...props}
     >
       {title && (
         <div className="flex items-center justify-between gap-3 px-[19px] py-[18px]">
-          <h2 className="flex items-center gap-2 text-[13px] font-medium tracking-[-0.01em]">{title}</h2>
+          <h2 id={headingId} className="flex items-center gap-2 text-[13px] font-medium tracking-[-0.01em]">
+            {title}
+          </h2>
           {action}
         </div>
       )}

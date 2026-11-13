@@ -385,10 +385,8 @@ export function IncidentActions({ incident }: { incident: Incident }) {
   }
 
   return (
-    <section aria-labelledby="actions-heading" className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-      <h2 id="actions-heading" className="sr-only">
-        Actions and roles
-      </h2>
+    <section aria-label="Actions and roles" className="flex flex-col gap-3 rounded-lg border bg-card p-[19px] shadow-elev-1">
+      <h2 className="text-[13px] font-medium tracking-[-0.01em]">Ownership</h2>
 
       {conflict && (
         <div role="alert" className="flex items-start gap-2.5 rounded-md bg-sev-1-bg px-3.5 py-3 text-sm text-sev-1-fg">
@@ -405,7 +403,7 @@ export function IncidentActions({ incident }: { incident: Incident }) {
         </p>
       )}
 
-      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+      <dl className="flex flex-col gap-2 text-[13px]">
         {(
           [
             ['Lead', incident.assignee],
@@ -413,7 +411,7 @@ export function IncidentActions({ incident }: { incident: Incident }) {
             ['Ops', incident.roles.ops],
           ] as const
         ).map(([label, person]) => (
-          <div key={label} className="flex gap-1.5">
+          <div key={label} className="flex items-center justify-between gap-3">
             <dt className="text-muted-foreground">{label}</dt>
             <dd className="font-medium">{person?.displayName ?? 'Nobody yet'}</dd>
           </div>

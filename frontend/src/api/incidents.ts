@@ -16,6 +16,13 @@ export const incidentSummarySchema = z.object({
   // The board sorts by time left; which of the two clocks still runs follows from the status.
   responseDueAt: timestamp,
   resolutionDueAt: timestamp,
+  // Sent back as expectedVersion when the overview acknowledges from the list (#266).
+  version: z.number(),
+  // The Lead (D39); null until someone is assigned or acknowledges.
+  assignee: personSchema.nullable().default(null),
+  // When each clock stopped; null while it runs.
+  acknowledgedAt: timestamp.nullable().default(null),
+  resolvedAt: timestamp.nullable().default(null),
 })
 
 export type IncidentSummary = z.infer<typeof incidentSummarySchema>

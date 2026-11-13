@@ -10,6 +10,7 @@ import { EscalationPage } from '@/pages/EscalationPage'
 import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
+import { PostmortemPage } from '@/pages/PostmortemPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -55,6 +56,7 @@ const RESPONSE_SCREENS: Record<string, ReactNode> = {
   '/history': <HistorySearchPage />,
   '/incidents': <IncidentsPage />,
   '/incidents/:id': <IncidentDetailPage />,
+  '/incidents/:id/postmortem': <PostmortemPage />,
 }
 const RESPONDER_SCREENS: Record<string, ReactNode> = { '/incidents/new': <NewIncidentPage /> }
 

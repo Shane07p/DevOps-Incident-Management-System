@@ -10,12 +10,14 @@ import { SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
-import { formatIst, formatMinutes } from '@/lib/time'
+import { formatIst } from '@/lib/time'
+import { IncidentActions } from './incident/IncidentActions'
 import { IncidentDeploys } from './incident/IncidentDeploys'
 import { IncidentEvidence } from './incident/IncidentEvidence'
 import { IncidentTelemetry } from './incident/IncidentTelemetry'
 import { IncidentTimeline } from './incident/IncidentTimeline'
 import { PublicUpdates } from './incident/PublicUpdateForm'
+import { SlaClocks } from './incident/SlaClocks'
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -26,17 +28,7 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function SlaDue({ label, dueAt, targetMinutes }: { label: string; dueAt: string; targetMinutes: number }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="font-mono text-lg font-semibold tnum">{formatIst(dueAt)}</span>
-      <span className="text-xs text-muted-foreground">Target {formatMinutes(targetMinutes)} from declaration</span>
-    </div>
-  )
-}
-
-/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
+/** One incident: what it is, what a responder can do to it, both SLA clocks, and its timeline. */
 // Show runbooks belonging to the incident's service.
 function IncidentRunbooks({
   serviceId,
@@ -138,18 +130,13 @@ export function IncidentDetailPage() {
             </Detail>
           </dl>
 
+          <IncidentActions incident={incident.data} />
+
           <section aria-labelledby="sla-heading" className="flex flex-col gap-3">
             <h2 id="sla-heading" className="text-lg font-semibold">
               SLA
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SlaDue label="Response due" dueAt={incident.data.responseDueAt} targetMinutes={incident.data.responseTargetMinutes} />
-              <SlaDue
-                label="Resolution due"
-                dueAt={incident.data.resolutionDueAt}
-                targetMinutes={incident.data.resolutionTargetMinutes}
-              />
-            </div>
+            <SlaClocks incident={incident.data} />
           </section>
 
           <IncidentDeploys incident={incident.data} />

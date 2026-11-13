@@ -37,6 +37,7 @@ import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
@@ -82,6 +83,9 @@ public class SecurityMatrixTest {
 
 	@Autowired
 	private JdbcTemplate jdbc;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@Autowired
 	private AppUserRepository users;
@@ -436,6 +440,27 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/acknowledge",
+						HttpMethod.POST,
+						"/api/incidents/{id}/acknowledge",
+						"{\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/transitions",
+						HttpMethod.POST,
+						"/api/incidents/{id}/transitions",
+						"{\"status\":\"INVESTIGATING\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/severity",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/severity",
+						"{\"severity\":\"SEV1\",\"reason\":\"Customers can't pay\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
@@ -585,6 +610,36 @@ public class SecurityMatrixTest {
 						"/api/telemetry/metrics",
 						null,
 						400, 400, 400, 401
+				),
+				// The org's own Grafana connection (#260): Admin only. The Admin's PUT has no URL (400), and
+				// the test call finds no connection (503).
+				new MatrixRow(
+						"GET /api/settings/telemetry",
+						HttpMethod.GET,
+						"/api/settings/telemetry",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/settings/telemetry",
+						HttpMethod.PUT,
+						"/api/settings/telemetry",
+						"{}",
+						400, 403, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/settings/telemetry",
+						HttpMethod.DELETE,
+						"/api/settings/telemetry",
+						null,
+						204, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/settings/telemetry/test",
+						HttpMethod.POST,
+						"/api/settings/telemetry/test",
+						null,
+						503, 403, 403, 401
 				)
 		);
 	}
@@ -732,6 +787,22 @@ public class SecurityMatrixTest {
 		}
 		if (path.equals("/api/incidents/duplicate-check")) {
 			req.queryParam("title", "SecurityMatrix incident");
+		}
+		if (path.endsWith("/acknowledge")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'OPEN', assignee_id = NULL, acknowledged_at = NULL WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/severity")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET severity = 'SEV2', status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/transitions")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/assignee")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET assignee_id = NULL WHERE id = ?", targetIncidentId);
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

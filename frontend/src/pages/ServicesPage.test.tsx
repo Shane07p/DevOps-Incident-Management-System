@@ -121,6 +121,7 @@ describe('ServicesPage', () => {
       ownerId: 2,
       publicVisible: false,
       publicName: '',
+      telemetryLabel: '',
       criticality: 'HIGH',
       targets: {
         SEV1: { responseMinutes: 15, resolutionMinutes: 240 },

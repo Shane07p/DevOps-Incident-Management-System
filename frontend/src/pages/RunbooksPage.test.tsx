@@ -1,6 +1,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -290,20 +290,76 @@ describe('RunbooksPage', () => {
       },
     })
 
-    vi.stubGlobal('confirm', vi.fn(() => true))
-
     await userEvent.click(
       await screen.findByRole('button', {
         name: 'Delete',
       }),
     )
 
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Restart payments service')
+    expect(callsWith(fetchMock, 'DELETE')).toHaveLength(0)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete runbook' }))
+
     await waitFor(() => {
       expect(callsWith(fetchMock, 'DELETE')).toHaveLength(1)
     })
 
-    expect(window.confirm).toHaveBeenCalledWith(
-      'Delete this runbook?',
-    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('cancels deletion without sending a request', async () => {
+    const fetchMock = renderRunbooks('ENGINEER')
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(callsWith(fetchMock, 'DELETE')).toHaveLength(0)
+  })
+
+  it('limits title and step text to the backend lengths', async () => {
+    const user = userEvent.setup()
+    renderRunbooks('ENGINEER')
+    await user.click(await screen.findByRole('button', { name: 'New runbook' }))
+    await user.click(screen.getByLabelText('Runbook title'))
+    await user.paste('t'.repeat(201))
+    await user.click(screen.getByLabelText('Step 1'))
+    await user.paste('s'.repeat(2001))
+
+    expect(screen.getByLabelText('Runbook title')).toHaveValue('t'.repeat(200))
+    expect(screen.getByLabelText('Step 1')).toHaveValue('s'.repeat(2000))
+  })
+
+  it('stops at 50 steps, explains the limit, and allows adding after removal', async () => {
+    renderRunbooks('ADMIN', {
+      'GET /api/services/1/runbooks': {
+        body: [{ ...sampleRunbook, steps: Array.from({ length: 49 }, (_, index) => `Step ${index + 1}`) }],
+      },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add step' }))
+
+    expect(screen.getByRole('button', { name: 'Add step' })).toBeDisabled()
+    expect(screen.getByText('A runbook can have at most 50 steps.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Step 50')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Step 51')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Remove' })[49])
+    expect(screen.getByRole('button', { name: 'Add step' })).toBeEnabled()
+  })
+
+  it('shows the backend field message when saving is rejected', async () => {
+    const fetchMock = renderRunbooks('ENGINEER', {
+      'PUT /api/runbooks/10': {
+        status: 400,
+        body: { message: 'Validation failed', errors: { steps: 'A runbook can have at most 50 steps.' } },
+      },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save runbook' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('A runbook can have at most 50 steps.')
+    expect(screen.queryByText('Validation failed')).not.toBeInTheDocument()
+    expect(callsWith(fetchMock, 'PUT')).toHaveLength(1)
   })
 })

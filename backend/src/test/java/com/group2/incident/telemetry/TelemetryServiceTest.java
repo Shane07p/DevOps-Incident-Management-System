@@ -14,13 +14,18 @@ import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.error.ServiceUnavailableException;
 import com.group2.incident.telemetry.config.TelemetryProperties;
+import com.group2.incident.telemetry.service.ActiveConnection.Naming;
 import com.group2.incident.telemetry.dto.LogEntryResponse;
 import com.group2.incident.telemetry.dto.MetricSeriesResponse;
+import com.group2.incident.telemetry.service.ActiveConnection;
+import com.group2.incident.telemetry.service.TelemetryConnectionService;
+import com.group2.incident.telemetry.service.TelemetryHttp;
 import com.group2.incident.telemetry.service.TelemetryService;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -153,9 +158,11 @@ class TelemetryServiceTest {
 	@Test
 	void theReadTokenIsSentAsAHeaderAndNeverLogged() {
 		Logger logger = (Logger) LoggerFactory.getLogger(TelemetryService.class);
+		Logger httpLogger = (Logger) LoggerFactory.getLogger(TelemetryHttp.class);
 		ListAppender<ILoggingEvent> captured = new ListAppender<>();
 		captured.start();
 		logger.addAppender(captured);
+		httpLogger.addAppender(captured);
 		try {
 			telemetry().queryLogs(1L, null, null, null, null, 10);
 			status.set(500);
@@ -164,6 +171,7 @@ class TelemetryServiceTest {
 		}
 		finally {
 			logger.detachAppender(captured);
+			httpLogger.detachAppender(captured);
 		}
 
 		assertThat(lastAuth.get())
@@ -206,9 +214,54 @@ class TelemetryServiceTest {
 		status.set(502);
 		assertThatThrownBy(() -> telemetry().queryMetric(1L, "requestRate", null, null, "60s"))
 				.isInstanceOf(ServiceUnavailableException.class);
-		assertThatThrownBy(() -> telemetry("", 5).queryLogs(1L, null, null, null, null, 10))
+	}
+
+	// ---------- D49: only the org's own connection, with its own names ----------
+
+	@Test
+	void withNoConnectionNothingIsSentAndTheAnswerSaysSo() {
+		TelemetryConnectionService none = mock(TelemetryConnectionService.class);
+		when(none.current()).thenThrow(new ServiceUnavailableException("Telemetry isn't connected for your organization"));
+		TelemetryService telemetry = new TelemetryService(none, services, http(5), JsonMapper.builder().build(),
+				Clock.fixed(NOW, ZoneOffset.UTC));
+
+		assertThatThrownBy(() -> telemetry.queryLogs(1L, null, null, null, null, 10))
 				.isInstanceOf(ServiceUnavailableException.class)
-				.hasMessage("Logs are not set up on this server");
+				.hasMessage("Telemetry isn't connected for your organization");
+		assertThat(lastPath.get()).isNull();
+	}
+
+	@Test
+	void aStoreTheOrgLeftOutIs503AndTheOtherStillWorks() {
+		TelemetryService logsOnly = telemetry(new ActiveConnection(null, null, URI.create(baseUrl), "123456", TOKEN,
+				DEMO_NAMING), 5);
+
+		assertThatThrownBy(() -> logsOnly.queryMetric(1L, "requestRate", null, null, "60s"))
+				.isInstanceOf(ServiceUnavailableException.class)
+				.hasMessage("Metrics aren't connected for your organization");
+		assertThat(lastPath.get()).isNull();
+		logsOnly.queryLogs(1L, null, null, null, null, 10);
+		assertThat(lastPath.get()).isEqualTo("/loki/api/v1/query_range");
+	}
+
+	@Test
+	void theOrgsOwnNamesAndTheServicesOwnLabelGoIntoTheQueries() {
+		TelemetryService telemetry = telemetry(new ActiveConnection(URI.create(baseUrl), null, URI.create(baseUrl), null,
+				TOKEN, new Naming("app", "http_requests_total", "code", "http_request_duration_seconds")), 5);
+		ServiceEntity labelled = mock(ServiceEntity.class);
+		when(labelled.getId()).thenReturn(3L);
+		when(labelled.getName()).thenReturn("Payments");
+		when(labelled.telemetryLabel()).thenReturn("payments-api");
+		when(services.findById(3L)).thenReturn(Optional.of(labelled));
+
+		telemetry.queryMetric(3L, "errorRate", null, null, "60s");
+		assertThat(lastPath.get()).isEqualTo("/api/v1/query_range");
+		assertThat(lastQuery.get().get("query")).isEqualTo(
+				"sum(rate(http_requests_total{app=\"payments-api\",code=~\"5..\"}[5m])) / sum(rate(http_requests_total{app=\"payments-api\"}[5m]))");
+		telemetry.queryLogs(3L, null, null, null, null, 10);
+		assertThat(lastQuery.get().get("query")).isEqualTo("{app=\"payments-api\"}");
+		// No user: the token goes as a bearer token.
+		assertThat(lastAuth.get()).isEqualTo("Bearer " + TOKEN);
 	}
 
 	// ---------- Reading Loki's answer ----------
@@ -282,17 +335,32 @@ class TelemetryServiceTest {
 		return telemetry(baseUrl, 5);
 	}
 
+	/** Demo-shop's names, which the tests above were written against. */
+	private static final Naming DEMO_NAMING = new Naming("service", "demo_http_requests_total", "status",
+			"demo_http_request_duration_seconds");
+
 	private TelemetryService telemetry(String url, int timeoutSeconds) {
-		TelemetryProperties properties = new TelemetryProperties(
-				new TelemetryProperties.PrometheusConfig(url.isEmpty() ? "" : url + "/api/prom", "123456"),
-				new TelemetryProperties.LokiConfig(url, "123456"), TOKEN, timeoutSeconds);
-		return new TelemetryService(properties, services, JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
+		return telemetry(new ActiveConnection(URI.create(url + "/api/prom"), "123456", URI.create(url), "123456", TOKEN,
+				DEMO_NAMING), timeoutSeconds);
+	}
+
+	private TelemetryService telemetry(ActiveConnection connection, int timeoutSeconds) {
+		TelemetryConnectionService connections = mock(TelemetryConnectionService.class);
+		when(connections.current()).thenReturn(connection);
+		return new TelemetryService(connections, services, http(timeoutSeconds), JsonMapper.builder().build(),
+				Clock.fixed(NOW, ZoneOffset.UTC));
+	}
+
+	/** The stub listens on 127.0.0.1 over http, so these tests allow private targets; TelemetryHttpTest covers the guard. */
+	private static TelemetryHttp http(int timeoutSeconds) {
+		return new TelemetryHttp(new TelemetryProperties("", true, timeoutSeconds));
 	}
 
 	private void service(long id, String name) {
 		ServiceEntity service = mock(ServiceEntity.class);
 		when(service.getId()).thenReturn(id);
 		when(service.getName()).thenReturn(name);
+		when(service.telemetryLabel()).thenReturn(ServiceEntity.defaultTelemetryLabel(name));
 		when(services.findById(id)).thenReturn(Optional.of(service));
 	}
 

@@ -32,6 +32,7 @@ export const serviceFormSchema = z.object({
   criticality: z.union([criticalitySchema, z.literal('')]).refine((value) => value.length > 0, { error: 'Choose a criticality' }),
   publicVisible: z.boolean(),
   publicName: z.string().trim().max(100, { error: 'Use at most 100 characters' }),
+  telemetryLabel: z.string().trim().max(100, { error: 'Use at most 100 characters' }),
   targets: z.record(z.enum(SEVERITIES), targetSchema),
 }).refine((values) => !values.publicVisible || values.publicName.length > 0, {
   // The server's rule and message (ServiceCatalogService).
@@ -54,6 +55,7 @@ export function emptyValues(): ServiceFormValues {
     criticality: '',
     publicVisible: false,
     publicName: '',
+    telemetryLabel: '',
     targets: bySeverity((severity) => ({ responseMinutes: String(DEFAULT_RESPONSE_MINUTES[severity]), resolutionMinutes: '' })),
   }
 }
@@ -66,11 +68,17 @@ export function valuesFrom(service: Service): ServiceFormValues {
     criticality: service.criticality,
     publicVisible: service.publicVisible ?? false,
     publicName: service.publicName ?? '',
+    telemetryLabel: service.telemetryLabel ?? '',
     targets: bySeverity((severity) => ({
       responseMinutes: String(service.targets[severity].responseMinutes),
       resolutionMinutes: String(service.targets[severity].resolutionMinutes),
     })),
   }
+}
+
+/** The label value a service gets when none is saved: what the backend falls back to. */
+export function defaultTelemetryLabel(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, '-')
 }
 
 /** Only called with values the schema accepted, so the casts hold. */
@@ -82,6 +90,7 @@ export function toRequest(values: ServiceFormValues): ServiceRequest {
     criticality: values.criticality as Criticality,
     publicVisible: values.publicVisible,
     publicName: values.publicName,
+    telemetryLabel: values.telemetryLabel,
     targets: bySeverity((severity) => ({
       responseMinutes: Number(values.targets[severity].responseMinutes),
       resolutionMinutes: Number(values.targets[severity].resolutionMinutes),
@@ -97,5 +106,6 @@ export const FIELD_NAMES: ReadonlySet<string> = new Set([
   'criticality',
   'publicVisible',
   'publicName',
+  'telemetryLabel',
   ...SEVERITIES.flatMap((severity) => [`targets.${severity}.responseMinutes`, `targets.${severity}.resolutionMinutes`]),
 ])

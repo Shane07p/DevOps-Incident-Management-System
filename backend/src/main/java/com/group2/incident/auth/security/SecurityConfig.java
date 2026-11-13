@@ -71,6 +71,7 @@ class SecurityConfig {
 						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/tools/**").hasRole("ADMIN")
 						.requestMatchers("/api/audit/**").hasRole("ADMIN")
+						.requestMatchers("/api/settings/telemetry", "/api/settings/telemetry/**").hasRole("ADMIN")
 						// Runbooks are written by Engineers too (FR-25), so their rule comes before the Admin-only one.
 						.requestMatchers(HttpMethod.POST, "/api/services/*/runbooks").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
@@ -82,6 +83,9 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/acknowledge").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/transitions").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/severity").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")

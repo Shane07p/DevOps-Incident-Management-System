@@ -80,6 +80,7 @@ export const ADMIN_PAGES: NavPage[] = [
   { path: '/users', label: 'Members', description: 'People in your org and their roles' },
   { path: '/tools', label: 'Tools', description: 'Monitoring tools and their tokens' },
   { path: '/audit', label: 'Audit log', description: 'Every configuration change, newest first' },
+  { path: '/integrations', label: 'Integrations', description: 'Connect your Grafana for logs and metrics' },
 ]
 
 export const ACCOUNT_PAGES: NavPage[] = [

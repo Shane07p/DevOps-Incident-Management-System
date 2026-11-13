@@ -587,6 +587,20 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-13.2m | Ordering | Entries with identical recordedAt timestamps | Secondary sort by id DESC produces deterministic ordering | `AuditControllerTest.equalTimestampsDeterministicOrdering` | Automated |
 | TC-FR-13.3c | Negative | POST, PUT, DELETE requests to `/api/audit` | 405 Method Not Allowed; endpoint is strictly read-only | `AuditControllerTest.mutationMethodsAreNotExposed` | Automated |
 
+## Sprint 5
+
+### Follow-ups API (FR-11.3, #240): boundary values on the due date
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-11.3a | Equivalence | An Engineer adds a CORRECTIVE and an Admin a PREVENTIVE follow-up | 201 with owner, due date, OPEN, not overdue; a timeline entry for each | `FollowUpControllerTest.createsACorrectiveAndAPreventiveFollowUp` | In review |
+| TC-FR-11.3b | Boundary | Due date the day before today (UTC), then today (UTC) while it is already tomorrow in IST | 400 on `dueDate`, then 201 | `FollowUpControllerTest.aDueDateBeforeTodayInUtcIsRefusedAndTodayIsAccepted` | In review |
+| TC-FR-11.3c | Equivalence (invalid) | Owner from another org, or an id that does not exist | 400 on `ownerId`, nothing saved | `FollowUpControllerTest.anOwnerFromAnotherOrgOrNoOneIsRefused`, `OrgIsolationTest` | In review |
+| TC-FR-11.3d | Boundary | Clock at 23:59:59 UTC on the due date, then 00:00 the day after | `overdue` false, then true | `FollowUpControllerTest.overdueIsFalseOnTheDueDateAndTrueTheDayAfter` | In review |
+| TC-FR-11.3e | State | Status to DONE, DONE again, then IN_PROGRESS | `completedAt` set and one timeline entry; nothing more; cleared on reopening | `FollowUpControllerTest.doneSetsCompletedAtAddsATimelineEntryAndIsNeverOverdue` | In review |
+| TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | In review |
+| TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
+
 ---
 
 ## White-box testing

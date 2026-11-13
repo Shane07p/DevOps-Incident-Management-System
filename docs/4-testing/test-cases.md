@@ -345,17 +345,17 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 ### Checks from several locations (D35, D36): boundary values on failing locations and checks in a row
 
-The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated.
+The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated. The checks run from 2 locations (D35 allows 2 or 3), so "2 of 2" is the smallest failing set that counts.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 1 of 3 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36b | Boundary value | 2 of 3 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36c | Boundary value | 2 of 3 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36d | Boundary value | 2 of 3 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36e | Boundary value | 2 of 3 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
+| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | In review |
+| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | In review |
+| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | In review |
+| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | In review |
 
 ### Demo-shop scenario table (Issue #64)
 

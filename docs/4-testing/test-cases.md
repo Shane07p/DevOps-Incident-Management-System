@@ -563,6 +563,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Automated |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` (Incident board sorting) | Automated |
+| TC-US-08d | Equivalence | Overview: Acknowledge and take Lead on an OPEN incident | The request carries the version the list showed | `HomePage.test.tsx` | In review |
+| TC-US-08e | State | Overview: acknowledge after someone else did (409) | Says someone got there first and reads the list again | `HomePage.test.tsx` | In review |
+| TC-US-12a | Equivalence | Incident list: search and a severity filter, then the board, then a reload | The URL keeps both filters and the view; both views show only the matches | `IncidentsPage.test.tsx` (Incident list views and filters) | In review |
+| TC-US-03a | Equivalence | Declare dialog: choose SEV1, then Payments | Shows SEV1's meaning and Payments' SEV1 targets | `IncidentsPage.test.tsx` (Incident list views and filters) | In review |
 
 ### Audit log API (FR-13, #153)
 

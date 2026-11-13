@@ -24,6 +24,8 @@ import { ServicesPage } from '@/pages/ServicesPage'
 import { RunbooksPage } from '@/pages/RunbooksPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
+import { MonitorsPage } from '@/pages/MonitorsPage'
+import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
@@ -34,6 +36,8 @@ const SCREENS: Record<string, ReactNode> = {
   '/services': <ServicesPage />,
   '/runbooks': <RunbooksPage />,
   '/tokens': <AccessTokensPage />,
+  '/monitors': <MonitorsPage />,
+  '/heartbeats': <HeartbeatsPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.

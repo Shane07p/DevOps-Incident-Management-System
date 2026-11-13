@@ -9,6 +9,9 @@
    Fonts: Host Grotesk (UI) and JetBrains Mono (clocks, references, timestamps), both self-hosted
    through Fontsource. */
 @import 'tailwindcss';
+/* The landing's markup carries the taste-skill kit's own classes (start-7, span-6 …); some share a name with a
+   Tailwind utility, so Tailwind leaves that folder alone (#267). */
+@source not './pages/landing';
 @import 'tw-animate-css';
 @import '@fontsource-variable/host-grotesk';
 @import '@fontsource-variable/jetbrains-mono';

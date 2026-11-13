@@ -1,26 +1,30 @@
-import { CallToAction } from './landing/CallToAction'
-import { Features } from './landing/Features'
+import { FlowSection } from './landing/FlowSection'
 import { Hero } from './landing/Hero'
-import { HowItWorks } from './landing/HowItWorks'
+import { IntegrationsSection } from './landing/IntegrationsSection'
+import { useLandingKit } from './landing/kit'
 import { LandingFooter } from './landing/LandingFooter'
-import { LandingHeader } from './landing/LandingHeader'
-import { Monitoring } from './landing/Monitoring'
-import { StatusPreview } from './landing/StatusPreview'
-import { Ticker } from './landing/Ticker'
+import { LandingNav } from './landing/LandingNav'
+import { MonitoringSection } from './landing/MonitoringSection'
+import { ProductSection } from './landing/ProductSection'
+import { QuestionsSection } from './landing/QuestionsSection'
+import { SettledSection } from './landing/SettledSection'
 
-/** The public product page. Everything on it is a demonstration with sample data. */
+/** The public product page. It calls no API; the incidents and people on it are illustrations. */
 export function LandingPage() {
+  const styled = useLandingKit()
+
   return (
-    <div className="overflow-x-clip bg-background text-base text-foreground">
-      <LandingHeader />
-      <main>
+    // Hidden until the kit's styles arrive, so the unstyled markup never flashes.
+    <div style={styled ? undefined : { visibility: 'hidden' }}>
+      <LandingNav />
+      <main id="top">
         <Hero />
-        <Ticker />
-        <HowItWorks />
-        <Features />
-        <Monitoring />
-        <StatusPreview />
-        <CallToAction />
+        <ProductSection />
+        <FlowSection />
+        <MonitoringSection />
+        <SettledSection />
+        <IntegrationsSection />
+        <QuestionsSection />
       </main>
       <LandingFooter />
     </div>

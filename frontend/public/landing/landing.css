@@ -1,0 +1,163 @@
+/* The landing page's own styles (#267): its palette and the page rules, from the redesign preview.
+   The kit's stylesheets in assets/ load first; these come last, as in the preview. */
+:root {
+  --p-bg: #111213; --p-surface: #1a1c1d; --p-ink: #e9e9e0; --p-muted: #a3a7a1;
+  --p-accent: #ee936b; --p-accent-ink: #111213; --p-action: #ee936b; --p-action-ink: #111213;
+  --p-inv-bg: #e9e9e0; --p-inv-surface: #d8d8d0; --p-inv-ink: #111213; --p-inv-muted: #595a58;
+  --p-inv-accent: #111213; --p-inv-accent-ink: #e9e9e0; --p-inv-action: #111213; --p-inv-action-ink: #e9e9e0;
+  --font-display: "Host Grotesk Variable", "Host Grotesk", system-ui, sans-serif;
+  --font-text: "Host Grotesk Variable", "Host Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 500;
+  --display-tracking: -0.035em;
+  --display-tracking-xl: -0.04em;
+}
+  /* The wave wordmark (the client's own logo): "settle" over its wave. */
+  .wordmark { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1; font-family: var(--font-display); font-weight: 600; font-size: 24px; letter-spacing: -0.02em; color: var(--p-ink); }
+  .wordmark svg { width: 56px; height: 6px; margin-top: 2px; }
+  .wordmark path { fill: none; stroke: var(--p-accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+
+  /* app-frame (sections-library.md, app-frame) */
+  .app.ui { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); margin-top: var(--s-7); background: var(--u-bg); border: 1px solid var(--u-border); border-radius: var(--u-r); box-shadow: var(--u-shadow); }
+  .app > .app__pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  .app > .app__pane + .app__pane { border-left: 1px solid var(--u-line); }
+  .app > .app__pane > .ui-panel { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+  .app > .app__pane::after { content: ""; position: absolute; inset: auto 0 0 0; height: 64px; background: linear-gradient(transparent, var(--u-bg)); pointer-events: none; }
+  @media (min-width: 1024px) and (max-width: 1279px) { .app.ui { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); } }
+  @media (max-width: 1023px) {
+    .app.ui { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+    .app > .app__pane--list { max-height: 252px; }
+    .app > .app__pane--list::after { display: none; }
+    .app .ui-win__side { display: none; }
+    .app .ui-win__body { grid-template-columns: minmax(0, 1fr); }
+    .app > .app__pane + .app__pane { border-left: 0; border-top: 1px solid var(--u-line); }
+  }
+  @media (max-width: 639px) {
+    .app.ui { grid-template-rows: minmax(0, 1fr); }
+    .app > .app__pane--list { display: none; }
+    .app > .app__pane + .app__pane { border-top: 0; }
+  }
+
+  /* The glass ground fills the hero's picture box; the window and the float card sit on it. */
+  .hero__media > .panel { --p-h: 100%; height: 100%; }
+  @media (max-width: 639px) { .hero__media .ly-float { display: none; } }
+  /* On a phone the lane captions sit on the lit ground under their tiles: dark ink there. */
+  @media (max-width: 639px) { #monitoring .dg-cap__l { color: var(--p-inv-ink); } }
+  /* The questions' picture keeps its shape once the split stacks. */
+  @media (max-width: 1023px) { #questions .frame--fill { height: auto; aspect-ratio: 3 / 2; margin-top: var(--s-7); } }
+  /* Wide screens: the content widens with the screen instead of leaving empty sides. */
+  @media (min-width: 1600px) { :root { --container: 1440px; --gut: 80px; } }
+  @media (min-width: 1800px) { :root { --container: 1600px; --gut: 96px; } }
+  @media (min-width: 2200px) { :root { --container: 1760px; --gut: 120px; } }
+  /* Very tall screens: a section holds its content's screen, never a band of empty ground. */
+  @media (min-height: 1100px) and (min-width: 1024px) {
+    main > section.hero { height: 1000px; }
+    main > section:not(.hero) { height: calc(var(--h, 1) * 1000px); }
+  }
+  /* The close and the footer take the height of what they hold. */
+  footer.closing, footer.closing > .wrap { height: auto; }
+  footer.closing .closing__links { margin-top: var(--s-9); }
+
+  /* The product, drawn in HTML on the lit ground: crisp at any size, nothing cropped. */
+  .shot { container-type: inline-size; display: grid; place-items: center; width: 100%; height: 100%; min-height: 100%; padding: 28px; }
+  .mo-pc__visual { background: none; }
+  .mo-pc__visual > .shot { aspect-ratio: 4 / 3; }
+  .shot--tile { height: var(--p-h); min-height: 0; padding: 20px; overflow: hidden; }
+  .shot--tile .status-card { zoom: .84; }
+  @container (min-width: 520px) { .sla-card--large { zoom: 1.18; } }
+  .shot--faq { align-self: stretch; min-height: 420px; }
+  .app-card { --ac-bg: #1a1c1d; --ac-line: #323534; --ac-ink: #e9e9e0; --ac-muted: #a3a7a1; --ac-accent: #ee936b;
+    position: relative; background: var(--ac-bg); color: var(--ac-ink); border: 1px solid var(--ac-line); border-radius: 12px;
+    box-shadow: 0 24px 48px -24px rgb(17 18 19 / .55), 0 2px 6px rgb(17 18 19 / .25);
+    font: 400 13px/1.45 var(--font-text); text-align: left; }
+  .app-card b { font-weight: 600; }
+  .app-card code { font: 500 13px/1.2 var(--font-mono); color: var(--ac-ink); background: none; padding: 0; }
+  .app-card em { font-style: normal; }
+  .ac-btn { display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 12px; border-radius: 7px; background: var(--ac-accent); color: #111213; font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+  .ac-btn--ghost { background: transparent; color: var(--ac-ink); border: 1px solid #4a4d4b; }
+  /* Waiting for acknowledgement */
+  .ack-card { width: min(560px, 100%); overflow: hidden; }
+  .ac-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; font-size: 14px; }
+  .ac-count { font: 500 12px var(--font-mono); color: var(--ac-muted); }
+  .ac-row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--ac-line); }
+  .ac-sev { justify-self: start; font: 600 11.5px var(--font-text); color: var(--ac-ink); }
+  .ac-sev--1 { padding: 2px 6px; border-radius: 5px; background: var(--ac-accent); color: #111213; }
+  .ac-main { display: grid; gap: 3px; min-width: 0; }
+  .ac-main b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ac-main span { color: var(--ac-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ac-main em { color: var(--ac-accent); }
+  .ac-side { display: grid; justify-items: end; gap: 7px; }
+  .ac-clock { display: inline-flex; align-items: baseline; gap: 6px; color: var(--ac-muted); font-size: 12px; white-space: nowrap; }
+  .ac-clock--risk { color: #dcba7a; font-weight: 600; }
+  .ac-clock--risk code { color: #dcba7a; }
+  .ac-clock i { align-self: center; width: 6px; height: 6px; border-radius: 50%; background: #dcba7a; box-shadow: 0 0 0 0 #dcba7a; animation: ac-pulse 2.4s cubic-bezier(.16,1,.3,1) infinite; }
+  @keyframes ac-pulse { 0% { box-shadow: 0 0 0 0 rgb(220 186 122 / .6); } 70%, 100% { box-shadow: 0 0 0 7px rgb(220 186 122 / 0); } }
+  /* SLA targets and the AI suggestion */
+  .shot-pair { display: grid; grid-template-columns: 200px 270px; gap: 14px; align-items: start; }
+  .sla-card { padding: 14px 16px; display: grid; gap: 12px; }
+  .sc-title { font-size: 13.5px; }
+  .sc-block { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--ac-line); }
+  .sc-block > span { display: flex; justify-content: space-between; align-items: center; color: var(--ac-muted); font-size: 12px; }
+  .sc-block > code { font-size: 20px; }
+  .sc-block small { color: var(--ac-muted); font-size: 11.5px; }
+  .sc-tag { padding: 1px 6px; border-radius: 5px; border: 1px solid #4a4d4b; color: var(--ac-ink); font-size: 11px; }
+  .sc-tag--met { color: #a5c79b; border-color: rgb(165 199 155 / .4); }
+  .sc-tag--breach { color: #f07a72; border-color: rgb(240 122 114 / .45); }
+  .sc-bar { display: block; height: 4px; border-radius: 2px; background: #2c2e2f; overflow: hidden; }
+  .sc-bar u { display: block; height: 100%; background: #a3a7a1; }
+  .sc-block:first-of-type .sc-bar u { background: #a5c79b; }
+  .sc-block--breach > code { color: #f07a72; }
+  .sc-block--breach .sc-bar u { background: #f07a72; }
+  .sc-foot { padding-top: 10px; border-top: 1px solid var(--ac-line); color: var(--ac-muted); font-size: 12px; }
+  .sla-card--large { width: min(380px, 100%); }
+  .sla-card--large .sc-block > code { font-size: 30px; }
+  .ai-card { padding: 14px 16px; display: grid; gap: 8px; border-color: rgb(238 147 107 / .35); }
+  .ai-label { justify-self: start; padding: 1px 7px; border-radius: 5px; border: 1px solid rgb(238 147 107 / .45); color: var(--ac-accent); font-size: 11px; font-weight: 600; }
+  .ai-card p { margin: 0; font-size: 13.5px; }
+  .ai-sub { color: var(--ac-muted); font-size: 11.5px; margin-top: 2px; }
+  .ai-card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; }
+  .ai-card ul li::before { content: "✓"; color: #a5c79b; margin-right: 6px; }
+  .ai-card ul.ai-open li::before { content: "–"; color: var(--ac-muted); }
+  .ai-actions { display: flex; gap: 8px; margin-top: 4px; }
+  /* The resolve dialog */
+  .dialog-card { width: min(440px, 100%); padding: 20px; display: grid; gap: 10px; border-radius: 16px; }
+  .dc-title { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+  .dialog-card p { margin: 0; color: var(--ac-muted); font-size: 13px; }
+  .dc-label { margin-top: 4px; font-size: 12.5px; font-weight: 500; }
+  .dc-field { min-height: 64px; padding: 10px 12px; border: 1px solid #4a4d4b; border-radius: 8px; background: #111213; font-size: 13px; }
+  .dialog-card small { color: var(--ac-muted); font-size: 11.5px; }
+  .dc-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  /* The public status page */
+  .status-card { width: min(440px, 100%); overflow: hidden; }
+  .st-banner { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--ac-line); }
+  .st-banner i { grid-row: span 2; width: 9px; height: 9px; border-radius: 50%; background: #dcba7a; }
+  .st-banner b { font-size: 13.5px; }
+  .st-banner small { color: var(--ac-muted); font-size: 11.5px; }
+  .st-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 9px 16px; border-bottom: 1px solid var(--ac-line); font-size: 12.5px; }
+  .st-row:last-child { border-bottom: 0; }
+  .st-row em { font-size: 12px; font-weight: 500; }
+  .st-ok { color: #a5c79b; }
+  .st-warn { color: #dcba7a; }
+  .st-bars { grid-column: 1 / -1; height: 10px; border-radius: 2px; background: repeating-linear-gradient(90deg, rgb(165 199 155 / .55) 0 7px, transparent 7px 9px); }
+  .st-bars--warn { background: linear-gradient(90deg, transparent 88%, #dcba7a 88%), repeating-linear-gradient(90deg, rgb(165 199 155 / .55) 0 7px, transparent 7px 9px); -webkit-mask: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 9px); mask: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 9px); }
+  /* Smaller frames scale the drawn screens down as one piece */
+  @container (max-width: 560px) { .shot-pair { zoom: .82; } .ack-card, .dialog-card { zoom: .9; } }
+  @container (max-width: 420px) { .shot-pair { zoom: .66; } .ack-card { zoom: .72; } .dialog-card, .status-card, .sla-card--large { zoom: .8; } }
+  @container (max-width: 330px) { .shot-pair { zoom: .56; } .ack-card { zoom: .62; } .dialog-card, .status-card, .sla-card--large { zoom: .7; } }
+  @media (prefers-reduced-motion: reduce) { .ac-clock i { animation: none; } }
+  /* Phones: the walkthrough's screens take the moment's short frame, scaled down as one piece. */
+  @media (max-width: 639px) {
+    [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual > .shot { aspect-ratio: 16 / 9; max-height: 26svh; padding: 10px; }
+    [data-moment="pinned-chapters"]:not(.is-live) .shot .ack-card { zoom: .5; }
+    [data-moment="pinned-chapters"]:not(.is-live) .shot .shot-pair { zoom: .42; }
+    [data-moment="pinned-chapters"]:not(.is-live) .shot .dialog-card { zoom: .52; }
+  }
+  #monitoring .panel { --p-h: 340px; }
+  @media (max-width: 639px) { #monitoring .panel { --p-h: 220px; } }
+  #tools .panel { --p-h: 420px; }
+  @media (max-width: 639px) { #tools .panel { --p-h: 300px; } }
+
+/* In the app, Tailwind's base sets <small> to 80%; the landing keeps the browser's own size, as in the preview. */
+small { font-size: smaller; }
+/* A row's name and its note read as two phrases ("Targets  Copied from …"), not run together. */
+@media (min-width: 640px) { .rows__name small { margin-left: 0.6em; } }

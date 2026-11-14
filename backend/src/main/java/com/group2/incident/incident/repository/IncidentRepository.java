@@ -15,8 +15,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface IncidentRepository extends JpaRepository<Incident, Long> {
 
-	// The list shows only the service name; reporter and assignee stay unloaded.
-	@EntityGraph(attributePaths = "service")
+	// The list shows the service name and the Lead (the assignee); the reporter stays unloaded.
+	@EntityGraph(attributePaths = { "service", "assignee" })
 	List<Incident> findAllByOrderByCreatedAtDescIdDesc();
 
 	@EntityGraph(attributePaths = { "service", "reporter", "assignee", "comms", "ops" })

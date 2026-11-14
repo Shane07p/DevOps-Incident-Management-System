@@ -154,12 +154,12 @@ the version we submitted; where the two differ, this file wins (D30).
 - **FR-25.2** The incident page shall offer the runbooks of the incident's service.
 
 ### FR-26 Logs explorer · Should
-- **FR-26.1** Users shall be able to search a service's logs by level, text, and time range. The backend runs every query with its own read token (D34).
+- **FR-26.1** Users shall be able to search a service's logs by level, text, and time range. The backend runs every query against the org's own Grafana with the org's read token (D49).
 - **FR-26.2** One query's time range shall be capped (*proposed:* 24 hours).
 - **FR-26.3** If the log store is slow or unavailable, the system shall say so within a timeout, and everything else shall keep working.
 
 ### FR-27 Metrics dashboards · Should
-- **FR-27.1** For each service, the system shall show request rate, error rate, and latency (p50 and p95) over a chosen time range, queried by the backend (D34).
+- **FR-27.1** For each service, the system shall show request rate, error rate, and latency (p50 and p95) over a chosen time range, queried by the backend from the org's own Grafana (D49).
 - **FR-27.2** The incident page shall show the same metrics for the incident's service and time window.
 - **FR-27.3** If the metrics store is slow or unavailable, the charts shall say so, and everything else shall keep working.
 

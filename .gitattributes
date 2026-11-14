@@ -10,3 +10,7 @@ mvnw text eol=lf
 *.jpeg binary
 *.pdf binary
 *.zip binary
+
+# The taste-skill kit the landing page loads (#267): third-party files, copied as they are, never edited.
+# GitHub collapses them in diffs and leaves them out of the language stats.
+frontend/public/landing/assets/** linguist-generated=true linguist-vendored=true

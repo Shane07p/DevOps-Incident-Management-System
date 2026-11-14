@@ -49,15 +49,15 @@ class TelemetryControllerTest {
 	}
 
 	@Test
-	void anyRoleReadsTelemetryAndTheAppSaysWhenGrafanaIsNotSetUp() throws Exception {
+	void anyRoleReadsTelemetryAndTheAppSaysWhenTheOrgHasNotConnectedGrafana() throws Exception {
 		mvc.perform(get("/api/telemetry/logs").param("serviceId", String.valueOf(serviceId))
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.message").value("Logs are not set up on this server"));
+				.andExpect(jsonPath("$.message").value("Telemetry isn't connected for your organization"));
 		mvc.perform(get("/api/telemetry/metrics").param("serviceId", String.valueOf(serviceId)).param("metric", "errorRate")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.message").value("Metrics are not set up on this server"));
+				.andExpect(jsonPath("$.message").value("Telemetry isn't connected for your organization"));
 	}
 
 	@Test

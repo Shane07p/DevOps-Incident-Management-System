@@ -161,7 +161,7 @@ Merging to `main` deploys automatically once CI passes:
 | Frontend | Vercel | Every pull request also gets a preview link from the Vercel bot |
 | Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `JAVA_TOOL_OPTIONS`. No admin is created at start: the first person signs up and creates an org (D48). `RABBITMQ_URL` (the hosted RabbitMQ). Optional: the `DB_POOL_*`, `RATE_LIMIT_*`, and `OUTBOX_RELAY_DELAY_MS` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads |
 | Database | Supabase (PostgreSQL) | Reached through the session pooler; tables in the `incident` schema |
-| Uptime | UptimeRobot | Pings `/actuator/health` every 10 minutes, which also keeps Render's free tier awake |
+| Uptime | UptimeRobot | An external uptime bot calls the backend's `/actuator/health` URL every few minutes to keep the free Render service awake; without it, the first request after 15 idle minutes waits for a cold start |
 | Messaging | CloudAMQP (RabbitMQ, free plan) | `RABBITMQ_URL` on Render, the instance's AMQP URL. Unset, events wait in the outbox; the health check never depends on RabbitMQ |
 
 Secrets live only in Render's environment variables, never in the repository.

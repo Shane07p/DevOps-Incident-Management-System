@@ -245,8 +245,11 @@ The monitor raises an alert after N = 3 consecutive failures.
 | TC-FR-22.1f | Negative | A monitor URL on our own network: loopback, private ranges, `169.254.169.254`, IPv6 local | Refused on save with a field error, and never contacted by a check | `MonitorTargetGuardTest`, `HttpProbeTest.refusedTargetIsNotContacted`, `MonitorControllerTest.internalUrlIsRefused` | Automated |
 | TC-FR-22.1g | State transition | A monitor in an outage is moved to another service | The count starts again; the new service gets its own alert at the threshold; its pass does not recover the old service's alert | `MonitorCheckTest.movingToAnotherServiceStartsAfresh` (Testcontainers) | Automated |
 | TC-FR-22.1h | Boundary value | A target that answers at once and then keeps sending its body | The check ends with the status, well within its 10-second deadline | `HttpProbeTest.streamingBodyDoesNotHoldTheCheck` | Automated |
+| TC-FR-22.1i | Equivalence | Monitors page with a healthy and a down monitor | Each shows its real state (Up; Down since …); no uptime bars or figures are invented; a Viewer has no New monitor button | `MonitorsPage.test.tsx` | In review |
+| TC-FR-22.1j | Boundary value | Monitor form: an `ftp://` URL and a 10-second interval, then a URL the server refuses | Both are refused before the request with the server's own messages; the server's URL error shows on the URL field; create and edit send the server's body | `MonitorsPage.test.tsx` | In review |
 | TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Automated |
 | TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Automated |
+| TC-HBc | Equivalence | Heartbeats page: on time, late, missed, waiting, paused | Each status is read from the job's own fields; a missed job is named at the top; no sample data | `HeartbeatsPage.test.tsx` | In review |
 
 ---
 
@@ -271,27 +274,27 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Planned (Utsav B) |
-| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Planned (Utsav B) |
-| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Planned (Utsav B) |
+| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | In review |
+| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | In review |
+| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | In review |
+| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | In review |
 
 ### Acknowledgement (FR-06, FR-07.4, FR-16.2, US-08)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Planned (Utsav B) |
-| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeTest` (Testcontainers) | Planned (Utsav B) |
-| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Planned (Utsav B) |
+| TC-US-08a | Equivalence | Acknowledge an OPEN incident | ACKNOWLEDGED; the acknowledger becomes the assignee | `AcknowledgeTest` | Automated |
+| TC-FR-16.2a | Equivalence | Acknowledge at minute 10 | The response clock stops at 10; the resolution clock keeps running | `AcknowledgeTest` | Automated |
+| TC-US-08b | Equivalence (invalid) | Acknowledge an incident that isn't OPEN | 409 | `AcknowledgeTest` | Automated |
+| TC-US-08c | Concurrency | Two people acknowledge at the same moment | One gets 200, the other 409 | `AcknowledgeRaceTest` (Testcontainers) | Automated |
+| TC-ACK-OWNER | Scenario | A is assigned; escalation notifies B; B acknowledges first | B becomes the assignee; escalation alone never changed it | `AcknowledgeTest` | Automated |
 
 ### Severity (FR-04.2)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | Planned (Utsav B) |
-| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | Planned (Utsav B) |
+| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | In review |
+| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | In review |
 
 ### Escalation (FR-07.3 to FR-07.7): decision table
 
@@ -342,17 +345,17 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 ### Checks from several locations (D35, D36): boundary values on failing locations and checks in a row
 
-The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated.
+The rules are Grafana alert rules, so a to f are checked by hand with the demo shop's fault switches, with a screenshot of each in the pull request; g is automated. The checks run from 2 locations (D35 allows 2 or 3), so "2 of 2" is the smallest failing set that counts.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 1 of 3 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36b | Boundary value | 2 of 3 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36c | Boundary value | 2 of 3 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36d | Boundary value | 2 of 3 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36e | Boundary value | 2 of 3 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36f | Boundary value | 3 of 3 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Planned (Manush) |
-| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | Intake test with a recorded Grafana payload | Planned (Manush) |
+| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | In review |
+| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
+| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | In review |
+| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | In review |
+| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | In review |
 
 ### Demo-shop scenario table (Issue #64)
 
@@ -478,8 +481,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-26.3a | Negative | The stubbed Grafana never answers | 503 within the timeout; other endpoints still answer | `TelemetryServiceTest` | Automated |
 | TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Automated |
 | TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
-| TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not set up) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
+| TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not connected) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
+
+### Each org's own Grafana (D49, #260)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-D49a | Org isolation | Two orgs, each with a service named Payments and its own Grafana, read logs and metrics | Each org's requests reach only its own Grafana, with its own token | `TelemetryConnectionTest.eachOrgReadsLogsAndMetricsOnlyFromItsOwnGrafana` (Testcontainers) | In review |
+| TC-D49b | Negative | An org with no connection reads logs | 503 "Telemetry isn't connected for your organization"; no Grafana is called | `TelemetryConnectionTest.withoutItsOwnConnectionAnOrgGets503AndNeverAnotherOrgsData`, `TelemetryServiceTest` | In review |
+| TC-D49c | Negative | Save a connection, then read it, the database row, and the audit log | The token is never returned, stored in the clear, or audited; a ciphertext moved to another org does not decrypt | `TelemetryConnectionTest.theTokenIsNeverReturnedStoredInTheClearOrAudited`, `TokenCipherTest` | In review |
+| TC-D49d | Equivalence (invalid) | A URL that is http, has no host, has user info, or points at loopback, private, link-local, or another internal address | 400 on that field | `TelemetryHttpTest` | In review |
+| TC-D49e | Negative | A name that passed the check resolves to our own machine when the call is made | Refused while connecting; the request never leaves | `TelemetryHttpTest.theConnectionItselfRefusesAnInternalAddressEvenIfTheCheckWasSkipped` | In review |
+| TC-D49f | Equivalence | The org names its label, counter, and status label; a service sets its own label value | The queries use those names and that value | `TelemetryConnectionTest.aServiceCanSayHowItIsLabelledAndTheOrgItsMetricNames` | In review |
+| TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | In review |
+| TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | In review |
 
 ### Evidence links (FR-09.3)
 
@@ -545,8 +561,13 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
 | TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
 | TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
-| TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Planned (Shlok) |
-| TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` | Planned (Shlok) |
+| TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Automated |
+| TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` (Incident board sorting) | Automated |
+| TC-US-08d | Equivalence | Overview: Acknowledge and take Lead on an OPEN incident | The request carries the version the list showed | `HomePage.test.tsx` | In review |
+| TC-US-08e | State | Overview: acknowledge after the incident changed: someone acknowledged it, or an escalation step ran (409) | Says it changed and reads the list again | `HomePage.test.tsx` | In review |
+| TC-US-12a | Equivalence | Incident list: search and a severity filter, then the board, then a reload | The URL keeps both filters and the view; both views show only the matches | `IncidentsPage.test.tsx` (Incident list views and filters) | In review |
+| TC-US-12b | Equivalence (invalid) | Incident list link with a severity, status and scope that do not exist | Falls back to every severity, status and scope | `incidents/filters.test.ts` | In review |
+| TC-US-03a | Equivalence | Declare dialog: choose SEV1, then Payments | Shows SEV1's meaning and Payments' SEV1 targets | `IncidentsPage.test.tsx` (Incident list views and filters) | In review |
 
 ### Audit log API (FR-13, #153)
 
@@ -571,6 +592,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-13.2m | Ordering | Entries with identical recordedAt timestamps | Secondary sort by id DESC produces deterministic ordering | `AuditControllerTest.equalTimestampsDeterministicOrdering` | Automated |
 | TC-FR-13.3c | Negative | POST, PUT, DELETE requests to `/api/audit` | 405 Method Not Allowed; endpoint is strictly read-only | `AuditControllerTest.mutationMethodsAreNotExposed` | Automated |
 
+## Sprint 5
+
+### Follow-ups API (FR-11.3, #240): boundary values on the due date
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-11.3a | Equivalence | An Engineer adds a CORRECTIVE and an Admin a PREVENTIVE follow-up | 201 with owner, due date, OPEN, not overdue; a timeline entry for each | `FollowUpControllerTest.createsACorrectiveAndAPreventiveFollowUp` | In review |
+| TC-FR-11.3b | Boundary | Due date the day before today (UTC), then today (UTC) while it is already tomorrow in IST | 400 on `dueDate`, then 201 | `FollowUpControllerTest.aDueDateBeforeTodayInUtcIsRefusedAndTodayIsAccepted` | In review |
+| TC-FR-11.3c | Equivalence (invalid) | Owner from another org, or an id that does not exist | 400 on `ownerId`, nothing saved | `FollowUpControllerTest.anOwnerFromAnotherOrgOrNoOneIsRefused`, `OrgIsolationTest` | In review |
+| TC-FR-11.3d | Boundary | Clock at 23:59:59 UTC on the due date, then 00:00 the day after | `overdue` false, then true | `FollowUpControllerTest.overdueIsFalseOnTheDueDateAndTrueTheDayAfter` | In review |
+| TC-FR-11.3e | State | Status to DONE, DONE again, then IN_PROGRESS | `completedAt` set and one timeline entry; nothing more; cleared on reopening | `FollowUpControllerTest.doneSetsCompletedAtAddsATimelineEntryAndIsNeverOverdue` | In review |
+| TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | In review |
+| TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
+| TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | In review |
+
 ---
 
 ## White-box testing
@@ -579,7 +615,7 @@ Two rule methods get basis path testing, done by their owners once the code exis
 
 | Method | Owner |
 | --- | --- |
-| The transition check (`from`, `to` → allowed or the reason it is not) | Utsav D |
+| The transition check (`from`, `to` → allowed or the reason it is not) | Utsav B (#84) |
 | The SLA check (target, start, stop, now → running, met, or breached) | Utsav D and Manan |
 
 For each one:
@@ -588,3 +624,23 @@ For each one:
 3. List V(G) independent paths, and write one test per path. Name them here as `TC-WB-…`.
 4. Check that JaCoCo shows every branch of the method covered.
 5. Run PIT on the class and record the mutation score in the sprint's test report.
+
+### The transition check: `TransitionPolicy.isLegal(from, to)` (#84)
+
+![Control-flow graph of TransitionPolicy.isLegal](transition-policy-cfg.svg)
+
+Ten decisions: the two null checks, six branches of the seven-case `switch (from)`, and the two short-circuit ORs (INVESTIGATING and MONITORING), so V(G) = 10 + 1 = 11. The tests are in `TransitionPolicyTest.BasisPathTests` (Utsav B); the paths below are the basis set they cover.
+
+| ID | Path | Expected | Test | Status |
+| --- | --- | --- | --- | --- |
+| TC-WB-01 | `from` is null | false | `path1_nullFromReturnsFalse` | In review |
+| TC-WB-02 | `to` is null | false | `path2_nullToReturnsFalse` | In review |
+| TC-WB-03 | OPEN | `to == ACKNOWLEDGED` | `path3_openToAcknowledgedReturnsTrue`, `path4_openToOtherReturnsFalse` | In review |
+| TC-WB-04 | ACKNOWLEDGED | `to == INVESTIGATING` | `path5_acknowledgedToInvestigatingReturnsTrue`, `path6_acknowledgedToOtherReturnsFalse` | In review |
+| TC-WB-05 | INVESTIGATING, `to == IDENTIFIED` | true, without the second test | `path7_investigatingToIdentifiedReturnsTrue` | In review |
+| TC-WB-06 | INVESTIGATING, `to != IDENTIFIED` | `to == MONITORING` | `path8_investigatingToMonitoringReturnsTrue`, `path9_investigatingToOtherReturnsFalse` | In review |
+| TC-WB-07 | IDENTIFIED | `to == MONITORING` | `path10_identifiedToMonitoringReturnsTrue`, `path11_identifiedToOtherReturnsFalse` | In review |
+| TC-WB-08 | MONITORING, `to == INVESTIGATING` | true, without the second test | `path12_monitoringToInvestigatingReturnsTrue` | In review |
+| TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | In review |
+| TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | In review |
+| TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | In review |

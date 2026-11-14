@@ -2,6 +2,7 @@ package com.group2.incident.org;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.closeTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -90,6 +91,9 @@ class OrgIsolationTest {
 
 	private long sourceIncidentOfA;
 
+	// B's monitoring-tool token: alerts sent with it belong to B.
+	private String toolTokenOfB;
+
 	@BeforeEach
 	void resetAiClient() {
 		reset(aiEmbeddingClient);
@@ -109,7 +113,7 @@ class OrgIsolationTest {
 				"{\"steps\": [{\"stepNumber\": 1, \"responderId\": %d, \"waitMinutes\": 15}]}".formatted(b.adminId()));
 		String toolJson = send(b, post("/api/tools"), "{\"name\":\"Prometheus\"}");
 		long toolOfB = TestOrgs.id(toolJson);
-		String toolTokenOfB = JsonPath.read(toolJson, "$.token");
+		toolTokenOfB = JsonPath.read(toolJson, "$.token");
 		String deployJson = mvc.perform(post("/webhooks/deploys")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolTokenOfB)
 						.contentType(MediaType.APPLICATION_JSON)
@@ -144,6 +148,8 @@ class OrgIsolationTest {
 				"update incident set embedding = cast(? as incident.vector), embedding_retry_at = null where id = ? and org_id = ?",
 				vector(1, 0), incidentOfB, b.orgId());
 		idsOfB.put("entryId", timelineEntryOfB);
+		idsOfB.put("followUpId", TestOrgs.id(send(b, post("/api/incidents/{id}/follow-ups", incidentOfB),
+				"{\"title\": \"Rotate keys\", \"kind\": \"CORRECTIVE\", \"ownerId\": %d, \"dueDate\": \"2099-12-31\"}".formatted(b.adminId()))));
 		idsOfB.put("notificationId", notificationOfB);
 		long tokenOfB = TestOrgs.id(send(b, post("/api/me/tokens"), "{\"name\":\"TokenOfB\"}"));
 		idsOfB.put("tokenId", tokenOfB);
@@ -191,6 +197,12 @@ class OrgIsolationTest {
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("GET /api/incidents/{id}", HttpMethod.GET, "/api/incidents/{incidentId}", null),
 				Arguments.of("GET /api/incidents/{id}/similar", HttpMethod.GET, "/api/incidents/{incidentId}/similar", null),
+				Arguments.of("POST /api/incidents/{id}/acknowledge", HttpMethod.POST, "/api/incidents/{incidentId}/acknowledge",
+						"{\"expectedVersion\": 0}"),
+				Arguments.of("POST /api/incidents/{id}/transitions", HttpMethod.POST, "/api/incidents/{incidentId}/transitions",
+						"{\"status\":\"INVESTIGATING\", \"expectedVersion\": 0}"),
+				Arguments.of("PUT /api/incidents/{id}/severity", HttpMethod.PUT, "/api/incidents/{incidentId}/severity",
+						"{\"severity\":\"SEV1\", \"reason\": \"x\", \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/assignee", HttpMethod.PUT, "/api/incidents/{incidentId}/assignee",
 						"{\"assigneeId\": {adminOfA}, \"expectedVersion\": 0}"),
 				Arguments.of("PUT /api/incidents/{id}/roles", HttpMethod.PUT, "/api/incidents/{incidentId}/roles",
@@ -203,6 +215,10 @@ class OrgIsolationTest {
 						"{\"url\":\"https://example.com/logs\",\"label\":\"Logs\"}"),
 				Arguments.of("POST /api/incidents/{id}/deploys/{deployId}", HttpMethod.POST,
 						"/api/incidents/{incidentId}/deploys/{deployId}", null),
+				Arguments.of("GET /api/incidents/{id}/follow-ups", HttpMethod.GET, "/api/incidents/{incidentId}/follow-ups", null),
+				Arguments.of("POST /api/incidents/{id}/follow-ups", HttpMethod.POST, "/api/incidents/{incidentId}/follow-ups",
+						"{\"title\":\"x\",\"kind\":\"CORRECTIVE\",\"ownerId\": {adminOfA},\"dueDate\":\"2099-12-31\"}"),
+				Arguments.of("PUT /api/follow-ups/{id}", HttpMethod.PUT, "/api/follow-ups/{followUpId}", "{\"status\":\"DONE\"}"),
 				Arguments.of("POST /api/incidents/{id}/timeline/{entryId}/corrections", HttpMethod.POST,
 						"/api/incidents/{incidentId}/timeline/{entryId}/corrections", "{\"details\":\"x\"}"),
 				Arguments.of("DELETE /api/tools/{id}", HttpMethod.DELETE, "/api/tools/{toolId}", null),
@@ -261,6 +277,8 @@ class OrgIsolationTest {
 						"{\"steps\": [{\"stepNumber\": 1, \"responderId\": {userId}, \"waitMinutes\": 15}]}"),
 				Arguments.of("PUT dependencies on B's service", HttpMethod.PUT, "/api/services/{serviceOfA}/dependencies",
 						"{\"dependsOn\": [{serviceId}]}"),
+				Arguments.of("POST a follow-up on A's incident owned by B's Admin", HttpMethod.POST, "/api/incidents/{incidentOfA}/follow-ups",
+						"{\"title\":\"x\",\"kind\":\"CORRECTIVE\",\"ownerId\": {userId},\"dueDate\":\"2099-12-31\"}"),
 				Arguments.of("POST /api/monitors on B's service", HttpMethod.POST, "/api/monitors", """
 						{"name": "Health", "url": "https://203.0.113.10/health", "expectedStatus": 200, "intervalSeconds": 60, "serviceId": {serviceId}, "failureThreshold": 3, "enabled": true}"""),
 				Arguments.of("POST /api/heartbeats on B's service", HttpMethod.POST, "/api/heartbeats", """
@@ -292,7 +310,8 @@ class OrgIsolationTest {
 				Arguments.of("GET /api/heartbeats", "/api/heartbeats", "$[*].id", "heartbeatId"),
 				Arguments.of("GET /api/users", "/api/users", "$[*].id", "userId"),
 				Arguments.of("GET /api/notifications", "/api/notifications", "$.notifications[*].id", "notificationId"),
-				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"));
+				Arguments.of("GET /api/audit", "/api/audit", "$.content[*].id", "auditId"),
+				Arguments.of("GET /api/follow-ups", "/api/follow-ups", "$[*].id", "followUpId"));
 	}
 
 	/** Every list, read as A, holds none of B's rows. */
@@ -331,6 +350,47 @@ class OrgIsolationTest {
 						.andExpect(jsonPath("$.incident.score").value(closeTo(0.8, 0.002)));
 	}
 
+	/**
+	 * The org's Grafana connection has no id in its path, so each org reaches only its own: saving and deleting
+	 * A's leaves B's as it was (D49, #260).
+	 */
+	@Test
+	void eachOrgSeesAndChangesOnlyItsOwnGrafanaConnection() throws Exception {
+		send(a, put("/api/settings/telemetry"), "{\"lokiUrl\": \"https://203.0.113.10\", \"token\": \"glc_a\"}");
+		send(b, put("/api/settings/telemetry"), "{\"lokiUrl\": \"https://203.0.113.20\", \"token\": \"glc_b\"}");
+
+		assertThat(JsonPath.<String>read(send(a, get("/api/settings/telemetry"), null), "$.lokiUrl")).isEqualTo("https://203.0.113.10");
+		assertThat(JsonPath.<String>read(send(b, get("/api/settings/telemetry"), null), "$.lokiUrl")).isEqualTo("https://203.0.113.20");
+
+		send(a, put("/api/settings/telemetry"), "{\"lokiUrl\": \"https://203.0.113.30\"}");
+		send(a, delete("/api/settings/telemetry"), null);
+
+		assertThat(JsonPath.<Boolean>read(send(a, get("/api/settings/telemetry"), null), "$.connected")).isFalse();
+		String ofB = send(b, get("/api/settings/telemetry"), null);
+		assertThat(JsonPath.<Boolean>read(ofB, "$.connected")).isTrue();
+		assertThat(JsonPath.<String>read(ofB, "$.lokiUrl")).isEqualTo("https://203.0.113.20");
+		send(b, delete("/api/settings/telemetry"), null);
+	}
+
+	/** Both orgs have a service named Payments; an alert sent with B's tool token opens an incident in B only. */
+	@Test
+	void aGrafanaAlertBelongsToTheOrgOfTheToolThatSentIt() throws Exception {
+		mvc.perform(post("/webhooks/grafana")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + toolTokenOfB)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"status": "firing", "alerts": [{"status": "firing", "fingerprint": "15017a7e",
+								 "startsAt": "2026-11-13T10:00:00Z", "labels": {"alertname": "Down", "service": "Payments"},
+								 "annotations": {"summary": "Payments is down"}}]}"""))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.accepted.length()").value(1));
+
+		assertThat(jdbcTemplate.queryForList(
+				"SELECT org_id FROM alert WHERE source = 'grafana' AND event_id = 'gf-15017a7e-1794564000'", Long.class))
+				.containsExactly(b.orgId());
+		assertThat(JsonPath.<List<String>>read(send(a, get("/api/incidents"), null), "$..title")).doesNotContain("Payments is down");
+	}
+
 	/** Keeps idEndpoints() complete, as SecurityMatrixTest does for roles. */
 	@Test
 	void everyEndpointWithAnIdIsCovered() {
@@ -351,7 +411,8 @@ class OrgIsolationTest {
 	}
 
 	private String expand(String template) {
-		String result = template.replace("{serviceOfA}", Long.toString(serviceOfA)).replace("{adminOfA}", Long.toString(a.adminId()));
+		String result = template.replace("{serviceOfA}", Long.toString(serviceOfA)).replace("{adminOfA}", Long.toString(a.adminId()))
+				.replace("{incidentOfA}", Long.toString(sourceIncidentOfA));
 		for (Map.Entry<String, Long> id : idsOfB.entrySet()) {
 			result = result.replace("{" + id.getKey() + "}", id.getValue().toString());
 		}

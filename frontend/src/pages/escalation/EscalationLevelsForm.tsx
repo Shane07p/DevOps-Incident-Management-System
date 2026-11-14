@@ -71,9 +71,9 @@ export function EscalationLevelsForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={onSubmit} noValidate aria-label="Escalation levels" className="flex flex-col gap-4 rounded-lg border bg-card p-4">
+      <form onSubmit={onSubmit} noValidate aria-label="Escalation levels" className="flex flex-col gap-4 rounded-lg border bg-card p-[19px] shadow-elev-1">
         <div className="flex flex-col gap-1">
-          <h3 className="font-semibold">Change the levels</h3>
+          <h3 className="text-[13px] font-medium">Change the levels</h3>
           <p className="text-sm text-muted-foreground">
             Each level is paged its wait after the level before it; the first, after the incident opens.
           </p>

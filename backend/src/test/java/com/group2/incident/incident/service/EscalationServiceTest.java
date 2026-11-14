@@ -27,6 +27,7 @@ import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.EscalationTaskRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.service.NotificationService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -171,7 +172,7 @@ class EscalationServiceTest {
 		assertThat(outbox.getPayload()).contains("\"stepNumber\":1").contains(responder1.getDisplayName());
 
 		// Level 1 is notified in the app too (FR-07.3)
-		verify(notificationService).createNotification(eq(responder1), eq(incident), contains("level 1"));
+		verify(notificationService).createNotification(eq(responder1), eq(incident), eq(NotificationKind.PAGE), contains("level 1"));
 	}
 
 	@Test
@@ -191,7 +192,7 @@ class EscalationServiceTest {
 		assertThat(task.getCurrentStep()).isEqualTo(0);
 		verify(timelineEntryRepository, never()).save(any());
 		verify(outboxRepository, never()).save(any());
-		verify(notificationService, never()).createNotification(any(), any(), any());
+		verify(notificationService, never()).createNotification(any(), any(), any(), any());
 	}
 
 	@Test
@@ -211,7 +212,7 @@ class EscalationServiceTest {
 		assertThat(task.getState()).isEqualTo(EscalationTaskState.CANCELLED);
 		verify(timelineEntryRepository, never()).save(any());
 		verify(outboxRepository, never()).save(any());
-		verify(notificationService, never()).createNotification(any(), any(), any());
+		verify(notificationService, never()).createNotification(any(), any(), any(), any());
 	}
 
 	@Test
@@ -230,7 +231,7 @@ class EscalationServiceTest {
 		assertThat(task.getState()).isEqualTo(EscalationTaskState.CANCELLED);
 		verify(timelineEntryRepository, never()).save(any());
 		verify(outboxRepository, never()).save(any());
-		verify(notificationService, never()).createNotification(any(), any(), any());
+		verify(notificationService, never()).createNotification(any(), any(), any(), any());
 	}
 
 	@Test
@@ -267,7 +268,7 @@ class EscalationServiceTest {
 		assertThat(executedSecondTime).isFalse();
 
 		// The fallback contact is notified in the app, once (FR-07.5)
-		verify(notificationService).createNotification(eq(fallbackContact), eq(incident), contains("fallback contact"));
+		verify(notificationService).createNotification(eq(fallbackContact), eq(incident), eq(NotificationKind.PAGE), contains("fallback contact"));
 	}
 
 	@Test

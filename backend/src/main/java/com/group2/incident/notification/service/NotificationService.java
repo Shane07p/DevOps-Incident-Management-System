@@ -6,6 +6,7 @@ import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.notification.dto.NotificationListResponse;
 import com.group2.incident.notification.dto.NotificationResponse;
 import com.group2.incident.notification.entity.Notification;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.repository.NotificationRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,13 +24,18 @@ public class NotificationService {
 	private final Clock clock;
 
 	/**
-	 * Creates a notification inside the caller's transaction, so it rolls back with the change that
-	 * caused it (FR-07.8, D33). MANDATORY: a call without a transaction fails instead of committing alone.
+	 * Creates a notification inside the caller's transaction, defaulting to SYSTEM kind so it does
+	 * not accidentally classify informational notifications as genuine pages (FR-07.8, D33).
 	 */
 	@Transactional(propagation = Propagation.MANDATORY)
 	public Notification createNotification(AppUser recipient, Incident incident, String message) {
+		return createNotification(recipient, incident, NotificationKind.SYSTEM, message);
+	}
+
+	@Transactional(propagation = Propagation.MANDATORY)
+	public Notification createNotification(AppUser recipient, Incident incident, NotificationKind kind, String message) {
 		Instant now = clock.instant();
-		Notification notification = new Notification(recipient, incident, message, now);
+		Notification notification = new Notification(recipient, incident, kind, message, now);
 		return notificationRepository.save(notification);
 	}
 

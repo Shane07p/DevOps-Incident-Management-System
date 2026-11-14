@@ -4,6 +4,8 @@ import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.incident.entity.Incident;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -40,6 +42,10 @@ public class Notification {
 	@JoinColumn(name = "incident_id")
 	private Incident incident;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "kind", nullable = false, length = 30)
+	private NotificationKind kind = NotificationKind.SYSTEM;
+
 	@Column(nullable = false, length = 500)
 	private String message;
 
@@ -50,8 +56,13 @@ public class Notification {
 	private Instant readAt;
 
 	public Notification(AppUser recipient, Incident incident, String message, Instant createdAt) {
+		this(recipient, incident, NotificationKind.SYSTEM, message, createdAt);
+	}
+
+	public Notification(AppUser recipient, Incident incident, NotificationKind kind, String message, Instant createdAt) {
 		this.recipient = recipient;
 		this.incident = incident;
+		this.kind = kind != null ? kind : NotificationKind.SYSTEM;
 		this.message = message;
 		this.createdAt = createdAt;
 	}

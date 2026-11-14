@@ -3,6 +3,7 @@ package com.group2.incident.incident.repository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -18,6 +19,10 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
 	// The list shows the service name and the Lead (the assignee); the reporter stays unloaded.
 	@EntityGraph(attributePaths = { "service", "assignee" })
 	List<Incident> findAllByOrderByCreatedAtDescIdDesc();
+
+	@EntityGraph(attributePaths = { "service" })
+	@Query("select i from Incident i where i.createdAt >= :from and i.createdAt < :to order by i.createdAt asc, i.id asc")
+	List<Incident> findAllInWindow(@Param("from") Instant from, @Param("to") Instant to);
 
 	@EntityGraph(attributePaths = { "service", "reporter", "assignee", "comms", "ops" })
 	Optional<Incident> findWithDetailsById(Long id);

@@ -15,6 +15,7 @@ import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.EscalationTaskRepository;
 import com.group2.incident.incident.repository.OutboxRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.service.NotificationService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -133,7 +134,7 @@ public class EscalationService {
 					now
 			);
 			timelineEntryRepository.save(timelineEntry);
-			notificationService.createNotification(responder, incident,
+			notificationService.createNotification(responder, incident, NotificationKind.PAGE,
 					"Incident " + incident.getReference() + " was escalated to you (level " + nextStep.getStepNumber() + "): "
 							+ incident.getTitle());
 
@@ -174,7 +175,7 @@ public class EscalationService {
 							now
 					);
 					timelineEntryRepository.save(timelineEntry);
-					notificationService.createNotification(fallbackContact, incident,
+					notificationService.createNotification(fallbackContact, incident, NotificationKind.PAGE,
 							"Incident " + incident.getReference() + " was escalated to you as the fallback contact: "
 									+ incident.getTitle());
 

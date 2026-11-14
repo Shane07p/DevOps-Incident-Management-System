@@ -33,3 +33,28 @@ export const toShiftRequest = (shift: Shift): ShiftRequest => ({
   startTime: shift.startTime,
   endTime: shift.endTime,
 })
+
+export type Coverage =
+  | { kind: 'shift'; shift: Shift; start: number; end: number }
+  | { kind: 'gap'; start: number; end: number }
+
+/**
+ * The window [from, to) split into the shifts that cover it (clipped to the window) and the gaps between them,
+ * in time order. A gap is when a new incident would go to the fallback contact. Shifts never overlap (D12).
+ */
+export function coverage(shifts: Shift[], from: number, to: number): Coverage[] {
+  const parts: Coverage[] = []
+  let cursor = from
+  const inside = shifts
+    .filter((shift) => Date.parse(shift.startTime) < to && Date.parse(shift.endTime) > from)
+    .toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))
+  for (const shift of inside) {
+    const start = Math.max(Date.parse(shift.startTime), from)
+    const end = Math.min(Date.parse(shift.endTime), to)
+    if (start > cursor) parts.push({ kind: 'gap', start: cursor, end: start })
+    parts.push({ kind: 'shift', shift, start, end })
+    cursor = end
+  }
+  if (cursor < to) parts.push({ kind: 'gap', start: cursor, end: to })
+  return parts
+}

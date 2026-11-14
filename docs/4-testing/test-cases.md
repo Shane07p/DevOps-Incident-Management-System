@@ -607,6 +607,19 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
 | TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | In review |
 
+### Insights API (FR-12.1, #243): aggregate metrics across incidents, follow-ups, and notifications
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.1a | Equivalence | GET /api/insights with days=7, 30, and 90 (or omitted default 30) | 200 with from, to half-open window, MTTA/MTTR, breakdowns, SLA breach rates, follow-ups, and outOfHoursPages | `InsightsControllerTest.getInsightsDefaultDaysReturns200`, `getInsightsWithExplicitDaysReturns200` | In review |
+| TC-FR-12.1b | Boundary | Half-open window: incident created at exactly `from` included; incident created at exactly `to` excluded | `from` included in counts, `to` excluded | `InsightsServiceTest.halfOpenWindowRespectsFromInclusiveAndToExclusive` | In review |
+| TC-FR-12.1c | Equivalence (invalid) | GET /api/insights with days=15 or invalid parameter | 400 Bad Request with field error on days | `InsightsControllerTest.invalidDaysReturns400` | In review |
+| TC-FR-12.1d | Boundary | SLA exact target matches duration (response or resolution) | Not counted as breach (breach is strictly > target) | `InsightsServiceTest.exactTargetIsStrictlyNotABreach` | In review |
+| TC-FR-12.1e | Equivalence | In-flight incident within target vs overdue | In-flight within target excluded from SLA denominator; in-flight overdue counted as breach | `InsightsServiceTest.slaBreachRatesMeasureCompletedOrOverdueOnly`, `slaBreachRatesExcludeInFlightWithinTarget` | In review |
+| TC-FR-12.1f | Decision table | Roles Admin, Engineer, Viewer, and unauthenticated | Admin, Engineer, Viewer get 200; unauthenticated gets 401 | `InsightsControllerTest.viewerAndEngineerCanAccessInsights`, `SecurityMatrixTest.endpointSecurityMatrix` | In review |
+| TC-FR-12.1g | Equivalence | Multi-tenant isolation: requests from Org B cannot see Org A incidents, follow-ups, or notifications | Org B receives empty/zero metrics | `InsightsControllerTest.crossOrganizationDataIsolation` | In review |
+| TC-FR-12.1h | Boundary | Out-of-hours notifications: weekday 09:00 to 18:00 IST working hours vs weekend / off-hours | Only off-hours or weekend incident notifications count towards outOfHoursPages | `InsightsServiceTest.outOfHoursPagesCountedCorrectlyInAsiaKolkata` | In review |
+
 ---
 
 ## White-box testing

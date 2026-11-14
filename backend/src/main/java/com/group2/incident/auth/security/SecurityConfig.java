@@ -100,6 +100,8 @@ class SecurityConfig {
 						// Reading follow-ups is open to every role; adding and changing them is for responders (#240).
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/follow-ups").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/follow-ups/*").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/investigations").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/investigations/*/actions/*/decision").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.bearerTokenResolver(request -> {

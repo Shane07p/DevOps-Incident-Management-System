@@ -24,8 +24,6 @@ import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
-import com.group2.incident.support.TestOrgs;
-import com.group2.incident.support.TestOrgs.SignedUp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,10 +39,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.http.MediaType;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @IntegrationTest
 class InsightsControllerTest {
@@ -57,9 +51,6 @@ class InsightsControllerTest {
 
 	@Autowired
 	private TestAccounts accounts;
-
-	@Autowired
-	private TestOrgs testOrgs;
 
 	@Autowired
 	private AppUserRepository users;
@@ -261,46 +252,5 @@ class InsightsControllerTest {
 				.andExpect(jsonPath("$.followUps.completionRate").value(0.5))
 				// Out of hours pages: 1 out of hours page
 				.andExpect(jsonPath("$.outOfHoursPages").value(1));
-	}
-
-	@Test
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	@DisplayName("Cross-organization data isolation: insights never include another org's data")
-	void crossOrganizationDataIsolation() throws Exception {
-		// Signed up Org A
-		SignedUp orgA = testOrgs.signUp("org_a_admin@test.local", "Org A Insights");
-		long serviceAId = testOrgs.createService(orgA.adminToken(), "Org A Payments", orgA.adminId());
-
-		// Declare incident in Org A via API
-		mvc.perform(post("/api/incidents")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + orgA.adminToken())
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{"title":"Org A Outage","description":"Details","serviceId":%d,"severity":"SEV1"}
-								""".formatted(serviceAId)))
-				.andExpect(status().isCreated());
-
-		// Set insights clock just after incident creation
-		holdClockAt(clock.instant().plusSeconds(60));
-
-		// Read insights as Org A -> total 1
-		mvc.perform(get("/api/insights")
-						.queryParam("days", "7")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + orgA.adminToken()))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.incidents.total").value(1))
-				.andExpect(jsonPath("$.byService[0].name").value("Org A Payments"));
-
-		// Now sign up Org B
-		SignedUp orgB = testOrgs.signUp("org_b_admin@test.local", "Org B Insights");
-
-		// Read insights as Org B -> 0 incidents, empty byService!
-		mvc.perform(get("/api/insights")
-						.queryParam("days", "7")
-						.header(HttpHeaders.AUTHORIZATION, "Bearer " + orgB.adminToken()))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.incidents.total").value(0))
-				.andExpect(jsonPath("$.byService").isEmpty())
-				.andExpect(jsonPath("$.outOfHoursPages").value(0));
 	}
 }

@@ -617,7 +617,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-12.1d | Boundary | SLA exact target matches duration (response or resolution) | Not counted as breach (breach is strictly > target) | `InsightsServiceTest.exactTargetIsStrictlyNotABreach` | In review |
 | TC-FR-12.1e | Equivalence | In-flight incident within target vs overdue | In-flight within target excluded from SLA denominator; in-flight overdue counted as breach | `InsightsServiceTest.slaBreachRatesMeasureCompletedOrOverdueOnly`, `slaBreachRatesExcludeInFlightWithinTarget` | In review |
 | TC-FR-12.1f | Decision table | Roles Admin, Engineer, Viewer, and unauthenticated | Admin, Engineer, Viewer get 200; unauthenticated gets 401 | `InsightsControllerTest.viewerAndEngineerCanAccessInsights`, `SecurityMatrixTest.endpointSecurityMatrix` | In review |
-| TC-FR-12.1g | Equivalence | Multi-tenant isolation: requests from Org B cannot see Org A incidents, follow-ups, or notifications | Org B receives empty/zero metrics | `InsightsControllerTest.crossOrganizationDataIsolation` | In review |
+| TC-FR-12.1g | Equivalence | Multi-tenant isolation: requests from Org B cannot see Org A incidents, follow-ups, or notifications | Org B receives empty/zero metrics | `InsightsOrgTest.crossOrganizationDataIsolation` | In review |
 | TC-FR-12.1h | Boundary | Out-of-hours notifications: weekday 09:00 to 18:00 IST working hours vs weekend / off-hours | Only off-hours or weekend incident notifications count towards outOfHoursPages | `InsightsServiceTest.outOfHoursPagesCountedCorrectlyInAsiaKolkata` | In review |
 
 ---

@@ -20,10 +20,10 @@ public class TestOrgs {
 
 	public static final String PASSWORD = "DevPassw0rd!";
 
-	// Every table with org_id; service_sla_target goes with its service.
+	// Every table with org_id; service_sla_target goes with its service, runbook_step with its runbook.
 	private static final List<String> ORG_TABLES = List.of("telemetry_connection", "public_update", "heartbeat", "incident_deployment", "deployment", "personal_access_token", "notification", "outbox", "monitor_check_result", "uptime_monitor", "alert", "timeline_entry", "audit_entry",
 			"escalation_task_step", "escalation_task", "escalation_step", "escalation_policy", "on_call_shift", "service_dependency", "incident",
-			"monitoring_tool", "service");
+			"monitoring_tool", "service", "runbook", "follow_up");
 
 	private final MockMvc mvc;
 	private final JdbcTemplate jdbc;
@@ -82,6 +82,7 @@ public class TestOrgs {
 			// Replica mode skips the append-only triggers and the foreign keys, so the order does not matter.
 			jdbc.execute("SET LOCAL session_replication_role = 'replica'");
 			jdbc.update("DELETE FROM service_sla_target WHERE service_id IN (SELECT id FROM service WHERE org_id = ?)", orgId);
+			jdbc.update("DELETE FROM runbook_step WHERE runbook_id IN (SELECT id FROM runbook WHERE org_id = ?)", orgId);
 			for (String table : ORG_TABLES) {
 				jdbc.update("DELETE FROM " + table + " WHERE org_id = ?", orgId);
 			}

@@ -20,9 +20,9 @@ public class TestOrgs {
 
 	public static final String PASSWORD = "DevPassw0rd!";
 
-	// Every table with org_id; service_sla_target goes with its service.
+	// Every table with org_id; service_sla_target and investigation child tables go with their parents.
 	private static final List<String> ORG_TABLES = List.of("telemetry_connection", "public_update", "heartbeat", "incident_deployment", "deployment", "personal_access_token", "notification", "outbox", "monitor_check_result", "uptime_monitor", "alert", "timeline_entry", "audit_entry",
-			"escalation_task_step", "escalation_task", "escalation_step", "escalation_policy", "on_call_shift", "service_dependency", "incident",
+			"investigation", "escalation_task_step", "escalation_task", "escalation_step", "escalation_policy", "on_call_shift", "service_dependency", "incident",
 			"monitoring_tool", "service");
 
 	private final MockMvc mvc;
@@ -82,6 +82,9 @@ public class TestOrgs {
 			// Replica mode skips the append-only triggers and the foreign keys, so the order does not matter.
 			jdbc.execute("SET LOCAL session_replication_role = 'replica'");
 			jdbc.update("DELETE FROM service_sla_target WHERE service_id IN (SELECT id FROM service WHERE org_id = ?)", orgId);
+			jdbc.update("DELETE FROM investigation_evidence WHERE hypothesis_id IN (SELECT h.id FROM investigation_hypothesis h JOIN investigation i ON h.investigation_id = i.id WHERE i.org_id = ?)", orgId);
+			jdbc.update("DELETE FROM investigation_hypothesis WHERE investigation_id IN (SELECT id FROM investigation WHERE org_id = ?)", orgId);
+			jdbc.update("DELETE FROM investigation_action WHERE investigation_id IN (SELECT id FROM investigation WHERE org_id = ?)", orgId);
 			for (String table : ORG_TABLES) {
 				jdbc.update("DELETE FROM " + table + " WHERE org_id = ?", orgId);
 			}

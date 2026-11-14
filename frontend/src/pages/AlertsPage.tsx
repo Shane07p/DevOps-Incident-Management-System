@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/app/PageHeader'
 import { Panel, PanelFooter } from '@/components/app/Panel'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatIst, istDayStart } from '@/lib/time'
+import { useNow } from '@/lib/useNow'
 import { cn } from '@/lib/utils'
 
 // NEW: the alert opened its incident. ATTACHED: it joined one already open (V8__alert_intake.sql).
@@ -35,8 +36,8 @@ function Tile({ label, value, detail }: { label: string; value: number; detail: 
 }
 
 /** Today's alerts in three numbers: all of them, the ones that opened an incident, and the ones grouped into one. */
-function Today({ alerts }: { alerts: Alert[] }) {
-  const today = alerts.filter((alert) => Date.parse(alert.createdAt) >= istDayStart(Date.now()))
+function Today({ alerts, now }: { alerts: Alert[]; now: number }) {
+  const today = alerts.filter((alert) => Date.parse(alert.createdAt) >= istDayStart(now))
   const sources = [...new Set(today.map((alert) => alert.source))].toSorted()
   return (
     <section
@@ -58,6 +59,8 @@ function Today({ alerts }: { alerts: Alert[] }) {
 export function AlertsPage() {
   const { user } = useAuth()
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: listAlerts })
+  // Re-read each minute, so "today" moves on at midnight IST.
+  const now = useNow(60_000)
   // The filters live in the URL, so a link opens the same view.
   const [params, setParams] = useSearchParams()
   const filter = FILTERS.find((candidate) => candidate.id === params.get('status')) ?? FILTERS[0]
@@ -86,7 +89,7 @@ export function AlertsPage() {
     <div className="mx-auto flex max-w-[1180px] flex-col">
       <PageHeader title="Alert inbox" description="Every alert received, and the incident it opened or joined. Times in IST." />
 
-      {alerts.data && <Today alerts={alerts.data} />}
+      {alerts.data && <Today alerts={alerts.data} now={now} />}
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b">
         <div role="group" aria-label="Show alerts" className="flex gap-5">

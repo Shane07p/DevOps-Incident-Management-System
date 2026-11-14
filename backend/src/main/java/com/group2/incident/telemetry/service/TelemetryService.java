@@ -5,22 +5,14 @@ import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.error.ServiceUnavailableException;
-import com.group2.incident.telemetry.config.TelemetryProperties;
 import com.group2.incident.telemetry.dto.LogEntryResponse;
 import com.group2.incident.telemetry.dto.MetricDataPoint;
 import com.group2.incident.telemetry.dto.MetricSeriesResponse;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
+import com.group2.incident.telemetry.service.ActiveConnection.Naming;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +21,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
@@ -37,10 +28,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Logs from Loki (FR-26) and metrics from Prometheus (FR-27), queried with the backend's own read token (D34).
- * The browser never sees the token or writes a query: each query is built here from a service of the caller's
- * org and a few checked parameters. Grafana being slow or down answers 503 within the timeout; nothing else in
- * the app depends on it.
+ * Logs from Loki (FR-26) and metrics from Prometheus (FR-27), read from the caller's org's own Grafana (D49,
+ * #260): its connection, its token, its naming. There is no server-wide stack, so an org without a connection
+ * gets 503 and never another org's data. The browser never sees the token or writes a query: each query is
+ * built here from a service of the caller's org and a few checked parameters. Grafana being slow or down
+ * answers 503 within the timeout; nothing else in the app depends on it.
  */
 @Service
 @Slf4j
@@ -62,16 +54,21 @@ public class TelemetryService {
 
 	private static final Pattern STEP = Pattern.compile("(\\d{1,5})([smh]?)");
 
-	/** The four series a service's dashboard shows (FR-27.1), as PromQL over demo-shop's metric names. */
+	/**
+	 * The four series a service's dashboard shows (FR-27.1), as PromQL over the org's own names: {@code {requests}}
+	 * is its request counter, {@code {duration}} its duration histogram, {@code {label}} its service label and
+	 * {@code {status}} its status label. The names were checked against Prometheus's rules when saved; the
+	 * service's value is escaped.
+	 */
 	public enum Metric {
-		REQUEST_RATE("requestRate", "sum(rate(demo_http_requests_total{service=\"%1$s\"}[5m]))"),
+		REQUEST_RATE("requestRate", "sum(rate({requests}{{label}=\"{value}\"}[5m]))"),
 		ERROR_RATE("errorRate",
-				"sum(rate(demo_http_requests_total{service=\"%1$s\",status=~\"5..\"}[5m]))"
-						+ " / sum(rate(demo_http_requests_total{service=\"%1$s\"}[5m]))"),
+				"sum(rate({requests}{{label}=\"{value}\",{status}=~\"5..\"}[5m]))"
+						+ " / sum(rate({requests}{{label}=\"{value}\"}[5m]))"),
 		LATENCY_P50("latencyP50",
-				"histogram_quantile(0.50, sum(rate(demo_http_request_duration_seconds_bucket{service=\"%1$s\"}[5m])) by (le))"),
+				"histogram_quantile(0.50, sum(rate({duration}_bucket{{label}=\"{value}\"}[5m])) by (le))"),
 		LATENCY_P95("latencyP95",
-				"histogram_quantile(0.95, sum(rate(demo_http_request_duration_seconds_bucket{service=\"%1$s\"}[5m])) by (le))");
+				"histogram_quantile(0.95, sum(rate({duration}_bucket{{label}=\"{value}\"}[5m])) by (le))");
 
 		private final String apiName;
 
@@ -86,8 +83,12 @@ public class TelemetryService {
 			return apiName;
 		}
 
-		String query(String serviceLabel) {
-			return template.formatted(escape(serviceLabel));
+		String query(Naming naming, String serviceValue) {
+			return template.replace("{requests}", naming.requestsMetric())
+					.replace("{duration}", naming.durationMetric())
+					.replace("{label}", naming.serviceLabel())
+					.replace("{status}", naming.statusLabel())
+					.replace("{value}", escape(serviceValue));
 		}
 
 		static Metric parse(String value) {
@@ -100,26 +101,23 @@ public class TelemetryService {
 		}
 	}
 
-	private final TelemetryProperties properties;
+	private final TelemetryConnectionService connections;
 
 	private final ServiceRepository serviceRepository;
+
+	private final TelemetryHttp http;
 
 	private final JsonMapper jsonMapper;
 
 	private final Clock clock;
 
-	private final HttpClient httpClient;
-
-	public TelemetryService(TelemetryProperties properties, ServiceRepository serviceRepository, JsonMapper jsonMapper,
-			Clock clock) {
-		this.properties = properties;
+	public TelemetryService(TelemetryConnectionService connections, ServiceRepository serviceRepository,
+			TelemetryHttp http, JsonMapper jsonMapper, Clock clock) {
+		this.connections = connections;
 		this.serviceRepository = serviceRepository;
+		this.http = http;
 		this.jsonMapper = jsonMapper;
 		this.clock = clock;
-		this.httpClient = HttpClient.newBuilder()
-				.connectTimeout(timeout())
-				.followRedirects(HttpClient.Redirect.NEVER)
-				.build();
 	}
 
 	/** Log lines of one service, newest first, filtered by level and by text matched literally (FR-26.1). */
@@ -134,13 +132,18 @@ public class TelemetryService {
 		if (normalizedLevel != null && !LEVELS.contains(normalizedLevel)) {
 			throw new FieldValidationException("level", "must be DEBUG, INFO, WARN, or ERROR");
 		}
+		ActiveConnection connection = connections.current();
+		if (connection.loki() == null) {
+			throw new ServiceUnavailableException("Logs aren't connected for your organization");
+		}
 		Map<String, String> params = new LinkedHashMap<>();
-		params.put("query", logQuery(serviceLabel(service), normalizedLevel, text));
+		params.put("query", logQuery(connection.naming().serviceLabel(), service.telemetryLabel(), normalizedLevel, text));
 		params.put("start", String.valueOf(nanos(range.from())));
 		params.put("end", String.valueOf(nanos(range.to())));
 		params.put("limit", String.valueOf(limit));
 		params.put("direction", "backward");
-		JsonNode body = get(properties.lokiUrl(), properties.lokiUser(), "/loki/api/v1/query_range", params, "Logs");
+		JsonNode body = read(http.get(connection.loki(), "/loki/api/v1/query_range", params,
+				connection.authorization(connection.lokiUser()), "Logs"), "Logs");
 		return parseLogs(body, service, limit);
 	}
 
@@ -150,25 +153,28 @@ public class TelemetryService {
 		Metric metric = Metric.parse(metricName);
 		Range range = range(from, to);
 		Duration stepDuration = step(step);
+		ActiveConnection connection = connections.current();
+		if (connection.prometheus() == null) {
+			throw new ServiceUnavailableException("Metrics aren't connected for your organization");
+		}
 		Map<String, String> params = new LinkedHashMap<>();
-		params.put("query", metric.query(serviceLabel(service)));
+		params.put("query", metric.query(connection.naming(), service.telemetryLabel()));
 		params.put("start", String.valueOf(range.from().getEpochSecond()));
 		params.put("end", String.valueOf(range.to().getEpochSecond()));
 		params.put("step", String.valueOf(stepDuration.toSeconds()));
-		JsonNode body = get(properties.prometheusUrl(), properties.prometheusUser(), prometheusPath(), params, "Metrics");
+		JsonNode body = read(http.get(connection.prometheus(),
+				TelemetryConnectionService.prometheusPath(connection.prometheus(), "/query_range"), params,
+				connection.authorization(connection.prometheusUser()), "Metrics"), "Metrics");
 		return new MetricSeriesResponse(metric.apiName(), service.getId(), service.getName(), range.from(), range.to(),
 				stepDuration.toSeconds(), parseMatrix(body));
 	}
 
 	// ---------- Queries, built here only ----------
 
-	/** The {@code service} label demo-shop puts on its logs and metrics: the service name in lower case, words joined by hyphens. */
-	static String serviceLabel(ServiceEntity service) {
-		return service.getName().trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "-");
-	}
-
-	static String logQuery(String serviceLabel, String level, String text) {
-		StringBuilder query = new StringBuilder("{service=\"").append(escape(serviceLabel)).append("\"}");
+	/** {@code labelName} was checked against Prometheus's label rules when saved; the value is escaped. */
+	static String logQuery(String labelName, String serviceValue, String level, String text) {
+		StringBuilder query = new StringBuilder("{").append(labelName).append("=\"").append(escape(serviceValue))
+				.append("\"}");
 		if (level != null) {
 			query.append(" | json | level=\"").append(escape(level)).append('"');
 		}
@@ -182,11 +188,6 @@ public class TelemetryService {
 	/** Escapes a value for a LogQL or PromQL double-quoted string. */
 	static String escape(String value) {
 		return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
-	}
-
-	private String prometheusPath() {
-		// Grafana Cloud's address ends in /api/prom; a plain Prometheus serves /api/v1 at its root.
-		return properties.prometheusUrl().replaceAll("/+$", "").endsWith("/api/v1") ? "/query_range" : "/api/v1/query_range";
 	}
 
 	// ---------- Parameters ----------
@@ -235,61 +236,17 @@ public class TelemetryService {
 		return instant.getEpochSecond() * 1_000_000_000L + instant.getNano();
 	}
 
-	// ---------- Calling Grafana ----------
-
-	private Duration timeout() {
-		return Duration.ofSeconds(properties.timeoutSeconds());
-	}
-
-	/**
-	 * One GET to Loki or Prometheus with the read token. The whole call, from connecting to the last byte, ends
-	 * within the timeout. Failures name the store, never the token or the response.
-	 */
-	private JsonNode get(String baseUrl, String user, String path, Map<String, String> params, String store) {
-		if (baseUrl == null || baseUrl.isBlank()) {
-			throw new ServiceUnavailableException(store + " are not set up on this server");
-		}
-		// Only the query string carries what the caller sent, encoded, after a fixed "?": the host and path come
-		// from settings alone, so no parameter can point the request somewhere else.
-		String query = params.entrySet().stream()
-				.map(param -> param.getKey() + "=" + URLEncoder.encode(param.getValue(), StandardCharsets.UTF_8))
-				.collect(Collectors.joining("&"));
-		URI uri = URI.create(baseUrl.replaceAll("/+$", "") + path + "?" + query);
-		HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(timeout()).GET();
-		String auth = authorization(user);
-		if (auth != null) {
-			request.header("Authorization", auth);
-		}
-		try {
-			HttpResponse<String> response = httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
-			if (response.statusCode() / 100 != 2) {
-				log.warn("{} store answered HTTP {}", store, response.statusCode());
-				throw new ServiceUnavailableException(store + " are unavailable right now");
-			}
-			return jsonMapper.readTree(response.body());
-		}
-		catch (IOException | JacksonException e) {
-			log.warn("{} store is slow or unreachable: {}", store, e.getClass().getSimpleName());
-			throw new ServiceUnavailableException(store + " are slow or unavailable right now", e);
-		}
-		catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			throw new ServiceUnavailableException(store + " are slow or unavailable right now", e);
-		}
-	}
-
-	private String authorization(String user) {
-		String token = properties.readToken();
-		if (token == null || token.isBlank()) {
-			return null;
-		}
-		if (user != null && !user.isBlank()) {
-			return "Basic " + Base64.getEncoder().encodeToString((user + ":" + token).getBytes(StandardCharsets.UTF_8));
-		}
-		return "Bearer " + token;
-	}
-
 	// ---------- Reading the answers ----------
+
+	private JsonNode read(String body, String store) {
+		try {
+			return jsonMapper.readTree(body);
+		}
+		catch (JacksonException e) {
+			log.warn("{} store answered with something that is not JSON", store);
+			throw new ServiceUnavailableException(store + " are slow or unavailable right now", e);
+		}
+	}
 
 	private List<LogEntryResponse> parseLogs(JsonNode body, ServiceEntity service, int limit) {
 		List<LogEntryResponse> logs = new ArrayList<>();

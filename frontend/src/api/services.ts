@@ -22,6 +22,8 @@ export const serviceSchema = z.object({
   criticality: criticalitySchema,
   publicVisible: z.boolean().optional(),
   publicName: z.string().nullable().optional(),
+  // How this service is labelled in the org's own telemetry (D49); null means the default.
+  telemetryLabel: z.string().nullable().optional(),
   // An enum key makes the record exhaustive, so a service missing a severity fails loudly.
   targets: z.record(severitySchema, slaTargetSchema),
 })
@@ -36,6 +38,8 @@ export interface ServiceRequest {
   criticality: Criticality
   publicVisible: boolean
   publicName: string
+  // Empty goes back to the default: the name in lower case, words joined by hyphens.
+  telemetryLabel: string
   targets: Record<Severity, SlaTarget>
 }
 

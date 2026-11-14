@@ -21,6 +21,9 @@ import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.followup.entity.FollowUp;
+import com.group2.incident.followup.entity.FollowUpKind;
+import com.group2.incident.followup.repository.FollowUpRepository;
 import com.group2.incident.heartbeat.entity.Heartbeat;
 import com.group2.incident.heartbeat.repository.HeartbeatRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
@@ -40,7 +43,9 @@ import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -87,6 +92,9 @@ public class SecurityMatrixTest {
 	private JdbcTemplate jdbc;
 
 	@Autowired
+	private EntityManager entityManager;
+
+	@Autowired
 	private AppUserRepository users;
 
 	@Autowired
@@ -124,7 +132,11 @@ public class SecurityMatrixTest {
 	private DeploymentRepository deployments;
 
 	@Autowired
+	@Autowired
 	private InvestigationRepository investigations;
+
+	@Autowired
+	private FollowUpRepository followUps;
 
 	private String adminToken;
 
@@ -144,6 +156,7 @@ public class SecurityMatrixTest {
 	private Long targetDeployId;
 	private Long targetMonitorId;
 	private Long targetHeartbeatId;
+	private Long targetFollowUpId;
 	private String targetHeartbeatToken;
 	private Long targetInvestigationId;
 	private Long targetActionId;
@@ -444,6 +457,27 @@ public class SecurityMatrixTest {
 						201, 201, 403, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/{id}/acknowledge",
+						HttpMethod.POST,
+						"/api/incidents/{id}/acknowledge",
+						"{\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/transitions",
+						HttpMethod.POST,
+						"/api/incidents/{id}/transitions",
+						"{\"status\":\"INVESTIGATING\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/severity",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/severity",
+						"{\"severity\":\"SEV1\",\"reason\":\"Customers can't pay\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"PUT /api/incidents/{id}/assignee",
 						HttpMethod.PUT,
 						"/api/incidents/{id}/assignee",
@@ -579,6 +613,34 @@ public class SecurityMatrixTest {
 						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
 						201, 403, 403, 401
 				),
+				new MatrixRow(
+						"GET /api/incidents/{id}/follow-ups",
+						HttpMethod.GET,
+						"/api/incidents/{id}/follow-ups",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/follow-ups",
+						HttpMethod.POST,
+						"/api/incidents/{id}/follow-ups",
+						"{\"title\":\"Matrix follow-up\",\"kind\":\"CORRECTIVE\",\"ownerId\":${OWNER_ID},\"dueDate\":\"2099-12-31\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/follow-ups/{id}",
+						HttpMethod.PUT,
+						"/api/follow-ups/{id}",
+						"{\"status\":\"IN_PROGRESS\"}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/follow-ups",
+						HttpMethod.GET,
+						"/api/follow-ups",
+						null,
+						200, 200, 200, 401
+				),
 				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
 				new MatrixRow(
 						"GET /api/telemetry/logs",
@@ -622,6 +684,37 @@ public class SecurityMatrixTest {
 						"/api/investigations/{id}/actions/{actionId}/decision",
 						"{\"decision\":\"ACCEPTED\"}",
 						200, 200, 403, 401
+				),
+				// The org's own Grafana connection (#260): Admin only. The Admin's PUT has no URL (400), and
+				// the test call finds no connection (503).
+				new MatrixRow(
+						"GET /api/settings/telemetry",
+						HttpMethod.GET,
+						"/api/settings/telemetry",
+						null,
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/settings/telemetry",
+						HttpMethod.PUT,
+						"/api/settings/telemetry",
+						"{}",
+						400, 403, 403, 401
+				),
+				new MatrixRow(
+						"DELETE /api/settings/telemetry",
+						HttpMethod.DELETE,
+						"/api/settings/telemetry",
+						null,
+						204, 403, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/settings/telemetry/test",
+						HttpMethod.POST,
+						"/api/settings/telemetry/test",
+						null,
+						503, 403, 403, 401
+				)
 				)
 		);
 	}
@@ -662,6 +755,8 @@ public class SecurityMatrixTest {
 		unsaved.assignNumber(990_001L);
 		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
+		targetFollowUpId = followUps.saveAndFlush(new FollowUp(incident, "Matrix follow-up", FollowUpKind.CORRECTIVE, admin,
+				LocalDate.of(2099, 12, 31), clock.instant())).getId();
 
 		// A documentation-only address (RFC 5737): nothing is ever contacted, since the worker is off in tests.
 		targetMonitorId = monitors.saveAndFlush(new UptimeMonitor(savedService, "Matrix monitor", "https://203.0.113.10/health",
@@ -762,6 +857,7 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
 				: pathTemplate.startsWith("/api/investigations/") ? targetInvestigationId.toString()
+				: pathTemplate.startsWith("/api/follow-ups/") ? targetFollowUpId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
 				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
@@ -778,6 +874,22 @@ public class SecurityMatrixTest {
 		}
 		if (path.equals("/api/incidents/duplicate-check")) {
 			req.queryParam("title", "SecurityMatrix incident");
+		}
+		if (path.endsWith("/acknowledge")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'OPEN', assignee_id = NULL, acknowledged_at = NULL WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/severity")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET severity = 'SEV2', status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/transitions")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/assignee")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET assignee_id = NULL WHERE id = ?", targetIncidentId);
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

@@ -11,6 +11,7 @@ import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
+import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { LogsPage } from '@/pages/LogsPage'
 import { SignupPage } from '@/pages/SignupPage'
@@ -23,6 +24,8 @@ import { ServicesPage } from '@/pages/ServicesPage'
 import { RunbooksPage } from '@/pages/RunbooksPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
+import { MonitorsPage } from '@/pages/MonitorsPage'
+import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
@@ -33,10 +36,17 @@ const SCREENS: Record<string, ReactNode> = {
   '/services': <ServicesPage />,
   '/runbooks': <RunbooksPage />,
   '/tokens': <AccessTokensPage />,
+  '/monitors': <MonitorsPage />,
+  '/heartbeats': <HeartbeatsPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.
-const ADMIN_SCREENS: Record<string, ReactNode> = { '/audit': <AuditLogPage />, '/tools': <ToolsPage />, '/users': <UsersPage /> }
+const ADMIN_SCREENS: Record<string, ReactNode> = {
+  '/audit': <AuditLogPage />,
+  '/integrations': <IntegrationsPage />,
+  '/tools': <ToolsPage />,
+  '/users': <UsersPage />,
+}
 
 // Response screens: incidents and alerts. Open to every role; they rank above the /incidents/* and /alerts/*
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.

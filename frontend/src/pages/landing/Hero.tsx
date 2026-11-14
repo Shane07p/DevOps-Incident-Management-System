@@ -1,113 +1,136 @@
-import { RotateCcw } from 'lucide-react'
-import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring } from 'motion/react'
-import type { MouseEvent } from 'react'
-import { Link } from 'react-router-dom'
-import BlurText from '@/components/effects/BlurText'
-import { Spotlight } from '@/components/effects/spotlight-new'
-import { IncidentReplay } from './IncidentReplay'
-import { useIncidentReplay } from './useIncidentReplay'
+import type { CSSProperties } from 'react'
 
-const ICE = 'hsla(205, 85%, 85%'
-
+// The redesign preview's markup for this part of the landing, styled and animated by the kit in
+// public/landing (see LandingPage). Classes and data attributes are the kit's; keep them as they are.
 export function Hero() {
-  const replay = useIncidentReplay()
-  const reduceMotion = useReducedMotion()
-
-  // A soft glow that drifts after the pointer.
-  const x = useMotionValue(typeof window === 'undefined' ? 600 : window.innerWidth / 2)
-  const y = useMotionValue(240)
-  const glowX = useSpring(x, { stiffness: 60, damping: 20 })
-  const glowY = useSpring(y, { stiffness: 60, damping: 20 })
-  const glowTransform = useMotionTemplate`translate(${glowX}px, ${glowY}px)`
-
-  const onMove = (event: MouseEvent<HTMLElement>) => {
-    const box = event.currentTarget.getBoundingClientRect()
-    x.set(event.clientX - box.left)
-    y.set(event.clientY - box.top)
-  }
-
-  const replayFromButton = () => {
-    document.getElementById('replay')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' })
-    replay.play()
-  }
-
   return (
-    <section id="top" onMouseMove={onMove} className="dark relative isolate overflow-hidden bg-deep px-4 pt-[150px] pb-24 text-foreground sm:px-8">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 [background-image:radial-gradient(oklch(1_0_0/0.09)_1px,transparent_1.2px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_35%,black_30%,transparent_75%)]"
-      />
-      <motion.div
-        aria-hidden="true"
-        className="pointer-events-none absolute top-0 left-0 -z-10 -mt-[360px] -ml-[360px] size-[720px] rounded-full [background:radial-gradient(circle,color-mix(in_oklch,var(--glow)_28%,transparent),transparent_62%)]"
-        style={{ transform: glowTransform }}
-      />
-      {!reduceMotion && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-          <Spotlight
-            gradientFirst={`radial-gradient(68.54% 68.72% at 55.02% 31.46%, ${ICE}, .1) 0, ${ICE}, .03) 50%, transparent 80%)`}
-            gradientSecond={`radial-gradient(50% 50% at 50% 50%, ${ICE}, .07) 0, ${ICE}, .02) 80%, transparent 100%)`}
-            gradientThird={`radial-gradient(50% 50% at 50% 50%, ${ICE}, .05) 0, ${ICE}, .02) 80%, transparent 100%)`}
-          />
+    <section className="hero hero--split" data-enter="" aria-labelledby="hero-h">
+      <div className="wrap">
+        <div className="hero-text grid hero__grid">
+          <div className="hero__text span-5">
+            <h1 id="hero-h">
+              Incident management for on-call teams
+            </h1>
+            <p className="hero__lead">
+              Alerts from Grafana and your own uptime checks open one incident, page whoever is on call and start two SLA clocks. The first person to acknowledge becomes Lead.
+            </p>
+            <div className="btn-row">
+              <a className="btn btn--primary" href="/signup">
+                Create a workspace
+                <svg className="m-arrow" viewBox="0 0 12 12" aria-hidden="true">
+                  <path className="m-arrow__stem" d="M1 6h8" />
+                  <path className="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5" />
+                </svg>
+              </a>
+              <a className="btn btn--secondary" href="#flow">
+                See the incident flow
+              </a>
+            </div>
+            <dl className="hero-facts">
+              <div>
+                <dt>
+                  Severity
+                </dt>
+                <dd>
+                  SEV1 to SEV4
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  Paged when
+                </dt>
+                <dd>
+                  2 locations fail twice
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  Times
+                </dt>
+                <dd>
+                  Shown in IST
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div className="hero__media span-6 start-7">
+            <div className="panel" data-fx="fluted-glass" data-fx-seed="14">
+              <div className="stage">
+                <div className="at-rise fit" style={{ "--fit-max": "440px", "--ax": "max(24px, 50% - 220px)", "--ay": "168px", "--ay-sm": "24px" } as CSSProperties} data-ui-loop="">
+                  <div className="ui ui-notify" data-ui="notify">
+                    <ul className="ui-notify__list" data-notify-list="">
+                      <li className="ui-note">
+                        <span className="ui-agent ui-note__av" aria-hidden="true" />
+                        <span className="ui-note__text">
+                          <span className="ui-note__title">
+                            Settle paged you
+                            <time>
+                              now
+                            </time>
+                          </span>
+                          <span className="ui-note__body">
+                            INC-1043 · SEV1 · UPI payment authorisations failing
+                          </span>
+                        </span>
+                        <span className="ui-btn ui-btn--sm ui-note__btn">
+                          Acknowledge
+                        </span>
+                      </li>
+                      <li className="ui-note">
+                        <span className="ui-avatar ui-note__av" data-tone="3">
+                          RS
+                        </span>
+                        <span className="ui-note__text">
+                          <span className="ui-note__title">
+                            Rohan Shah is Lead on INC-1041
+                            <time>
+                              4m
+                            </time>
+                          </span>
+                          <span className="ui-note__body">
+                            Response target met in 5 minutes
+                          </span>
+                        </span>
+                      </li>
+                      <li className="ui-note">
+                        <span className="ui-note__ico">
+                          <svg className="ui-icon" viewBox="0 0 16 16">
+                            <path d="m3.5 8.4 2.8 2.8 6.2-6.4" />
+                          </svg>
+                        </span>
+                        <span className="ui-note__text">
+                          <span className="ui-note__title">
+                            INC-1039 resolved
+                            <time>
+                              12m
+                            </time>
+                          </span>
+                          <span className="ui-note__body">
+                            Search indexing lag, inside its 24h target
+                          </span>
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="ly-float">
+              <div className="ly-float__row">
+                <span className="ly-live">
+                  Response clock
+                </span>
+                <span>
+                  3m left
+                </span>
+              </div>
+              <div className="ly-float__title">
+                INC-1043, waiting for acknowledgement
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-
-      <div className="mx-auto flex max-w-(--page-max) flex-col items-center gap-[26px] text-center">
-        <a
-          href="#replay"
-          className="inline-flex h-8 items-center gap-2.5 rounded-full border border-white/12 bg-white/6 pr-1.5 pl-3.5 text-[13.5px] whitespace-nowrap text-foreground backdrop-blur-[10px] hover:no-underline"
-        >
-          Two clocks start the moment an incident opens
-          <span className="h-[22px] rounded-full bg-primary px-[9px] text-xs leading-[22px] font-semibold text-primary-foreground">Watch</span>
-        </a>
-
-        <BlurText
-          as="h1"
-          text="Every incident runs on a clock."
-          animateBy="words"
-          direction="bottom"
-          delay={90}
-          blur={12}
-          distance={18}
-          className="max-w-[1100px] justify-center text-[clamp(64px,9.6vw,148px)] leading-[0.86] font-[750] tracking-[-0.015em] [font-stretch:62%]"
-        />
-
-        <p className="max-w-[640px] text-[19px] leading-[1.5] text-pretty text-muted-foreground">
-          Settle watches your services and pages whoever is on call. A response clock and a resolution clock start the moment an
-          incident opens, and an append-only record runs until the postmortem is written.
-        </p>
-
-        <div className="flex flex-wrap items-center justify-center gap-2.5">
-          <Link
-            to="/login"
-            className="relative inline-flex h-12 items-center overflow-hidden rounded-full bg-primary px-[26px] font-bold text-primary-foreground shadow-[0_0_0_1px_oklch(1_0_0/0.15)_inset,0_10px_30px_-8px_color-mix(in_oklch,var(--glow)_60%,transparent)] hover:no-underline"
-          >
-            {!reduceMotion && (
-              <motion.span
-                aria-hidden="true"
-                className="absolute inset-y-0 left-0 w-2/5 bg-[linear-gradient(100deg,transparent,oklch(1_0_0/0.45),transparent)]"
-                initial={{ x: '-120%' }}
-                animate={{ x: '320%' }}
-                transition={{ duration: 1.4, delay: 1.8, repeat: Infinity, repeatDelay: 2.6, ease: 'easeInOut' }}
-              />
-            )}
-            <span className="relative">Log in</span>
-          </Link>
-          <button
-            type="button"
-            onClick={replayFromButton}
-            className="inline-flex h-12 items-center gap-2 rounded-full border border-white/16 bg-white/5 px-[22px] font-semibold text-foreground backdrop-blur-[10px] hover:bg-white/10"
-          >
-            <RotateCcw className="size-[15px]" aria-hidden="true" />
-            Replay the incident
-          </button>
-        </div>
-        <span className="text-[13px] text-muted-foreground">
-          New team? <Link to="/signup">Create an org</Link>
-        </span>
       </div>
-
-      <IncidentReplay replay={replay} />
     </section>
   )
 }

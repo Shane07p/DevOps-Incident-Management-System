@@ -90,6 +90,7 @@ public class ServiceCatalogService {
         boolean visible = Boolean.TRUE.equals(request.publicVisible());
         String publicName = publicName(visible, clean(request.publicName()));
         service.publishAs(visible, publicName, clock.instant());
+        service.labelTelemetryAs(clean(request.telemetryLabel()));
 
         ServiceEntity saved = saveService(service, name);
         AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
@@ -120,12 +121,20 @@ public class ServiceCatalogService {
 
         List<String> changes = detectChanges(service, name, description, owner, request.criticality(), resolvedTargets);
         changes.addAll(publicationChanges(service, visible, publicName));
+        // Left out: unchanged; blank: back to the default (clean gives null).
+        String telemetryLabel = request.telemetryLabel() != null
+                ? clean(request.telemetryLabel())
+                : service.getTelemetryLabel();
+        if (!java.util.Objects.equals(telemetryLabel, service.getTelemetryLabel())) {
+            changes.add("telemetry label: " + (telemetryLabel != null ? telemetryLabel : "default"));
+        }
         if (changes.isEmpty()) {
             return ServiceResponse.from(service);
         }
 
         service.update(name, description, owner, request.criticality(), clock.instant());
         service.publishAs(visible, publicName, clock.instant());
+        service.labelTelemetryAs(telemetryLabel);
         for (Map.Entry<Severity, SlaTargetDto> entry : resolvedTargets.entrySet()) {
             service.putTarget(entry.getKey(), entry.getValue().responseMinutes(), entry.getValue().resolutionMinutes());
         }

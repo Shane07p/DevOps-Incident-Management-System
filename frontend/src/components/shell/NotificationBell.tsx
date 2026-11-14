@@ -6,6 +6,7 @@ import { listNotifications, markNotificationRead, type Notification } from '@/ap
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { formatIst } from '@/lib/time'
+import { iconButtonClass } from './ThemeToggle'
 
 /** The bell in the top bar: your unread count, and your notifications. Opening one marks it read. */
 export function NotificationBell() {
@@ -31,9 +32,9 @@ export function NotificationBell() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
-        className="relative grid size-[34px] place-items-center rounded-full border bg-card transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        className={iconButtonClass}
       >
-        <Bell className="size-[15px]" aria-hidden="true" />
+        <Bell className="size-[17px]" aria-hidden="true" />
         {unread > 0 && (
           <span
             aria-hidden="true"

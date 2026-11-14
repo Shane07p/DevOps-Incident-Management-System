@@ -57,3 +57,7 @@ Rule: a record that must stay true later stores what it belonged to at the time 
 ## 2026-11-11 · A state's start time is its first entry, not its latest
 Seen in: #233 (Codex). A second RESOLVED update moved `resolvedAt` forward and could bring an old incident back into the 90-day list.
 Rule: take a transition time from the first event that entered the state, and load enough history to see it.
+
+## 2026-11-12 · Monitoring config that was never run
+Seen in: #256. Check bodies the demo shop rejects with 422, a payload template no contact point used, rules that fired on one location, and a hand-written "recorded" payload (third time, after #215, #224).
+Rule: load Grafana files into a real Grafana (a local container is enough), send each check's request to the app, and record payloads from the real sender.

@@ -21,7 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 		"app.monitors.worker-enabled=false",
 		"app.heartbeats.worker-enabled=false",
 		"app.ai.embedding.worker-enabled=false",
-		"app.ai.service-url="
+		"app.ai.service-url=",
+		// A fixed test key (32 zero bytes), so tests can save telemetry connections (D49). Production reads
+		// TELEMETRY_SECRET_KEY from the environment.
+		"app.telemetry.secret-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 })
 @AutoConfigureMockMvc
 @Import({ TestcontainersConfiguration.class, TestAccounts.class, TestOrgs.class })

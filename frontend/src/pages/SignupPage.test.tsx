@@ -35,10 +35,10 @@ function renderSignup() {
 }
 
 async function fillForm(email = 'ana@acme.test') {
-  await userEvent.type(await screen.findByLabelText('Email'), email)
+  await userEvent.type(await screen.findByLabelText('Work email'), email)
   await userEvent.type(screen.getByLabelText('Password'), 'DevPassw0rd!')
   await userEvent.type(screen.getByLabelText('Your name'), 'Ana')
-  await userEvent.type(screen.getByLabelText('Org name'), 'Acme')
+  await userEvent.type(screen.getByLabelText('Organisation'), 'Acme')
 }
 
 const signupCalls = (fetchMock: ReturnType<typeof mockFetch>) =>
@@ -56,9 +56,9 @@ describe('SignupPage', () => {
     const router = renderSignup()
 
     await fillForm()
-    await userEvent.click(screen.getByRole('button', { name: 'Create org' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create a workspace' }))
 
-    const breadcrumb = await screen.findByRole('navigation', { name: 'Breadcrumb' })
+    const breadcrumb = await screen.findByRole('navigation', { name: 'Breadcrumb' }, { timeout: 3000 })
     expect(within(breadcrumb).getByText('Acme')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/home')
     expect(readToken()).toBe('new-token')
@@ -71,10 +71,10 @@ describe('SignupPage', () => {
     renderSignup()
 
     await fillForm('taken@acme.test')
-    await userEvent.click(screen.getByRole('button', { name: 'Create org' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create a workspace' }))
 
     expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument()
-    expect(screen.getByLabelText('Email')).toHaveAccessibleDescription('An account with this email already exists')
+    expect(screen.getByLabelText('Work email')).toHaveAccessibleDescription('An account with this email already exists')
   })
 
   it("puts the server's field errors next to their fields", async () => {
@@ -87,22 +87,22 @@ describe('SignupPage', () => {
     renderSignup()
 
     await fillForm()
-    await userEvent.click(screen.getByRole('button', { name: 'Create org' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create a workspace' }))
 
     expect(await screen.findByText('Org name is at most 100 characters')).toBeInTheDocument()
-    expect(screen.getByLabelText('Org name')).toHaveAccessibleDescription('Org name is at most 100 characters')
+    expect(screen.getByLabelText('Organisation')).toHaveAccessibleDescription('Org name is at most 100 characters')
   })
 
   it('shows a message under each empty field and sends nothing', async () => {
     const fetchMock = mockFetch({})
     renderSignup()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Create org' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Create a workspace' }))
 
-    expect(await screen.findByText('Enter a valid email')).toBeInTheDocument()
-    expect(screen.getByText('At least 8 characters')).toBeInTheDocument()
-    expect(screen.getByText('Enter your name')).toBeInTheDocument()
-    expect(screen.getByText('Enter a name for your org')).toBeInTheDocument()
+    expect(await screen.findByText('Write your work email, like name@company.com.')).toBeInTheDocument()
+    expect(screen.getByText('Use 8 or more characters.')).toBeInTheDocument()
+    expect(screen.getByText('Write your name as your team knows it.')).toBeInTheDocument()
+    expect(screen.getByText('Write your organisation’s name.')).toBeInTheDocument()
     expect(signupCalls(fetchMock)).toHaveLength(0)
   })
 

@@ -1,6 +1,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { ApiRequestError } from '@/api/client'
 import {
   createRunbook,
   deleteRunbook,
@@ -13,6 +14,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export function RunbooksPage() {
   const { user } = useAuth()
@@ -30,6 +32,7 @@ export function RunbooksPage() {
   const [title, setTitle] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
   const [formError, setFormError] = useState('')
+  const [deleting, setDeleting] = useState<Runbook | null>(null)
 
   const serviceId = selectedServiceId ?? services.data?.[0]?.id ?? null
 
@@ -64,6 +67,7 @@ export function RunbooksPage() {
   const removeMutation = useMutation({
     mutationFn: deleteRunbook,
     onSuccess: () => {
+      setDeleting(null)
       void queryClient.invalidateQueries({
         queryKey: ['runbooks', serviceId],
       })
@@ -71,6 +75,7 @@ export function RunbooksPage() {
   })
 
   function openForm(runbook: Runbook | null) {
+    saveMutation.reset()
     setEditing(runbook)
     setTitle(runbook?.title ?? '')
     setSteps(runbook ? [...runbook.steps] : [''])
@@ -108,6 +113,16 @@ export function RunbooksPage() {
 
     if (steps.length === 0 || steps.some((step) => !step.trim())) {
       setFormError('Add at least one non-empty step.')
+      return
+    }
+
+    if (title.length > 200) {
+      setFormError('A runbook title can have at most 200 characters.')
+      return
+    }
+
+    if (steps.length > 50 || steps.some((step) => step.length > 2000)) {
+      setFormError('Use at most 50 steps, with at most 2,000 characters each.')
       return
     }
 
@@ -197,9 +212,8 @@ export function RunbooksPage() {
                           variant="destructive"
                           disabled={removeMutation.isPending}
                           onClick={() => {
-                            if (window.confirm('Delete this runbook?')) {
-                              removeMutation.mutate(runbook.id)
-                            }
+                            removeMutation.reset()
+                            setDeleting(runbook)
                           }}
                         >
                           Delete
@@ -218,12 +232,6 @@ export function RunbooksPage() {
             </div>
           )}
 
-          {removeMutation.isError && (
-            <p role="alert" className="text-destructive">
-              {removeMutation.error.message}
-            </p>
-          )}
-
           {canEdit && formOpen && (
             <section className="rounded-lg border bg-card p-5">
               <h2 className="mb-4 text-xl font-semibold">
@@ -233,9 +241,11 @@ export function RunbooksPage() {
               <label className="mb-4 flex flex-col gap-2">
                 <span>Title</span>
                 <input
+                  id="title"
                   aria-label="Runbook title"
                   className="rounded-md border bg-background p-2"
                   value={title}
+                  maxLength={200}
                   onChange={(event) => setTitle(event.target.value)}
                 />
               </label>
@@ -250,9 +260,11 @@ export function RunbooksPage() {
                   >
                     <span className="w-6">{index + 1}.</span>
                     <input
+                      id={`steps-${index}`}
                       aria-label={`Step ${index + 1}`}
                       className="min-w-0 flex-1 rounded-md border bg-background p-2"
                       value={step}
+                      maxLength={2000}
                       onChange={(event) =>
                         updateStep(index, event.target.value)
                       }
@@ -289,12 +301,17 @@ export function RunbooksPage() {
               <Button
                 className="mt-4"
                 variant="outline"
+                disabled={steps.length >= 50}
                 onClick={() =>
                   setSteps((current) => [...current, ''])
                 }
               >
                 Add step
               </Button>
+
+              {steps.length >= 50 && (
+                <p className="mt-2 text-muted-foreground">A runbook can have at most 50 steps.</p>
+              )}
 
               {formError && (
                 <p role="alert" className="mt-3 text-destructive">
@@ -304,7 +321,9 @@ export function RunbooksPage() {
 
               {saveMutation.isError && (
                 <p role="alert" className="mt-3 text-destructive">
-                  {saveMutation.error.message}
+                  {saveMutation.error instanceof ApiRequestError && Object.keys(saveMutation.error.errors).length > 0
+                    ? Object.values(saveMutation.error.errors).join(' ')
+                    : saveMutation.error.message}
                 </p>
               )}
 
@@ -328,6 +347,23 @@ export function RunbooksPage() {
           )}
         </>
       )}
+      <Dialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {deleting?.title}?</DialogTitle>
+            <DialogDescription>This permanently deletes the runbook and its steps.</DialogDescription>
+          </DialogHeader>
+          {removeMutation.isError && (
+            <p role="alert" className="text-destructive">{removeMutation.error.message}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={removeMutation.isPending} onClick={() => deleting && removeMutation.mutate(deleting.id)}>
+              Delete runbook
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

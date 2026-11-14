@@ -97,7 +97,7 @@ describe('RunbooksPage', () => {
   it('shows runbooks with their steps in the correct order', async () => {
     renderRunbooks('VIEWER')
 
-    await screen.findByText('Restart payments service')
+    await screen.findByRole('heading', { name: 'Restart payments service' })
 
     const firstStep = screen.getByText('Check the service logs')
     const secondStep = screen.getByText('Restart the service')
@@ -118,7 +118,7 @@ describe('RunbooksPage', () => {
     renderRunbooks('VIEWER')
 
     expect(
-      await screen.findByText('Restart payments service'),
+      await screen.findByRole('heading', { name: 'Restart payments service' }),
     ).toBeInTheDocument()
 
     expect(
@@ -361,5 +361,39 @@ describe('RunbooksPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('A runbook can have at most 50 steps.')
     expect(screen.queryByText('Validation failed')).not.toBeInTheDocument()
     expect(callsWith(fetchMock, 'PUT')).toHaveLength(1)
+  })
+
+  it('lists the runbooks of every service and shows the one chosen', async () => {
+    renderRunbooks('VIEWER', {
+      'GET /api/services': { body: [payments, { ...payments, id: 2, name: 'Search' }] },
+      'GET /api/services/2/runbooks': { body: [{ id: 20, title: 'Rebuild the search index', steps: ['Pause indexing', 'Rebuild'] }] },
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Restart payments service' })).toBeInTheDocument()
+    const list = screen.getByRole('navigation', { name: 'Runbooks' })
+    await userEvent.click(within(list).getByRole('button', { name: /Rebuild the search index/ }))
+
+    expect(screen.getByRole('heading', { name: 'Rebuild the search index' })).toBeInTheDocument()
+    expect(screen.getByText('Pause indexing')).toBeInTheDocument()
+    expect(screen.queryByText('Check the service logs')).not.toBeInTheDocument()
+    expect(within(list).getByRole('button', { name: /Rebuild the search index/ })).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('creates a runbook on the service chosen in the form', async () => {
+    const fetchMock = renderRunbooks('ENGINEER', {
+      'GET /api/services': { body: [payments, { ...payments, id: 2, name: 'Search' }] },
+      'GET /api/services/2/runbooks': { body: [] },
+      'POST /api/services/2/runbooks': { status: 201, body: { id: 21, title: 'Clear the cache', steps: ['Flush'] } },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'New runbook' }))
+    await userEvent.click(screen.getByLabelText('Service'))
+    await userEvent.click(await screen.findByRole('option', { name: 'Search' }))
+    await userEvent.type(screen.getByLabelText('Runbook title'), 'Clear the cache')
+    await userEvent.type(screen.getByLabelText('Step 1'), 'Flush')
+    await userEvent.click(screen.getByRole('button', { name: 'Save runbook' }))
+
+    await waitFor(() => expect(callsWith(fetchMock, 'POST')).toHaveLength(1))
+    expect(callsWith(fetchMock, 'POST')[0][0]).toBe('/api/services/2/runbooks')
   })
 })

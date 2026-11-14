@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Role } from '@/api/schemas'
 import { clearToken, writeToken } from '@/api/token'
 import { AuthProvider } from '@/auth/AuthProvider'
@@ -155,5 +155,38 @@ describe('EscalationPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save levels' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Responder user engineer is disabled')
+  })
+
+  it('shows each unacknowledged open incident where it is in the paging order', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-30T10:20:00Z'))
+    const incident = (overrides: Record<string, unknown>) => ({
+      serviceName: 'Payments',
+      severity: 'SEV2',
+      status: 'OPEN',
+      createdAt: '2026-10-30T10:00:00Z',
+      responseDueAt: '2026-10-30T11:00:00Z',
+      resolutionDueAt: '2026-10-30T14:00:00Z',
+      version: 0,
+      assignee: null,
+      acknowledgedAt: null,
+      resolvedAt: null,
+      ...overrides,
+    })
+    renderEscalation('VIEWER', {
+      'GET /api/incidents': {
+        body: [
+          incident({ id: 9, reference: 'INC-9', title: 'Refunds slow' }),
+          incident({ id: 10, reference: 'INC-10', title: 'Acknowledged', acknowledgedAt: '2026-10-30T10:05:00Z' }),
+        ],
+      },
+    })
+
+    expect(
+      await screen.findByText(/Dev Engineer \(level 1\) was paged 5 min ago\. Dev Admin \(level 2\) is paged in 25 min\./),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open INC-9' })).toHaveAttribute('href', '/incidents/9')
+    expect(screen.queryByText(/Escalating INC-10/)).not.toBeInTheDocument()
+    vi.useRealTimers()
   })
 })

@@ -42,3 +42,10 @@ export function formatMinutes(total: number) {
   const parts = [days && `${days} d`, hours && `${hours} h`, minutes && `${minutes} min`].filter(Boolean)
   return parts.length > 0 ? parts.join(' ') : '0 min'
 }
+
+const istClockFormat = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+/** "09:30" in IST for `at`; the end of an IST day (`dayEnd`) reads "24:00", not the next day's "00:00". */
+export function formatIstClock(at: number, dayEnd?: number) {
+  return at === dayEnd ? '24:00' : istClockFormat.format(new Date(at))
+}

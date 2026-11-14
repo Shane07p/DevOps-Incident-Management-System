@@ -21,6 +21,7 @@ import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.insights.service.InsightsService;
 import com.group2.incident.notification.entity.Notification;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
@@ -217,13 +218,21 @@ class InsightsControllerTest {
 		followUps.saveAndFlush(fu2);
 
 		// Notifications:
-		// Notification 1: attached to inc1, sent at Saturday 10:00 UTC (Saturday afternoon IST -> OUT OF HOURS)
-		Notification page1 = new Notification(engineer, inc1, "Page for checkout", Instant.parse("2026-03-14T10:00:00Z"));
+		// Notification 1: genuine PAGE attached to inc1, sent at Saturday 10:00 UTC (Saturday afternoon IST -> OUT OF HOURS)
+		Notification page1 = new Notification(engineer, inc1, NotificationKind.PAGE, "Page for checkout", Instant.parse("2026-03-14T10:00:00Z"));
 		notifications.saveAndFlush(page1);
 
-		// Notification 2: attached to inc2, sent at Wednesday 14:00 IST (08:30 UTC -> IN HOURS)
-		Notification page2 = new Notification(engineer, inc2, "In hours alert", Instant.parse("2026-03-18T08:30:00Z"));
+		// Notification 2: genuine PAGE attached to inc2, sent at Wednesday 14:00 IST (08:30 UTC -> IN HOURS)
+		Notification page2 = new Notification(engineer, inc2, NotificationKind.PAGE, "In hours page", Instant.parse("2026-03-18T08:30:00Z"));
 		notifications.saveAndFlush(page2);
+
+		// Notification 3: REASSIGNMENT notification attached to inc1, sent at Saturday 11:00 UTC (OUT OF HOURS -> MUST NOT be counted)
+		Notification reassignNotif = new Notification(engineer, inc1, NotificationKind.REASSIGNMENT, "Reassigned lead", Instant.parse("2026-03-14T11:00:00Z"));
+		notifications.saveAndFlush(reassignNotif);
+
+		// Notification 4: ROLE_ASSIGNMENT notification attached to inc1, sent at Saturday 12:00 UTC (OUT OF HOURS -> MUST NOT be counted)
+		Notification roleNotif = new Notification(engineer, inc1, NotificationKind.ROLE_ASSIGNMENT, "Role assigned", Instant.parse("2026-03-14T12:00:00Z"));
+		notifications.saveAndFlush(roleNotif);
 
 		mvc.perform(get("/api/insights")
 						.queryParam("days", "7")
@@ -240,6 +249,10 @@ class InsightsControllerTest {
 				.andExpect(jsonPath("$.mttr.mean").value(90.0))
 				.andExpect(jsonPath("$.mttr.median").value(90.0))
 				.andExpect(jsonPath("$.mttr.p90").value(90.0))
+				// byService exposes serviceId, name, count
+				.andExpect(jsonPath("$.byService[0].serviceId").value(service.getId().intValue()))
+				.andExpect(jsonPath("$.byService[0].name").value(service.getName()))
+				.andExpect(jsonPath("$.byService[0].count").value(2))
 				// SLA breach rate:
 				// Response: 2 measurable (30m breached, 10m met) -> 1 / 2 = 0.500
 				.andExpect(jsonPath("$.slaBreachRate.response").value(0.5))
@@ -250,7 +263,7 @@ class InsightsControllerTest {
 				.andExpect(jsonPath("$.followUps.done").value(1))
 				.andExpect(jsonPath("$.followUps.overdue").value(1))
 				.andExpect(jsonPath("$.followUps.completionRate").value(0.5))
-				// Out of hours pages: 1 out of hours page
+				// Out of hours pages: exactly 1 genuine out of hours page (reassignment and role assignment ignored)
 				.andExpect(jsonPath("$.outOfHoursPages").value(1));
 	}
 }

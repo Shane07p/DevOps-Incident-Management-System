@@ -81,6 +81,7 @@ class InsightsOrgTest {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + orgA.adminToken()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.incidents.total").value(1))
+				.andExpect(jsonPath("$.byService[0].serviceId").value((int) serviceAId))
 				.andExpect(jsonPath("$.byService[0].name").value("Org A Payments"));
 
 		// Now sign up Org B

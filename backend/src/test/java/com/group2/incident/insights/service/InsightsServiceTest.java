@@ -22,6 +22,7 @@ import com.group2.incident.insights.dto.InsightsResponse;
 import com.group2.incident.insights.dto.ServiceBreakdown;
 import com.group2.incident.insights.dto.SeverityBreakdown;
 import com.group2.incident.notification.entity.Notification;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.repository.NotificationRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -81,7 +82,7 @@ class InsightsServiceTest {
 		Instant from = NOW.minus(Duration.ofDays(30));
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(30);
 
@@ -127,7 +128,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of(open1, open2, open3, open4, open5, res1, res2));
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(7);
 
@@ -156,7 +157,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(incidents);
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(30);
 
@@ -185,7 +186,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(incidents);
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(30);
 
@@ -211,7 +212,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of(inc1, inc2));
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(30);
 
@@ -232,7 +233,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of(inFlight));
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(7);
 
@@ -253,7 +254,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of(overdue));
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(7);
 
@@ -275,7 +276,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of(i1, i2, i3, i4));
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(30);
 
@@ -312,7 +313,7 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of(fu1, fu2, fu3));
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		InsightsResponse response = insightsService.getInsights(30);
 
@@ -365,26 +366,41 @@ class InsightsServiceTest {
 	}
 
 	@Test
-	@DisplayName("Out-of-hours notifications: counts only out-of-hours incident notifications")
+	@DisplayName("Out-of-hours notifications: counts only out-of-hours incident pages")
 	void outOfHoursPages_countsOnlyOutOfHoursNotifications() {
 		Instant from = NOW.minus(Duration.ofDays(7));
 		Incident incident = createIncident("Inc", serviceA, Severity.SEV1, IncidentStatus.OPEN, from.plusSeconds(10), 15, 60);
 
 		// One in-hours notification: Wednesday 14:00 IST (08:30 UTC)
-		Notification inHours = new Notification(testUser, incident, "In hours page", Instant.parse("2026-03-11T08:30:00Z"));
+		Notification inHours = new Notification(testUser, incident, NotificationKind.PAGE, "In hours page", Instant.parse("2026-03-11T08:30:00Z"));
 
 		// Two out-of-hours notifications: Saturday and Friday night
-		Notification outHours1 = new Notification(testUser, incident, "Saturday page", Instant.parse("2026-03-14T10:00:00Z"));
-		Notification outHours2 = new Notification(testUser, incident, "Friday night page", Instant.parse("2026-03-13T16:30:00Z"));
+		Notification outHours1 = new Notification(testUser, incident, NotificationKind.PAGE, "Saturday page", Instant.parse("2026-03-14T10:00:00Z"));
+		Notification outHours2 = new Notification(testUser, incident, NotificationKind.PAGE, "Friday night page", Instant.parse("2026-03-13T16:30:00Z"));
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW))
+		when(notificationRepository.findAllPagesInWindow(from, NOW))
 				.thenReturn(List.of(inHours, outHours1, outHours2));
 
 		InsightsResponse response = insightsService.getInsights(7);
 
 		assertThat(response.outOfHoursPages()).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("Out-of-hours pages: only queries genuine PAGE notifications; excludes other kinds")
+	void outOfHoursPages_onlyQueriesGenuinePageNotifications() {
+		Instant from = NOW.minus(Duration.ofDays(7));
+
+		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
+		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
+
+		InsightsResponse response = insightsService.getInsights(7);
+
+		assertThat(response.outOfHoursPages()).isEqualTo(0);
+		verify(notificationRepository).findAllPagesInWindow(eq(from), eq(NOW));
 	}
 
 	@Test
@@ -394,13 +410,13 @@ class InsightsServiceTest {
 
 		when(incidentRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
 		when(followUpRepository.findAllInWindow(from, NOW)).thenReturn(List.of());
-		when(notificationRepository.findAllIncidentNotificationsInWindow(from, NOW)).thenReturn(List.of());
+		when(notificationRepository.findAllPagesInWindow(from, NOW)).thenReturn(List.of());
 
 		insightsService.getInsights(30);
 
 		verify(incidentRepository).findAllInWindow(eq(from), eq(NOW));
 		verify(followUpRepository).findAllInWindow(eq(from), eq(NOW));
-		verify(notificationRepository).findAllIncidentNotificationsInWindow(eq(from), eq(NOW));
+		verify(notificationRepository).findAllPagesInWindow(eq(from), eq(NOW));
 	}
 
 	private Incident createIncident(String title, ServiceEntity service, Severity severity,

@@ -212,7 +212,7 @@ public class InsightsService {
 	}
 
 	private int computeOutOfHoursPages(Instant from, Instant to) {
-		List<Notification> notifications = notificationRepository.findAllIncidentNotificationsInWindow(from, to);
+		List<Notification> notifications = notificationRepository.findAllPagesInWindow(from, to);
 		return (int) notifications.stream()
 				.filter(n -> isOutOfHours(n.getCreatedAt()))
 				.count();

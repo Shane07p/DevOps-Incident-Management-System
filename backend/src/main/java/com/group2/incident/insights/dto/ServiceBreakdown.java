@@ -1,7 +1,7 @@
 package com.group2.incident.insights.dto;
 
 public record ServiceBreakdown(
-		Long id,
+		Long serviceId,
 		String name,
 		int count
 ) {}

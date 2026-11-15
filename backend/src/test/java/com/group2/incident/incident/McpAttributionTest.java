@@ -8,17 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.group2.incident.audit.entity.AuditAction;
 import com.group2.incident.audit.entity.AuditEntry;
 import com.group2.incident.audit.repository.AuditEntryRepository;
-import com.group2.incident.auth.dto.CreatePersonalAccessTokenResponse;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.entity.Role;
 import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.auth.service.PersonalAccessTokenService;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
-import com.group2.incident.catalog.entity.SlaTarget;
 import com.group2.incident.catalog.repository.ServiceRepository;
-import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEntry;
@@ -31,8 +27,6 @@ import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,9 +54,6 @@ class McpAttributionTest {
 	private AuditEntryRepository auditEntries;
 
 	@Autowired
-	private PersonalAccessTokenService tokenService;
-
-	@Autowired
 	private ServiceRepository services;
 
 	@Autowired
@@ -81,30 +72,27 @@ class McpAttributionTest {
 	private ServiceEntity service;
 	private String patToken;
 	private String jwtToken;
+	private long nextIncidentNumber = 950000L;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		Instant now = clock.instant();
 
 		engineer = users.findByEmail("mcp-engineer@test.local")
-				.orElseGet(() -> accounts.save(new AppUser("mcp-engineer@test.local", "MCP Engineer", passwordEncoder.encode(PASSWORD), now), Role.ENGINEER));
+				.orElseGet(() -> accounts.save(
+						new AppUser("mcp-engineer@test.local", "MCP Engineer", passwordEncoder.encode(PASSWORD), now),
+						Role.ENGINEER
+				));
 
 		service = services.findByNameIgnoreCase("MCPService")
 				.orElseGet(() -> {
-					ServiceEntity s = new ServiceEntity("MCPService", "MCP Service Description", engineer, Criticality.TIER_1);
-					s.setTargets(Map.of(
-							Severity.SEV1, new SlaTarget(15, 60),
-							Severity.SEV2, new SlaTarget(30, 120),
-							Severity.SEV3, new SlaTarget(60, 240),
-							Severity.SEV4, new SlaTarget(120, 480)
-					));
-					return services.save(s);
+					ServiceEntity s = new ServiceEntity("MCPService", "MCP Service Description", engineer, Criticality.CRITICAL, now);
+					s.putTarget(Severity.SEV1, 15, 60);
+					s.putTarget(Severity.SEV2, 30, 120);
+					s.putTarget(Severity.SEV3, 60, 240);
+					s.putTarget(Severity.SEV4, 120, 480);
+					return services.saveAndFlush(s);
 				});
-
-		// Create PAT token
-		OrgContext.set(1L);
-		CreatePersonalAccessTokenResponse patResp = tokenService.createToken(engineer.getId(), "MCP Token", Optional.empty());
-		patToken = patResp.token();
 
 		// Create regular JWT login token
 		String loginBody = "{\"email\":\"mcp-engineer@test.local\",\"password\":\"%s\"}".formatted(PASSWORD);
@@ -112,6 +100,15 @@ class McpAttributionTest {
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		jwtToken = JsonPath.read(loginResp, "$.token");
+
+		// Create PAT token via authenticated endpoint
+		String tokenResp = mvc.perform(post("/api/me/tokens")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"name\":\"MCP Attribution Token\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		patToken = JsonPath.read(tokenResp, "$.token");
 	}
 
 	private Incident createTestIncident() {
@@ -125,12 +122,10 @@ class McpAttributionTest {
 				engineer,
 				now,
 				30,
-				120,
-				null,
-				null
+				120
 		);
-		incident.assignNumber(System.currentTimeMillis() % 1000000);
-		return incidents.save(incident);
+		incident.assignNumber(nextIncidentNumber++);
+		return incidents.saveAndFlush(incident);
 	}
 
 	@Test
@@ -196,7 +191,7 @@ class McpAttributionTest {
 				.filter(e -> e.getEventType() == TimelineEventType.ACKNOWLEDGED)
 				.findFirst()
 				.orElseThrow();
-		assertThat(ackEntry.getDetails()).isEqualTo("Acknowledged by MCP Engineer via MCP");
+		assertThat(ackEntry.getDetails()).isEqualTo("Acknowledged by " + engineer.getDisplayName() + " via MCP");
 
 		List<AuditEntry> audits = auditEntries.findAll().stream()
 				.filter(a -> a.getAction() == AuditAction.INCIDENT_ACKNOWLEDGED && a.getItemId() == incident.getId())
@@ -222,7 +217,6 @@ class McpAttributionTest {
 				.filter(e -> e.getEventType() == TimelineEventType.ACKNOWLEDGED)
 				.findFirst()
 				.orElseThrow();
-		assertThat(ackEntry.getDetails()).isEqualTo("Acknowledged by MCP Engineer");
+		assertThat(ackEntry.getDetails()).isEqualTo("Acknowledged by " + engineer.getDisplayName());
 	}
 }
-

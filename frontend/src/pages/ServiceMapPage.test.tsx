@@ -68,9 +68,10 @@ describe('ServiceMapPage', () => {
     expect(links.map((link) => link.textContent)).toEqual(['Checkout depends on Payments', 'Storefront depends on Checkout'])
   })
 
-  it('TC-US-26a: choosing a service highlights everything that depends on it, directly or not', async () => {
+  it('TC-US-26a: in Blast radius, choosing a service highlights everything that depends on it, directly or not', async () => {
     renderMap()
-    await userEvent.click(await screen.findByRole('button', { name: 'Payments, Down' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Blast radius' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Payments, Down' }))
 
     expect(await screen.findByText(/If Payments fails, 2 services may be affected/)).toHaveTextContent('Checkout, Storefront')
     expect(node('Payments')).toHaveAttribute('aria-pressed', 'true')
@@ -81,7 +82,8 @@ describe('ServiceMapPage', () => {
 
   it('says so when nothing depends on the chosen service', async () => {
     renderMap()
-    await userEvent.click(await screen.findByRole('button', { name: 'Search, Unknown' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Blast radius' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Search, Unknown' }))
 
     expect(await screen.findByText('Nothing depends on Search.')).toBeInTheDocument()
   })
@@ -90,9 +92,46 @@ describe('ServiceMapPage', () => {
     renderMap()
     await screen.findByRole('button', { name: 'Payments, Down' })
 
-    const main = screen.getByRole('heading', { name: 'Service map' }).closest('div')!.parentElement!
+    const main = screen.getByRole('main')
     const buttons = within(main).getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? '')
     expect(buttons.every((label) => /^(Payments|Checkout|Storefront|Search),/.test(label))).toBe(true)
     expect(screen.queryByRole('button', { name: /edit|depends on|save/i })).not.toBeInTheDocument()
+  })
+
+  it('TC-US-26c: switches between Dependencies and Blast radius from the keyboard', async () => {
+    renderMap()
+    const dependencies = await screen.findByRole('radio', { name: 'Dependencies' })
+    expect(dependencies).toHaveAttribute('aria-checked', 'true')
+
+    dependencies.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    const blast = screen.getByRole('radio', { name: 'Blast radius' })
+    expect(blast).toHaveAttribute('aria-checked', 'true')
+    expect(blast).toHaveFocus()
+
+    // Only the chosen view is in the tab order, so Tab leaves the group for the map.
+    await userEvent.tab()
+    expect(screen.getByRole('radio', { name: 'Dependencies' })).not.toHaveFocus()
+    node('Payments').focus()
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByText(/If Payments fails, 2 services may be affected/)).toBeInTheDocument()
+
+    await userEvent.click(blast)
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(dependencies).toHaveAttribute('aria-checked', 'true')
+    expect(node('Checkout')).toHaveAccessibleName('Checkout, Degraded')
+  })
+
+  it('TC-US-26d: in Dependencies, the chosen service shows what it calls and what calls it', async () => {
+    renderMap()
+    await userEvent.click(await screen.findByRole('button', { name: 'Checkout, Degraded' }))
+
+    const panel = screen.getByRole('region', { name: 'Checkout' })
+    expect(within(panel).getByRole('heading', { name: 'Calls' }).nextElementSibling).toHaveTextContent('Payments')
+    expect(within(panel).getByRole('heading', { name: 'Called by' }).nextElementSibling).toHaveTextContent('Storefront')
+    expect(within(panel).getByRole('link', { name: 'Open service' })).toHaveAttribute('href', '/services/2')
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Clear selection' }))
+    expect(node('Checkout')).toHaveAttribute('aria-pressed', 'false')
   })
 })

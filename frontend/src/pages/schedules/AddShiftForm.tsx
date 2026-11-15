@@ -70,8 +70,8 @@ export function AddShiftForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={onSubmit} noValidate aria-label="Add a shift" className="flex flex-col gap-4 rounded-lg border bg-card p-4">
-        <h3 className="font-semibold">Add a shift</h3>
+      <form onSubmit={onSubmit} noValidate aria-label="Add a shift" className="flex flex-col gap-4 rounded-lg border bg-card p-[19px] shadow-elev-1">
+        <h3 className="text-[13px] font-medium">Add a shift</h3>
         <div className="grid gap-4 sm:grid-cols-3">
           <FormField
             control={form.control}

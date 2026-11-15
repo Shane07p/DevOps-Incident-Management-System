@@ -1,32 +1,38 @@
 import { describe, expect, it } from 'vitest'
-import { escalationNow } from './escalating'
+import { latestEscalation } from './escalating'
 
-const levels = [
-  { id: 1, stepNumber: 1, responderId: 2, responderDisplayName: 'Asha', waitMinutes: 5 },
-  { id: 2, stepNumber: 2, responderId: 3, responderDisplayName: 'Rohan', waitMinutes: 10 },
-]
-const opened = '2026-10-28T06:00:00Z'
-const minutesIn = (minutes: number) => Date.parse(opened) + minutes * 60_000
+const entry = (id: number, eventType: string, details: string, recordedAt: string) => ({
+  id,
+  eventType,
+  actor: null,
+  details,
+  recordedAt,
+  correctsEntryId: null,
+})
+const at = (iso: string) => Date.parse(iso)
 
-describe('escalationNow', () => {
-  it('names the first level before anyone is paged', () => {
-    expect(escalationNow(levels, 'Dev Admin', opened, minutesIn(2))).toBe('Nobody acknowledged yet. Asha (level 1) is paged in 3 min.')
+describe('latestEscalation', () => {
+  it('names the latest page recorded on the timeline, whatever the policy says now', () => {
+    const timeline = [
+      entry(1, 'CREATED', 'Incident declared', '2026-10-28T06:00:00Z'),
+      entry(3, 'ESCALATED', 'Escalated to level 2: Rohan', '2026-10-28T06:20:00Z'),
+      entry(2, 'ESCALATED', 'Escalated to level 1: Asha', '2026-10-28T06:05:00Z'),
+    ]
+
+    expect(latestEscalation(timeline, at('2026-10-28T06:27:30Z'))).toBe('Escalated to level 2: Rohan, 7 min ago.')
   })
 
-  it('names the level paged last and the next one, at the moment a level is paged', () => {
-    expect(escalationNow(levels, 'Dev Admin', opened, minutesIn(5))).toBe('Asha (level 1) was paged just now. Rohan (level 2) is paged in 10 min.')
+  it('says just now within the first minute, and names the fallback page as recorded', () => {
+    const timeline = [entry(4, 'ESCALATED', 'Escalated to fallback contact: Dev Admin (all levels exhausted)', '2026-10-28T06:40:00Z')]
+
+    expect(latestEscalation(timeline, at('2026-10-28T06:40:30Z'))).toBe(
+      'Escalated to fallback contact: Dev Admin (all levels exhausted), just now.',
+    )
   })
 
-  it('goes on to the fallback after the last level, the last wait later', () => {
-    expect(escalationNow(levels, 'Dev Admin', opened, minutesIn(20))).toBe('Rohan (level 2) was paged 5 min ago. Dev Admin, the fallback, is paged in 5 min.')
-    expect(escalationNow(levels, 'Dev Admin', opened, minutesIn(25))).toBe('Every level and Dev Admin, the fallback, have been paged.')
-  })
-
-  it('says when nobody comes after the last level', () => {
-    expect(escalationNow(levels, null, opened, minutesIn(40))).toBe('Rohan (level 2) was paged 25 min ago. That is the last level, and there is no fallback contact.')
-  })
-
-  it('says nothing without levels', () => {
-    expect(escalationNow([], 'Dev Admin', opened, minutesIn(40))).toBeNull()
+  it('says so when no level has been paged yet', () => {
+    expect(latestEscalation([entry(1, 'CREATED', 'Incident declared', '2026-10-28T06:00:00Z')], at('2026-10-28T06:02:00Z'))).toBe(
+      'No escalation level has been paged yet.',
+    )
   })
 })

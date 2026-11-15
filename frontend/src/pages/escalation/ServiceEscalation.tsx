@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellRing, ShieldCheck } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getEscalationPolicy, updateEscalationPolicy, type EscalationLevel } from '@/api/escalation'
-import { listIncidents } from '@/api/incidents'
+import { getIncident, listIncidents } from '@/api/incidents'
 import { getOnCall } from '@/api/onCall'
 import type { Service } from '@/api/services'
 import { listUsers } from '@/api/users'
@@ -17,7 +17,7 @@ import { Panel, PanelFooter } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
 import { formatMinutes } from '@/lib/time'
 import { useNow } from '@/lib/useNow'
-import { escalationNow } from './escalating'
+import { latestEscalation } from './escalating'
 import { EscalationLevelsForm } from './EscalationLevelsForm'
 
 function Step({ marker, when, name, note }: { marker: string; when: ReactNode; name: string; note?: string }) {
@@ -114,20 +114,33 @@ export function ServiceEscalation({ service }: { service: Service }) {
   const incidents = useQuery({ queryKey: ['incidents'], queryFn: listIncidents })
   // Contacts are users; that list is Admin-only, like editing.
   const users = useQuery({ queryKey: ['users'], queryFn: listUsers, enabled: isAdmin })
+  const waiting = (incidents.data ?? []).filter(
+    (incident) => incident.serviceName === service.name && incident.status === 'OPEN' && incident.acknowledgedAt === null,
+  )
+  // Who has been paged comes from each incident's timeline, the record escalation writes (D14), and not from
+  // this policy: an incident keeps the steps it opened with, and each wait counts from the previous real page.
+  const timelines = useQueries({
+    queries: waiting.map((incident) => ({
+      queryKey: ['incident', incident.id],
+      queryFn: () => getIncident(incident.id),
+      refetchInterval: 30_000,
+    })),
+  })
 
   if (policy.isPending) return <LoadingState message="Loading the escalation levels" />
   if (policy.isError) return <ErrorState message={policy.error.message} onRetry={() => policy.refetch()} />
 
   const levels = (policy.data?.steps ?? []).toSorted((a, b) => a.stepNumber - b.stepNumber)
   const fallback = onCall.data?.fallbackContactName ?? null
-  const escalating = (incidents.data ?? []).filter(
-    (incident) => incident.serviceName === service.name && incident.status === 'OPEN' && incident.acknowledgedAt === null,
-  )
 
   return (
     <div className="flex flex-col gap-5">
-      {levels.length > 0 &&
-        escalating.map((incident) => (
+      {waiting.map((incident, index) => {
+        const detail = timelines[index]
+        const paged = detail?.data?.timeline.some((entry) => entry.eventType === 'ESCALATED') ?? false
+        // No levels and nothing paged: this incident is not escalating, only waiting.
+        if (levels.length === 0 && !paged) return null
+        return (
           <div
             key={incident.id}
             className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sev-2/40 bg-sev-2-bg px-4 py-3"
@@ -135,14 +148,20 @@ export function ServiceEscalation({ service }: { service: Service }) {
             <p className="flex min-w-0 items-start gap-3 text-[13px]">
               <BellRing className="mt-0.5 size-4 shrink-0 text-sev-2-fg" aria-hidden="true" />
               <span>
-                <strong className="font-medium">Escalating {incident.reference}</strong> · {escalationNow(levels, fallback, incident.createdAt, now)}
+                <strong className="font-medium">{incident.reference} is not acknowledged</strong> ·{' '}
+                {detail?.data
+                  ? latestEscalation(detail.data.timeline, now)
+                  : detail?.isError
+                    ? 'Open it to see who has been paged.'
+                    : 'Checking who has been paged…'}
               </span>
             </p>
             <Button variant="outline" size="sm" asChild>
               <Link to={`/incidents/${incident.id}`}>Open {incident.reference}</Link>
             </Button>
           </div>
-        ))}
+        )
+      })}
       <PagingOrder service={service} levels={levels} fallback={fallback} />
       {isAdmin && (
         <EscalationLevelsForm

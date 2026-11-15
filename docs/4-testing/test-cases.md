@@ -482,7 +482,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Automated |
 | TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not connected) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
-| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Automated (Himanshu) |
 
 ### Each org's own Grafana (D49, #260)
 

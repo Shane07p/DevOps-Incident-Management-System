@@ -14,6 +14,7 @@ import { IncidentsPage } from '@/pages/IncidentsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { LogsPage } from '@/pages/LogsPage'
+import { MetricsPage } from '@/pages/MetricsPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
@@ -31,6 +32,7 @@ import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
 const SCREENS: Record<string, ReactNode> = {
   '/escalation': <EscalationPage />,
   '/logs': <LogsPage />,
+  '/metrics': <MetricsPage />,
   '/schedules': <SchedulesPage />,
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,

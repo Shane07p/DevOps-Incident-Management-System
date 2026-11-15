@@ -715,7 +715,6 @@ public class SecurityMatrixTest {
 						null,
 						503, 403, 403, 401
 				)
-				)
 		);
 	}
 

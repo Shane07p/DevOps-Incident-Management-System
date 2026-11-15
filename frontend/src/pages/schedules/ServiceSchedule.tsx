@@ -1,23 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2 } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { Trash2, TriangleAlert } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ApiRequestError } from '@/api/client'
 import { getOnCall, updateOnCall, type OnCallScheduleRequest, type Shift } from '@/api/onCall'
 import { listUsers } from '@/api/users'
 import { useAuth } from '@/auth/AuthProvider'
 import { can } from '@/auth/roles'
+import { Avatar } from '@/components/app/Avatar'
 import { ErrorState } from '@/components/app/ErrorState'
+import { Health } from '@/components/app/Health'
 import { LoadingState } from '@/components/app/LoadingState'
+import { Panel, PanelFooter } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { formatIst } from '@/lib/time'
+import { formatIst, formatIstClock, istDayStart } from '@/lib/time'
 import { AddShiftForm } from './AddShiftForm'
-import { nextShift, onCallAt, toShiftRequest } from './schedule'
+import { coverage, nextShift, onCallAt, toShiftRequest } from './schedule'
 import { ShiftTimeline } from './ShiftTimeline'
 
 /** The current time, refreshed every minute so "on call now" moves on by itself. */
@@ -30,21 +33,14 @@ function useNow() {
   return now
 }
 
+const DAY_MS = 86_400_000
+
 const errorMessage = (error: unknown) =>
   error instanceof ApiRequestError && Object.keys(error.errors).length > 0
     ? Object.values(error.errors).join(' ')
     : error instanceof Error
       ? error.message
       : 'The schedule was not saved. Try again.'
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="flex flex-col gap-0.5">{children}</div>
-    </div>
-  )
-}
 
 /** One service's on-call: who is on now, who is next, the fallback contact, and the shifts. */
 export function ServiceSchedule({ serviceId }: { serviceId: number }) {
@@ -100,89 +96,135 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
     setRemoving(null)
   }
 
+  const fallbackName = data.fallbackContactName
+  const dayStart = istDayStart(now)
+  const gaps = coverage(data.shifts, dayStart, dayStart + DAY_MS).filter((part) => part.kind === 'gap')
+  const shiftStatus = (shift: Shift) =>
+    Date.parse(shift.endTime) <= now ? 'Ended' : Date.parse(shift.startTime) <= now ? 'On call now' : 'Upcoming'
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Fact label="On call now">
-          {current.kind === 'shift' ? (
-            <>
-              <span className="text-lg font-semibold">{current.name}</span>
-              <span className="text-xs text-muted-foreground">Until {formatIst(current.until)}</span>
-            </>
-          ) : current.kind === 'fallback' ? (
-            <>
-              <span className="text-lg font-semibold">{current.name}</span>
-              <span className="text-xs text-muted-foreground">Fallback contact: no shift right now</span>
-            </>
-          ) : (
-            <span className="text-lg font-semibold text-muted-foreground">Nobody</span>
-          )}
-        </Fact>
-        <Fact label="Next shift">
-          {next ? (
-            <>
-              <span className="text-lg font-semibold">{next.responderName}</span>
-              <span className="text-xs text-muted-foreground">From {formatIst(next.startTime)}</span>
-            </>
-          ) : (
-            <span className="text-lg font-semibold text-muted-foreground">None planned</span>
-          )}
-        </Fact>
-        <Fact label="Fallback contact">
-          <span className="text-lg font-semibold">{data.fallbackContactName ?? 'Not set'}</span>
-          <span className="text-xs text-muted-foreground">Gets new incidents when no shift covers the time</span>
-        </Fact>
-      </div>
-
-      <ShiftTimeline shifts={data.shifts} now={now} />
-
-      {shifts.length === 0 ? (
-        <p className="rounded-lg border bg-card p-6 text-center text-muted-foreground">No shifts yet.</p>
-      ) : (
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Responder</TableHead>
-                <TableHead>Starts</TableHead>
-                <TableHead>Ends</TableHead>
-                {isAdmin && <TableHead className="w-[110px]" aria-label="Actions" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {shifts.map((shift) => {
-                const past = Date.parse(shift.endTime) <= now
-                return (
-                  <TableRow key={shift.id} className={cn(past && 'text-muted-foreground')}>
-                    <TableCell className="font-semibold">{shift.responderName}</TableCell>
-                    <TableCell className="font-mono text-xs tnum">{formatIst(shift.startTime)}</TableCell>
-                    <TableCell className="font-mono text-xs tnum">{formatIst(shift.endTime)}</TableCell>
-                    {isAdmin && (
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Remove ${shift.responderName}'s shift from ${formatIst(shift.startTime)}`}
-                          onClick={() => setRemoving(shift)}
-                          disabled={save.isPending}
-                        >
-                          <Trash2 aria-hidden="true" />
-                          Remove
-                        </Button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
+    <div className="flex flex-col gap-5">
+      {gaps.length > 0 && (
+        <p className="flex items-start gap-3 rounded-lg border border-sev-2/40 bg-sev-2-bg px-4 py-3.5 text-[13px] text-foreground">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-sev-2-fg" aria-hidden="true" />
+          <span>
+            <strong className="font-medium">{gaps.length === 1 ? '1 gap today' : `${gaps.length} gaps today`}</strong>
+            {' · '}
+            {gaps.map((gap) => `${formatIstClock(gap.start)}–${formatIstClock(gap.end, dayStart + DAY_MS)}`).join(' and ')}.{' '}
+            {fallbackName ? `${fallbackName}, the fallback, gets new incidents then.` : 'Nobody gets new incidents then: set a fallback contact.'}
+          </span>
+        </p>
       )}
 
+      <div className="grid gap-5 md:grid-cols-2">
+        <Panel title="On call now">
+          <div className="flex items-center gap-3 px-[19px] pb-5">
+            {current.kind === 'nobody' ? (
+              <p className="text-[13px] text-muted-foreground">Nobody: no shift and no fallback contact.</p>
+            ) : (
+              <>
+                <Avatar name={current.name} />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <strong className="text-[14px] font-medium">{current.name}</strong>
+                  <span className="text-[13px] text-muted-foreground">
+                    {current.kind === 'shift' ? `Until ${formatIst(current.until)}` : 'Fallback contact: no shift covers this time'}
+                  </span>
+                </div>
+                <Health tone={current.kind === 'shift' ? 'ok' : 'warn'} className="shrink-0 text-[12px]">
+                  {current.kind === 'shift' ? 'On shift' : 'Fallback'}
+                </Health>
+              </>
+            )}
+          </div>
+        </Panel>
+        <Panel title="Next">
+          <div className="flex items-center gap-3 px-[19px] pb-5">
+            {next ? (
+              <>
+                <Avatar name={next.responderName} />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <strong className="text-[14px] font-medium">{next.responderName}</strong>
+                  <span className="text-[13px] text-muted-foreground">From {formatIst(next.startTime)}</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-[13px] text-muted-foreground">No shift planned after this one.</p>
+            )}
+          </div>
+        </Panel>
+      </div>
+
+      <Panel title="Today’s coverage" action={<span className="text-[12px] text-muted-foreground">IST (UTC+05:30)</span>}>
+        <ShiftTimeline shifts={data.shifts} now={now} fallbackName={fallbackName} />
+        {shifts.length === 0 ? (
+          <p className="border-t px-[19px] py-6 text-center text-[13px] text-muted-foreground">No shifts yet.</p>
+        ) : (
+          <div className="overflow-x-auto border-t">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-[19px]">Responder</TableHead>
+                  <TableHead>Starts</TableHead>
+                  <TableHead>Ends</TableHead>
+                  <TableHead className={cn(!isAdmin && 'pr-[19px]')}>Status</TableHead>
+                  {isAdmin && <TableHead className="w-[110px] pr-[19px]" aria-label="Actions" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shifts.map((shift) => {
+                  const status = shiftStatus(shift)
+                  return (
+                    <TableRow key={shift.id} className={cn(status === 'Ended' && 'text-muted-foreground')}>
+                      <TableCell className="pl-[19px]">
+                        <span className="flex items-center gap-2 font-medium">
+                          <Avatar name={shift.responderName} size="sm" />
+                          {shift.responderName}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-mono text-[12px] tnum">{formatIst(shift.startTime)}</TableCell>
+                      <TableCell className="font-mono text-[12px] tnum">{formatIst(shift.endTime)}</TableCell>
+                      <TableCell className={cn('text-[13px]', !isAdmin && 'pr-[19px]')}>
+                        {status === 'On call now' ? (
+                          <Health tone="ok" className="text-[13px]">
+                            On call now
+                          </Health>
+                        ) : (
+                          status
+                        )}
+                      </TableCell>
+                      {isAdmin && (
+                        <TableCell className="pr-[19px] text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Remove ${shift.responderName}'s shift from ${formatIst(shift.startTime)}`}
+                            onClick={() => setRemoving(shift)}
+                            disabled={save.isPending}
+                          >
+                            <Trash2 aria-hidden="true" />
+                            Remove
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        <PanelFooter>
+          <span>
+            Fallback contact: <span className="text-foreground">{fallbackName ?? 'not set'}</span>. Gets new incidents when no shift
+            covers the time.
+          </span>
+        </PanelFooter>
+      </Panel>
+
       {isAdmin && (
-        <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
-          <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-            <h3 className="font-semibold">Fallback contact</h3>
+        <div className="grid items-start gap-5 lg:grid-cols-[1fr_2fr]">
+          <div className="flex flex-col gap-3 rounded-lg border bg-card p-[19px] shadow-elev-1">
+            <h3 className="text-[13px] font-medium">Fallback contact</h3>
             <div className="flex flex-col gap-2">
               <Label htmlFor="fallbackContactId">Contact</Label>
               <Select value={fallbackChoice} onValueChange={setFallbackChoice} disabled={!users.data}>
@@ -208,7 +250,7 @@ export function ServiceSchedule({ serviceId }: { serviceId: number }) {
             </Button>
           </div>
           {data.fallbackContactId === null ? (
-            <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+            <p className="rounded-lg border bg-card p-[19px] text-[13px] text-muted-foreground shadow-elev-1">
               Set a fallback contact first. New incidents go to them whenever no shift covers the time.
             </p>
           ) : (

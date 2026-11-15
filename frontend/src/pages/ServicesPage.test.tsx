@@ -79,7 +79,7 @@ describe('ServicesPage', () => {
   it.each<Role>(['VIEWER', 'ENGINEER'])('shows a %s each service with its owner and criticality, without New or Edit', async (role) => {
     renderServices(role)
 
-    const row = (await screen.findByText('Payments')).closest('tr')!
+    const row = (await screen.findByText('Payments')).closest('li')!
     expect(within(row).getByText('Dev Admin')).toBeInTheDocument()
     expect(within(row).getByText('critical')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'New service' })).not.toBeInTheDocument()

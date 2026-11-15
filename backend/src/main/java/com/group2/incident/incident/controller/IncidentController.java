@@ -15,8 +15,11 @@ import com.group2.incident.incident.dto.SimilarIncidentResponse;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
 import com.group2.incident.incident.dto.SeverityChangeRequest;
 import com.group2.incident.incident.dto.TransitionRequest;
+import com.group2.incident.incident.dto.TriageHintRequest;
+import com.group2.incident.incident.dto.TriageHintResponse;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.incident.service.IncidentSimilarityService;
+import com.group2.incident.incident.service.TriageHintService;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -46,6 +49,7 @@ public class IncidentController {
 
 	private final IncidentService incidentService;
 	private final IncidentSimilarityService incidentSimilarityService;
+	private final TriageHintService triageHintService;
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
@@ -191,5 +195,16 @@ public class IncidentController {
 			@PathVariable Long deployId,
 			@AuthenticationPrincipal Jwt jwt) {
 		return incidentService.linkDeployment(id, deployId, Long.parseLong(jwt.getSubject()));
+	}
+
+	@PostMapping("/triage-hint")
+	@Operation(summary = "Get an AI triage hint for a new incident (AI-4)")
+	public org.springframework.http.ResponseEntity<TriageHintResponse> triageHint(
+			@Valid @RequestBody TriageHintRequest request) {
+		return triageHintService.fetchHint(request, List.of())
+				.map(hint -> org.springframework.http.ResponseEntity.ok(hint))
+				.orElseGet(() -> org.springframework.http.ResponseEntity
+						.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+						.build());
 	}
 }

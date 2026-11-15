@@ -227,6 +227,46 @@ class SuggestResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Triage Models (Sprint 5 — Issue #247)
+# ---------------------------------------------------------------------------
+
+class TriageRequest(BaseModel):
+    """Request payload for the /triage endpoint (AI-4, Issue #247)."""
+    title: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Incident title",
+        examples=["Payment gateway timeout on checkout"],
+    )
+    description: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="Incident description",
+        examples=["Checkout requests are failing with gateway timeouts."],
+    )
+    similar_incidents: list[dict] = Field(
+        default_factory=list,
+        description="Similar past incidents from AI-1 for context",
+    )
+
+
+class TriageServiceHint(BaseModel):
+    """Suggested service, nullable when no reliable service can be identified."""
+    id: int | None = None
+    name: str | None = None
+
+
+class TriageResponse(BaseModel):
+    """Response payload for the /triage endpoint."""
+    aiGenerated: bool = Field(True, description="Always True (FR-18.2)")
+    severity: str = Field(..., description="Suggested severity: SEV1, SEV2, SEV3, or SEV4")
+    service: TriageServiceHint | None = Field(None, description="Suggested service, null when unidentifiable")
+    reason: str = Field(..., description="Short, human-readable reason for the suggestion")
+
+
+# ---------------------------------------------------------------------------
 # Embed Models (Sprint 2 — Issue #62)
 # ---------------------------------------------------------------------------
 
@@ -356,6 +396,116 @@ def suggest(request: SuggestRequest) -> SuggestResponse:
     return SuggestResponse(
         aiGenerated=True,
         suggestions=suggestions,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Triage severity hint endpoint (Sprint 5 — Issue #247)
+# ---------------------------------------------------------------------------
+
+# Keyword sets that map text evidence to severity levels (order: SEV1 > SEV2 > SEV3 > SEV4).
+_SEV1_KEYWORDS = frozenset([
+    "outage", "down", "unavailable", "unreachable", "data loss", "all users",
+    "fully down", "critical failure", "payment fully", "100% error", "complete failure",
+    "total outage", "0% success", "service unavailable",
+])
+_SEV2_KEYWORDS = frozenset([
+    "timeout", "high error rate", "degraded", "elevated latency", "partial outage",
+    "majority", "most users", "slow", "50%", "gateway", "significant", "urgent",
+    "checkout fail", "payment fail", "auth fail",
+])
+_SEV3_KEYWORDS = frozenset([
+    "intermittent", "flapping", "some users", "minority", "non-critical",
+    "occasional", "one region", "partial", "few users", "sporadic",
+])
+_SEV4_KEYWORDS = frozenset([
+    "cosmetic", "typo", "ui issue", "minor", "low priority",
+    "background job", "slow render", "not urgent",
+])
+
+
+def _classify_severity(title: str, description: str, similar_incidents: list[dict]) -> tuple[str, str]:
+    """
+    Rule-based severity classification. Deterministic — no randomness.
+    Returns (severity, reason).
+    """
+    text = (title + " " + description).lower()
+
+    # Check similar incidents for majority severity evidence
+    severities_from_similar = [
+        s.get("severity", "").upper()
+        for s in similar_incidents
+        if isinstance(s.get("severity"), str)
+    ]
+
+    def _matches(keywords: frozenset) -> bool:
+        return any(kw in text for kw in keywords)
+
+    if _matches(_SEV1_KEYWORDS):
+        return "SEV1", "Keywords indicate a total or near-total outage with critical impact on all users."
+
+    if _matches(_SEV2_KEYWORDS):
+        return "SEV2", "Keywords indicate significant degradation or high-impact partial failure."
+
+    # If similar incidents are mostly SEV1 or SEV2, escalate the default
+    high_severity_count = sum(1 for s in severities_from_similar if s in ("SEV1", "SEV2"))
+    if high_severity_count > 0 and len(severities_from_similar) > 0:
+        ratio = high_severity_count / len(severities_from_similar)
+        if ratio >= 0.5:
+            return "SEV2", (
+                f"{high_severity_count} of {len(severities_from_similar)} similar past incidents "
+                "were high-severity (SEV1 or SEV2), suggesting elevated impact."
+            )
+
+    if _matches(_SEV3_KEYWORDS):
+        return "SEV3", "Keywords indicate intermittent or partial impact affecting a minority of users."
+
+    if _matches(_SEV4_KEYWORDS):
+        return "SEV4", "Keywords indicate a cosmetic or minor issue with negligible user impact."
+
+    return "SEV3", "No strong severity signal found; defaulting to moderate impact. Review and adjust as needed."
+
+
+def _extract_service_hint(similar_incidents: list[dict]) -> TriageServiceHint | None:
+    """
+    Extract the most common service from similar incidents.
+    Returns None when no reliable service can be identified.
+    """
+    service_counts: dict[str, dict] = {}
+    for inc in similar_incidents:
+        service = inc.get("service")
+        if isinstance(service, dict):
+            sid = service.get("id")
+            sname = service.get("name")
+            if sid is not None and sname:
+                key = str(sid)
+                service_counts[key] = {"id": sid, "name": sname, "count": service_counts.get(key, {}).get("count", 0) + 1}
+        elif isinstance(service, str) and service:
+            key = service
+            service_counts[key] = {"id": None, "name": service, "count": service_counts.get(key, {}).get("count", 0) + 1}
+    if not service_counts:
+        return None
+    # Pick the most frequent
+    best = max(service_counts.values(), key=lambda x: x["count"])
+    return TriageServiceHint(id=best["id"], name=best["name"])
+
+
+@app.post("/triage", response_model=TriageResponse)
+def triage(request: TriageRequest) -> TriageResponse:
+    """
+    Rule-based triage hint for the incident declare form (AI-4, Issue #247).
+
+    Deterministic: no Ollama call, no randomness. Works when Ollama is offline.
+    Uses severity-guide.md keyword sets and evidence from similar past incidents.
+    Never mutates incident state (DR-10.2).
+    """
+    severity, reason = _classify_severity(request.title, request.description, request.similar_incidents)
+    service_hint = _extract_service_hint(request.similar_incidents)
+    return TriageResponse(
+        aiGenerated=True,
+        severity=severity,
+        service=service_hint if (service_hint and service_hint.name) else None,
+        reason=reason,
     )
 
 

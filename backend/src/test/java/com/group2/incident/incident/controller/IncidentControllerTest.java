@@ -583,6 +583,40 @@ class IncidentControllerTest {
 		assertThat(unchanged.getVersion()).isEqualTo(originalVersion);
 	}
 
+	@Test
+	@DisplayName("POST /api/incidents/triage-hint returns 503 when AI service is not configured")
+	void triageHintReturns503WhenAiDisabled() throws Exception {
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/triage-hint")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+							{
+								"title": "Payment gateway timeout",
+								"description": "Checkout requests are failing with gateway timeouts."
+							}
+							"""))
+				.andExpect(status().isServiceUnavailable());
+	}
+
+	@Test
+	@DisplayName("POST /api/incidents/triage-hint validates required title")
+	void triageHintValidatesTitle() throws Exception {
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/triage-hint")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+							{
+								"title": "",
+								"description": "Description only"
+							}
+							"""))
+				.andExpect(status().isBadRequest());
+	}
+
 	private ResultActions login(String username, String password) throws Exception {
 		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));

@@ -10,6 +10,7 @@ import { listServices } from '@/api/services'
 import { severitySchema, type Severity } from '@/api/schemas'
 import { SeverityBadge } from '@/components/app/badges'
 import { DuplicateIncidentWarning } from '@/components/app/DuplicateIncidentWarning'
+import { TriageHint } from '@/pages/incident/TriageHint'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -86,6 +87,7 @@ export function DeclareIncidentForm({ onCancel, onDeclared }: { onCancel: () => 
   const services = useQuery({ queryKey: ['services'], queryFn: listServices })
   const form = useForm<NewIncidentValues>({ resolver: zodResolver(newIncidentSchema), defaultValues: EMPTY })
   const titleValue = form.watch('title')
+  const descriptionValue = form.watch('description')
   const serviceIdValue = form.watch('serviceId')
   const severityValue = form.watch('severity')
 
@@ -127,6 +129,16 @@ export function DeclareIncidentForm({ onCancel, onDeclared }: { onCancel: () => 
             )}
           />
           <DuplicateIncidentWarning title={titleValue} serviceId={serviceIdValue} />
+          <TriageHint
+            title={titleValue}
+            description={descriptionValue}
+            onApply={(severity, serviceId) => {
+              form.setValue('severity', severity as Severity, { shouldValidate: true })
+              if (serviceId !== null) {
+                form.setValue('serviceId', String(serviceId), { shouldValidate: true })
+              }
+            }}
+          />
           <FormField
             control={form.control}
             name="description"

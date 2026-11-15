@@ -82,6 +82,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/triage-hint").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/acknowledge").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/transitions").hasAnyRole("ADMIN", "ENGINEER")

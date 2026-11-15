@@ -66,6 +66,10 @@ function renderInsights(path = '/insights', queryClient?: QueryClient) {
         path: '/insights',
         element: <InsightsPage />,
       },
+      {
+        path: '/services/:id',
+        element: <div>Service Detail</div>,
+      },
     ],
     { initialEntries: [path] },
   )
@@ -268,6 +272,24 @@ describe('InsightsPage - Successful response rendering', () => {
     expect(screen.getByText('15')).toBeInTheDocument()
     expect(screen.getByText('Auth')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
+
+    // Service breakdown rows link to /services/{serviceId}
+    const paymentsLink = screen.getByRole('link', { name: /Payments/i })
+    expect(paymentsLink).toHaveAttribute('href', '/services/1')
+    const authLink = screen.getByRole('link', { name: /Auth/i })
+    expect(authLink).toHaveAttribute('href', '/services/2')
+  })
+
+  it('navigates to /services/{serviceId} when a service row is clicked', async () => {
+    mockFetch({
+      'GET /api/insights?days=30': { body: baseFixture },
+    })
+    const { router } = renderInsights('/insights')
+
+    const paymentsLink = await screen.findByRole('link', { name: /Payments/i })
+    await userEvent.click(paymentsLink)
+
+    expect(router.state.location.pathname).toBe('/services/1')
   })
 })
 

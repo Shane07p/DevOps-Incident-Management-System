@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { fetchInsights, type InsightsDays, type InsightsResponse } from '@/api/insights'
 import type { Severity } from '@/api/schemas'
 import { SeverityBadge } from '@/components/app/badges'
@@ -222,10 +222,14 @@ function ServiceBreakdownPanel({ data }: { data: InsightsResponse }) {
           {services.map((item) => {
             const barWidth = maxCount > 0 ? (item.count / maxCount) * 100 : 0
             return (
-              <div key={item.serviceId} className="flex flex-col gap-1.5">
+              <Link
+                key={item.serviceId}
+                to={`/services/${item.serviceId}`}
+                className="group -m-1 flex flex-col gap-1.5 rounded-md p-1 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
                 <div className="flex items-center justify-between text-[13px]">
-                  <span className="truncate font-medium">{item.name}</span>
-                  <span className="font-mono font-medium tnum">{item.count}</span>
+                  <span className="truncate font-medium group-hover:underline">{item.name}</span>
+                  <span className="font-mono font-medium tnum text-foreground">{item.count}</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
@@ -233,7 +237,7 @@ function ServiceBreakdownPanel({ data }: { data: InsightsResponse }) {
                     style={{ width: `${barWidth}%` }}
                   />
                 </div>
-              </div>
+              </Link>
             )
           })}
         </div>
@@ -264,7 +268,7 @@ export function InsightsPage() {
   })
 
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
+    <div className="mx-auto flex max-w-[1180px] flex-col">
       <PageHeader
         title="Insights"
         description="Incident volume, MTTA, MTTR, SLA performance, and paging trends across your services."
@@ -280,13 +284,13 @@ export function InsightsPage() {
           onRetry={() => refetch()}
         />
       ) : data ? (
-        <>
+        <div className="flex flex-col gap-6">
           <MetricCards data={data} />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SeverityBreakdownPanel data={data} />
             <ServiceBreakdownPanel data={data} />
           </div>
-        </>
+        </div>
       ) : null}
     </div>
   )

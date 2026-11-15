@@ -559,8 +559,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Automated |
 | TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26a | Equivalence | Choose Blast radius, then a service on the map | Everything that depends on it, directly or not, is highlighted and named | `ServiceMapPage.test.tsx` | Automated |
 | TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
+| TC-US-26c | Equivalence | Move between Dependencies and Blast radius with the arrow keys, then choose a service with Enter | The view changes and focus stays on the chosen view; the service opens in it | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26d | Equivalence | In Dependencies, choose a service | It lists what it calls and what calls it, with a link to the service | `ServiceMapPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Automated |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` (Incident board sorting) | Automated |
 | TC-US-08d | Equivalence | Overview: Acknowledge and take Lead on an OPEN incident | The request carries the version the list showed | `HomePage.test.tsx` | In review |
@@ -606,6 +608,19 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | In review |
 | TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
 | TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | In review |
+
+### Insights API (FR-12.1, #243): aggregate metrics across incidents, follow-ups, and notifications
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.1a | Equivalence | GET /api/insights with days=7, 30, and 90 (or omitted default 30) | 200 with from, to half-open window, MTTA/MTTR, breakdowns, SLA breach rates, follow-ups, and outOfHoursPages | `InsightsControllerTest.getInsightsDefaultDaysReturns200`, `getInsightsWithExplicitDaysReturns200` | In review |
+| TC-FR-12.1b | Boundary | Half-open window: incident created at exactly `from` included; incident created at exactly `to` excluded | `from` included in counts, `to` excluded | `InsightsServiceTest.halfOpenWindowRespectsFromInclusiveAndToExclusive` | In review |
+| TC-FR-12.1c | Equivalence (invalid) | GET /api/insights with days=15 or invalid parameter | 400 Bad Request with field error on days | `InsightsControllerTest.invalidDaysReturns400` | In review |
+| TC-FR-12.1d | Boundary | SLA exact target matches duration (response or resolution) | Not counted as breach (breach is strictly > target) | `InsightsServiceTest.exactTargetIsStrictlyNotABreach` | In review |
+| TC-FR-12.1e | Equivalence | In-flight incident within target vs overdue | In-flight within target excluded from SLA denominator; in-flight overdue counted as breach | `InsightsServiceTest.slaBreachRatesMeasureCompletedOrOverdueOnly`, `slaBreachRatesExcludeInFlightWithinTarget` | In review |
+| TC-FR-12.1f | Decision table | Roles Admin, Engineer, Viewer, and unauthenticated | Admin, Engineer, Viewer get 200; unauthenticated gets 401 | `InsightsControllerTest.viewerAndEngineerCanAccessInsights`, `SecurityMatrixTest.endpointSecurityMatrix` | In review |
+| TC-FR-12.1g | Equivalence | Multi-tenant isolation: requests from Org B cannot see Org A incidents, follow-ups, or notifications | Org B receives empty/zero metrics | `InsightsOrgTest.crossOrganizationDataIsolation` | In review |
+| TC-FR-12.1h | Boundary | Out-of-hours pages: weekday 09:00 to 18:00 IST working hours vs weekend / off-hours; genuine pages only, excluding reassignments and role assignments | Only off-hours or weekend incident pages count towards outOfHoursPages | `InsightsServiceTest.outOfHoursPages_countsOnlyOutOfHoursNotifications`, `InsightsControllerTest.endToEndAggregations` | In review |
 
 ---
 

@@ -413,13 +413,15 @@ public class IncidentService {
 				details,
 				clock.instant()
 		));
-		auditService.record(
-				actor,
-				AuditAction.INCIDENT_COMMENT_ADDED,
-				AuditItemType.INCIDENT,
-				incident.getId(),
-				isPat ? comment + " (via MCP)" : comment
-		);
+		if (isPat) {
+			auditService.record(
+					actor,
+					AuditAction.INCIDENT_COMMENT_ADDED,
+					AuditItemType.INCIDENT,
+					incident.getId(),
+					details
+			);
+		}
 		return toTimelineEntryResponse(entry);
 	}
 
@@ -559,13 +561,15 @@ public class IncidentService {
 		);
 		timelineEntryRepository.save(timelineEntry);
 
-		auditService.record(
-				actor,
-				AuditAction.INCIDENT_ACKNOWLEDGED,
-				AuditItemType.INCIDENT,
-				incident.getId(),
-				isPat ? "Acknowledged via MCP by " + actor.getDisplayName() : "Acknowledged by " + actor.getDisplayName()
-		);
+		if (isPat) {
+			auditService.record(
+					actor,
+					AuditAction.INCIDENT_ACKNOWLEDGED,
+					AuditItemType.INCIDENT,
+					incident.getId(),
+					"Acknowledged via MCP by " + actor.getDisplayName()
+			);
+		}
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		return toResponse(incident, timeline);

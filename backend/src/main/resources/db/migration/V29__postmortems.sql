@@ -1,4 +1,4 @@
--- One draft/reviewed postmortem per incident (FR-11, D17, #239). V25 belongs to #84.
+-- One draft/reviewed postmortem per incident (FR-11, D17, #239).
 CREATE TABLE postmortem (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     org_id      bigint NOT NULL REFERENCES organization (id),

@@ -41,6 +41,7 @@ import com.group2.incident.incident.repository.IncidentSearchRow;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.postmortem.service.PostmortemService;
 import com.group2.incident.deploy.entity.IncidentDeployment;
 import com.group2.incident.deploy.repository.IncidentDeploymentRepository;
 import com.group2.incident.org.entity.Membership;
@@ -85,6 +86,7 @@ public class IncidentService {
 	private final DeploymentRepository deploymentRepository;
 	private final IncidentDeploymentRepository incidentDeploymentRepository;
 	private final TransitionPolicy transitionPolicy;
+	private final PostmortemService postmortemService;
 	private final Clock clock;
 
 	@Transactional
@@ -581,6 +583,11 @@ public class IncidentService {
 
 		if (!transitionPolicy.isLegal(currentStatus, newStatus)) {
 			throw new ConflictException("Cannot transition incident from " + currentStatus + " to " + newStatus);
+		}
+
+		// D17: a SEV1 or SEV2 incident closes only with a REVIEWED postmortem; SEV3 and SEV4 close without one.
+		if (newStatus == IncidentStatus.CLOSED) {
+			postmortemService.requireReviewedForClosure(incident);
 		}
 
 		if (newStatus == IncidentStatus.RESOLVED) {

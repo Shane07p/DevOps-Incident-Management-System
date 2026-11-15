@@ -1,8 +1,6 @@
 package com.group2.incident.postmortem.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,7 +14,6 @@ import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
-import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.entity.TimelineEventType;
@@ -25,7 +22,6 @@ import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.postmortem.dto.PostmortemRequest;
 import com.group2.incident.postmortem.entity.PostmortemStatus;
 import com.group2.incident.postmortem.repository.PostmortemRepository;
-import com.group2.incident.postmortem.service.PostmortemService;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.jayway.jsonpath.JsonPath;
@@ -57,7 +53,6 @@ class PostmortemTest {
 	@Autowired private IncidentRepository incidents;
 	@Autowired private PostmortemRepository postmortems;
 	@Autowired private TimelineEntryRepository timeline;
-	@Autowired private PostmortemService service;
 	@Autowired private EntityManager entityManager;
 	@Autowired private ObjectMapper json;
 	@Autowired private Clock clock;
@@ -236,31 +231,40 @@ class PostmortemTest {
 				.andExpect(status().isNotFound());
 	}
 
+	// D17 through the transitions API (#84's code): closing is refused until the postmortem is REVIEWED, and an
+	// edit after the review puts it back to DRAFT, so closing is refused again until someone reviews it again.
 	@ParameterizedTest
 	@EnumSource(value = Severity.class, names = { "SEV1", "SEV2" })
-	void majorIncidentRequiresReviewAndEditingRevokesClosurePermission(Severity severity) throws Exception {
+	void majorIncidentClosesOnlyWithAReviewedPostmortem(Severity severity) throws Exception {
 		incident = createIncident(severity);
-		assertThatThrownBy(() -> service.requireReviewedForClosure(incident))
-				.isInstanceOf(ConflictException.class).hasMessage(CLOSURE);
+		close(authorToken).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value(CLOSURE));
+
 		String created = save(authorToken, request(null)).andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
-		assertThatThrownBy(() -> service.requireReviewedForClosure(incident))
-				.isInstanceOf(ConflictException.class).hasMessage(CLOSURE);
+		close(authorToken).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value(CLOSURE));
+
 		String reviewed = review(reviewerToken, version(created)).andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
+		String edited = save(authorToken, request(version(reviewed))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("DRAFT"))
+				.andReturn().getResponse().getContentAsString();
+		close(authorToken).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value(CLOSURE));
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getStatus()).isEqualTo(IncidentStatus.RESOLVED);
+
+		review(reviewerToken, version(edited)).andExpect(status().isOk());
+		close(authorToken).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED"));
+		entityManager.flush();
 		entityManager.clear();
-		assertThatCode(() -> service.requireReviewedForClosure(incident)).doesNotThrowAnyException();
-		save(authorToken, request(version(reviewed))).andExpect(status().isOk());
-		assertThatThrownBy(() -> service.requireReviewedForClosure(incident))
-				.isInstanceOf(ConflictException.class).hasMessage(CLOSURE);
+		assertThat(incidents.findById(incident.getId()).orElseThrow().getStatus()).isEqualTo(IncidentStatus.CLOSED);
 	}
 
 	@ParameterizedTest
 	@EnumSource(value = Severity.class, names = { "SEV3", "SEV4" })
-	void minorIncidentMayCloseWithoutAPostmortem(Severity severity) {
-		Incident minor = createIncident(severity);
-		assertThatCode(() -> service.requireReviewedForClosure(minor)).doesNotThrowAnyException();
-		assertThat(postmortems.findByIncidentId(minor.getId())).isEmpty();
+	void minorIncidentClosesWithoutAPostmortem(Severity severity) throws Exception {
+		incident = createIncident(severity);
+
+		close(authorToken).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED"));
+		assertThat(postmortems.findByIncidentId(incident.getId())).isEmpty();
 	}
 
 	private Incident createIncident(Severity severity) {
@@ -278,6 +282,13 @@ class PostmortemTest {
 	private ResultActions save(String token, PostmortemRequest request) throws Exception {
 		return mvc.perform(put(path()).header(HttpHeaders.AUTHORIZATION, bearer(token))
 				.contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request)));
+	}
+
+	private ResultActions close(String token) throws Exception {
+		long expectedVersion = incidents.findById(incident.getId()).orElseThrow().getVersion();
+		return mvc.perform(post("/api/incidents/" + incident.getId() + "/transitions").header(HttpHeaders.AUTHORIZATION, bearer(token))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"status\":\"CLOSED\",\"expectedVersion\":%d}".formatted(expectedVersion)));
 	}
 
 	private ResultActions review(String token, long expectedVersion) throws Exception {

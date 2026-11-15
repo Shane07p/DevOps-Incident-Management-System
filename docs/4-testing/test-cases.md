@@ -630,10 +630,6 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-12.2b | Boundary value | Null metrics and empty breakdown lists vs genuine numeric zeros | Null metric, null rate, empty service list, and zero total incidents display "No data yet"; numeric 0 displays as 0 | `InsightsPage.test.tsx` (Missing values handling, Zero values handling), `format.test.ts` | In review |
 | TC-FR-12.2c | Equivalence | Controlled fixture data rendered into dashboard tiles and breakdown bars | MTTA/MTTR formatted in hours and minutes (mean with median and P90), SLA breach percentages, follow-up metrics, out-of-hours pages, severity proportional bars, and service breakdown rows linking to `/services/{serviceId}` | `InsightsPage.test.tsx` (Successful response rendering) | In review |
 
----
-
-## Sprint 5
-
 ### Postmortems (FR-11.1, DR-06, D17, #239)
 
 | ID | Technique | Input or condition | Expected | Test | Status | Owner |
@@ -648,11 +644,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-11.1h | Concurrency | PUT has a version when no postmortem exists, or null when a draft already exists | 409; null means the caller saw no postmortem and cannot overwrite a saved draft | `PostmortemTest.nullVersionMeansCreateAndCannotOverwriteAnExistingDraft` | In review | Shane |
 | TC-FR-11.1i | Idempotency | Review an already REVIEWED postmortem using its current version, then repeat with the old version | Current version returns the existing review unchanged and adds no timeline entry; old version gets 409 | `PostmortemTest.repeatingACurrentReviewKeepsItsOriginalReviewerTimeAndTimeline` | In review | Shane |
 | TC-FR-11.1j | Concurrency | Two first drafts overlap, or two edits overlap after reading the same version | Exactly one wins; the loser gets 409 from the unique incident key or optimistic lock, preserving the winner's text and version | `PostmortemConcurrencyTest.overlappingCreatesAndEditsKeepOnlyTheWinningDraft` (PostgreSQL) | In review | Shane |
-| TC-DR-06a | Decision table | SEV1 or SEV2 closure check with no postmortem, DRAFT, REVIEWED, then an edit | 409 without review, allowed after review, then 409 after editing invalidates it | `PostmortemTest.majorIncidentRequiresReviewAndEditingRevokesClosurePermission` | In review | Shane |
-| TC-DR-06b | Decision table | SEV3 or SEV4 closure check without a postmortem | Allowed | `PostmortemTest.minorIncidentMayCloseWithoutAPostmortem` | In review | Shane |
+| TC-DR-06a | Decision table | Close a RESOLVED SEV1 or SEV2 incident through `POST /api/incidents/{id}/transitions` with no postmortem, a DRAFT, a REVIEWED one edited back to DRAFT, then after a second review | 409 "A reviewed postmortem is required to close a SEV1 or SEV2 incident" and the incident stays RESOLVED until the postmortem is REVIEWED; then 200 and CLOSED | `PostmortemTest.majorIncidentClosesOnlyWithAReviewedPostmortem` | In review | Shane |
+| TC-DR-06b | Decision table | Close a RESOLVED SEV3 or SEV4 incident through `POST /api/incidents/{id}/transitions` with no postmortem | 200 and CLOSED | `PostmortemTest.minorIncidentClosesWithoutAPostmortem` | In review | Shane |
 
-The closure cases exercise `PostmortemService.requireReviewedForClosure` until #84's transitions
-endpoint merges; whichever feature merges second connects the check to RESOLVED → CLOSED.
+---
 
 ## White-box testing
 

@@ -258,6 +258,25 @@ class PostmortemTest {
 		assertThat(incidents.findById(incident.getId()).orElseThrow().getStatus()).isEqualTo(IncidentStatus.CLOSED);
 	}
 
+	// DR-06.3: closure is judged by the highest severity reached, so lowering SEV1 to SEV3 keeps the rule.
+	@Test
+	void aDowngradedIncidentStillNeedsAReviewedPostmortemToClose() throws Exception {
+		incident = createIncident(Severity.SEV1);
+		mvc.perform(put("/api/incidents/" + incident.getId() + "/severity").header(HttpHeaders.AUTHORIZATION, bearer(authorToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"severity\":\"SEV3\",\"reason\":\"Only one region\",\"expectedVersion\":%d}"
+								.formatted(incidents.findById(incident.getId()).orElseThrow().getVersion())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.severity").value("SEV3"));
+
+		close(authorToken).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value(CLOSURE));
+
+		String created = save(authorToken, request(null)).andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		review(reviewerToken, version(created)).andExpect(status().isOk());
+		close(authorToken).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED"));
+	}
+
 	@ParameterizedTest
 	@EnumSource(value = Severity.class, names = { "SEV3", "SEV4" })
 	void minorIncidentClosesWithoutAPostmortem(Severity severity) throws Exception {

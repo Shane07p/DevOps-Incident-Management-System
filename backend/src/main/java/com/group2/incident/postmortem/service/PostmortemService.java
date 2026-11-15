@@ -22,6 +22,7 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -93,11 +94,16 @@ public class PostmortemService {
 		return PostmortemResponse.from(postmortem);
 	}
 
-	/** Called by #84's RESOLVED-to-CLOSED transition, in the same transaction (D17). */
-	@Transactional(readOnly = true)
+	/**
+	 * Called by the RESOLVED-to-CLOSED transition, inside its transaction (D17, DR-06.3). Judged by the highest
+	 * severity the incident reached, so a downgrade does not lift the rule, and on the postmortem read with a
+	 * shared lock, so an overlapping edit is either seen or made to wait until the closure commits.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
 	public void requireReviewedForClosure(Incident incident) {
-		if ((incident.getSeverity() == Severity.SEV1 || incident.getSeverity() == Severity.SEV2)
-				&& postmortems.findByIncidentId(incident.getId())
+		Severity highest = incident.getHighestSeverity();
+		if ((highest == Severity.SEV1 || highest == Severity.SEV2)
+				&& postmortems.findForClosureByIncidentId(incident.getId())
 						.filter(postmortem -> postmortem.getStatus() == PostmortemStatus.REVIEWED).isEmpty()) {
 			throw new ConflictException("A reviewed postmortem is required to close a SEV1 or SEV2 incident");
 		}

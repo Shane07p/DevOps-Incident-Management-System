@@ -1,6 +1,7 @@
 package com.group2.incident.postmortem.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,6 +80,49 @@ class PostmortemConcurrencyTest {
 				String.class, incidentId, org.orgId())).isEqualTo("Winner");
 		assertThat(jdbc.queryForObject("SELECT version FROM postmortem WHERE incident_id = ? AND org_id = ?",
 				Long.class, incidentId, org.orgId())).isEqualTo(existingDraft ? 1L : 0L);
+	}
+
+	// TC-DR-06c: the edit has written the postmortem back to DRAFT but not committed when the closure reads it.
+	// The closure's shared lock makes it wait for the edit, read DRAFT, and refuse, instead of closing on the
+	// REVIEWED row the edit was replacing.
+	@Test
+	void aClosureOverlappingAnEditWaitsForItAndThenRefuses() throws Exception {
+		org = orgs.signUp("pm-close-race@test.local", "Postmortem close race");
+		long serviceId = orgs.createService(org.adminToken(), "Payments", org.adminId());
+		long incidentId = TestOrgs.id(orgs.declareIncident(org.adminToken(), serviceId, "Checkout failing"));
+		String path = "/api/incidents/" + incidentId + "/postmortem";
+		write(path, "{\"summary\":\"Original\"}").andExpect(status().isOk());
+		long reviewer = TestOrgs.id(mvc.perform(post("/api/users").header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"pm-close-reviewer@test.local\",\"displayName\":\"Reviewer\","
+								+ "\"password\":\"Reviewer-Passw0rd!\",\"role\":\"ENGINEER\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+		// Set up directly: the SEV2 incident is RESOLVED and its postmortem was reviewed by someone else.
+		jdbc.update("UPDATE incident SET status = 'RESOLVED', acknowledged_at = now(), resolved_at = now() WHERE id = ?", incidentId);
+		jdbc.update("UPDATE postmortem SET status = 'REVIEWED', reviewed_by = ?, reviewed_at = now(), version = version + 1"
+				+ " WHERE incident_id = ?", reviewer, incidentId);
+		long incidentVersion = jdbc.queryForObject("SELECT version FROM incident WHERE id = ?", Long.class, incidentId);
+
+		Future<MvcResult> closing = OrgContext.runAs(org.orgId(), () -> new TransactionTemplate(transactions).execute(tx -> {
+			try {
+				write(path, "{\"summary\":\"Edited after the review\",\"expectedVersion\":1}").andExpect(status().isOk());
+				Future<MvcResult> pending = contender.submit(() -> mvc.perform(post("/api/incidents/" + incidentId + "/transitions")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"status\":\"CLOSED\",\"expectedVersion\":" + incidentVersion + "}")).andReturn());
+				awaitPostmortemLock(pending);
+				return pending;
+			} catch (Exception ex) {
+				throw new IllegalStateException(ex);
+			}
+		}));
+		MvcResult result = closing.get(30, TimeUnit.SECONDS);
+		assertThat(result.getResponse().getStatus()).isEqualTo(409);
+		assertThat(result.getResponse().getContentAsString())
+				.contains("A reviewed postmortem is required to close a SEV1 or SEV2 incident");
+		assertThat(jdbc.queryForObject("SELECT status FROM incident WHERE id = ?", String.class, incidentId)).isEqualTo("RESOLVED");
+		assertThat(jdbc.queryForObject("SELECT status FROM postmortem WHERE incident_id = ?", String.class, incidentId))
+				.isEqualTo("DRAFT");
 	}
 
 	private org.springframework.test.web.servlet.ResultActions write(String path, String body) throws Exception {

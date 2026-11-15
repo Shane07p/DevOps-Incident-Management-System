@@ -28,7 +28,7 @@ class DatabaseSchemaTest {
 			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
 					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency", "personal_access_token",
-					"deployment", "incident_deployment", "public_update", "heartbeat", "telemetry_connection");
+					"deployment", "incident_deployment", "public_update", "heartbeat", "telemetry_connection", "postmortem");
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -546,9 +546,9 @@ class DatabaseSchemaTest {
 		Fixture f = fixture();
 
 		assertThatThrownBy(() -> jdbc.update("""
-				insert into incident (org_id, number, title, description, service_id, severity, status, reporter_id, created_at,
-				                      response_target_minutes, resolution_target_minutes)
-				values ((select id from organization where slug = 'test-org'), (select coalesce(max(number), 0) + 1 from incident), null, 'Checkout failing', ?, 'SEV2', 'OPEN', ?, now(), 60, 480)""", f.service, f.user))
+				insert into incident (org_id, number, title, description, service_id, severity, highest_severity, status, reporter_id,
+				                      created_at, response_target_minutes, resolution_target_minutes)
+				values ((select id from organization where slug = 'test-org'), (select coalesce(max(number), 0) + 1 from incident), null, 'Checkout failing', ?, 'SEV2', 'SEV2', 'OPEN', ?, now(), 60, 480)""", f.service, f.user))
 				.isInstanceOf(DataIntegrityViolationException.class)
 				.hasMessageContaining("title");
 	}
@@ -887,10 +887,10 @@ class DatabaseSchemaTest {
 	private long insertIncident(Long serviceId, Long reporterId, String severity, String status,
 			int responseTarget, Integer resolutionTarget) {
 		return jdbc.queryForObject("""
-				insert into incident (org_id, number, title, description, service_id, severity, status, reporter_id, created_at,
-				                      response_target_minutes, resolution_target_minutes)
-				values ((select id from organization where slug = 'test-org'), (select coalesce(max(number), 0) + 1 from incident), 'Checkout failing', 'Card payments time out', ?, ?, ?, ?, now(), ?, ?) returning id""",
-				Long.class, serviceId, severity, status, reporterId, responseTarget, resolutionTarget);
+				insert into incident (org_id, number, title, description, service_id, severity, highest_severity, status, reporter_id,
+				                      created_at, response_target_minutes, resolution_target_minutes)
+				values ((select id from organization where slug = 'test-org'), (select coalesce(max(number), 0) + 1 from incident), 'Checkout failing', 'Card payments time out', ?, ?, ?, ?, ?, now(), ?, ?) returning id""",
+				Long.class, serviceId, severity, severity, status, reporterId, responseTarget, resolutionTarget);
 	}
 
 	private long insertEntry(long incidentId, long actorId, Long correctsEntryId) {

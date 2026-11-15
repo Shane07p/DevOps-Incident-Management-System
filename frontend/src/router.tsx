@@ -21,6 +21,7 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { ServiceMapPage } from '@/pages/ServiceMapPage'
 import { ServicesPage } from '@/pages/ServicesPage'
+import { ServicePage } from '@/pages/services/ServicePage'
 import { RunbooksPage } from '@/pages/RunbooksPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
@@ -34,6 +35,7 @@ const SCREENS: Record<string, ReactNode> = {
   '/schedules': <SchedulesPage />,
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
+  '/services/:id': <ServicePage />,
   '/runbooks': <RunbooksPage />,
   '/tokens': <AccessTokensPage />,
   '/monitors': <MonitorsPage />,

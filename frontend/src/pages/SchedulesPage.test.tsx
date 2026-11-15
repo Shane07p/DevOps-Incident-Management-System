@@ -80,18 +80,30 @@ describe('SchedulesPage', () => {
   it('shows who is on call now, who is next, and the fallback contact, in IST', async () => {
     renderSchedules('VIEWER')
 
-    const now = (await screen.findByText('On call now')).parentElement!
+    const now = await screen.findByRole('region', { name: 'On call now' })
     expect(now).toHaveTextContent('engineer')
     expect(now).toHaveTextContent('Until 28 Oct, 17:00 IST')
-    expect(screen.getByText('Next shift').parentElement).toHaveTextContent('adminFrom 28 Oct, 17:00 IST')
-    expect(screen.getByText('Fallback contact').parentElement).toHaveTextContent('admin')
-    expect(screen.getByRole('figure', { name: 'Shifts over the next 7 days, in IST' })).toHaveTextContent('Wed 28')
+    expect(screen.getByRole('region', { name: 'Next' })).toHaveTextContent('adminFrom 28 Oct, 17:00 IST')
+    expect(screen.getByRole('region', { name: 'Today’s coverage' })).toHaveTextContent('Fallback contact: admin.')
+  })
+
+  // 11:30 IST on 28 Oct: engineer 09:00–17:00, admin 17:00–21:00, the fallback (admin) before and after.
+  it("draws today's shifts and gaps, names the gaps, and marks the shift on now", async () => {
+    renderSchedules('VIEWER')
+
+    const day = await screen.findByRole('figure', { name: "Today's coverage, in IST" })
+    expect(day).toHaveTextContent('engineer, 28 Oct, 09:00 IST to 28 Oct, 17:00 IST')
+    expect(day).toHaveTextContent('21:00 to 24:00: admin, the fallback')
+    expect(day).toHaveTextContent('Now 11:30')
+    expect(screen.getByText('2 gaps today').parentElement).toHaveTextContent('00:00–09:00 and 21:00–24:00. admin, the fallback, gets new incidents then.')
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(rows.map((row) => row.lastElementChild?.textContent)).toEqual(['On call now', 'Upcoming'])
   })
 
   it('lets a Viewer read the schedule without changing it', async () => {
     renderSchedules('VIEWER')
 
-    await screen.findByText('On call now')
+    await screen.findByRole('region', { name: 'On call now' })
     expect(screen.getAllByRole('row')).toHaveLength(3)
     expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Add a shift' })).not.toBeInTheDocument()

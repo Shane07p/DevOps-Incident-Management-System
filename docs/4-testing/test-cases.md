@@ -622,6 +622,14 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-12.1g | Equivalence | Multi-tenant isolation: requests from Org B cannot see Org A incidents, follow-ups, or notifications | Org B receives empty/zero metrics | `InsightsOrgTest.crossOrganizationDataIsolation` | In review |
 | TC-FR-12.1h | Boundary | Out-of-hours pages: weekday 09:00 to 18:00 IST working hours vs weekend / off-hours; genuine pages only, excluding reassignments and role assignments | Only off-hours or weekend incident pages count towards outOfHoursPages | `InsightsServiceTest.outOfHoursPages_countsOnlyOutOfHoursNotifications`, `InsightsControllerTest.endToEndAggregations` | In review |
 
+### Insights page (FR-12, #244): range selection, stat tiles, and breakdown bars
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.2a | Equivalence | Select 7, 30, or 90-day range on `/insights` | Selected range updates URL search parameter `?days=`, sends matching API request, and preserves unrelated URL parameters | `InsightsPage.test.tsx` (URL and date ranges) | In review |
+| TC-FR-12.2b | Boundary value | Null metrics and empty breakdown lists vs genuine numeric zeros | Null metric, null rate, empty service list, and zero total incidents display "No data yet"; numeric 0 displays as 0 | `InsightsPage.test.tsx` (Missing values handling, Zero values handling), `format.test.ts` | In review |
+| TC-FR-12.2c | Equivalence | Controlled fixture data rendered into dashboard tiles and breakdown bars | MTTA/MTTR formatted in hours and minutes (mean with median and P90), SLA breach percentages, follow-up metrics, out-of-hours pages, severity proportional bars, and service breakdown rows linking to `/services/{serviceId}` | `InsightsPage.test.tsx` (Successful response rendering) | In review |
+
 ---
 
 ## White-box testing

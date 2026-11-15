@@ -60,6 +60,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -402,13 +404,22 @@ public class IncidentService {
 	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
 		Incident incident = requireIncident(incidentId);
 		AppUser actor = requireActor(actorId);
+		boolean isPat = isPatRequest();
+		String details = isPat ? comment + " (via MCP)" : comment;
 		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
 				incident,
 				actor,
 				TimelineEventType.COMMENT,
-				comment,
+				details,
 				clock.instant()
 		));
+		auditService.record(
+				actor,
+				AuditAction.INCIDENT_COMMENT_ADDED,
+				AuditItemType.INCIDENT,
+				incident.getId(),
+				isPat ? comment + " (via MCP)" : comment
+		);
 		return toTimelineEntryResponse(entry);
 	}
 
@@ -537,7 +548,8 @@ public class IncidentService {
 
 		escalationService.cancelTaskForIncident(incidentId, now);
 
-		String details = "Acknowledged by " + actor.getDisplayName();
+		boolean isPat = isPatRequest();
+		String details = "Acknowledged by " + actor.getDisplayName() + (isPat ? " via MCP" : "");
 		TimelineEntry timelineEntry = new TimelineEntry(
 				incident,
 				actor,
@@ -547,8 +559,25 @@ public class IncidentService {
 		);
 		timelineEntryRepository.save(timelineEntry);
 
+		auditService.record(
+				actor,
+				AuditAction.INCIDENT_ACKNOWLEDGED,
+				AuditItemType.INCIDENT,
+				incident.getId(),
+				isPat ? "Acknowledged via MCP by " + actor.getDisplayName() : "Acknowledged by " + actor.getDisplayName()
+		);
+
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		return toResponse(incident, timeline);
+	}
+
+	private boolean isPatRequest() {
+		var auth = SecurityContextHolder.getContext().getAuthentication();
+		if (auth instanceof JwtAuthenticationToken jwtAuth) {
+			Object patClaim = jwtAuth.getToken().getClaims().get("pat");
+			return Boolean.TRUE.equals(patClaim);
+		}
+		return false;
 	}
 
 	/**

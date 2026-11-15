@@ -777,7 +777,6 @@ public class SecurityMatrixTest {
 						"{\"decision\":\"ACCEPTED\"}",
 						200, 200, 403, 401
 				)
-				)
 		);
 	}
 

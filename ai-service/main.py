@@ -56,6 +56,7 @@ from agent_loop import (
 from agent_tools import EvidenceItem, ToolRegistry, build_bundle_tool_registry, build_default_tool_registry
 from drafting import DraftRequest, DraftResponse, generate_draft
 from providers import LlmProvider, OllamaProvider
+from triage import TriageRequest, TriageResponse, suggest_triage
 
 logger = logging.getLogger("ai-service")
 
@@ -515,3 +516,16 @@ async def draft(request: DraftRequest) -> DraftResponse:
     provider = get_investigation_provider()
     timeout = get_agent_timeout()
     return await generate_draft(request=request, provider=provider, timeout=timeout)
+
+
+# ---------------------------------------------------------------------------
+# Triage Hint Endpoint (Issue #247 / Issue #252)
+# ---------------------------------------------------------------------------
+
+@app.post("/triage", response_model=TriageResponse)
+async def triage(request: TriageRequest) -> TriageResponse:
+    """
+    Generate an AI-4 triage hint with suggested severity and service based on severity guide.
+    """
+    provider = get_investigation_provider()
+    return await suggest_triage(request=request, provider=provider)

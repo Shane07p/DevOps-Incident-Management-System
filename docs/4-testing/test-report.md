@@ -66,3 +66,63 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Manual demo | |
 | Defects | |
 | Notes | |
+
+
+## Sprint 6 — AI Evaluation Runs (Issue #252)
+
+Evaluated on 15 November 2026, commit `d24b254` (branch `feat/ai-evaluation-runs`), using deterministic mock providers and rule-based classifiers.
+Model identifier: `qwen2.5:0.5b` (evaluation script default; mock providers used for CI).
+
+### AI-2: AI SRE Scenario Investigation
+
+Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml`.
+
+- **Top-1 Cause Accuracy:** 5/5 (100% on 5 demo scenarios)
+- **Mean Time to First Hypothesis:** < 50 ms (mock provider; production latency depends on Ollama)
+
+| Scenario | Service | Fault Switch | Top-1 Hypothesis Matches Real Cause |
+|---|---|---|---|
+| `SCN-01` | payments | `slow_gateway` | **Passed** — "Payment gateway latency degradation" |
+| `SCN-02` | checkout | `error_spike` | **Passed** — "Database transaction deadlocks causing checkout failures" |
+| `SCN-03` | checkout | `bad_deploy` | **Passed** — "A recent checkout deployment introduced a regression" |
+| `SCN-04` | order-fulfillment | `queue_backlog` | **Passed** — "The order fulfillment worker is stalled or paused" |
+| `SCN-05` | payments | `expiring_certificate` | **Passed** — "Payment gateway TLS certificate expiry" |
+
+Demo data is cleaner than real production; report results as "5/5 on 5 demo scenarios".
+
+### AI-3: Drafting Verification Checklist
+
+Evaluation across all writing kinds (SUMMARY, STATUS_UPDATE, POSTMORTEM) with adversarial mock provider injecting fabricated references (`INC-999`, `entry #999`).
+
+- **Checklist Pass Rate:** 3/3 (100%)
+- **Fabricated Reference Leakage Rate:** 0.0% (100% rejection of `INC-999` and `entry #999`)
+
+| Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Checklist Result |
+|---|---|---|---|---|
+| `SUMMARY` | Yes | Yes (0 leaked) | Yes | **Passed** |
+| `STATUS_UPDATE` | Yes | Yes (0 leaked) | Yes | **Passed** |
+| `POSTMORTEM` | Yes | Yes (0 leaked) | Yes (6 sections) | **Passed** |
+
+### AI-4: Triage Severity Classification
+
+Evaluation against 25 labelled test cases in `ai-service/data/triage_eval_set.jsonl`.
+
+- **Overall Triage Accuracy:** 25/25 (100% on 25 labelled cases)
+
+| Severity Level | Labelled Cases | Correctly Classified | Accuracy |
+|---|---|---|---|
+| **SEV1** | 6 | 6 | 100% |
+| **SEV2** | 7 | 7 | 100% |
+| **SEV3** | 6 | 6 | 100% |
+| **SEV4** | 6 | 6 | 100% |
+
+### Notes
+
+- Evaluation script: `ai-service/ai_evaluation.py`
+- Automated tests: `ai-service/tests/test_ai_evaluation.py`
+- All evaluations run hermetically in CI with mock providers (no Ollama required)
+- The triage classifier uses deterministic keyword patterns aligned with `docs/2-design/severity-guide.md`
+- Triage evaluation set: 25 hand-labelled cases covering SEV1–SEV4 across 13 service types
+- AI-2 uses `ScenarioEvaluatorProvider` replaying recorded fixture data from `ai-service/data/fixtures/scenarios/`
+- AI-3 uses `DraftingAdversarialProvider` injecting fabricated IDs to test `sanitize_draft_text` rejection
+- These results are on small evaluation sets with mock providers; they are not general model accuracy

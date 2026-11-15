@@ -70,25 +70,25 @@ describe('AlertsPage', () => {
     expect(cellUnder(newest, 'Alerts')).toHaveTextContent('2')
   })
 
-  it('shows only new alerts under New, and remembers the filter in the URL', async () => {
+  it('shows only the alerts that opened an incident under Opened, and remembers the filter in the URL', async () => {
     const router = renderInbox()
 
-    await userEvent.click(await screen.findByRole('button', { name: /^New/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Opened/ }))
 
     expect(sources()).toEqual(['uptime-robot'])
-    expect(screen.getByRole('button', { name: /^New/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^Opened/ })).toHaveAttribute('aria-pressed', 'true')
     expect(router.state.location.search).toBe('?status=new')
   })
 
-  it('shows only attached alerts under Attached, with a count on each filter', async () => {
+  it('shows only the alerts grouped into an open incident under Grouped, with a count on each filter', async () => {
     renderInbox()
 
-    await userEvent.click(await screen.findByRole('button', { name: /^Attached/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Grouped/ }))
 
     expect(sources()).toEqual(['grafana', 'demo-shop'])
     expect(screen.getByRole('button', { name: /^All/ })).toHaveTextContent('3')
-    expect(screen.getByRole('button', { name: /^New/ })).toHaveTextContent('1')
-    expect(screen.getByRole('button', { name: /^Attached/ })).toHaveTextContent('2')
+    expect(screen.getByRole('button', { name: /^Opened/ })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: /^Grouped/ })).toHaveTextContent('2')
   })
 
   it('opens on the filter named in the URL', async () => {
@@ -108,13 +108,13 @@ describe('AlertsPage', () => {
     expect(router.state.location.search).toBe('?routed=me')
     // The status counts follow what is routed to the viewer.
     expect(screen.getByRole('button', { name: /^All/ })).toHaveTextContent('2')
-    expect(screen.getByRole('button', { name: /^Attached/ })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: /^Grouped/ })).toHaveTextContent('1')
   })
 
   it('combines Routed to me with a status filter, and keeps both in the URL', async () => {
     const router = renderInbox('/alerts?routed=me')
 
-    await userEvent.click(await screen.findByRole('button', { name: /^New/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Opened/ }))
 
     expect(sources()).toEqual(['uptime-robot'])
     expect(router.state.location.search).toBe('?routed=me&status=new')
@@ -134,6 +134,23 @@ describe('AlertsPage', () => {
   it('says so when a filter has no alerts', async () => {
     renderInbox('/alerts?status=new', alerts.filter((alert) => alert.status !== 'NEW'))
 
-    expect(await screen.findByText('No new alerts.')).toBeInTheDocument()
+    expect(await screen.findByText('No alert opened an incident.')).toBeInTheDocument()
+  })
+
+  it("counts today's alerts, and says how each one arrived", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 12:00 IST on 28 Oct: the demo-shop alert came at 09:30 IST, the others later.
+    vi.setSystemTime(new Date('2026-10-28T06:30:00Z'))
+    renderInbox()
+
+    const today = await screen.findByRole('region', { name: 'Alerts today' })
+    expect(today).toHaveTextContent('Received today3from demo-shop, grafana and uptime-robot')
+    expect(today).toHaveTextContent('Opened an incident1')
+    expect(today).toHaveTextContent('Grouped2')
+    const [newest, second] = screen.getAllByRole('row').slice(1)
+    expect(cellUnder(newest, 'How it arrived')).toHaveTextContent('Grouped')
+    expect(cellUnder(second, 'How it arrived')).toHaveTextContent('Opened the incident')
+    expect(cellUnder(second, 'Alert')).toHaveTextContent('no correlation key')
+    vi.useRealTimers()
   })
 })

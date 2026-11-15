@@ -39,6 +39,7 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.IncidentSearchRow;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.service.NotificationService;
 import com.group2.incident.deploy.entity.IncidentDeployment;
 import com.group2.incident.deploy.repository.IncidentDeploymentRepository;
@@ -171,6 +172,7 @@ public class IncidentService {
 			notificationService.createNotification(
 					assignee,
 					incident,
+					NotificationKind.PAGE,
 					"You have been assigned to incident " + incident.getReference() + ": " + incident.getTitle()
 			);
 		}
@@ -700,6 +702,7 @@ public class IncidentService {
 		notificationService.createNotification(
 				newAssignee,
 				incident,
+				NotificationKind.REASSIGNMENT,
 				"You have been assigned to incident " + incident.getReference() + ": " + incident.getTitle()
 		);
 
@@ -769,6 +772,7 @@ public class IncidentService {
 		notificationService.createNotification(
 				newRoleUser,
 				incident,
+				NotificationKind.ROLE_ASSIGNMENT,
 				"You have been assigned the role " + request.role() + " on incident " + incident.getReference() + ": " + incident.getTitle()
 		);
 

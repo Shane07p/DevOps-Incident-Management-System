@@ -816,6 +816,28 @@ class DatabaseSchemaTest {
 				.hasMessageContaining("notification_message_not_blank");
 	}
 
+	@Test
+	void notificationKindDefaultsToSystem() {
+		long user = insertUser("default_kind_user");
+		long id = jdbc.queryForObject("""
+				insert into notification (org_id, recipient_id, message, created_at)
+				values ((select id from organization where slug = 'test-org'), ?, 'Hello', now())
+				returning id""", Long.class, user);
+
+		String kind = jdbc.queryForObject("select kind from notification where id = ?", String.class, id);
+		assertThat(kind).isEqualTo("SYSTEM");
+	}
+
+	@Test
+	void notificationKindRejectsInvalidValues() {
+		long user = insertUser("invalid_kind_user");
+		assertThatThrownBy(() -> jdbc.update("""
+				insert into notification (org_id, recipient_id, message, kind, created_at)
+				values ((select id from organization where slug = 'test-org'), ?, 'Hello', 'INVALID_KIND', now())""", user))
+				.isInstanceOf(DataIntegrityViolationException.class)
+				.hasMessageContaining("notification_kind_check");
+	}
+
 	// Fixtures
 
 	private record Fixture(long user, long service) {

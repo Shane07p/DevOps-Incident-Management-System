@@ -632,6 +632,13 @@ public class SecurityMatrixTest {
 						null,
 						200, 200, 200, 401
 				),
+				new MatrixRow(
+						"GET /api/insights",
+						HttpMethod.GET,
+						"/api/insights",
+						null,
+						200, 200, 200, 401
+				),
 				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
 				new MatrixRow(
 						"GET /api/telemetry/logs",

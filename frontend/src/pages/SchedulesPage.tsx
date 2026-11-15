@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { listServices } from '@/api/services'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { PageHeader } from '@/components/app/PageHeader'
 import { ServicePicker } from '@/components/app/ServicePicker'
 import { ServiceSchedule } from './schedules/ServiceSchedule'
 
@@ -14,18 +15,15 @@ export function SchedulesPage() {
   const chosen = services.data?.find((service) => String(service.id) === params.get('service')) ?? services.data?.[0]
 
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-[44px] leading-[0.9] font-[750]" style={{ fontStretch: '62%' }}>
-            Schedules
-          </h1>
-          <p className="text-muted-foreground">Who is on call for each service, now and next. Times are IST.</p>
-        </div>
-        {services.data && services.data.length > 0 && (
-          <ServicePicker services={services.data} chosen={chosen} onChoose={(id) => setParams({ service: id })} />
-        )}
-      </div>
+    <div className="mx-auto flex max-w-[1180px] flex-col">
+      <PageHeader
+        title="On-call schedules"
+        description="Who is on call for each service, now and next. Times in IST."
+        actions={
+          services.data &&
+          services.data.length > 0 && <ServicePicker services={services.data} chosen={chosen} onChoose={(id) => setParams({ service: id })} />
+        }
+      />
 
       {services.isPending ? (
         <LoadingState message="Loading services" />

@@ -559,8 +559,10 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Automated |
 | TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26a | Equivalence | Choose Blast radius, then a service on the map | Everything that depends on it, directly or not, is highlighted and named | `ServiceMapPage.test.tsx` | Automated |
 | TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
+| TC-US-26c | Equivalence | Move between Dependencies and Blast radius with the arrow keys, then choose a service with Enter | The view changes and focus stays on the chosen view; the service opens in it | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26d | Equivalence | In Dependencies, choose a service | It lists what it calls and what calls it, with a link to the service | `ServiceMapPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Automated |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` (Incident board sorting) | Automated |
 | TC-US-08d | Equivalence | Overview: Acknowledge and take Lead on an OPEN incident | The request carries the version the list showed | `HomePage.test.tsx` | In review |

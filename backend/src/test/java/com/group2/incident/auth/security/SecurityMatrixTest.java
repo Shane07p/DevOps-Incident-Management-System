@@ -132,7 +132,6 @@ public class SecurityMatrixTest {
 	private DeploymentRepository deployments;
 
 	@Autowired
-	@Autowired
 	private InvestigationRepository investigations;
 
 	@Autowired

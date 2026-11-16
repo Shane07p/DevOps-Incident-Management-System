@@ -66,3 +66,24 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Manual demo | |
 | Defects | |
 | Notes | |
+
+---
+
+## Sprint 6 – Performance Testing with k6 (Issue #250)
+
+Evaluated against non-functional performance requirements **NFR-01.1** (incident board and detail latency with 1,000 incidents) and **NFR-01.2** (incoming alert intake throughput and latency at 10 alerts/sec) using the k6 automated test suite in `perf/`.
+
+- **Test Date:** 16 November 2026
+- **Application Commit Under Test:** `d6e7f95`
+- **Environment:** Local Docker Compose stack on Windows 11 / WSL2, Docker Desktop 4.96.0, Docker Engine 29.9.1, k6 v2.4.0 (commit/dd9395906d, linux/amd64), PostgreSQL 16.15 (pgvector 0.8.6), Spring Boot 4.1 backend (`incident-app`), Nginx 1.31.8 (`incident-web`).
+- **Database Stored Incidents:** 1,000 valid synthetic incidents seeded via `perf/seed_1000_incidents.sql` with associated timeline entries. Incident references are assigned sequentially starting from `organization.next_incident_number` (e.g. `INC-<number>`) rather than assuming a fixed `INC-1` through `INC-1000` sequence, preserving organization numbering constraints and per-org uniqueness. The k6 test suite dynamically discovers the actual incident IDs via `GET /api/incidents` during test setup.
+
+### Test Execution & Results Summary
+
+| Benchmark | Target Requirement | Workload Profile | Target Rate / Concurrency | Metrics (p50 / p90 / p95 / Max) | Failed Rate | Threshold | Status |
+|---|---|---|---|---|---|---|---|
+| **Incident Board** (`GET /api/incidents`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total board requests) | p50: 24.65 ms<br>p90: 43.48 ms<br>p95: **52.89 ms**<br>Max: 173.85 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total detail requests) | p50: 7.58 ms<br>p90: 19.53 ms<br>p95: **25.03 ms**<br>Max: 112.06 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **Alert Webhook Intake** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 11.83 ms<br>p90: 17.04 ms<br>p95: **20.39 ms**<br>Max: 64.00 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+
+> **Notes on Execution Results:** Both performance requirements comfortably satisfied their respective thresholds: incident board p95 was 52.89 ms (threshold 2,000 ms, 37x headroom), incident detail p95 was 25.03 ms (threshold 2,000 ms, 79x headroom), and alert intake p95 was 20.39 ms at 10 alerts/sec (threshold 1,000 ms, 49x headroom). Zero requests failed across 13,530 incident queries and 304 webhook requests. Execution instructions and reproducible runners are documented in [perf/README.md](../../perf/README.md).

@@ -649,6 +649,14 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-DR-06c | Concurrency | An edit has written a reviewed postmortem back to DRAFT and not committed when a close of the SEV2 incident reads it (PostgreSQL) | The close waits for the edit, then gets 409; the incident stays RESOLVED and the postmortem is DRAFT | `PostmortemConcurrencyTest.aClosureOverlappingAnEditWaitsForItAndThenRefuses` | In review | Shane |
 | TC-DR-06d | State transition | A SEV1 incident is lowered to SEV3, then closed without, then with, a reviewed postmortem | 409 until the postmortem is REVIEWED (judged by the highest severity reached, DR-06.3); then 200 and CLOSED | `PostmortemTest.aDowngradedIncidentStillNeedsAReviewedPostmortemToClose` | In review | Shane |
 
+### Performance and latency (NFR-01, Issue #250)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-NFR-01.1a | Performance | 10 concurrent VUs query the incident board (`GET /api/incidents`) with 1,000 stored incidents | 95th percentile response time $< 2,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-1-incidents.js` | Automated |
+| TC-NFR-01.1b | Performance | 10 concurrent VUs query incident detail (`GET /api/incidents/{id}`) with 1,000 stored incidents | 95th percentile response time $< 2,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-1-incidents.js` | Automated |
+| TC-NFR-01.2a | Performance | Webhook alert intake (`POST /webhooks/alerts`) at a constant arrival rate of 10 alerts/sec for 30s | 95th percentile response time $< 1,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-2-alerts.js` | Automated |
+
 ---
 
 ## White-box testing

@@ -617,6 +617,23 @@ class IncidentControllerTest {
 				.andExpect(status().isBadRequest());
 	}
 
+	@Test
+	@DisplayName("POST /api/incidents/triage-hint accepts empty description (Point 5)")
+	void triageHintAcceptsEmptyDescription() throws Exception {
+		String token = tokenFor("engineer");
+
+		mvc.perform(post("/api/incidents/triage-hint")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+							{
+								"title": "Payment service is down",
+								"description": ""
+							}
+							"""))
+				.andExpect(status().isServiceUnavailable());
+	}
+
 	private ResultActions login(String username, String password) throws Exception {
 		String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(username + "@test.local", password);
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(body));

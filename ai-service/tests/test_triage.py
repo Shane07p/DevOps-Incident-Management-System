@@ -178,7 +178,7 @@ def test_same_input_same_output():
 
 
 # ---------------------------------------------------------------------------
-# Input validation
+# Input validation (Sprint 5 Issue #247 — description is optional)
 # ---------------------------------------------------------------------------
 
 def test_empty_title_rejected():
@@ -186,9 +186,11 @@ def test_empty_title_rejected():
     assert r.status_code == 422
 
 
-def test_empty_description_rejected():
+def test_empty_description_accepted():
+    # Shane review point 5: description is optional; do not reject empty string
     r = client.post("/triage", json={"title": "Some title", "description": ""})
-    assert r.status_code == 422
+    assert r.status_code == 200
+    assert r.json()["severity"] in ("SEV1", "SEV2", "SEV3", "SEV4")
 
 
 def test_missing_title_rejected():
@@ -196,12 +198,88 @@ def test_missing_title_rejected():
     assert r.status_code == 422
 
 
-def test_missing_description_rejected():
-    r = client.post("/triage", json={"title": "Some title"})
-    assert r.status_code == 422
+def test_missing_description_accepted():
+    # Shane review point 5: description is optional; can be omitted entirely
+    r = client.post("/triage", json={"title": "Payment service is down"})
+    assert r.status_code == 200
+    assert r.json()["severity"] == "SEV1"
 
 
 def test_similar_incidents_defaults_to_empty_list():
     # No similar_incidents key — should default to empty list and not crash
     r = client.post("/triage", json={"title": "Service is slow", "description": "users report latency"})
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Whole-word keyword matching & multi-word phrase precedence (Review point 3)
+# ---------------------------------------------------------------------------
+
+def test_whole_word_matching_prevents_dropdown_false_positive():
+    # "down" must not match "dropdown" -> should classify as SEV4 via "typo"
+    r = triage("Typo in the dropdown label", "Label on the checkout dropdown has a misspelling")
+    assert r.status_code == 200
+    assert r.json()["severity"] == "SEV4"
+
+
+def test_whole_word_matching_prevents_download_false_positive():
+    # "down" must not match "download" -> not SEV1
+    r = triage("Download button alignment off")
+    assert r.status_code == 200
+    assert r.json()["severity"] != "SEV1"
+
+
+def test_whole_word_matching_prevents_shutdown_false_positive():
+    # "down" must not match "shutdown" -> not SEV1
+    r = triage("Scheduled graceful shutdown of staging host")
+    assert r.status_code == 200
+    assert r.json()["severity"] != "SEV1"
+
+
+def test_multi_word_phrase_takes_precedence_over_single_word():
+    # "slow render" (SEV4) takes precedence over "slow" (SEV2)
+    r = triage("Slow render in analytics view", "Reports table has slow render")
+    assert r.status_code == 200
+    assert r.json()["severity"] == "SEV4"
+
+
+def test_partial_outage_takes_precedence_over_outage():
+    # "partial outage" (SEV2) takes precedence over single word "outage" (SEV1)
+    r = triage("Partial outage on reporting export")
+    assert r.status_code == 200
+    assert r.json()["severity"] == "SEV2"
+
+
+# ---------------------------------------------------------------------------
+# Organization service validation (Review point 2)
+# ---------------------------------------------------------------------------
+
+def test_service_hint_validated_against_org_services():
+    services = [{"id": 1, "name": "Payments"}, {"id": 2, "name": "Auth"}]
+    similar = [
+        {"severity": "SEV2", "service": {"id": 1, "name": "Payments"}},
+    ]
+    r = client.post("/triage", json={
+        "title": "Checkout failure",
+        "description": "Payments issue",
+        "similar_incidents": similar,
+        "services": services,
+    })
+    assert r.status_code == 200
+    assert r.json()["service"] == {"id": 1, "name": "Payments"}
+
+
+def test_service_hint_rejected_when_not_in_org_services():
+    # Service ID 999 does not belong to the organization's valid services
+    services = [{"id": 1, "name": "Payments"}, {"id": 2, "name": "Auth"}]
+    similar = [
+        {"severity": "SEV2", "service": {"id": 999, "name": "Foreign Service"}},
+    ]
+    r = client.post("/triage", json={
+        "title": "Checkout failure",
+        "description": "Payments issue",
+        "similar_incidents": similar,
+        "services": services,
+    })
+    assert r.status_code == 200
+    assert r.json()["service"] is None

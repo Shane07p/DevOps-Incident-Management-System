@@ -1,5 +1,6 @@
 package com.group2.incident.incident.service;
 
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.incident.dto.TriageHintRequest;
 import com.group2.incident.incident.dto.TriageHintResponse;
 import com.group2.incident.incident.dto.TriageHintServiceDto;
@@ -54,18 +55,21 @@ public class TriageHintService {
     }
 
     /**
-     * Calls the AI service's /triage endpoint.
+     * Calls the AI service's /triage endpoint with similar incidents and org services.
      *
      * @return an empty Optional when AI is disabled, unavailable, or returns an unusable response.
      *         Never throws — AI failures must not block incident declaration.
      */
-    public Optional<TriageHintResponse> fetchHint(TriageHintRequest request, List<?> similarIncidents) {
+    public Optional<TriageHintResponse> fetchHint(
+            TriageHintRequest request,
+            List<?> similarIncidents,
+            List<TriageHintServiceDto> orgServices) {
         if (!isEnabled()) {
             return Optional.empty();
         }
         try {
             AiTriageRequest aiRequest = new AiTriageRequest(
-                    request.title(), request.description(), similarIncidents);
+                    request.title(), request.description(), similarIncidents, orgServices != null ? orgServices : List.of());
             String body = jsonMapper.writeValueAsString(aiRequest);
             HttpRequest httpRequest = HttpRequest.newBuilder(triageEndpoint)
                     .timeout(timeout)
@@ -82,11 +86,25 @@ public class TriageHintService {
                 log.warn("AI triage service returned an unusable response");
                 return Optional.empty();
             }
-            TriageHintServiceDto serviceDto = null;
-            if (aiResponse.service() != null && aiResponse.service().name() != null) {
-                serviceDto = new TriageHintServiceDto(aiResponse.service().id(), aiResponse.service().name());
+            Severity severity;
+            try {
+                severity = Severity.valueOf(aiResponse.severity().trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.warn("AI triage service returned invalid severity '{}'; ignoring hint", aiResponse.severity());
+                return Optional.empty();
             }
-            return Optional.of(new TriageHintResponse(aiResponse.severity(), serviceDto, aiResponse.reason()));
+            TriageHintServiceDto serviceDto = null;
+            if (aiResponse.service() != null && aiResponse.service().id() != null && aiResponse.service().name() != null) {
+                Long suggestedId = aiResponse.service().id();
+                boolean isValid = orgServices != null && orgServices.stream()
+                        .anyMatch(s -> suggestedId.equals(s.id()));
+                if (isValid) {
+                    serviceDto = new TriageHintServiceDto(suggestedId, aiResponse.service().name());
+                } else {
+                    log.warn("AI triage suggested service id {} not in organization services; returning null service", suggestedId);
+                }
+            }
+            return Optional.of(new TriageHintResponse(severity, serviceDto, aiResponse.reason()));
         } catch (HttpTimeoutException e) {
             log.warn("AI triage request timed out");
             return Optional.empty();
@@ -101,6 +119,10 @@ public class TriageHintService {
             log.warn("AI triage service returned an unreadable response");
             return Optional.empty();
         }
+    }
+
+    public Optional<TriageHintResponse> fetchHint(TriageHintRequest request, List<?> similarIncidents) {
+        return fetchHint(request, similarIncidents, List.of());
     }
 
     private static URI triageEndpointFor(String serviceUrl) {
@@ -121,7 +143,7 @@ public class TriageHintService {
     // Internal records for JSON serialization/deserialization
     // ---------------------------------------------------------------------------
 
-    private record AiTriageRequest(String title, String description, List<?> similar_incidents) {
+    private record AiTriageRequest(String title, String description, List<?> similar_incidents, List<?> services) {
     }
 
     private record AiServiceDto(Long id, String name) {

@@ -12,7 +12,6 @@ public record TriageHintRequest(
         @Size(max = 200, message = "Title must not exceed 200 characters")
         String title,
 
-        @NotBlank(message = "Description must not be blank")
         @Size(max = 5000, message = "Description must not exceed 5000 characters")
         String description
 ) {

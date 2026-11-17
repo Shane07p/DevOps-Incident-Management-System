@@ -39,6 +39,7 @@ from contextlib import asynccontextmanager
 import logging
 import math
 import os
+import re
 from typing import List, Literal
 
 import httpx
@@ -239,9 +240,8 @@ class TriageRequest(BaseModel):
         description="Incident title",
         examples=["Payment gateway timeout on checkout"],
     )
-    description: str = Field(
-        ...,
-        min_length=1,
+    description: str | None = Field(
+        default=None,
         max_length=5000,
         description="Incident description",
         examples=["Checkout requests are failing with gateway timeouts."],
@@ -249,6 +249,10 @@ class TriageRequest(BaseModel):
     similar_incidents: list[dict] = Field(
         default_factory=list,
         description="Similar past incidents from AI-1 for context",
+    )
+    services: list[dict] = Field(
+        default_factory=list,
+        description="Valid organization services (id and name)",
     )
 
 
@@ -403,51 +407,78 @@ def suggest(request: SuggestRequest) -> SuggestResponse:
 # Triage severity hint endpoint (Sprint 5 — Issue #247)
 # ---------------------------------------------------------------------------
 
-# Keyword sets that map text evidence to severity levels (order: SEV1 > SEV2 > SEV3 > SEV4).
-_SEV1_KEYWORDS = frozenset([
-    "outage", "down", "unavailable", "unreachable", "data loss", "all users",
-    "fully down", "critical failure", "payment fully", "100% error", "complete failure",
-    "total outage", "0% success", "service unavailable",
-])
-_SEV2_KEYWORDS = frozenset([
-    "timeout", "high error rate", "degraded", "elevated latency", "partial outage",
-    "majority", "most users", "slow", "50%", "gateway", "significant", "urgent",
+# Multi-word phrases checked before single words to ensure specificity (e.g. "slow render" over "slow").
+_SEV4_PHRASES = (
+    "slow render", "not urgent", "ui issue", "low priority", "background job",
+)
+_SEV1_PHRASES = (
+    "total outage", "0% success", "service unavailable", "all users",
+    "fully down", "critical failure", "payment fully", "100% error",
+    "complete failure", "data loss",
+)
+_SEV2_PHRASES = (
+    "partial outage", "high error rate", "elevated latency", "most users",
     "checkout fail", "payment fail", "auth fail",
-])
-_SEV3_KEYWORDS = frozenset([
-    "intermittent", "flapping", "some users", "minority", "non-critical",
-    "occasional", "one region", "partial", "few users", "sporadic",
-])
-_SEV4_KEYWORDS = frozenset([
-    "cosmetic", "typo", "ui issue", "minor", "low priority",
-    "background job", "slow render", "not urgent",
-])
+)
+_SEV3_PHRASES = (
+    "some users", "non-critical", "one region", "few users",
+)
+
+# Single-word keywords matched on whole-word boundaries (preventing false positives like dropdown/download/shutdown).
+_SEV1_WORDS = (
+    "outage", "down", "unavailable", "unreachable",
+)
+_SEV2_WORDS = (
+    "timeout", "degraded", "majority", "slow", "50%", "gateway", "significant", "urgent",
+)
+_SEV3_WORDS = (
+    "intermittent", "flapping", "minority", "occasional", "partial", "sporadic",
+)
+_SEV4_WORDS = (
+    "cosmetic", "typo", "minor",
+)
 
 
-def _classify_severity(title: str, description: str, similar_incidents: list[dict]) -> tuple[str, str]:
+def _matches_phrase(pattern: str, text: str) -> bool:
+    """Matches a whole word or boundary-bounded phrase (case-insensitive)."""
+    regex = rf'(?<!\w){re.escape(pattern)}(?!\w)'
+    return bool(re.search(regex, text, re.IGNORECASE))
+
+
+def _classify_severity(title: str, description: str | None, similar_incidents: list[dict]) -> tuple[str, str]:
     """
     Rule-based severity classification. Deterministic — no randomness.
+    Matches multi-word phrases first, then whole-word single keywords.
     Returns (severity, reason).
     """
-    text = (title + " " + description).lower()
+    desc_text = (description or "").strip()
+    text = (title + (" " + desc_text if desc_text else "")).lower()
 
-    # Check similar incidents for majority severity evidence
+    # 1. Multi-word phrases checked first (specific phrases override broad single words)
+    # Check SEV4 phrases first so "slow render", "not urgent", "ui issue" override "slow" or "urgent"
+    if any(_matches_phrase(p, text) for p in _SEV4_PHRASES):
+        return "SEV4", "Keywords indicate a cosmetic or minor issue with negligible user impact."
+
+    if any(_matches_phrase(p, text) for p in _SEV1_PHRASES):
+        return "SEV1", "Keywords indicate a total or near-total outage with critical impact on all users."
+
+    if any(_matches_phrase(p, text) for p in _SEV2_PHRASES):
+        return "SEV2", "Keywords indicate significant degradation or high-impact partial failure."
+
+    # 2. SEV1 single words (e.g. whole-word "outage", "down", "unavailable", "unreachable")
+    if any(_matches_phrase(w, text) for w in _SEV1_WORDS):
+        return "SEV1", "Keywords indicate a total or near-total outage with critical impact on all users."
+
+    # 3. SEV2 single words (e.g. whole-word "timeout", "degraded", "slow", "gateway", etc.)
+    if any(_matches_phrase(w, text) for w in _SEV2_WORDS):
+        return "SEV2", "Keywords indicate significant degradation or high-impact partial failure."
+
+    # 4. Similar incidents evidence (escalate to SEV2 if majority were high-severity)
     severities_from_similar = [
         s.get("severity", "").upper()
         for s in similar_incidents
         if isinstance(s.get("severity"), str)
     ]
-
-    def _matches(keywords: frozenset) -> bool:
-        return any(kw in text for kw in keywords)
-
-    if _matches(_SEV1_KEYWORDS):
-        return "SEV1", "Keywords indicate a total or near-total outage with critical impact on all users."
-
-    if _matches(_SEV2_KEYWORDS):
-        return "SEV2", "Keywords indicate significant degradation or high-impact partial failure."
-
-    # If similar incidents are mostly SEV1 or SEV2, escalate the default
     high_severity_count = sum(1 for s in severities_from_similar if s in ("SEV1", "SEV2"))
     if high_severity_count > 0 and len(severities_from_similar) > 0:
         ratio = high_severity_count / len(severities_from_similar)
@@ -457,20 +488,38 @@ def _classify_severity(title: str, description: str, similar_incidents: list[dic
                 "were high-severity (SEV1 or SEV2), suggesting elevated impact."
             )
 
-    if _matches(_SEV3_KEYWORDS):
+    # 5. SEV3 multi-word phrases (e.g. "some users", "non-critical", "one region", "few users")
+    if any(_matches_phrase(p, text) for p in _SEV3_PHRASES):
         return "SEV3", "Keywords indicate intermittent or partial impact affecting a minority of users."
 
-    if _matches(_SEV4_KEYWORDS):
+    # 6. SEV3 single words (e.g. whole-word "intermittent", "flapping", "sporadic", etc.)
+    if any(_matches_phrase(w, text) for w in _SEV3_WORDS):
+        return "SEV3", "Keywords indicate intermittent or partial impact affecting a minority of users."
+
+    # 7. SEV4 single words (e.g. whole-word "cosmetic", "typo", "minor")
+    if any(_matches_phrase(w, text) for w in _SEV4_WORDS):
         return "SEV4", "Keywords indicate a cosmetic or minor issue with negligible user impact."
 
     return "SEV3", "No strong severity signal found; defaulting to moderate impact. Review and adjust as needed."
 
 
-def _extract_service_hint(similar_incidents: list[dict]) -> TriageServiceHint | None:
+def _extract_service_hint(similar_incidents: list[dict], services: list[dict] = []) -> TriageServiceHint | None:
     """
     Extract the most common service from similar incidents.
-    Returns None when no reliable service can be identified.
+    Validates against the provided organization services: returns None if the
+    suggested service ID does not belong to the organization's valid services.
     """
+    valid_ids: set[int] = set()
+    name_to_valid: dict[str, dict] = {}
+    for s in services:
+        if isinstance(s, dict):
+            sid = s.get("id")
+            sname = s.get("name")
+            if sid is not None and isinstance(sid, int):
+                valid_ids.add(sid)
+                if sname and isinstance(sname, str):
+                    name_to_valid[sname.strip().lower()] = {"id": sid, "name": sname}
+
     service_counts: dict[str, dict] = {}
     for inc in similar_incidents:
         service = inc.get("service")
@@ -481,13 +530,30 @@ def _extract_service_hint(similar_incidents: list[dict]) -> TriageServiceHint | 
                 key = str(sid)
                 service_counts[key] = {"id": sid, "name": sname, "count": service_counts.get(key, {}).get("count", 0) + 1}
         elif isinstance(service, str) and service:
-            key = service
+            key = service.strip().lower()
             service_counts[key] = {"id": None, "name": service, "count": service_counts.get(key, {}).get("count", 0) + 1}
+
     if not service_counts:
         return None
+
     # Pick the most frequent
     best = max(service_counts.values(), key=lambda x: x["count"])
-    return TriageServiceHint(id=best["id"], name=best["name"])
+    best_id = best["id"]
+    best_name = best["name"]
+
+    # Validate against organization services if services list was supplied
+    if valid_ids or name_to_valid:
+        if best_id is not None:
+            if best_id not in valid_ids:
+                return None
+        elif best_name and best_name.strip().lower() in name_to_valid:
+            matched = name_to_valid[best_name.strip().lower()]
+            best_id = matched["id"]
+            best_name = matched["name"]
+        else:
+            return None
+
+    return TriageServiceHint(id=best_id, name=best_name)
 
 
 @app.post("/triage", response_model=TriageResponse)
@@ -500,7 +566,7 @@ def triage(request: TriageRequest) -> TriageResponse:
     Never mutates incident state (DR-10.2).
     """
     severity, reason = _classify_severity(request.title, request.description, request.similar_incidents)
-    service_hint = _extract_service_hint(request.similar_incidents)
+    service_hint = _extract_service_hint(request.similar_incidents, request.services)
     return TriageResponse(
         aiGenerated=True,
         severity=severity,

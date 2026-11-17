@@ -2,8 +2,10 @@ package com.group2.incident.incident.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.incident.dto.TriageHintRequest;
 import com.group2.incident.incident.dto.TriageHintResponse;
+import com.group2.incident.incident.dto.TriageHintServiceDto;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -58,21 +60,46 @@ class TriageHintServiceTest {
 	}
 
 	@Test
-	@DisplayName("Successfully parses valid triage hint response")
+	@DisplayName("Successfully parses valid triage hint response with Severity enum and valid service")
 	void parsesValidResponse() {
 		var service = new TriageHintService(baseUrl, Duration.ofSeconds(2), JsonMapper.builder().build());
 		assertThat(service.isEnabled()).isTrue();
 
-		var result = service.fetchHint(new TriageHintRequest("Payment timeout", "504 errors on checkout"), List.of());
+		var orgServices = List.of(new TriageHintServiceDto(1L, "Payments"));
+		var result = service.fetchHint(new TriageHintRequest("Payment timeout", "504 errors on checkout"), List.of(), orgServices);
 
 		assertThat(result).isPresent();
 		TriageHintResponse hint = result.orElseThrow();
-		assertThat(hint.severity()).isEqualTo("SEV2");
+		assertThat(hint.severity()).isEqualTo(Severity.SEV2);
 		assertThat(hint.service()).isNotNull();
 		assertThat(hint.service().id()).isEqualTo(1L);
 		assertThat(hint.service().name()).isEqualTo("Payments");
 		assertThat(hint.reason()).isEqualTo("High urgency");
 		assertThat(requestBody.get()).contains("\"title\":\"Payment timeout\"", "\"description\":\"504 errors on checkout\"");
+	}
+
+	@Test
+	@DisplayName("Sets suggested service to null when suggested service ID is not in org services (Point 2)")
+	void rejectsForeignServiceSuggestion() {
+		var service = new TriageHintService(baseUrl, Duration.ofSeconds(2), JsonMapper.builder().build());
+		// AI response suggests service id 1, but org only has service id 99
+		var orgServices = List.of(new TriageHintServiceDto(99L, "OtherService"));
+		var result = service.fetchHint(new TriageHintRequest("Payment timeout", "504 errors"), List.of(), orgServices);
+
+		assertThat(result).isPresent();
+		assertThat(result.orElseThrow().severity()).isEqualTo(Severity.SEV2);
+		assertThat(result.orElseThrow().service()).isNull();
+	}
+
+	@Test
+	@DisplayName("Returns empty optional when AI returns an invalid severity string (Point 4)")
+	void returnsEmptyOnInvalidSeverityString() {
+		responseBody.set("{\"aiGenerated\":true,\"severity\":\"INVALID_SEV\",\"service\":null,\"reason\":\"Bad severity\"}");
+		var service = new TriageHintService(baseUrl, Duration.ofSeconds(2), JsonMapper.builder().build());
+
+		var result = service.fetchHint(new TriageHintRequest("Some incident", "Some detail"), List.of());
+
+		assertThat(result).isEmpty();
 	}
 
 	@Test
@@ -84,7 +111,7 @@ class TriageHintServiceTest {
 		var result = service.fetchHint(new TriageHintRequest("Minor issue", "Some detail"), List.of());
 
 		assertThat(result).isPresent();
-		assertThat(result.orElseThrow().severity()).isEqualTo("SEV3");
+		assertThat(result.orElseThrow().severity()).isEqualTo(Severity.SEV3);
 		assertThat(result.orElseThrow().service()).isNull();
 	}
 

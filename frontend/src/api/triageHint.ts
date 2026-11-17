@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { apiFetch } from './client'
+import { severitySchema } from './schemas'
 
 // ---------------------------------------------------------------------------
 // Schema — matches POST /api/incidents/triage-hint response contract
@@ -11,7 +12,7 @@ export const triageHintServiceSchema = z.object({
 })
 
 export const triageHintSchema = z.object({
-  severity: z.string(),
+  severity: severitySchema,
   service: triageHintServiceSchema.nullable().optional(),
   reason: z.string(),
 })
@@ -34,16 +35,15 @@ export type TriageHint = z.infer<typeof triageHintSchema>
  */
 export async function fetchTriageHint(
   title: string,
-  description: string,
+  description?: string,
 ): Promise<TriageHint | null> {
   const trimmedTitle = title.trim()
-  const trimmedDesc = description.trim()
   if (trimmedTitle.length < 3) return null
 
   try {
     return await apiFetch('/incidents/triage-hint', triageHintSchema, {
       method: 'POST',
-      body: { title: trimmedTitle, description: trimmedDesc || 'No description provided.' },
+      body: { title: trimmedTitle, description: description ?? '' },
     })
   } catch {
     // AI unavailable or error — return null, never throw (never block declaration)

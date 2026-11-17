@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { fetchTriageHint, type TriageHint as TriageHintData } from '@/api/triageHint'
+import { type Severity } from '@/api/schemas'
 import { SeverityBadge } from '@/components/app/badges'
 import { Button } from '@/components/ui/button'
 
@@ -20,7 +21,7 @@ interface TriageHintProps {
    * Called when the user clicks Apply. The parent should update the form
    * fields using React Hook Form's setValue without submitting.
    */
-  onApply: (severity: string, serviceId: number | null) => void
+  onApply: (severity: Severity, serviceId: number | null) => void
 }
 
 /**
@@ -93,7 +94,7 @@ export function TriageHint({ title, description, onApply }: TriageHintProps) {
               AI
             </span>
             <span className="text-[12px] font-medium text-muted-foreground">Suggested</span>
-            <SeverityBadge severity={hint.severity as 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4'} />
+            <SeverityBadge severity={hint.severity} />
             {hint.service?.name && (
               <>
                 <span className="text-muted-foreground">·</span>

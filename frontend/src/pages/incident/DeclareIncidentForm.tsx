@@ -133,7 +133,7 @@ export function DeclareIncidentForm({ onCancel, onDeclared }: { onCancel: () => 
             title={titleValue}
             description={descriptionValue}
             onApply={(severity, serviceId) => {
-              form.setValue('severity', severity as Severity, { shouldValidate: true })
+              form.setValue('severity', severity, { shouldValidate: true })
               if (serviceId !== null) {
                 form.setValue('serviceId', String(serviceId), { shouldValidate: true })
               }

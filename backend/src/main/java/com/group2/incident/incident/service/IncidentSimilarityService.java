@@ -11,6 +11,8 @@ import com.group2.incident.incident.dto.DuplicateIncidentResponse;
 import com.group2.incident.incident.dto.IncidentSearchPageResponse;
 import com.group2.incident.incident.dto.IncidentSearchResult;
 import com.group2.incident.incident.dto.SimilarIncidentResponse;
+import com.group2.incident.incident.dto.TriageHintServiceDto;
+import com.group2.incident.incident.dto.TriageSimilarIncidentDto;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.IncidentRepository;
@@ -60,6 +62,31 @@ public class IncidentSimilarityService {
 						false, SIMILARITY_THRESHOLD, 3, 0)
 				.stream()
 				.map(IncidentSimilarityService::toSimilarIncident)
+				.toList();
+	}
+
+	public List<TriageSimilarIncidentDto> findSimilarForTriage(String title, String description) {
+		if (title == null || title.isBlank() || !aiEmbeddingClient.isEnabled()) {
+			return List.of();
+		}
+		String normalizedTitle = title.trim();
+		String queryText = (description != null && !description.isBlank())
+				? "Title: " + normalizedTitle + "\nSymptoms: " + description.trim()
+				: "Title: " + normalizedTitle;
+		Optional<List<Double>> embedding = aiEmbeddingClient.embedQuery(queryText);
+		if (embedding.isEmpty()) {
+			return List.of();
+		}
+		long orgId = OrgContext.current();
+		return similarityRepository.findMatches(
+						orgId, vectorLiteral(embedding.get()), null, null, null, null, null,
+						false, SIMILARITY_THRESHOLD, 5, 0)
+				.stream()
+				.map(match -> new TriageSimilarIncidentDto(
+						match.id(),
+						match.title(),
+						match.severity(),
+						new TriageHintServiceDto(match.serviceId(), match.serviceName())))
 				.toList();
 	}
 

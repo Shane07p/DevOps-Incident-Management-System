@@ -1,0 +1,40 @@
+name: Deploy check
+
+# CI passing on main makes Render and Vercel deploy that commit. This waits for both to serve it and
+# checks they answer, so a broken deploy shows up as a failed run instead of at the next demo.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: read
+
+# A newer commit on main replaces the check of the older one.
+concurrency:
+  group: deploy-check
+  cancel-in-progress: true
+
+jobs:
+  deploy-check:
+    name: Backend and frontend serve the commit
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The script compares the deployed commit's backend/ with this one's.
+          fetch-depth: 0
+
+      - name: Wait for the deploys and check them
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Public URLs, also in docs/README; no secrets are needed.
+          BACKEND_URL: https://incident-backend-f340.onrender.com
+          FRONTEND_URL: https://dev-ops-incident-management-system.vercel.app
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/deploy-check.sh

@@ -46,7 +46,7 @@ const WIDTH = 300
 const HEIGHT = 96
 
 /** One metric as a line, with the moment the incident was declared marked. Hover reads a point. */
-function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt: string }) {
+export function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt?: string }) {
   const [hovered, setHovered] = useState<number | null>(null)
   const label = METRIC_LABEL[series.metric]
   const { points } = series
@@ -58,13 +58,15 @@ function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt:
   const x = (at: string) => ((Date.parse(at) - start) / span) * WIDTH
   const y = (value: number) => HEIGHT - (value / top) * (HEIGHT - 6)
   const line = points.map((point) => `${x(point.timestamp).toFixed(1)},${y(point.value).toFixed(1)}`).join(' ')
-  const declaredX = x(declaredAt)
+  const declaredX = declaredAt ? x(declaredAt) : -1
   const latest = points.at(-1)
   const shown = hovered === null ? null : points[hovered]
 
   const onMove = (event: MouseEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect()
-    const at = start + ((event.clientX - box.left) / box.width) * span
+    const width = box.width > 0 ? box.width : WIDTH
+    const left = box.left || 0
+    const at = start + ((event.clientX - left) / width) * span
     let nearest = 0
     for (let index = 1; index < points.length; index++) {
       if (Math.abs(Date.parse(points[index].timestamp) - at) < Math.abs(Date.parse(points[nearest].timestamp) - at)) nearest = index
@@ -123,7 +125,7 @@ function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt:
           </svg>
           <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
             <span>Peak {formatMetric(series.metric, max)}</span>
-            <span>Dashed line: declared</span>
+            {declaredAt && <span>Dashed line: declared</span>}
           </div>
         </>
       )}

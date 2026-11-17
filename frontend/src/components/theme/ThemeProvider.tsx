@@ -26,8 +26,11 @@ function readStored(fallback: Theme): Theme {
   }
 }
 
-/** Puts the "dark" class on <html> and remembers the choice. Replaces next-themes, whose injected script React 19 warns about. */
-export function ThemeProvider({ children, defaultTheme = 'light' }: { children: ReactNode; defaultTheme?: Theme }) {
+/**
+ * Puts the "dark" class on <html> and remembers the choice in this browser. Until someone picks a theme, the
+ * system preference decides. Replaces next-themes, whose injected script React 19 warns about.
+ */
+export function ThemeProvider({ children, defaultTheme = 'system' }: { children: ReactNode; defaultTheme?: Theme }) {
   const [theme, setThemeState] = useState<Theme>(() => readStored(defaultTheme))
   const [systemTheme, setSystemTheme] = useState<Resolved>(() => (systemPrefersDark() ? 'dark' : 'light'))
   const resolvedTheme: Resolved = theme === 'system' ? systemTheme : theme

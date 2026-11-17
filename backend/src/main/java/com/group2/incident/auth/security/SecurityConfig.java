@@ -84,6 +84,10 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/acknowledge").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/transitions").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/severity").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/postmortem").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/postmortem/review").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")
@@ -95,6 +99,9 @@ class SecurityConfig {
 						.hasAnyRole("ADMIN", "ENGINEER")
 						// PublicUpdateService narrows Engineers to the incident's Lead and Comms (D45).
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/public-updates").hasAnyRole("ADMIN", "ENGINEER")
+						// Reading follow-ups is open to every role; adding and changing them is for responders (#240).
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/follow-ups").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/follow-ups/*").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.bearerTokenResolver(request -> {

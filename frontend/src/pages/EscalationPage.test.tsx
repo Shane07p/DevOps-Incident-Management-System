@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Role } from '@/api/schemas'
 import { clearToken, writeToken } from '@/api/token'
 import { AuthProvider } from '@/auth/AuthProvider'
@@ -155,5 +155,62 @@ describe('EscalationPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save levels' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Responder user engineer is disabled')
+  })
+
+  it('says who escalation last paged on each unacknowledged incident, from its timeline', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-30T10:20:00Z'))
+    const summary = (overrides: Record<string, unknown>) => ({
+      serviceName: 'Payments',
+      severity: 'SEV2',
+      status: 'OPEN',
+      createdAt: '2026-10-30T10:00:00Z',
+      responseDueAt: '2026-10-30T11:00:00Z',
+      resolutionDueAt: '2026-10-30T14:00:00Z',
+      version: 0,
+      assignee: null,
+      acknowledgedAt: null,
+      resolvedAt: null,
+      ...overrides,
+    })
+    // The policy now says Dev Engineer then Dev Admin; the incident kept the steps it opened with and its
+    // timeline records the page that really went out. The banner follows the timeline.
+    const detail = {
+      id: 9,
+      reference: 'INC-9',
+      title: 'Refunds slow',
+      description: 'Refunds slow.',
+      service: { id: 1, name: 'Payments' },
+      severity: 'SEV2',
+      status: 'OPEN',
+      version: 1,
+      reporter: null,
+      assignee: null,
+      createdAt: '2026-10-30T10:00:00Z',
+      responseTargetMinutes: 60,
+      resolutionTargetMinutes: 240,
+      responseDueAt: '2026-10-30T11:00:00Z',
+      resolutionDueAt: '2026-10-30T14:00:00Z',
+      timeline: [
+        { id: 1, eventType: 'CREATED', actor: null, details: 'Incident declared', recordedAt: '2026-10-30T10:00:00Z', correctsEntryId: null },
+        { id: 2, eventType: 'ESCALATED', actor: null, details: 'Escalated to level 1: Asha Patel', recordedAt: '2026-10-30T10:12:00Z', correctsEntryId: null },
+      ],
+    }
+    renderEscalation('VIEWER', {
+      'GET /api/incidents': {
+        body: [
+          summary({ id: 9, reference: 'INC-9', title: 'Refunds slow' }),
+          summary({ id: 10, reference: 'INC-10', title: 'Acknowledged', acknowledgedAt: '2026-10-30T10:05:00Z' }),
+        ],
+      },
+      'GET /api/incidents/9': { body: detail },
+    })
+
+    expect(await screen.findByText(/Escalated to level 1: Asha Patel, 8 min ago\./)).toBeInTheDocument()
+    expect(screen.getByText('INC-9 is not acknowledged')).toBeInTheDocument()
+    expect(screen.queryByText(/Dev Engineer \(level 1\) was paged/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open INC-9' })).toHaveAttribute('href', '/incidents/9')
+    expect(screen.queryByText(/INC-10 is not acknowledged/)).not.toBeInTheDocument()
+    vi.useRealTimers()
   })
 })

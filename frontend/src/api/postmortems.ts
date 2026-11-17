@@ -48,9 +48,10 @@ export function savePostmortem(incidentId: number, body: PostmortemInput) {
   })
 }
 
-export function reviewPostmortem(incidentId: number) {
+export function reviewPostmortem(incidentId: number, expectedVersion: number) {
   return apiFetch(`/incidents/${incidentId}/postmortem/review`, postmortemSchema, {
     method: 'POST',
+    body: { expectedVersion },
   })
 }
 

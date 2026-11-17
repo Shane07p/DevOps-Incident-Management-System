@@ -1,0 +1,90 @@
+# Grafana contact points and payload template (D36)
+# --------------------------------------------------
+# In Grafana's file-provisioning format (contactPoints, templates). There is no `policies`
+# section on purpose: each rule picks its contact point (notification_settings in
+# alerts/alert-rules.yaml), and importing `policies` would replace the stack's whole policy
+# tree, which also routes Grafana's own rules.
+#
+# One webhook contact point per rule type, each with its own tool token: register
+# three tools in Settle (POST /api/tools) and put each token in its own variable. Grafana
+# sends the token in the Authorization header, never in the URL.
+#
+# The "settle.alert" template turns one firing alert into our AlertRequest:
+#   source          grafana-down | grafana-degraded | grafana-error_rate
+#   eventId         gf-<fingerprint>-<startsAt, Unix seconds>: the same while one outage
+#                   lasts (repeats are counted once), new for the next outage
+#   service         the rule's `service` label; a Settle service of that name must exist
+#   correlationKey  grafana-<rule_type>-<service>: alerts of one outage join one incident
+# Nothing in the body changes between repeats (no values, no times other than startsAt),
+# because intake answers 409 when a known eventId comes back with a different body.
+#
+# Resolved notifications are not sent (disableResolveMessage): Settle resolves incidents
+# through its own status flow, not from Grafana.
+
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: settle-alert
+    template: |
+      {{ define "settle.alert" -}}
+      {{- range $i, $alert := .Alerts.Firing -}}
+      {{- if eq $i 0 -}}
+      {{- $severity := "SEV3" -}}
+      {{- if eq $alert.Labels.severity "critical" }}{{ $severity = "SEV1" }}{{ else if eq $alert.Labels.severity "warning" }}{{ $severity = "SEV2" }}{{ end -}}
+      {{- coll.Dict
+            "source" (printf "grafana-%s" $alert.Labels.rule_type)
+            "eventId" (printf "gf-%s-%d" $alert.Fingerprint $alert.StartsAt.Unix)
+            "service" $alert.Labels.service
+            "title" $alert.Annotations.summary
+            "description" $alert.Annotations.description
+            "severity" $severity
+            "correlationKey" (printf "grafana-%s-%s" $alert.Labels.rule_type $alert.Labels.service)
+            "details" (coll.Dict "rule" $alert.Labels.alertname "ruleType" $alert.Labels.rule_type "fingerprint" $alert.Fingerprint)
+          | data.ToJSON -}}
+      {{- end -}}
+      {{- end -}}
+      {{- end }}
+
+contactPoints:
+  - orgId: 1
+    name: settle-down
+    receivers:
+      - uid: settle-down
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "${SETTLE_BACKEND_URL}/webhooks/alerts"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "${SETTLE_DOWN_TOOL_TOKEN}"
+          payload:
+            template: '{{ template "settle.alert" . }}'
+
+  - orgId: 1
+    name: settle-degraded
+    receivers:
+      - uid: settle-degraded
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "${SETTLE_BACKEND_URL}/webhooks/alerts"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "${SETTLE_DEGRADED_TOOL_TOKEN}"
+          payload:
+            template: '{{ template "settle.alert" . }}'
+
+  - orgId: 1
+    name: settle-error-rate
+    receivers:
+      - uid: settle-error-rate
+        type: webhook
+        disableResolveMessage: true
+        settings:
+          url: "${SETTLE_BACKEND_URL}/webhooks/alerts"
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: "${SETTLE_ERROR_RATE_TOOL_TOKEN}"
+          payload:
+            template: '{{ template "settle.alert" . }}'

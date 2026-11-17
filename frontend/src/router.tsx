@@ -10,11 +10,12 @@ import { EscalationPage } from '@/pages/EscalationPage'
 import { HistorySearchPage } from '@/pages/HistorySearchPage'
 import { HomePage } from '@/pages/HomePage'
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
-import { PostmortemPage } from '@/pages/PostmortemPage'
+import { PostmortemPage } from '@/pages/incident/PostmortemPage'
 import { IncidentsPage } from '@/pages/IncidentsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { LogsPage } from '@/pages/LogsPage'
+import { MetricsPage } from '@/pages/MetricsPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
@@ -22,19 +23,28 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { ServiceMapPage } from '@/pages/ServiceMapPage'
 import { ServicesPage } from '@/pages/ServicesPage'
+import { ServicePage } from '@/pages/services/ServicePage'
 import { RunbooksPage } from '@/pages/RunbooksPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
+import { MonitorsPage } from '@/pages/MonitorsPage'
+import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
+import { InsightsPage } from '@/pages/InsightsPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
   '/escalation': <EscalationPage />,
   '/logs': <LogsPage />,
+  '/metrics': <MetricsPage />,
   '/schedules': <SchedulesPage />,
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
+  '/services/:id': <ServicePage />,
   '/runbooks': <RunbooksPage />,
   '/tokens': <AccessTokensPage />,
+  '/monitors': <MonitorsPage />,
+  '/heartbeats': <HeartbeatsPage />,
+  '/insights': <InsightsPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.

@@ -29,6 +29,8 @@ import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.IncidentUserDto;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
+import com.group2.incident.incident.dto.SeverityChangeRequest;
+import com.group2.incident.incident.dto.TransitionRequest;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.IncidentRole;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -37,7 +39,9 @@ import com.group2.incident.incident.entity.TimelineEventType;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.IncidentSearchRow;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.postmortem.service.PostmortemService;
 import com.group2.incident.deploy.entity.IncidentDeployment;
 import com.group2.incident.deploy.repository.IncidentDeploymentRepository;
 import com.group2.incident.org.entity.Membership;
@@ -81,6 +85,8 @@ public class IncidentService {
 	private final OrgMembers orgMembers;
 	private final DeploymentRepository deploymentRepository;
 	private final IncidentDeploymentRepository incidentDeploymentRepository;
+	private final TransitionPolicy transitionPolicy;
+	private final PostmortemService postmortemService;
 	private final Clock clock;
 
 	@Transactional
@@ -168,6 +174,7 @@ public class IncidentService {
 			notificationService.createNotification(
 					assignee,
 					incident,
+					NotificationKind.PAGE,
 					"You have been assigned to incident " + incident.getReference() + ": " + incident.getTitle()
 			);
 		}
@@ -228,7 +235,13 @@ public class IncidentService {
 						i.getService().getName(),
 						i.getSeverity(),
 						i.getStatus(),
-						i.getCreatedAt()
+						i.getCreatedAt(),
+						i.getResponseDueAt(),
+						i.getResolutionDueAt(),
+						i.getVersion(),
+						toUserDto(i.getAssignee()),
+						i.getAcknowledgedAt(),
+						i.getResolvedAt()
 				))
 				.toList();
 	}
@@ -344,6 +357,7 @@ public class IncidentService {
 				incident.getResponseDueAt(),
 				incident.getResolutionDueAt(),
 				incident.getAcknowledgedAt(),
+				incident.getResolvedAt(),
 				timelineResponses,
 				deploys != null ? deploys : List.of()
 		);
@@ -541,6 +555,106 @@ public class IncidentService {
 		return toResponse(incident, timeline);
 	}
 
+	/**
+	 * Transitions an incident to a new legal status (FR-06, US-10).
+	 * Enforces legal transitions, optimistic locking, non-blank recovery notes for RESOLVED,
+	 * appends a timeline entry with authenticated actor and timestamp, and returns the updated incident.
+	 */
+	@Transactional
+	public IncidentResponse transitionIncident(Long incidentId, TransitionRequest request, Long actorId) {
+		if (request == null || request.expectedVersion() == null) {
+			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
+		}
+		if (request.status() == null) {
+			throw new FieldValidationException("status", "Status is required");
+		}
+
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+
+		IncidentStatus currentStatus = incident.getStatus();
+		IncidentStatus newStatus = request.status();
+
+		// OPEN -> ACKNOWLEDGED is legal, but only through POST /acknowledge (#83), which makes the acknowledger the
+		// Lead, stops the response clock, and cancels escalation; one path keeps those rules in one place.
+		if (newStatus == IncidentStatus.ACKNOWLEDGED) {
+			throw new ConflictException("Acknowledge the incident instead");
+		}
+
+		if (!transitionPolicy.isLegal(currentStatus, newStatus)) {
+			throw new ConflictException("Cannot transition incident from " + currentStatus + " to " + newStatus);
+		}
+
+		// D17: a SEV1 or SEV2 incident closes only with a REVIEWED postmortem; SEV3 and SEV4 close without one.
+		if (newStatus == IncidentStatus.CLOSED) {
+			postmortemService.requireReviewedForClosure(incident);
+		}
+
+		if (newStatus == IncidentStatus.RESOLVED) {
+			if (request.note() == null || request.note().isBlank()) {
+				throw new FieldValidationException("note", "A recovery note is required to resolve an incident");
+			}
+		}
+
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+
+		incident.transitionTo(newStatus, now);
+
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		} catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+
+		// The note goes on the timeline with any move, not only RESOLVED.
+		String transitionDetails = "Status changed from " + currentStatus + " to " + newStatus;
+		if (request.note() != null && !request.note().isBlank()) {
+			transitionDetails += ": " + request.note().trim();
+		}
+
+		TimelineEntry statusTimelineEntry = new TimelineEntry(
+				incident,
+				actor,
+				TimelineEventType.STATUS_CHANGED,
+				transitionDetails,
+				now
+		);
+		timelineEntryRepository.save(statusTimelineEntry);
+
+		List<TimelineEntry> updatedTimeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
+		return toResponse(incident, updatedTimeline);
+	}
+
+	/**
+	 * Changes an incident's severity with a reason (FR-04.2). The SLA targets and due times copied at creation stay as
+	 * they were; the change and its reason go on the timeline.
+	 */
+	@Transactional
+	public IncidentResponse changeSeverity(Long incidentId, SeverityChangeRequest request, Long actorId) {
+		Incident incident = requireIncident(incidentId);
+		requireVersion(incident, request.expectedVersion());
+		if (incident.getStatus() == IncidentStatus.CLOSED) {
+			throw new ConflictException("Cannot change severity on a closed incident");
+		}
+		Severity previous = incident.getSeverity();
+		if (previous == request.severity()) {
+			throw new ConflictException("The incident is already " + previous);
+		}
+		AppUser actor = requireActor(actorId);
+		Instant now = clock.instant();
+		incident.changeSeverity(request.severity());
+		try {
+			incident = incidentRepository.saveAndFlush(incident);
+		}
+		catch (OptimisticLockingFailureException ex) {
+			throw new ConflictException(STALE_CHANGE);
+		}
+		timelineEntryRepository.save(new TimelineEntry(incident, actor, TimelineEventType.SEVERITY_CHANGED,
+				"Severity changed from " + previous + " to " + request.severity() + ": " + request.reason().trim(), now));
+		return toResponse(incident, timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId));
+	}
+
 	/** Reassigns an active incident, records a timeline entry, and notifies the new assignee. */
 	@Transactional
 	public IncidentResponse reassignIncident(Long incidentId, ReassignRequest request, Long actorId) {
@@ -595,6 +709,7 @@ public class IncidentService {
 		notificationService.createNotification(
 				newAssignee,
 				incident,
+				NotificationKind.REASSIGNMENT,
 				"You have been assigned to incident " + incident.getReference() + ": " + incident.getTitle()
 		);
 
@@ -664,6 +779,7 @@ public class IncidentService {
 		notificationService.createNotification(
 				newRoleUser,
 				incident,
+				NotificationKind.ROLE_ASSIGNMENT,
 				"You have been assigned the role " + request.role() + " on incident " + incident.getReference() + ": " + incident.getTitle()
 		);
 

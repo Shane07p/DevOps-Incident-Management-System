@@ -1,48 +1,69 @@
+
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { Activity, ArrowLeft, Check } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
+
 import { ApiRequestError } from '@/api/client'
 import { getIncident } from '@/api/incidents'
 import { listRunbooks } from '@/api/runbooks'
 import { useAuth } from '@/auth/AuthProvider'
-import { SeverityBadge, StatusBadge } from '@/components/app/badges'
+import { Avatar } from '@/components/app/Avatar'
+import { LIFECYCLE, SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { Panel } from '@/components/app/Panel'
 import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
-import { formatIst, formatMinutes } from '@/lib/time'
+import type { IncidentStatus } from '@/api/schemas'
+import { cn } from '@/lib/utils'
+import { formatIst } from '@/lib/time'
+
+import { IncidentActions } from './incident/IncidentActions'
+import { IncidentAlerts } from './incident/IncidentAlerts'
 import { IncidentDeploys } from './incident/IncidentDeploys'
 import { IncidentEvidence } from './incident/IncidentEvidence'
 import { IncidentTelemetry } from './incident/IncidentTelemetry'
 import { IncidentTimeline } from './incident/IncidentTimeline'
 import { PublicUpdates } from './incident/PublicUpdateForm'
+import { SlaClocks } from './incident/SlaClocks'
 
-function Detail({ label, children }: { label: string; children: ReactNode }) {
+/** The seven steps, done ones checked and the current one numbered. */
+function Lifecycle({ status }: { status: IncidentStatus }) {
+  const current = LIFECYCLE.indexOf(status)
+
   return (
-    <div className="flex flex-col gap-1">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
+    <ol
+      aria-label="Lifecycle"
+      className="flex gap-4 overflow-x-auto rounded-lg border bg-card px-[19px] py-3.5 text-[12px]"
+    >
+      {LIFECYCLE.map((step, index) => (
+        <li
+          key={step}
+          aria-current={index === current ? 'step' : undefined}
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 whitespace-nowrap text-muted-foreground',
+            index < current && 'text-status-resolved',
+            index === current && 'font-medium text-foreground',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'grid size-[18px] place-items-center rounded-full border font-mono text-[10px]',
+              index === current && 'border-foreground',
+            )}
+          >
+            {index < current ? <Check className="size-3" /> : index + 1}
+          </span>
+          {step.charAt(0) + step.slice(1).toLowerCase()}
+        </li>
+      ))}
+    </ol>
   )
 }
 
-function SlaDue({ label, dueAt, targetMinutes }: { label: string; dueAt: string; targetMinutes: number }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="font-mono text-lg font-semibold tnum">{formatIst(dueAt)}</span>
-      <span className="text-xs text-muted-foreground">Target {formatMinutes(targetMinutes)} from declaration</span>
-    </div>
-  )
-}
-
-/** One incident: what it is, both SLA due times, and its timeline. Actions arrive in Sprint 3 (#89). */
+/** One incident: what it is, what a responder can do to it, both SLA clocks, and its timeline. */
 // Show runbooks belonging to the incident's service.
-function IncidentRunbooks({
-  serviceId,
-}: {
-  serviceId: number
-}) {
+function IncidentRunbooks({ serviceId }: { serviceId: number }) {
   const runbooks = useQuery({
     queryKey: ['runbooks', serviceId],
     queryFn: () => listRunbooks(serviceId),
@@ -55,7 +76,7 @@ function IncidentRunbooks({
     >
       <h2
         id="incident-runbooks-heading"
-        className="text-lg font-semibold"
+        className="text-[13px] font-medium"
       >
         Suggested runbooks
       </h2>
@@ -78,9 +99,7 @@ function IncidentRunbooks({
               key={runbook.id}
               className="rounded-lg border bg-card p-4"
             >
-              <h3 className="font-semibold">
-                {runbook.title}
-              </h3>
+              <h3 className="font-semibold">{runbook.title}</h3>
 
               <ol className="mt-3 list-decimal space-y-2 pl-6 text-sm">
                 {runbook.steps.map((step, index) => (
@@ -99,92 +118,199 @@ export function IncidentDetailPage() {
   const { user, org } = useAuth()
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
-  const incident = useQuery({ queryKey: ['incident', id], queryFn: () => getIncident(id), enabled: valid })
-  const notFound = !valid || (incident.error instanceof ApiRequestError && incident.error.status === 404)
+
+  const incident = useQuery({
+    queryKey: ['incident', id],
+    queryFn: () => getIncident(id),
+    enabled: valid,
+  })
+
+  const notFound =
+    !valid ||
+    (incident.error instanceof ApiRequestError &&
+      incident.error.status === 404)
 
   return (
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
-      <Link to="/incidents" className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Incidents
+      <Link
+        to="/incidents"
+        className="flex w-fit items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden="true" />
+        All incidents
       </Link>
 
       {notFound ? (
-        <ErrorState title="Incident not found" message="It may have been mistyped. Check the incident list." />
+        <ErrorState
+          title="Incident not found"
+          message="It may have been mistyped. Check the incident list."
+        />
       ) : incident.isPending ? (
         <LoadingState message="Loading incident" />
       ) : incident.isError ? (
-        <ErrorState message={incident.error.message} onRetry={() => incident.refetch()} />
+        <ErrorState
+          message={incident.error.message}
+          onRetry={() => incident.refetch()}
+        />
       ) : (
         <>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm text-muted-foreground">{incident.data.reference}</span>
-              <SeverityBadge severity={incident.data.severity} />
-              <StatusBadge status={incident.data.status} />
+          <header className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <span className="font-mono">
+                  {incident.data.reference}
+                </span>
+                <span aria-hidden="true">/</span>
+                <span>{incident.data.service.name}</span>
+              </span>
+
+              <span>
+                Declared{' '}
+                <span className="font-mono tnum">
+                  {formatIst(incident.data.createdAt)}
+                </span>{' '}
+                · by {incident.data.reporter?.displayName ?? 'the system'}
+              </span>
             </div>
-            <h1 className="text-[40px] leading-[0.95] font-[750]" style={{ fontStretch: '62%' }}>
+
+            <h1 className="text-[26px] leading-[1.15] font-medium tracking-[-0.035em] nav:text-[30px]">
               {incident.data.title}
             </h1>
-            <p className="max-w-[760px] whitespace-pre-line text-muted-foreground">{incident.data.description}</p>
+
+            <div className="flex flex-wrap items-center gap-3 text-[13px]">
+              <SeverityBadge severity={incident.data.severity} />
+              <StatusBadge status={incident.data.status} />
+              <span
+                aria-hidden="true"
+                className="text-muted-foreground"
+              >
+                ·
+              </span>
+
+              {incident.data.assignee ? (
+                <span className="flex items-center gap-2">
+                  <Avatar
+                    name={incident.data.assignee.displayName}
+                    size="sm"
+                  />
+                  <span>
+                    <span className="sr-only">Lead: </span>
+                    {incident.data.assignee.displayName}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  No Lead yet
+                </span>
+              )}
+            </div>
+
             <Link
               to={'/incidents/' + incident.data.id + '/postmortem'}
               className="w-fit text-sm font-medium text-primary underline"
             >
               Open postmortem →
             </Link>
-          </div>
+          </header>
 
-          <dl className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-4">
-            <Detail label="Service">{incident.data.service.name}</Detail>
-            <Detail label="Reporter">{incident.data.reporter?.displayName ?? 'System'}</Detail>
-            <Detail label="Assignee">{incident.data.assignee?.displayName ?? 'Unassigned'}</Detail>
-            <Detail label="Declared">
-              <span className="font-mono tnum">{formatIst(incident.data.createdAt)}</span>
-            </Detail>
-          </dl>
+          <Lifecycle status={incident.data.status} />
 
-          <section aria-labelledby="sla-heading" className="flex flex-col gap-3">
-            <h2 id="sla-heading" className="text-lg font-semibold">
-              SLA
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SlaDue label="Response due" dueAt={incident.data.responseDueAt} targetMinutes={incident.data.responseTargetMinutes} />
-              <SlaDue
-                label="Resolution due"
-                dueAt={incident.data.resolutionDueAt}
-                targetMinutes={incident.data.resolutionTargetMinutes}
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_290px]">
+            <div className="flex min-w-0 flex-col gap-6">
+              <Panel
+                title={
+                  <>
+                    <Activity
+                      className="size-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    Current impact
+                  </>
+                }
+              >
+                <p className="px-[19px] pb-[18px] text-[14px] leading-relaxed whitespace-pre-line">
+                  {incident.data.description}
+                </p>
+              </Panel>
+
+              <section
+                aria-labelledby="timeline-heading"
+                className="flex flex-col gap-3"
+              >
+                <h2
+                  id="timeline-heading"
+                  className="text-[13px] font-medium"
+                >
+                  Timeline
+                </h2>
+                <IncidentTimeline
+                  incidentId={incident.data.id}
+                  entries={incident.data.timeline}
+                />
+              </section>
+
+              <IncidentAlerts incidentId={incident.data.id} />
+
+              <IncidentDeploys incident={incident.data} />
+
+              <IncidentEvidence
+                incidentId={incident.data.id}
+                timeline={incident.data.timeline}
               />
+
+              <IncidentTelemetry
+                serviceId={incident.data.service.id}
+                createdAt={incident.data.createdAt}
+              />
+
+              {user && user.role !== 'VIEWER' && (
+                <PublicUpdates
+                  incidentId={incident.data.id}
+                  orgSlug={org?.slug}
+                  // The same rule as the server's: an Admin, or this incident's Lead or Comms.
+                  mayPublish={
+                    user.role === 'ADMIN' ||
+                    incident.data.assignee?.id === user.id ||
+                    incident.data.roles?.comms?.id === user.id
+                  }
+                />
+              )}
             </div>
-          </section>
 
-          <IncidentDeploys incident={incident.data} />
+            <aside
+              aria-label="Clocks and ownership"
+              className="flex min-w-0 flex-col gap-6"
+            >
+              <section
+                aria-labelledby="sla-heading"
+                className="flex flex-col gap-3"
+              >
+                <h2
+                  id="sla-heading"
+                  className="text-[13px] font-medium"
+                >
+                  SLA
+                </h2>
+                <SlaClocks
+                  incident={incident.data}
+                  className="grid gap-3"
+                />
+                <p className="text-[12px] text-muted-foreground">
+                  Targets were copied when the incident was declared and stay fixed.
+                </p>
+              </section>
 
-          <IncidentTelemetry serviceId={incident.data.service.id} createdAt={incident.data.createdAt} />
+              <IncidentActions incident={incident.data} />
 
-          <IncidentEvidence incidentId={incident.data.id} timeline={incident.data.timeline} />
+              <IncidentRunbooks
+                serviceId={incident.data.service.id}
+              />
 
-          <IncidentRunbooks serviceId={incident.data.service.id} />
-
-          <SimilarIncidentsPanel incidentId={incident.data.id} />
-
-          {user && user.role !== 'VIEWER' && (
-            <PublicUpdates
-              incidentId={incident.data.id}
-              orgSlug={org?.slug}
-              // The same rule as the server's: an Admin, or this incident's Lead or Comms.
-              mayPublish={
-                user.role === 'ADMIN' || incident.data.assignee?.id === user.id || incident.data.roles?.comms?.id === user.id
-              }
-            />
-          )}
-
-          <section aria-labelledby="timeline-heading" className="flex flex-col gap-3">
-            <h2 id="timeline-heading" className="text-lg font-semibold">
-              Timeline
-            </h2>
-            <IncidentTimeline incidentId={incident.data.id} entries={incident.data.timeline} />
-          </section>
+              <SimilarIncidentsPanel
+                incidentId={incident.data.id}
+              />
+            </aside>
+          </div>
         </>
       )}
     </div>

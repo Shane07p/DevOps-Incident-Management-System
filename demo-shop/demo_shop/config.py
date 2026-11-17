@@ -3,6 +3,23 @@
 from __future__ import annotations
 import os
 
+DEFAULT_METRIC_EXPORT_INTERVAL_MS = 60_000
+
+
+def _metric_export_interval_ms() -> int:
+    """How often metrics are pushed, from OTEL_METRIC_EXPORT_INTERVAL (milliseconds, as in the OTel spec).
+
+    60 s by default: every push is outbound traffic on the host's free allowance, and Grafana Cloud's
+    free tier counts one data point per series per minute. Anything unreadable falls back to the
+    default, and nothing goes below 1 s.
+    """
+    raw = os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "").strip()
+    try:
+        value = int(raw) if raw else DEFAULT_METRIC_EXPORT_INTERVAL_MS
+    except ValueError:
+        return DEFAULT_METRIC_EXPORT_INTERVAL_MS
+    return max(value, 1_000)
+
 
 class Config:
     PORT: int = int(os.getenv("PORT", os.getenv("DEMO_SHOP_PORT", "8001")))
@@ -21,6 +38,8 @@ class Config:
         "OTEL_EXPORTER_OTLP_HEADERS",
         os.getenv("GRAFANA_OTLP_TOKEN", ""),
     ).strip()
+
+    OTEL_METRIC_EXPORT_INTERVAL_MS: int = _metric_export_interval_ms()
 
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     CONTROL_TOKEN: str = os.getenv("DEMO_SHOP_CONTROL_TOKEN", "").strip()

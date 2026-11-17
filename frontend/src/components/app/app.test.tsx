@@ -23,9 +23,17 @@ describe('SeverityBadge', () => {
 })
 
 describe('StatusBadge', () => {
-  it('shows the status as text', () => {
+  it('shows the status as a word, not only as an icon', () => {
     render(<StatusBadge status="INVESTIGATING" />)
-    expect(screen.getByText('INVESTIGATING')).toBeInTheDocument()
+    expect(screen.getByText('Investigating')).toBeInTheDocument()
+  })
+
+  it('colours only a finished incident', () => {
+    const { rerender } = render(<StatusBadge status="RESOLVED" />)
+    expect(screen.getByText('Resolved')).toHaveClass('text-status-resolved')
+
+    rerender(<StatusBadge status="OPEN" />)
+    expect(screen.getByText('Open')).toHaveClass('text-foreground')
   })
 })
 

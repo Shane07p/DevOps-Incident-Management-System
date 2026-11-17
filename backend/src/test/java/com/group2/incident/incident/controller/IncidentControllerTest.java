@@ -3,6 +3,7 @@ package com.group2.incident.incident.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -234,8 +235,17 @@ class IncidentControllerTest {
 				.andExpect(jsonPath("$[0].id").value(second.getId()))
 				.andExpect(jsonPath("$[0].reference").value("INC-902"))
 				.andExpect(jsonPath("$[0].serviceName").value("Payments"))
+				// The board sorts by time left, so each row carries both due times (TC-FR-16.3f).
+				.andExpect(jsonPath("$[0].responseDueAt").value(second.getResponseDueAt().toString()))
+				.andExpect(jsonPath("$[0].resolutionDueAt").value(second.getResolutionDueAt().toString()))
 				.andExpect(jsonPath("$[1].id").value(first.getId()))
-				.andExpect(jsonPath("$[1].reference").value("INC-901"));
+				.andExpect(jsonPath("$[1].reference").value("INC-901"))
+				.andExpect(jsonPath("$[1].responseDueAt").value(first.getResponseDueAt().toString()))
+				// The overview acknowledges from the list and shows the Lead and both clocks (#266).
+				.andExpect(jsonPath("$[0].version").value(second.getVersion()))
+				.andExpect(jsonPath("$[0].assignee").value(nullValue()))
+				.andExpect(jsonPath("$[0].acknowledgedAt").value(nullValue()))
+				.andExpect(jsonPath("$[0].resolvedAt").value(nullValue()));
 	}
 
 	@Test

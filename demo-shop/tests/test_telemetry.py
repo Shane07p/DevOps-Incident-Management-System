@@ -75,6 +75,44 @@ def test_otlp_auth_header_parsing_with_base64_padding(monkeypatch):
     assert headers.get("Authorization") == "Basic dXNlcjpwYXNz=="
 
 
+def test_otlp_headers_as_grafana_cloud_generates_them_are_percent_decoded():
+    # Grafana Cloud's OpenTelemetry page gives "Authorization=Basic%20<base64>"; sent as is, it is a 401.
+    assert parse_otlp_headers("Authorization=Basic%20dXNlcjpwYXNz") == {"Authorization": "Basic dXNlcjpwYXNz"}
+    assert parse_otlp_headers("Basic%20dXNlcjpwYXNz==") == {"Authorization": "Basic dXNlcjpwYXNz=="}
+    assert parse_otlp_headers(" Authorization=Basic dXNlcjpwYXNz ") == {"Authorization": "Basic dXNlcjpwYXNz"}
+
+
+def test_metric_export_interval_defaults_to_a_minute_and_reads_the_otel_variable(monkeypatch):
+    from demo_shop.config import _metric_export_interval_ms
+
+    monkeypatch.delenv("OTEL_METRIC_EXPORT_INTERVAL", raising=False)
+    assert _metric_export_interval_ms() == 60_000
+    monkeypatch.setenv("OTEL_METRIC_EXPORT_INTERVAL", "30000")
+    assert _metric_export_interval_ms() == 30_000
+    monkeypatch.setenv("OTEL_METRIC_EXPORT_INTERVAL", "soon")
+    assert _metric_export_interval_ms() == 60_000
+    monkeypatch.setenv("OTEL_METRIC_EXPORT_INTERVAL", "10")
+    assert _metric_export_interval_ms() == 1_000
+
+
+def test_remote_export_is_gzipped_and_pushed_at_the_configured_interval(monkeypatch):
+    from opentelemetry.exporter.otlp.proto.http import Compression
+    from demo_shop import telemetry as telemetry_module
+
+    monkeypatch.setattr(Config, "OTEL_EXPORTER_OTLP_ENDPOINT", "https://otlp.example.test/otlp")
+    monkeypatch.setattr(Config, "OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Basic%20dXNlcjpwYXNz")
+    monkeypatch.setattr(Config, "OTEL_METRIC_EXPORT_INTERVAL_MS", 60_000)
+    with patch("opentelemetry.exporter.otlp.proto.http.metric_exporter.OTLPMetricExporter") as exporter,             patch.object(telemetry_module, "PeriodicExportingMetricReader") as reader:
+        telemetry_module.TelemetryManager()
+
+    exporter.assert_called_once()
+    sent = exporter.call_args.kwargs
+    assert sent["endpoint"] == "https://otlp.example.test/otlp/v1/metrics"
+    assert sent["headers"] == {"Authorization": "Basic dXNlcjpwYXNz"}
+    assert sent["compression"] == Compression.Gzip
+    assert reader.call_args.kwargs["export_interval_millis"] == 60_000
+
+
 def test_metric_labels_use_route_template_not_raw_path(client):
     # Request a product with an ID parameter
     resp = client.get("/products/prod-101")

@@ -16,7 +16,7 @@
     "cypress:run": "cypress run"
   },
   "dependencies": {
-    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/host-grotesk": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-query": "^5.104.5",

@@ -1,0 +1,38 @@
+name: Demo Keep-Alive and Telemetry Warmup
+
+on:
+  schedule:
+    # Runs every 12 hours (00:00 and 12:00 UTC) to keep Supabase active and refresh Grafana retention
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
+    inputs:
+      warmup_traffic_seconds:
+        description: 'Duration (seconds) of demo traffic to generate'
+        required: false
+        default: '30'
+
+concurrency:
+  group: keep-alive-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  warmup:
+    name: Warm up Render, Supabase, and Grafana
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run warmup script
+        env:
+          BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL || 'https://settle-backend.onrender.com' }}
+          FRONTEND_URL: ${{ secrets.VERCEL_FRONTEND_URL || 'https://settle-frontend.vercel.app' }}
+          DEMO_SHOP_URL: ${{ secrets.DEMO_SHOP_URL || 'https://settle-demo-shop.onrender.com' }}
+          DEMO_SHOP_CONTROL_TOKEN: ${{ secrets.DEMO_SHOP_CONTROL_TOKEN || '' }}
+          WARMUP_TRAFFIC_SECONDS: ${{ github.event.inputs.warmup_traffic_seconds || '30' }}
+        run: |
+          chmod +x scripts/demo-warmup.sh
+          ./scripts/demo-warmup.sh

@@ -20,6 +20,7 @@ design, project management, and testing. The specification here is the source of
 | Test cases | [4-testing/test-cases.md](4-testing/test-cases.md) | Every case by ID, with technique and status |
 | Test report | [4-testing/test-report.md](4-testing/test-report.md) | Real results per sprint |
 | Traceability | [4-testing/traceability.csv](4-testing/traceability.csv) | Each requirement, its check, and its status |
+| Viva demo checklist | [viva-demo-checklist.md](viva-demo-checklist.md) | Day-before free-tier readiness, warmup, and fallbacks |
 
 ## Every document, and when to open it
 
@@ -64,6 +65,7 @@ request, read [lessons.md](lessons.md).
 | [3-project-management/project.md](3-project-management/project.md) | Product, scope, stack, team, and the decision log | Checking scope, who owns what, or a decision |
 | [3-project-management/implementation-plan.md](3-project-management/implementation-plan.md) | Who builds what, per sprint, with each issue's status and contract | Finding an issue's owner, contract, or proposed endpoints |
 | [3-project-management/sprint-plan.md](3-project-management/sprint-plan.md) | Roadmap and sprint records | Sprint scope or end-of-sprint results |
+| [viva-demo-checklist.md](viva-demo-checklist.md) | Free-tier readiness, warmup, and day-before verification | Preparing for the viva or running a live demo |
 | [3-project-management/done/](3-project-management/done/) | Finished step-by-step plans, kept for the record | Rarely: only to see how finished work was planned |
 
 ### 4. Testing

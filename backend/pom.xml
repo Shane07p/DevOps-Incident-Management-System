@@ -205,6 +205,34 @@
 							<goal>report</goal>
 						</goals>
 					</execution>
+					<!-- The build fails if coverage drops below these floors, set a point or two under main on 17 Nov 2026
+					     (lines 94.78%, branches 81.56%). Raise them as coverage grows; never lower them to pass a PR. -->
+					<execution>
+						<id>check</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.93</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
 				</executions>
 			</plugin>
 			<!-- Mutation testing for the transition and SLA rules; run on demand, not bound to a phase. -->

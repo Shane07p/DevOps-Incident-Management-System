@@ -31,7 +31,8 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # The runner already provides Docker, so Testcontainers tests run here.
+      # The runner already provides Docker, so Testcontainers tests run here. verify also fails if line or branch
+      # coverage drops below the floors in pom.xml (jacoco check).
       - name: Build and test
         working-directory: backend
         run: ./mvnw -B verify
@@ -52,9 +53,10 @@ jobs:
           path: backend/target/site/jacoco/
           if-no-files-found: ignore
 
-      # Posts overall and changed-file coverage on the PR. No minimum is set, so it never fails the build.
+      # Posts overall and changed-file coverage on the PR, also when a gate failed. The comment only reports: the
+      # floors that fail the build are in pom.xml.
       - name: Comment coverage on the pull request
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: madrapps/jacoco-report@e51ce1f46f7f8b5331593f935e59cbaf44b84920 # v1.8.0
         with:
           paths: ${{ github.workspace }}/backend/target/site/jacoco/jacoco.xml

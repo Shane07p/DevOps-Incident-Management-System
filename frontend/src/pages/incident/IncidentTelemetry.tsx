@@ -2,9 +2,10 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { useState, type MouseEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
-import { fetchLogs, fetchMetric, METRIC_LABEL, METRICS, type MetricName, type MetricSeries } from '@/api/telemetry'
+import { fetchLogs, fetchMetric, METRIC_LABEL, METRICS, type MetricSeries } from '@/api/telemetry'
 import { formatIst } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { formatMetric } from './formatMetric'
 
 const HOUR_MS = 3_600_000
 
@@ -16,18 +17,6 @@ function incidentWindow(createdAt: string, now: number) {
   const from = Date.parse(createdAt) - HOUR_MS
   const to = Math.min(now, from + 24 * HOUR_MS)
   return { from: new Date(from).toISOString(), to: new Date(to).toISOString() }
-}
-
-/** requestRate is per second, errorRate a 0-1 ratio, and latency in seconds. */
-function formatMetric(metric: MetricName, value: number) {
-  switch (metric) {
-    case 'requestRate':
-      return `${value < 10 ? value.toFixed(2) : Math.round(value)} req/s`
-    case 'errorRate':
-      return `${(value * 100).toFixed(value < 0.1 ? 2 : 1)}%`
-    default:
-      return `${Math.round(value * 1000)} ms`
-  }
 }
 
 const LEVEL_STYLE: Record<string, string> = {
@@ -46,7 +35,7 @@ const WIDTH = 300
 const HEIGHT = 96
 
 /** One metric as a line, with the moment the incident was declared marked. Hover reads a point. */
-export function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt?: string }) {
+export function MetricChart({ series, declaredAt, className }: { series: MetricSeries; declaredAt?: string; className?: string }) {
   const [hovered, setHovered] = useState<number | null>(null)
   const label = METRIC_LABEL[series.metric]
   const { points } = series
@@ -75,7 +64,7 @@ export function MetricChart({ series, declaredAt }: { series: MetricSeries; decl
   }
 
   return (
-    <figure className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+    <figure className={cn('flex flex-col gap-2 rounded-lg border bg-card p-4', className)}>
       <figcaption className="flex items-baseline justify-between gap-2">
         <span className="text-sm font-semibold">{label}</span>
         <span className="font-mono text-xs text-muted-foreground tnum">

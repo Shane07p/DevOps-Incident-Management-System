@@ -148,6 +148,29 @@ jobs:
         working-directory: demo-shop
         run: pytest
 
+  # A token, key, or password committed anywhere in the history fails the build (.gitleaks.toml lists what is allowed).
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Gitleaks
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -sSfL -o gitleaks.tar.gz "$base/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep "_linux_x64.tar.gz" checksums.txt | sed 's#  .*#  gitleaks.tar.gz#' | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+
+      # --redact keeps any finding's value out of the log.
+      - name: Scan every commit
+        run: ./gitleaks git --redact --no-banner .
+
   # The AGENTS.md rules that only the pull request's history can show.
   repository-rules:
     name: Repository rules

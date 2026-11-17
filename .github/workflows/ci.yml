@@ -31,10 +31,24 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # The runner already provides Docker, so Testcontainers tests run here.
+      # The runner already provides Docker, so Testcontainers tests run here. verify also fails if line or branch
+      # coverage drops below the floors in pom.xml (jacoco check).
       - name: Build and test
         working-directory: backend
         run: ./mvnw -B verify
+
+      # PIT mutates the lifecycle and SLA rules and fails below the mutation threshold in pom.xml.
+      - name: Mutation tests
+        working-directory: backend
+        run: ./mvnw -B org.pitest:pitest-maven:mutationCoverage
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-mutation
+          path: backend/target/pit-reports/
+          if-no-files-found: ignore
 
       - name: Upload test reports
         if: always()
@@ -52,9 +66,10 @@ jobs:
           path: backend/target/site/jacoco/
           if-no-files-found: ignore
 
-      # Posts overall and changed-file coverage on the PR. No minimum is set, so it never fails the build.
+      # Posts overall and changed-file coverage on the PR, also when a gate failed. The comment only reports: the
+      # floors that fail the build are in pom.xml.
       - name: Comment coverage on the pull request
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: madrapps/jacoco-report@e51ce1f46f7f8b5331593f935e59cbaf44b84920 # v1.8.0
         with:
           paths: ${{ github.workspace }}/backend/target/site/jacoco/jacoco.xml
@@ -147,6 +162,29 @@ jobs:
       - name: Run tests
         working-directory: demo-shop
         run: pytest
+
+  # A token, key, or password committed anywhere in the history fails the build (.gitleaks.toml lists what is allowed).
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Gitleaks
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -sSfL -o gitleaks.tar.gz "$base/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep "_linux_x64.tar.gz" checksums.txt | sed 's#  .*#  gitleaks.tar.gz#' | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+
+      # --redact keeps any finding's value out of the log.
+      - name: Scan every commit
+        run: ./gitleaks git --redact --no-banner .
 
   # The AGENTS.md rules that only the pull request's history can show.
   repository-rules:

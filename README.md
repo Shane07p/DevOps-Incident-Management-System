@@ -167,6 +167,21 @@ Merging to `main` deploys automatically once CI passes:
 
 Secrets live only in Render's environment variables, never in the repository.
 
+### Rolling back a bad deploy
+
+1. **Frontend:** in Vercel, open the project's Deployments, pick the last good Production deployment, and choose
+   Instant Rollback. It serves again within seconds; the next merge to `main` deploys as usual.
+2. **Backend:** in Render, open the service's Events, pick the last good deploy, and choose Rollback. Then revert the
+   bad commit on `main` with a pull request, or the next deploy brings it back.
+3. **Database:** migrations only go forward. An older backend still starts after a newer migration
+   (`spring.flyway.ignore-migration-patterns=*:future`), but if that migration added a `NOT NULL` column without a
+   default, the older code's inserts fail. Check the migrations in between before rolling back; to undo a schema
+   change, add a new `V` migration.
+4. Check the result with the Deploy check workflow (Actions, Run workflow), or open `/actuator/health`.
+
+Releases are tagged on `main` as `vMAJOR.MINOR.PATCH` (`git tag -a v1.0.0 -m "…" && git push origin v1.0.0`), so a
+known good build has a name to roll back to; `v1.0.0` marks the build shown at the viva.
+
 ## Working agreement
 
 Branch from `main`, keep commits attributable to their author, open a focused pull request,

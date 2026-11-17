@@ -143,6 +143,17 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 | TC-FR-16.4a | Equivalence | An incident open across a night and a weekend | All elapsed time counts | `SlaTest` | Automated |
 | TC-FR-16.1a | Equivalence | A new incident | `responseDueAt` and `resolutionDueAt` are creation time plus each target | `IncidentTest` | Automated |
 
+### Property-based checks: generated cases for the rules
+
+jqwik (backend) and fast-check (frontend) generate the inputs, check a rule that must hold for all of them, and
+shrink a failure to the smallest case. They add to the hand-picked boundaries above; they don't replace them.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-16.3e | Property-based (boundary) | 1,000 generated starts, targets (1 to 100,000 min), and elapsed times, negative ones included | Breached exactly when elapsed is over the target; at the due time itself, not breached; 1 ns later, breached | `SlaPropertyTest` | In review |
+| TC-FR-06.3b | Property-based (state transition) | All 49 (from, to) pairs, generated exhaustively | Legal exactly for the 8 pairs in AGENTS.md; nothing returns to OPEN or leaves CLOSED; every status can still reach CLOSED, and only RESOLVED goes straight to it | `TransitionPolicyPropertyTest` | In review |
+| TC-FR-15.2f | Property-based (equivalence) | 200 generated sets of non-overlapping shifts and windows, and a moment in each window | The coverage bar tiles the window with no hole, overlap, or two gaps in a row; at any moment it agrees with who gets a new incident (the shift, else the fallback) | `schedule.property.test.ts` | In review |
+
 ### Append-only records (FR-08, FR-13)
 
 | ID | Technique | Input or condition | Expected | Test | Status |

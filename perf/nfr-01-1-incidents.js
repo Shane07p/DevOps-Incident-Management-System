@@ -23,12 +23,23 @@ const boardDuration = new Trend('board_response_time', true);
 const detailDuration = new Trend('detail_response_time', true);
 const failureRate = new Rate('custom_failure_rate');
 
+// Workload profile configuration:
+// - Default (Local NFR-01.1 benchmark): 10 VUs for 80s (10s ramp, 60s steady, 10s ramp-down).
+// - Deployed (WORKLOAD_PROFILE=deployed): Gentle 2 VUs for 30s (5s ramp, 20s steady, 5s ramp-down).
+const isDeployed = __ENV.WORKLOAD_PROFILE === 'deployed';
+
 export const options = {
-  stages: [
-    { duration: '10s', target: 10 }, // Ramp-up to 10 VUs
-    { duration: '60s', target: 10 }, // Steady state with 10 VUs
-    { duration: '10s', target: 0 },  // Ramp-down to 0 VUs
-  ],
+  stages: isDeployed
+    ? [
+        { duration: '5s', target: 2 },  // Gentle ramp-up to 2 VUs
+        { duration: '20s', target: 2 }, // Steady state with 2 VUs
+        { duration: '5s', target: 0 },  // Gentle ramp-down
+      ]
+    : [
+        { duration: '10s', target: 10 }, // Ramp-up to 10 VUs
+        { duration: '60s', target: 10 }, // Steady state with 10 VUs
+        { duration: '10s', target: 0 },  // Ramp-down to 0 VUs
+      ],
   thresholds: {
     // Overall HTTP failure rate below 1%
     'http_req_failed': ['rate<0.01'],
@@ -107,7 +118,11 @@ export function setup() {
 
   console.log(`[setup] Discovered ${incidentIds.length} existing incident IDs in the database.`);
   if (incidentIds.length < 1000) {
-    console.warn(`[setup] Warning: Only ${incidentIds.length} incidents found. NFR-01.1 specifies 1,000 incidents. Ensure seed_1000_incidents.sql was executed.`);
+    if (isDeployed) {
+      console.log(`[setup] Deployed mode: Found ${incidentIds.length} incidents (non-destructive; 1,000 incident seed is not applied to deployed environment).`);
+    } else {
+      console.warn(`[setup] Warning: Only ${incidentIds.length} incidents found. NFR-01.1 specifies 1,000 incidents. Ensure seed_1000_incidents.sql was executed.`);
+    }
   }
 
   // Fallback to default ID if list is empty

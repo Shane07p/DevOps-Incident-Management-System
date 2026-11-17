@@ -78,12 +78,44 @@ Evaluated against non-functional performance requirements **NFR-01.1** (incident
 - **Environment:** Local Docker Compose stack on Windows 11 / WSL2, Docker Desktop 4.96.0, Docker Engine 29.9.1, k6 v2.4.0 (commit/dd9395906d, linux/amd64), PostgreSQL 16.15 (pgvector 0.8.6), Spring Boot 4.1 backend (`incident-app`), Nginx 1.31.8 (`incident-web`).
 - **Database Stored Incidents:** 1,000 valid synthetic incidents seeded via `perf/seed_1000_incidents.sql` with associated timeline entries. Incident references are assigned sequentially starting from `organization.next_incident_number` (e.g. `INC-<number>`) rather than assuming a fixed `INC-1` through `INC-1000` sequence, preserving organization numbering constraints and per-org uniqueness. The k6 test suite dynamically discovers the actual incident IDs via `GET /api/incidents` during test setup.
 
-### Test Execution & Results Summary
+### Local Benchmark Results
 
-| Benchmark | Target Requirement | Workload Profile | Target Rate / Concurrency | Metrics (p50 / p90 / p95 / Max) | Failed Rate | Threshold | Status |
+| Benchmark Run | Target Requirement | Workload Profile | Target Rate / Concurrency | Metrics (p50 / p90 / p95 / Max) | Failed Rate | Threshold | Status |
 |---|---|---|---|---|---|---|---|
-| **Incident Board** (`GET /api/incidents`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total board requests) | p50: 24.65 ms<br>p90: 43.48 ms<br>p95: **52.89 ms**<br>Max: 173.85 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
-| **Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total detail requests) | p50: 7.58 ms<br>p90: 19.53 ms<br>p95: **25.03 ms**<br>Max: 112.06 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
-| **Alert Webhook Intake** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 11.83 ms<br>p90: 17.04 ms<br>p95: **20.39 ms**<br>Max: 64.00 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Original Benchmark: Incident Board** (`GET /api/incidents`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total board requests) | p50: 24.65 ms<br>p90: 43.48 ms<br>p95: **52.89 ms**<br>Max: 173.85 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Original Benchmark: Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total detail requests) | p50: 7.58 ms<br>p90: 19.53 ms<br>p95: **25.03 ms**<br>Max: 112.06 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Additional Validation: Incident Board** (`GET /api/incidents`) | NFR-01.1 | Additional validation run on 1,330 stored incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (5,810 completed iterations, 5,810 board requests) | p50: 35.01 ms<br>p90: 52.75 ms<br>p95: **60.14 ms**<br>Max: 193.13 ms | 0.00% (0 / 5,810) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Additional Validation: Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | Additional validation run on 1,330 stored incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (5,810 completed iterations, 5,810 detail requests) | p50: 7.91 ms<br>p90: 16.63 ms<br>p95: **20.51 ms**<br>Max: 61.80 ms | 0.00% (0 / 5,810) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.2 Grouping-Path Benchmark** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s with reused correlation keys (exercises alert grouping into existing incidents) | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 11.83 ms<br>p90: 17.04 ms<br>p95: **20.39 ms**<br>Max: 64.00 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.2 New-Incident-Path Benchmark** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s with strictly unique correlation keys (exercises full incident creation path) | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 24.30 ms<br>p90: 32.36 ms<br>p95: **37.88 ms**<br>Max: 69.73 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
 
-> **Notes on Execution Results:** Both performance requirements comfortably satisfied their respective thresholds: incident board p95 was 52.89 ms (threshold 2,000 ms, 37x headroom), incident detail p95 was 25.03 ms (threshold 2,000 ms, 79x headroom), and alert intake p95 was 20.39 ms at 10 alerts/sec (threshold 1,000 ms, 49x headroom). Zero requests failed across 13,530 incident queries and 304 webhook requests. Execution instructions and reproducible runners are documented in [perf/README.md](../../perf/README.md).
+> **Notes on Local Execution Results:**
+> - **NFR-01.1:** The original benchmark met the threshold with 1,000 seeded incidents (Board p95: 52.89 ms; Detail p95: 25.03 ms). The subsequent validation run on an expanded dataset of 1,330 incidents confirmed sustained compliance (Board p95: 60.14 ms; Detail p95: 20.51 ms), well below the 2,000 ms ceiling.
+> - **NFR-01.2:** Two distinct workloads were evaluated:
+>   1. *Grouping-path benchmark:* Reused 4 correlation keys, resulting in 4 incidents created and 297 alerts attached (`status: ATTACHED`), measuring intake and grouping latency (p95: 20.39 ms).
+>   2. *Full new-incident-path benchmark:* Generated a strictly unique correlation key per iteration, resulting in 301 distinct new incidents verified in the database (incident count increased from 1,029 to 1,330; 301 alerts with `status: NEW`, 0 with `ATTACHED`). This verified the slower creation path including SLA copying, organization row-locking for atomic sequence numbering, on-call assignment, notifications, and timeline logging (p95: 37.88 ms, 26x headroom below 1,000 ms).
+> - Zero requests failed across all local runs (13,530 incident queries on original run, 11,620 on validation run, and 608 total webhook requests). Detailed execution instructions are in [perf/README.md](../../perf/README.md).
+
+### Deployed Low-Load Testing Status (Render / Supabase)
+
+- **Target URL:** `https://incident-backend-f340.onrender.com`
+- **Health Verification:** `GET /actuator/health` responded with HTTP 200 `{"groups":["liveness","readiness"],"status":"UP"}`.
+- **Access Attempts:** Requests to `POST /api/auth/login` and `POST /webhooks/alerts` returned **HTTP 401 Unauthorized**.
+- **Execution Status:** **Not Completed (Blocked)**. Deployed performance tests have **not** completed because authorized credentials and tool tokens are not available in the test environment. In compliance with `AGENTS.md` and `application.properties`, development seed accounts (`admin@settle.local` / `DevPassw0rd!`) are restricted to local databases (`R__dev_seed.sql`) and are not populated in the production database.
+- **Reporting Note:** Deployed performance metrics are **not** reported, and deployed testing is **not** marked as passed.
+- **Execution Instructions Once Authorized Credentials Are Supplied:**
+  To run the gentle deployed suite once credentials or tool tokens are provided in the environment:
+  ```powershell
+  # 1. Gentle incident latency check (2 VUs, 30s):
+  k6 run perf/nfr-01-1-incidents.js `
+    -e BASE_URL=https://incident-backend-f340.onrender.com `
+    -e WORKLOAD_PROFILE=deployed `
+    -e ADMIN_EMAIL=<authorized_admin_email> `
+    -e ADMIN_PASSWORD=<authorized_admin_password>
+
+  # 2. Gentle alert intake check (1 alert/s, 30s):
+  k6 run perf/nfr-01-2-alerts.js `
+    -e BASE_URL=https://incident-backend-f340.onrender.com `
+    -e WORKLOAD_PROFILE=deployed `
+    -e TOOL_TOKEN=<authorized_tool_token>
+  ```

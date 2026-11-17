@@ -47,6 +47,7 @@ You can run the tests using either **native k6** or **Docker Desktop**.
 | `ADMIN_PASSWORD` | `DevPassw0rd!` | Admin user password. |
 | `TOOL_TOKEN` | *(auto-registered if unset)* | Bearer token for incoming alert webhooks (starts with `tt_`). |
 | `SERVICE_NAME` | `Payments` | Target service in the catalog to attribute test alerts to. |
+| `WORKLOAD_PROFILE` | `local` | `local` (default benchmark load) or `deployed` (gentle low-load run). |
 
 ---
 
@@ -102,6 +103,21 @@ docker run --rm -i -v "${PWD}/perf:/perf" grafana/k6 run /perf/nfr-01-1-incident
 
 ### 6.3 Running NFR-01.2 (Alert Ingestion at 10 alerts/sec)
 
+#### Alert Correlation Keys: New Incident Path vs. Grouping
+In Settle, incoming alerts are processed by `AlertService` and `AlertCorrelationService`:
+- **Grouping Path (Attachment):** If an active (non-terminal) incident already exists matching `(service_id, source, correlation_key)`, the incoming alert attaches to the existing incident (`status: ATTACHED`).
+- **New-Incident Path (Incident Creation):** If no active incident matches the correlation key, a brand new incident is created via `IncidentService.createIncidentFromAlert()`. This executes the full, slower incident lifecycle:
+  1. SLA targets are resolved and copied from the service catalog (fixed SLA baseline).
+  2. The organization row is locked to allocate `next_incident_number` atomically.
+  3. The on-call schedule is evaluated and an assignee is assigned.
+  4. The incident entity is saved (`status: OPEN`).
+  5. Append-only timeline entries are generated (`INCIDENT_CREATED`, `ASSIGNED`, `ALERT_ATTACHED`).
+  6. Escalation notifications (`PAGE`) are created.
+  7. Configuration audit entries are recorded.
+  8. SLA escalation tasks are scheduled.
+
+`perf/nfr-01-2-alerts.js` generates a **strictly unique correlation key for every alert iteration** (`k6-corr-${Date.now()}-${__VU}-${__ITER}-${rand}`), ensuring every alert exercises the complete new-incident creation path rather than the faster grouping path.
+
 #### Option 1: Auto-Provisioning Tool Token (Local Dev)
 If `TOOL_TOKEN` is omitted, the script logs in using `admin@settle.local`, registers a temporary tool token (`POST /api/tools`), runs the 10 alerts/sec workload, and automatically revokes the tool during teardown:
 ```powershell
@@ -131,23 +147,51 @@ docker run --rm -i -v "${PWD}/perf:/perf" grafana/k6 run /perf/nfr-01-2-alerts.j
 
 ## 7. Running Against Deployed Environments
 
-> [!CAUTION]
-> **Safety Rules for Deployed Testing:**
-> 1. **NEVER** run `seed_1000_incidents.sql` against a production or shared staging database.
-> 2. **NEVER** hardcode credentials or tokens in git.
-> 3. Use an authorized, dedicated monitoring tool token registered for performance verification.
-> 4. Keep testing non-destructive: NFR-01.1 is read-only; for NFR-01.2 use a dedicated test service or short bursts.
+To test a deployed environment safely without stressing resources or creating excessive alerts/incidents, use the **`WORKLOAD_PROFILE=deployed`** low-load configuration:
 
+| Benchmark | Local Default Profile | Deployed Profile (`WORKLOAD_PROFILE=deployed`) |
+|---|---|---|
+| **NFR-01.1 (Incidents)** | 10 concurrent VUs for 80s (10s ramp, 60s steady, 10s ramp-down) | **2 concurrent VUs for 30s** (5s ramp, 20s steady, 5s ramp-down) |
+| **NFR-01.2 (Alerts)** | Constant arrival rate of 10 alerts/sec for 30s (300 alerts) | **Constant arrival rate of 1 alert/sec for 30s** (30 alerts) |
+
+> [!CAUTION]
+> **Safety Rules & Operational Requirements for Deployed Testing:**
+> 1. **Alert Tests Create Real Incidents & Records:** Submitting alerts via `perf/nfr-01-2-alerts.js` generates actual `incident`, `timeline_entry`, responder notification (`PAGE`), audit log, and SLA escalation task records in the database. Therefore, **running tests against a deployed environment requires explicit approval from the environment owner**, and should target dedicated non-production services.
+> 2. **Credentials Must Come From Environment Variables:** In accordance with repository security rules (`AGENTS.md`), **never hardcode or commit credentials or tokens to git**. All credentials (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TOOL_TOKEN`) must be supplied strictly through environment variables or CLI arguments.
+> 3. **Never Seed Deployed Databases:** **NEVER** run `seed_1000_incidents.sql` against a production or shared staging database. The deployed profile automatically bypasses the 1,000 incident precondition check.
+> 4. **Use Authorized Tool Tokens:** For alert testing, prefer a dedicated monitoring tool token registered specifically for performance verification rather than relying on automatic admin registration.
+
+### Executing Low-Load Deployed Tests
+
+#### 7.1 Incident Latency (NFR-01.1 deployed run)
 ```powershell
-# Test incident latency against deployed backend:
+# Native k6:
 k6 run perf/nfr-01-1-incidents.js `
-  -e BASE_URL=https://<your-backend-app>.onrender.com `
+  -e BASE_URL=https://incident-backend-f340.onrender.com `
+  -e WORKLOAD_PROFILE=deployed `
   -e ADMIN_EMAIL=<authorized_admin_email> `
   -e ADMIN_PASSWORD=<authorized_admin_password>
 
-# Test alert ingestion against deployed backend:
+# Docker k6:
+docker run --rm -i -v "${PWD}/perf:/perf" grafana/k6 run /perf/nfr-01-1-incidents.js `
+  -e BASE_URL=https://incident-backend-f340.onrender.com `
+  -e WORKLOAD_PROFILE=deployed `
+  -e ADMIN_EMAIL=<authorized_admin_email> `
+  -e ADMIN_PASSWORD=<authorized_admin_password>
+```
+
+#### 7.2 Alert Webhook Ingestion (NFR-01.2 deployed run)
+```powershell
+# Native k6:
 k6 run perf/nfr-01-2-alerts.js `
-  -e BASE_URL=https://<your-backend-app>.onrender.com `
+  -e BASE_URL=https://incident-backend-f340.onrender.com `
+  -e WORKLOAD_PROFILE=deployed `
+  -e TOOL_TOKEN=<authorized_tool_token>
+
+# Docker k6:
+docker run --rm -i -v "${PWD}/perf:/perf" grafana/k6 run /perf/nfr-01-2-alerts.js `
+  -e BASE_URL=https://incident-backend-f340.onrender.com `
+  -e WORKLOAD_PROFILE=deployed `
   -e TOOL_TOKEN=<authorized_tool_token>
 ```
 

@@ -29,15 +29,24 @@ import { Trend, Rate } from 'k6/metrics';
 const alertLatency = new Trend('alert_intake_latency', true);
 const alertFailures = new Rate('alert_failure_rate');
 
+// Workload profile configuration:
+// - Default (Local NFR-01.2 benchmark): Constant arrival rate of 10 alerts/sec for 30s.
+// - Deployed (WORKLOAD_PROFILE=deployed): Gentle arrival rate of 1 alert/sec for 30s.
+const isDeployed = __ENV.WORKLOAD_PROFILE === 'deployed';
+const arrivalRate = isDeployed ? 1 : (parseInt(__ENV.ALERT_RATE, 10) || 10);
+const preAllocatedVUs = isDeployed ? 2 : (parseInt(__ENV.PRE_ALLOCATED_VUS, 10) || 10);
+const maxVUs = isDeployed ? 5 : (parseInt(__ENV.MAX_VUS, 10) || 20);
+const testDuration = __ENV.DURATION || '30s';
+
 export const options = {
   scenarios: {
-    ten_alerts_per_second: {
+    constant_alert_arrival: {
       executor: 'constant-arrival-rate',
-      rate: 10,
+      rate: arrivalRate,
       timeUnit: '1s',
-      duration: '30s',
-      preAllocatedVUs: 10,
-      maxVUs: 20,
+      duration: testDuration,
+      preAllocatedVUs: preAllocatedVUs,
+      maxVUs: maxVUs,
     },
   },
   thresholds: {
@@ -120,25 +129,39 @@ export function setup() {
 }
 
 /**
- * Main per-iteration function invoked at 10 iterations per second:
+ * Main per-iteration function invoked at the configured arrival rate:
  * Submits a synthetic alert conforming to AlertRequest DTO.
+ *
+ * Each iteration generates a strictly unique correlationKey so that the backend's
+ * AlertCorrelationService finds no active incident to group with, thus reliably
+ * exercising the full, slower new-incident creation path:
+ *   - SLA target lookup & copying from service catalog (fixed SLA baseline)
+ *   - Organization row-lock & atomic next_incident_number sequence allocation
+ *   - On-call schedule query and assignee resolution
+ *   - Incident persistence with OPEN status
+ *   - Append-only timeline entries (INCIDENT_CREATED, ASSIGNED, ALERT_ATTACHED)
+ *   - Notification generation (PAGE)
+ *   - Audit log recording
+ *   - Escalation task scheduling
  */
 export default function (data) {
-  const eventId = `k6-evt-${__VU}-${__ITER}-${Date.now()}`;
-  const correlationKey = `k6-corr-${__VU % 4}`;
+  const timestamp = Date.now();
+  const eventId = `k6-evt-${timestamp}-${__VU}-${__ITER}-${Math.floor(Math.random() * 1000000)}`;
+  const correlationKey = `k6-corr-${timestamp}-${__VU}-${__ITER}-${Math.floor(Math.random() * 1000000)}`;
 
   const payload = JSON.stringify({
     source: 'k6-load-generator',
     eventId: eventId,
     service: data.serviceName,
     title: `Synthetic High Latency Alert (${eventId})`,
-    description: 'Triggered during k6 constant-arrival-rate performance check for NFR-01.2.',
+    description: 'Triggered during k6 performance check for NFR-01.2 exercising the new-incident path.',
     severity: 'SEV2',
     correlationKey: correlationKey,
     details: {
       generator: 'k6',
       iteration: __ITER,
       vu: __VU,
+      correlationKey: correlationKey,
     },
   });
 

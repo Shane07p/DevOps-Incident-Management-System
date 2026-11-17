@@ -37,6 +37,19 @@ jobs:
         working-directory: backend
         run: ./mvnw -B verify
 
+      # PIT mutates the lifecycle and SLA rules and fails below the mutation threshold in pom.xml.
+      - name: Mutation tests
+        working-directory: backend
+        run: ./mvnw -B org.pitest:pitest-maven:mutationCoverage
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-mutation
+          path: backend/target/pit-reports/
+          if-no-files-found: ignore
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7

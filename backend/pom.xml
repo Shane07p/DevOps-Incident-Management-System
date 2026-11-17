@@ -235,18 +235,29 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Mutation testing for the transition and SLA rules; run on demand, not bound to a phase. -->
+			<!-- Mutation testing for the transition and SLA rules; not bound to a phase, the CI mutation job runs it. -->
 			<plugin>
 				<groupId>org.pitest</groupId>
 				<artifactId>pitest-maven</artifactId>
 				<version>1.30.1</version>
 				<configuration>
+					<!-- The lifecycle and SLA rules (test-plan.md section 7), mutated against their unit and property tests,
+					     which need no database. CI fails below mutationThreshold (a percentage of mutants killed). -->
 					<targetClasses>
-						<param>com.group2.incident.*</param>
+						<param>com.group2.incident.incident.service.TransitionPolicy</param>
+						<param>com.group2.incident.incident.service.SlaCalculator</param>
 					</targetClasses>
 					<targetTests>
-						<param>com.group2.incident.*</param>
+						<param>com.group2.incident.incident.service.TransitionPolicy*Test</param>
+						<param>com.group2.incident.incident.service.Sla*Test</param>
 					</targetTests>
+					<!-- STRONGER adds removed conditionals and switch mutations. On 17 Nov 2026 it made 28 mutants and the tests
+					     killed 27 (96%); the survivor drops the `to == null` check in TransitionPolicy, which changes nothing,
+					     since every case then compares `to` with == and returns false (an equivalent mutant). -->
+					<mutators>
+						<mutator>STRONGER</mutator>
+					</mutators>
+					<mutationThreshold>95</mutationThreshold>
 					<outputFormats>
 						<param>HTML</param>
 						<param>XML</param>

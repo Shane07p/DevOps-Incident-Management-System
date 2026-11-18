@@ -63,8 +63,9 @@ class SecurityConfig {
 	SecurityFilterChain oauthLoginFilterChain(HttpSecurity http, OAuthLoginHandler handler, ProviderUserService providerUserService,
 			ClientRegistrationRepository registrations)
 			throws Exception {
+		// CSRF protection stays on: this chain is the one with a session cookie. Its two endpoints are GETs, which CSRF
+		// checks leave alone, and the OAuth state parameter ties each callback to the sign-in that started it.
 		http.securityMatcher("/api/auth/oauth2/**")
-				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
 				.authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
 				.oauth2Login(login -> login

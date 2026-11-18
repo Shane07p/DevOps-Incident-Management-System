@@ -143,7 +143,7 @@ Both SLA clocks start at incident creation. The response clock ends at the first
 
 Targets stay fixed for that incident even if severity or service settings change later. Severity changes affect displayed priority and are recorded with a reason. Adding alerts, assigning another responder, or returning to investigation does not restart either clock. No pauses, business calendars, or reopening are included initially.
 
-RESOLVED requires a recovery note. CLOSED requires the basic postmortem to be saved and reviewed by an Engineer or Admin. Action items may remain open after closure. These are proposed simple rules to confirm during elicitation.
+RESOLVED requires a recovery note. CLOSED requires a REVIEWED postmortem for SEV1 and SEV2; SEV3 and SEV4 may close without one (D17, #239). An Engineer or Admin other than the person who last edited the postmortem reviews it. Action items may remain open after closure.
 
 ## 9. Access and history
 

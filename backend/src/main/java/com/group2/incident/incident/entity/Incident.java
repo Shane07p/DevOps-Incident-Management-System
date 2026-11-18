@@ -54,6 +54,11 @@ public class Incident {
 	@Column(nullable = false, length = 10)
 	private Severity severity;
 
+	// The most severe level the incident has had (DR-06.3): a downgrade does not lift the postmortem rule for closure.
+	@Enumerated(EnumType.STRING)
+	@Column(name = "highest_severity", nullable = false, length = 10)
+	private Severity highestSeverity;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)
 	private IncidentStatus status;
@@ -116,6 +121,7 @@ public class Incident {
 		this.description = description;
 		this.service = service;
 		this.severity = severity;
+		this.highestSeverity = severity;
 		this.status = status;
 		this.reporter = reporter;
 		this.createdAt = createdAt;
@@ -156,6 +162,10 @@ public class Incident {
 	/** Changes severity; the SLA targets copied at creation stay as they were. */
 	public void changeSeverity(Severity newSeverity) {
 		this.severity = newSeverity;
+		// SEV1 is the most severe and comes first in the enum.
+		if (newSeverity.compareTo(this.highestSeverity) < 0) {
+			this.highestSeverity = newSeverity;
+		}
 	}
 
 	/** Gives Comms or Ops to a person. The Lead is the assignee, changed only through {@link #assignTo}. */

@@ -60,7 +60,7 @@ class SecurityConfig {
 		http.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests
-						.requestMatchers("/error", "/actuator/health/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
+						.requestMatchers("/error", "/actuator/health/**", "/actuator/info", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
 						// The public status page is for customers, who have no account (D45).
@@ -82,10 +82,13 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/triage-hint").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/acknowledge").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/transitions").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/severity").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/postmortem").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/postmortem/review").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/assignee").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/incidents/*/roles").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasAnyRole("ADMIN", "ENGINEER")

@@ -27,7 +27,9 @@ Sprint 6.
 | API and security | Status codes, validation errors, and permissions for every endpoint and role | MockMvc, `SecurityMatrixTest` | Every build |
 | Frontend component | Forms, field errors, role-based screens, the API client | Vitest, Testing Library, jsdom | Every build |
 | AI service | Endpoints, contracts, and failure handling with fixed sample responses | pytest | Every build |
-| Mutation | Whether the tests catch small bugs in the transition and SLA rules | PIT | Not in CI: on demand, and at the end of each sprint |
+| Property-based | Rules that must hold for every input: the SLA breach rule, the lifecycle, on-call coverage | jqwik (backend), fast-check (frontend) | Every build |
+| Mutation | Whether the tests catch small bugs in the transition and SLA rules | PIT | Every build, after the backend tests; fails below 95% |
+| Secret scan | A token, key, or password anywhere in the history | Gitleaks (`.gitleaks.toml`); optional pre-commit hook | Every build |
 | Manual acceptance | The sprint demo, in Chrome and Firefox | People | End of each sprint |
 | End to end | One complete incident flow in a browser | Cypress | Sprint 6 |
 | Performance | NFR-01 response times and NFR-03 capacity on the deployed setup | k6 | Sprint 6 |
@@ -49,7 +51,8 @@ Every test case in [test-cases.md](test-cases.md) names the technique used to ch
 | Negative testing | Missing fields, bad tokens, stale versions, edits to append-only records |
 | Statement and branch coverage (white box) | Measured on every build with JaCoCo (backend) and Vitest (frontend) |
 | Basis path testing (white box) | The transition check and the SLA check: control-flow graph, cyclomatic complexity, one test per independent path |
-| Mutation testing | PIT on the transition and SLA classes |
+| Property-based testing | Generated inputs for the SLA rule, all 49 transition pairs, and on-call coverage; a failure shrinks to the smallest case (TC-FR-16.3e, TC-FR-06.3b, TC-FR-15.2f) |
+| Mutation testing | PIT on the transition and SLA classes, with the STRONGER mutators |
 
 ## 4. Environments and test data
 
@@ -95,10 +98,18 @@ issue lists the test case IDs it must automate.
   the `backend-coverage` artifact, and each PR gets a comment with overall and changed-file coverage.
 - **Frontend:** Vitest measures coverage over every source file, including files no test imports.
   The report is saved as the `frontend-coverage` artifact.
-- **Mutation:** PIT is not part of CI. Run it on demand, and at the end of each sprint on the
-  transition and SLA classes. Its score shows
-  whether the tests would catch a small bug, which coverage alone cannot.
-- **Targets:** none are set yet. We report the real numbers each sprint.
+- **Mutation:** PIT runs in CI after the backend tests, on the transition and SLA classes with the STRONGER
+  mutators, and fails below a 95% mutation score. On 17 Nov 2026 it made 28 mutants and killed 27 (96%). The
+  survivor drops the `to == null` check in `TransitionPolicy`: every case then compares `to` with `==` and returns
+  false, so nothing changes (an equivalent mutant). The report is the `backend-mutation` artifact.
+- **Targets:** the build fails below these floors, set a point or two under `main` on 17 Nov 2026. Raise them as
+  coverage grows; never lower them to make a pull request pass.
+
+  | Part | Floor | `main`, 17 Nov 2026 |
+  | --- | --- | --- |
+  | Backend (JaCoCo, `pom.xml`) | lines 93%, branches 80% | lines 94.78%, branches 81.56% |
+  | Frontend (Vitest, `vite.config.ts`) | statements 89%, branches 82%, functions 86%, lines 91% | statements 90.51%, branches 83.48%, functions 87.14%, lines 91.97% |
+  | Mutation (PIT, `pom.xml`) | 95% | 96% (27 of 28) |
 
 ## 8. Defects
 

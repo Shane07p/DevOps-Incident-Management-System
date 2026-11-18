@@ -1,27 +1,21 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { CircleAlert, RefreshCw, Terminal } from 'lucide-react'
-import { useCallback, useId, useState } from 'react'
+import { RefreshCw, Terminal } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
 import { listServiceChoices } from '@/api/incidents'
-import { fetchMetric, METRIC_LABEL, METRICS } from '@/api/telemetry'
+import { fetchMetric, METRICS, type MetricName, type MetricSeries } from '@/api/telemetry'
+import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { PageHeader } from '@/components/app/PageHeader'
+import { Panel, PanelFooter } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { formatIst } from '@/lib/time'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatIst, formatIstClock } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { formatMetric } from './incident/formatMetric'
 import { MetricChart } from './incident/IncidentTelemetry'
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const TIME_RANGES = [
   { id: '1h', label: 'Last 1 hour', minutes: 60 },
@@ -29,247 +23,191 @@ const TIME_RANGES = [
   { id: '24h', label: 'Last 24 hours', minutes: 1440 },
 ] as const
 
+/** The three numbers a responder reads first, each the metric's latest point. */
+const TILES: { metric: MetricName; label: string }[] = [
+  { metric: 'errorRate', label: 'Error rate' },
+  { metric: 'latencyP95', label: 'p95 latency' },
+  { metric: 'requestRate', label: 'Requests' },
+]
+
 /** A 503 means Grafana is down or not set up; the server's message says which. */
 function unavailable(error: unknown) {
   return error instanceof ApiRequestError && error.status === 503 ? error.message : null
 }
 
-// ---------------------------------------------------------------------------
-// Main Component
-// ---------------------------------------------------------------------------
+function Tile({ label, series }: { label: string; series: MetricSeries | undefined }) {
+  const latest = series?.points.at(-1)
+  return (
+    <div className="flex flex-col gap-3 px-5 py-5">
+      <span className="text-[12px] text-muted-foreground">{label}</span>
+      <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <strong className="font-mono text-[30px] leading-none font-medium tnum">
+          {series && latest ? formatMetric(series.metric, latest.value) : '–'}
+        </strong>
+        <span className="text-[12px] text-muted-foreground">
+          {latest ? `at ${formatIstClock(Date.parse(latest.timestamp))} IST` : 'no traffic'}
+        </span>
+      </span>
+    </div>
+  )
+}
 
 /**
- * Metrics Dashboard Page (FR-27 / Issue #163).
- * Telemetry section: query service metrics (request rate, error rate, latency p50/p95)
- * across configurable time ranges, synchronized with URL search parameters.
+ * Metrics (FR-27, #163): one service's request rate, error rate and latency over a chosen range. The service
+ * and range live in the URL; a value that isn't an option falls back to the first service and the last hour.
  */
 export function MetricsPage() {
   const [params, setParams] = useSearchParams()
+  // The window ends when the page opened, a filter changed, or Refresh was clicked; a new end is a new query key.
+  const [windowEnd, setWindowEnd] = useState(() => Date.now())
 
-  // ---- Read parameters from URL --------------------------------------------
-  const chosenServiceId = params.get('serviceId') ?? ''
-  const timeRangeParam = params.get('timeRange') ?? '1h'
-  const explicitFrom = params.get('from') ?? ''
-  const explicitTo = params.get('to') ?? ''
+  const services = useQuery({ queryKey: ['services-choices'], queryFn: listServiceChoices })
+  const choices = services.data ?? []
+  const service = choices.find((choice) => String(choice.id) === params.get('serviceId')) ?? choices[0]
+  const serviceId = service ? String(service.id) : ''
+  const range = TIME_RANGES.find((option) => option.id === params.get('timeRange')) ?? TIME_RANGES[0]
 
-  // Time reference kept in state; updated on refresh or range change
-  const [windowNow, setWindowNow] = useState(() => Date.now())
+  const from = new Date(windowEnd - range.minutes * 60_000).toISOString()
+  const to = new Date(windowEnd).toISOString()
 
-  // ---- Atomic filter updater -----------------------------------------------
-  const setFilters = useCallback(
-    (overrides: Partial<Record<'serviceId' | 'timeRange' | 'from' | 'to', string>>) => {
-      setWindowNow(Date.now())
-      setParams((prev) => {
-        const next = new URLSearchParams(prev)
-        for (const [k, v] of Object.entries(overrides)) {
-          if (v) {
-            next.set(k, v)
-          } else {
-            next.delete(k)
-          }
-        }
-        return next
-      })
-    },
-    [setParams],
-  )
-
-  // ---- Service list for dropdown -------------------------------------------
-  const services = useQuery({
-    queryKey: ['services-choices'],
-    queryFn: listServiceChoices,
-  })
-
-  // The server reads one service's metrics at a time; until one is chosen, the first is shown.
-  const serviceId = chosenServiceId || (services.data?.[0] ? String(services.data[0].id) : '')
-
-  // ---- Time window ---------------------------------------------------------
-  const rangeMinutes = TIME_RANGES.find((r) => r.id === timeRangeParam)?.minutes ?? 60
-
-  const fromTime = explicitFrom || new Date(windowNow - rangeMinutes * 60_000).toISOString()
-  const toTime = explicitFrom ? (explicitTo || new Date(windowNow).toISOString()) : new Date(windowNow).toISOString()
-
-  // ---- Metrics queries for the 4 standard metrics --------------------------
   const metrics = useQueries({
     queries: METRICS.map((metric) => ({
-      queryKey: ['telemetry', 'metric', serviceId, metric, fromTime, toTime],
-      queryFn: () => fetchMetric({ serviceId: Number(serviceId), metric, from: fromTime, to: toTime }),
+      queryKey: ['telemetry', 'metric', serviceId, metric, from, to],
+      queryFn: () => fetchMetric({ serviceId: Number(serviceId), metric, from, to }),
       enabled: serviceId !== '',
       retry: false,
     })),
   })
-
-  const isPending = metrics.some((q) => q.isPending)
-  const isFetching = metrics.some((q) => q.isFetching)
-
-  // 503 check: returns actual server message when Grafana is not set up or down
+  const series = Object.fromEntries(METRICS.map((metric, index) => [metric, metrics[index].data])) as Record<
+    MetricName,
+    MetricSeries | undefined
+  >
+  const isFetching = metrics.some((query) => query.isFetching)
   const metricsDown = metrics.map((query) => unavailable(query.error)).find((message) => message !== null) ?? null
+  const otherError = metrics.find((query) => query.isError && unavailable(query.error) === null)?.error
 
-  // Other non-503 error
-  const generalError = metrics.find(
-    (q) => q.isError && !(q.error instanceof ApiRequestError && q.error.status === 503),
-  )?.error
-
-  const refetchAll = () => {
-    setWindowNow(Date.now())
-    metrics.forEach((q) => q.refetch())
+  const refresh = () => setWindowEnd(Date.now())
+  const choose = (key: 'serviceId' | 'timeRange', value: string) => {
+    refresh()
+    setParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.set(key, value)
+      return next
+    })
   }
 
-  // ---- Accessibility IDs ---------------------------------------------------
-  const serviceIdAttr = useId()
-  const timeRangeIdAttr = useId()
+  const logsLink = serviceId ? `/logs?serviceId=${serviceId}&timeRange=${range.id}` : '/logs'
 
-  const logsLink = serviceId ? `/logs?serviceId=${serviceId}&timeRange=${timeRangeParam}` : '/logs'
+  let body
+  if (services.isError) {
+    body = <ErrorState title="Services could not be loaded" message={services.error.message} onRetry={() => services.refetch()} />
+  } else if (services.isSuccess && choices.length === 0) {
+    body = (
+      <Panel>
+        <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+          <p className="font-medium">No services yet</p>
+          <p className="text-[13px] text-muted-foreground">Metrics are read per service. An Admin adds services on the Services page.</p>
+        </div>
+      </Panel>
+    )
+  } else if (metricsDown) {
+    body = <ErrorState title="Metrics unavailable" message={`${metricsDown}. The rest of Settle keeps working.`} onRetry={refresh} />
+  } else if (otherError) {
+    body = <ErrorState title="Failed to load metrics" message={otherError.message} onRetry={refresh} />
+  } else if (metrics.some((query) => query.isPending)) {
+    body = <LoadingState message="Loading metrics…" />
+  } else {
+    body = (
+      <div className="flex flex-col gap-4">
+        <section
+          aria-label="Latest values"
+          className="grid divide-y rounded-lg border bg-card shadow-elev-1 md:grid-cols-3 md:divide-x md:divide-y-0"
+        >
+          {TILES.map((tile) => (
+            <Tile key={tile.metric} label={tile.label} series={series[tile.metric]} />
+          ))}
+        </section>
+        <Panel title={`${service?.name} · ${range.label.toLowerCase()}`}>
+          <div className="grid gap-px bg-border sm:grid-cols-2">
+            {METRICS.map((metric) => {
+              const data = series[metric]
+              return data ? (
+                <MetricChart key={metric} series={data} className="rounded-none border-0" />
+              ) : null
+            })}
+          </div>
+          <PanelFooter>
+            <span>
+              From {formatIst(from)} to {formatIst(to)}
+            </span>
+          </PanelFooter>
+        </Panel>
+      </div>
+    )
+  }
 
   return (
-    <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-[44px] leading-[0.9] font-[750]" style={{ fontStretch: '62%' }}>
-            Metrics
-          </h1>
-          <p className="text-muted-foreground">
-            Request rate, error rate, and latency across services. Times are IST.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" asChild className="gap-2 font-medium">
-            <Link to={logsLink}>
-              <Terminal className="size-4" aria-hidden="true" />
-              Open in Logs
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={refetchAll}
-            disabled={isFetching}
-            aria-label="Refresh metrics"
-            title="Refresh metrics"
-          >
-            <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter controls */}
-      <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Service filter */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={serviceIdAttr} className="text-sm font-medium">
-              Service
-            </Label>
-            <Select value={serviceId} onValueChange={(val) => setFilters({ serviceId: val })}>
-              <SelectTrigger id={serviceIdAttr} aria-label="Service" className="w-full">
-                <SelectValue placeholder={services.isPending ? 'Loading services' : 'Choose a service'} />
-              </SelectTrigger>
-              <SelectContent>
-                {services.data?.map((svc) => (
-                  <SelectItem key={svc.id} value={String(svc.id)}>
-                    {svc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Time range filter */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={timeRangeIdAttr} className="text-sm font-medium">
-              Time range
-            </Label>
-            <Select
-              value={timeRangeParam}
-              onValueChange={(val) => setFilters({ timeRange: val, from: '', to: '' })}
+    <div className="mx-auto flex max-w-[1180px] flex-col">
+      <PageHeader
+        title="Metrics"
+        description="Request rate, error rate and latency for one service. Times are IST."
+        actions={
+          <>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="serviceId" className="text-[12px] font-normal text-muted-foreground">
+                Service
+              </Label>
+              <Select value={serviceId} onValueChange={(value) => choose('serviceId', value)}>
+                <SelectTrigger id="serviceId" className="w-[180px]">
+                  <SelectValue placeholder={services.isPending ? 'Loading services' : 'Choose a service'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {choices.map((choice) => (
+                    <SelectItem key={choice.id} value={String(choice.id)}>
+                      {choice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="timeRange" className="text-[12px] font-normal text-muted-foreground">
+                Time range
+              </Label>
+              <Select value={range.id} onValueChange={(value) => choose('timeRange', value)}>
+                <SelectTrigger id="timeRange" className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_RANGES.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={logsLink}>
+                <Terminal aria-hidden="true" />
+                Open in Logs
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={refresh}
+              disabled={isFetching}
+              aria-label="Refresh metrics"
+              title="Refresh metrics"
             >
-              <SelectTrigger id={timeRangeIdAttr} aria-label="Time range" className="w-full">
-                <SelectValue placeholder="Last 1 hour" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIME_RANGES.map((tr) => (
-                  <SelectItem key={tr.id} value={tr.id}>
-                    {tr.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Time window readout */}
-          <div className="flex flex-col justify-end pb-1 text-xs text-muted-foreground sm:col-span-2">
-            <span>
-              Window: <span className="font-mono">{formatIst(fromTime)}</span> to{' '}
-              <span className="font-mono">{formatIst(toTime)}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Results / States */}
-      {services.isSuccess && services.data.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border bg-card py-16 text-center">
-          <p className="font-semibold">No services yet</p>
-          <p className="text-sm text-muted-foreground">
-            Metrics are read per service. An Admin adds services on the Services page.
-          </p>
-        </div>
-      ) : services.isError ? (
-        <div role="alert" className="rounded-lg border bg-card p-6 text-center text-sm">
-          Services could not be loaded: {services.error.message}
-        </div>
-      ) : metricsDown ? (
-        /* 503 Unavailable State (TC-FR-27.3a) */
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border bg-sev-1-bg p-8 text-center text-sev-1-fg"
-        >
-          <CircleAlert className="size-8" aria-hidden="true" />
-          <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold">Metrics unavailable</p>
-            <p className="text-sm">{metricsDown}. The rest of Settle keeps working.</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={refetchAll}>
-            Try again
-          </Button>
-        </div>
-      ) : generalError ? (
-        /* Generic Error State */
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border bg-sev-1-bg p-8 text-center text-sev-1-fg"
-        >
-          <CircleAlert className="size-8" aria-hidden="true" />
-          <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold">Failed to load metrics</p>
-            <p className="text-sm">{generalError.message}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={refetchAll}>
-            Try again
-          </Button>
-        </div>
-      ) : isPending ? (
-        <LoadingState message="Loading metrics…" />
-      ) : (
-        /* 4 Metric Charts Grid */
-        <div className="grid gap-3 sm:grid-cols-2">
-          {metrics.map((query, index) => {
-            const metric = METRICS[index]
-            if (query.isError) {
-              return (
-                <p key={metric} role="alert" className="rounded-lg border bg-card p-4 text-sm text-destructive">
-                  {METRIC_LABEL[metric]} could not be loaded: {query.error.message}
-                </p>
-              )
-            }
-            if (!query.data) return null
-            return <MetricChart key={metric} series={query.data} />
-          })}
-        </div>
-      )}
+              <RefreshCw className={cn(isFetching && 'animate-spin')} aria-hidden="true" />
+            </Button>
+          </>
+        }
+      />
+      {body}
     </div>
   )
 }

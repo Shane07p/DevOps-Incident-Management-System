@@ -140,11 +140,31 @@ describe('MetricsPage — rendering & defaults', () => {
     expect(screen.getByRole('link', { name: /Open in Logs/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Refresh metrics' })).toBeInTheDocument()
 
-    // All four metric chart titles rendered
-    expect(await screen.findByText('Request rate')).toBeInTheDocument()
-    expect(screen.getByText('Error rate')).toBeInTheDocument()
-    expect(screen.getByText('Latency p50')).toBeInTheDocument()
-    expect(screen.getByText('Latency p95')).toBeInTheDocument()
+    // All four metric charts rendered ("Error rate" also names a tile, so the charts are found by their figures)
+    expect(await screen.findByRole('img', { name: /^Request rate:/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Error rate:/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Latency p50:/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /^Latency p95:/ })).toBeInTheDocument()
+  })
+
+  it('shows the latest error rate, p95 latency and request rate as tiles', async () => {
+    renderMetrics('/metrics')
+
+    const tiles = await screen.findByRole('region', { name: 'Latest values' })
+    expect(within(tiles).getByText('Error rate')).toBeInTheDocument()
+    expect(within(tiles).getByText('5.00%')).toBeInTheDocument()
+    expect(within(tiles).getByText('p95 latency')).toBeInTheDocument()
+    expect(within(tiles).getByText('150 ms')).toBeInTheDocument()
+    expect(within(tiles).getByText('Requests')).toBeInTheDocument()
+    expect(within(tiles).getByText('18 req/s')).toBeInTheDocument()
+  })
+
+  it('names the pickers by their field, as form inputs are', async () => {
+    renderMetrics('/metrics')
+
+    await screen.findByRole('img', { name: /^Request rate:/ })
+    expect(screen.getByRole('combobox', { name: 'Service' })).toHaveAttribute('id', 'serviceId')
+    expect(screen.getByRole('combobox', { name: 'Time range' })).toHaveAttribute('id', 'timeRange')
   })
 
   it('defaults to the first service and 1 hour range when not specified in URL', async () => {
@@ -342,5 +362,46 @@ describe('MetricsPage — 503 unavailable state (TC-FR-27.3a)', () => {
     expect(await screen.findByText('Failed to load metrics')).toBeInTheDocument()
     expect(screen.getByText('Prometheus query failed')).toBeInTheDocument()
     expect(screen.queryByText('Metrics unavailable')).not.toBeInTheDocument()
+  })
+})
+
+describe('MetricsPage — URL values that are not options', () => {
+  it('falls back to the first service and the last hour for an unknown serviceId and timeRange', async () => {
+    const { fetchMock } = renderMetrics('/metrics?serviceId=999&timeRange=2d')
+
+    await screen.findByRole('img', { name: /^Request rate:/ })
+    expect(screen.getByRole('combobox', { name: 'Service' })).toHaveTextContent('Payments')
+    expect(screen.getByRole('combobox', { name: 'Time range' })).toHaveTextContent('Last 1 hour')
+    const reqs = metricRequests(fetchMock)
+    expect(reqs.length).toBeGreaterThanOrEqual(4)
+    for (const r of reqs) {
+      expect(r.get('serviceId')).toBe('1')
+      const span = Date.parse(r.get('to')!) - Date.parse(r.get('from')!)
+      expect(span).toBe(60 * 60_000)
+    }
+  })
+
+  it('ignores from and to in the URL instead of crashing on them', async () => {
+    const { fetchMock } = renderMetrics('/metrics?from=abc&to=xyz')
+
+    expect(await screen.findByRole('img', { name: /^Request rate:/ })).toBeInTheDocument()
+    for (const r of metricRequests(fetchMock)) {
+      expect(r.get('from')).not.toBe('abc')
+      expect(Number.isNaN(Date.parse(r.get('from')!))).toBe(false)
+    }
+  })
+})
+
+describe('MetricsPage — refresh', () => {
+  it('loads each metric once per click', async () => {
+    const { fetchMock } = renderMetrics('/metrics')
+
+    await screen.findByRole('img', { name: /^Request rate:/ })
+    const before = metricRequests(fetchMock).length
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh metrics' }))
+    await waitFor(() => expect(metricRequests(fetchMock).length).toBe(before + 4))
+    // Nothing else arrives after the four new requests.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(metricRequests(fetchMock).length).toBe(before + 4)
   })
 })

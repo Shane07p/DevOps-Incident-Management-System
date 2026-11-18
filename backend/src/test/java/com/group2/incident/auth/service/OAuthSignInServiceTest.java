@@ -164,4 +164,14 @@ class OAuthSignInServiceTest {
 		assertThat(jdbc.queryForObject("select count(*) from oauth_ticket where code_hash = ?", Integer.class,
 				OAuthSignInService.hash(code))).isEqualTo(1);
 	}
+
+	@Test
+	void withoutANameFromTheProviderTheEmailStandsInAndALongNameIsCut() {
+		String unnamed = codeIn(signIn.finish(new ProviderAccount(OAuthProvider.GITHUB, "5150", "octo.cat@example.test", true, null)));
+		assertThat(signIn.pendingSignup(unnamed).displayName()).isEqualTo("octo.cat");
+
+		String longName = "N".repeat(150);
+		String named = codeIn(signIn.finish(new ProviderAccount(OAuthProvider.GOOGLE, "g-long", "long@example.test", true, longName)));
+		assertThat(signIn.pendingSignup(named).displayName()).hasSize(100);
+	}
 }

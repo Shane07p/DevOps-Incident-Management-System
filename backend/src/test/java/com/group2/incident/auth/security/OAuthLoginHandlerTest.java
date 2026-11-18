@@ -1,14 +1,21 @@
 package com.group2.incident.auth.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.group2.incident.auth.entity.OAuthProvider;
+import com.group2.incident.auth.service.OAuthSignInService;
 import com.group2.incident.auth.service.ProviderAccount;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
@@ -61,5 +68,34 @@ class OAuthLoginHandlerTest {
 				new DefaultOAuth2User(USER, Map.of("id", 1), "id"), USER, "gitlab");
 
 		assertThat(OAuthLoginHandler.accountOf(gitlab)).isEmpty();
+	}
+
+	private final OAuthSignInService signIn = mock(OAuthSignInService.class);
+	private final OAuthLoginHandler handler = new OAuthLoginHandler(signIn,
+			new OAuthSettings("https://settle.test/", null, null, null));
+
+	@Test
+	void aFinishedSignInGoesToWhereTheServiceSaysAndEndsTheShortSession() throws Exception {
+		when(signIn.finish(any())).thenReturn("/auth/callback#code=abc");
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.getSession(true);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		handler.onAuthenticationSuccess(request, response, google(true));
+
+		assertThat(response.getRedirectedUrl()).isEqualTo("https://settle.test/auth/callback#code=abc");
+		assertThat(request.getSession(false)).isNull();
+	}
+
+	@Test
+	void aSignInThatBreaksOrIsRefusedGoesBackToTheSignInPage() throws Exception {
+		when(signIn.finish(any())).thenThrow(new IllegalStateException("database down"));
+		MockHttpServletResponse broken = new MockHttpServletResponse();
+		handler.onAuthenticationSuccess(new MockHttpServletRequest(), broken, google(true));
+		assertThat(broken.getRedirectedUrl()).isEqualTo("https://settle.test/login?oauth=failed");
+
+		MockHttpServletResponse refused = new MockHttpServletResponse();
+		handler.onAuthenticationFailure(new MockHttpServletRequest(), refused, new BadCredentialsException("access_denied"));
+		assertThat(refused.getRedirectedUrl()).isEqualTo("https://settle.test/login?oauth=failed");
 	}
 }

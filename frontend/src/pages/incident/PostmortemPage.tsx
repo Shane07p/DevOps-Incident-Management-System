@@ -14,6 +14,8 @@ import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { PageHeader } from '@/components/app/PageHeader'
+import { Panel } from '@/components/app/Panel'
 
 import { IncidentTimeline } from './IncidentTimeline'
 import { PostmortemFollowUps } from './PostmortemFollowUps'
@@ -28,6 +30,7 @@ const fields = [
 ] as const
 
 type FormData = Record<(typeof fields)[number][0], string>
+type MessageType = 'success' | 'error' | 'info'
 
 const emptyForm: FormData = {
   summary: '',
@@ -61,6 +64,12 @@ export function PostmortemPage() {
 
   const [form, setForm] = useState<FormData>(emptyForm)
   const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState<MessageType>('info')
+
+  const showMessage = (text: string, type: MessageType) => {
+    setMessage(text)
+    setMessageType(type)
+  }
 
   useEffect(() => {
     if (postmortem.data) {
@@ -104,7 +113,8 @@ export function PostmortemPage() {
       }),
 
     onSuccess: async () => {
-      setMessage('Draft saved successfully.')
+      showMessage('Draft saved successfully.', 'success')
+
       await queryClient.invalidateQueries({
         queryKey: ['postmortem', id],
       })
@@ -113,11 +123,13 @@ export function PostmortemPage() {
     onError: async (error) => {
       if (error instanceof ApiRequestError && error.status === 409) {
         await refreshPostmortem()
-        setMessage(
+
+        showMessage(
           'This postmortem was changed by someone else. The latest saved version has been reloaded. Please review it before editing again.',
+          'info',
         )
       } else {
-        setMessage(error.message)
+        showMessage(error.message, 'error')
       }
     },
   })
@@ -132,7 +144,7 @@ export function PostmortemPage() {
     },
 
     onSuccess: async () => {
-      setMessage('Postmortem marked as reviewed.')
+      showMessage('Postmortem marked as reviewed.', 'success')
 
       await queryClient.invalidateQueries({
         queryKey: ['postmortem', id],
@@ -146,11 +158,13 @@ export function PostmortemPage() {
     onError: async (error) => {
       if (error instanceof ApiRequestError && error.status === 409) {
         await refreshPostmortem()
-        setMessage(
+
+        showMessage(
           'The postmortem changed or cannot be reviewed in its current state. The latest saved version has been reloaded. Please check the content and reviewer permissions.',
+          'info',
         )
       } else {
-        setMessage(error.message)
+        showMessage(error.message, 'error')
       }
     },
   })
@@ -192,120 +206,123 @@ export function PostmortemPage() {
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
       <Link
         to={`/incidents/${id}`}
-        className="text-sm text-muted-foreground hover:text-foreground"
+        className="w-fit text-sm text-muted-foreground hover:text-foreground"
       >
         ← Back to incident
       </Link>
 
-      <div>
-        <p className="text-sm text-muted-foreground">
-          {incident.data.reference}
-        </p>
-
-        <h1 className="text-3xl font-bold">Postmortem</h1>
-
-        <p className="mt-1 text-muted-foreground">
-          {incident.data.title}
-        </p>
-
-        <p className="mt-2 text-sm">
-          Status:{' '}
-          <strong>
-            {postmortem.data?.status ?? 'NOT STARTED'}
-          </strong>
-        </p>
-      </div>
+      <PageHeader
+        eyebrow={incident.data.reference}
+        title="Postmortem"
+        description={incident.data.title}
+        actions={
+          <span className="text-sm text-muted-foreground">
+            Status:{' '}
+            <strong>
+              {postmortem.data?.status ?? 'NOT STARTED'}
+            </strong>
+          </span>
+        }
+      />
 
       <PostmortemFollowUps incidentId={id} canEdit={canEdit} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
-        <section className="flex flex-col gap-4">
-          {fields.map(([key, label]) => (
-            <label
-              key={key}
-              className="flex flex-col gap-2 text-sm font-medium"
-            >
-              {label}
-
-              <textarea
-                value={form[key]}
-                disabled={!canEdit || busy}
-                maxLength={10000}
-                rows={4}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    [key]: event.target.value,
-                  }))
-                }
-                className="rounded-md border bg-background p-3 font-normal"
-                placeholder={`Enter ${label.toLowerCase()}...`}
-              />
-            </label>
-          ))}
-
-          {!canEdit && (
-            <p className="text-sm text-muted-foreground">
-              You have read-only access.
-            </p>
-          )}
-
-          {reviewed && (
-            <p className="text-sm text-muted-foreground">
-              This postmortem has been reviewed.
-            </p>
-          )}
-
-          {canEdit && !postmortem.data && (
-            <p className="text-sm text-muted-foreground">
-              Save a draft first. A different user must review it.
-            </p>
-          )}
-
-          {canEdit && isLastAuthor && !reviewed && (
-            <p className="text-sm text-muted-foreground">
-              Someone other than the author must review this postmortem.
-            </p>
-          )}
-
-          {message && (
-            <p role="alert" className="text-sm text-destructive">
-              {message}
-            </p>
-          )}
-
-          {canEdit && (
-            <div className="flex flex-wrap gap-3">
-              <Button
-                disabled={busy}
-                onClick={() => save.mutate()}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+        <Panel title="Postmortem details">
+          <div className="flex flex-col gap-5 p-5">
+            {fields.map(([key, label]) => (
+              <label
+                key={key}
+                className="flex flex-col gap-2 text-sm font-medium"
               >
-                {save.isPending ? 'Saving...' : 'Save draft'}
-              </Button>
+                {label}
 
-              {canReview && (
+                <textarea
+                  value={form[key]}
+                  disabled={!canEdit || busy}
+                  maxLength={10000}
+                  rows={4}
+                  onChange={(event) => {
+                    setForm((current) => ({
+                      ...current,
+                      [key]: event.target.value,
+                    }))
+                    setMessage('')
+                  }}
+                  className="w-full rounded-md border bg-background p-3 font-normal"
+                  placeholder={`Enter ${label.toLowerCase()}...`}
+                />
+              </label>
+            ))}
+
+            {!canEdit && (
+              <p className="text-sm text-muted-foreground">
+                You have read-only access.
+              </p>
+            )}
+
+            {reviewed && (
+              <p className="text-sm text-muted-foreground">
+                This postmortem has been reviewed.
+              </p>
+            )}
+
+            {canEdit && !postmortem.data && (
+              <p className="text-sm text-muted-foreground">
+                Save a draft first. A different user must review it.
+              </p>
+            )}
+
+            {canEdit && isLastAuthor && !reviewed && (
+              <p className="text-sm text-muted-foreground">
+                Someone other than the author must review this postmortem.
+              </p>
+            )}
+
+            {message && (
+              <p
+                role={messageType === 'error' ? 'alert' : 'status'}
+                className={
+                  messageType === 'error'
+                    ? 'text-sm text-destructive'
+                    : 'text-sm text-muted-foreground'
+                }
+              >
+                {message}
+              </p>
+            )}
+
+            {canEdit && (
+              <div className="flex flex-wrap gap-3">
                 <Button
-                  variant="outline"
                   disabled={busy}
-                  onClick={() => review.mutate()}
+                  onClick={() => save.mutate()}
                 >
-                  {review.isPending ? 'Reviewing...' : 'Mark reviewed'}
+                  {save.isPending ? 'Saving...' : 'Save draft'}
                 </Button>
-              )}
-            </div>
-          )}
-        </section>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">
-            Incident timeline
-          </h2>
+                {canReview && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => review.mutate()}
+                  >
+                    {review.isPending ? 'Reviewing...' : 'Mark reviewed'}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </Panel>
 
-          <IncidentTimeline
-            incidentId={id}
-            entries={incident.data.timeline}
-          />
-        </section>
+        <Panel title="Incident timeline">
+          <div className="p-5">
+            <IncidentTimeline
+              incidentId={id}
+              entries={incident.data.timeline}
+            />
+          </div>
+        </Panel>
       </div>
     </div>
   )

@@ -1,6 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fetchMe, login as loginRequest, logout as logoutRequest, signup as signupRequest, type SignupValues } from '@/api/auth'
+import {
+  exchangeOAuthCode,
+  fetchMe,
+  finishOAuthSignup as finishOAuthSignupRequest,
+  login as loginRequest,
+  logout as logoutRequest,
+  signup as signupRequest,
+  type SignupValues,
+} from '@/api/auth'
 import { setUnauthorizedHandler } from '@/api/client'
 import type { LoginResponse, Org, User } from '@/api/schemas'
 import { clearToken, readToken, writeToken } from '@/api/token'
@@ -13,6 +21,9 @@ interface AuthState {
   org: Org | null
   login: (email: string, password: string) => Promise<User>
   signup: (values: SignupValues) => Promise<User>
+  /** Redeems the one-time code a Google or GitHub sign-in ends with (D50). */
+  exchangeOAuth: (code: string) => Promise<User>
+  finishOAuthSignup: (code: string, values: { orgName: string; displayName: string }) => Promise<User>
   logout: () => Promise<void>
 }
 
@@ -75,6 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => signIn(await loginRequest(email, password)), [signIn])
 
   const signup = useCallback(async (values: SignupValues) => signIn(await signupRequest(values)), [signIn])
+  const exchangeOAuth = useCallback(async (code: string) => signIn(await exchangeOAuthCode(code)), [signIn])
+  const finishOAuthSignup = useCallback(
+    async (code: string, values: { orgName: string; displayName: string }) => signIn(await finishOAuthSignupRequest(code, values)),
+    [signIn],
+  )
 
   const logout = useCallback(async () => {
     // The server bumps the token version so the token stops working everywhere; sign out
@@ -83,7 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOutLocally()
   }, [signOutLocally])
 
-  const value = useMemo(() => ({ status, user, org, login, signup, logout }), [status, user, org, login, signup, logout])
+  const value = useMemo(
+    () => ({ status, user, org, login, signup, exchangeOAuth, finishOAuthSignup, logout }),
+    [status, user, org, login, signup, exchangeOAuth, finishOAuthSignup, logout],
+  )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

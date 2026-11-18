@@ -141,6 +141,43 @@ number when it merges, after #174 and #180 if they merge first.
 starts empty and the first sign-up creates the first real org. `BOOTSTRAP_ADMIN_USERNAME` and
 `BOOTSTRAP_ADMIN_PASSWORD` are removed from the code, Render, and `.env.example`.
 
+## Part 2: Google and GitHub sign-in (D50)
+
+Built after part 1, for both providers at once; the table at the top planned GitHub for later.
+
+**Flow.** "Continue with Google" is a link to `/api/auth/oauth2/authorization/google`. The path sits under `/api`
+so Vercel's proxy carries it, and the short session that holds the OAuth state stays on the app's own domain.
+Google sends the person back to `<APP_PUBLIC_URL>/api/auth/oauth2/callback/google`, the backend reads who they are,
+throws the session away, and redirects to the app with a one-time code in the URL fragment:
+
+| Who | Goes to | Then |
+| --- | --- | --- |
+| A person this provider account is linked to | `/auth/callback#code=…` | The page swaps the code for a token (`POST /api/auth/oauth/exchange`) and opens Home |
+| Nobody linked yet, but a person with this verified email | `/auth/callback#code=…` | Linked first: their password is dropped, their old sessions and personal access tokens stop working (D50), and the audit log gets `ACCOUNT_LINKED` |
+| Nobody with this email | `/signup/finish#code=…` | They name their org and confirm their name (`POST /api/auth/oauth/signup`); no password is set |
+| An unverified or missing email, a disabled member, or a cancelled sign-in | `/login?oauth=…` | The sign-in page says why |
+
+A fragment never reaches a server or a `Referer` header, and the pages take the code out of the address bar at
+once. The code endpoints ignore any bearer token the tab still sends, since linking may just have revoked it. The code works once: one `UPDATE … WHERE used_at IS NULL` claims it. GitHub's `/user` may hide the email, so
+the backend reads the primary verified address from `/user/emails`.
+
+**Data.** `user_identity` links a provider account (Google's `sub`, GitHub's numeric id) to a person; `oauth_ticket`
+holds the codes, by SHA-256. Neither has `org_id`: like `app_user`, they belong to the person.
+
+**Settings (Render).** `APP_PUBLIC_URL` (the address people open), and `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`. A provider without both its values is off and its button hidden.
+
+**Setting up the providers (once, by the project owner):**
+1. Google Cloud Console: create an OAuth client of type "Web application". Under Authorized redirect URIs add
+   `https://dev-ops-incident-management-system.vercel.app/api/auth/oauth2/callback/google`, and for local runs
+   `http://localhost:5173/api/auth/oauth2/callback/google`. On the consent screen, ask only for the email, profile
+   and openid scopes, which need no Google review, and publish it.
+2. GitHub, Settings, Developer settings, OAuth Apps: one app with two redirect URIs,
+   `https://dev-ops-incident-management-system.vercel.app/api/auth/oauth2/callback/github` and, for local runs,
+   `http://localhost:5173/api/auth/oauth2/callback/github`. Leave wildcard matching and the device flow off.
+3. Put each client id and secret on Render, set `APP_PUBLIC_URL` to the deployed address, and redeploy. Secrets
+   never go in the repository or in chat.
+
 ## Testing
 
 | What | Test |

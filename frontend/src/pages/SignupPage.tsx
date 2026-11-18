@@ -9,6 +9,7 @@ import { showRequestErrors } from '@/lib/forms'
 import { AuthField } from './auth/AuthField'
 import { AuthLayout } from './auth/AuthLayout'
 import { settleDelay } from './auth/identity'
+import { OAuthButtons } from './auth/OAuthButtons'
 
 // The server checks the same rules (SignupRequest); these only save a round trip.
 const signupSchema = z.object({
@@ -62,6 +63,7 @@ export function SignupPage() {
     <AuthLayout wall={{ org: orgName.trim(), person: displayName.trim().slice(0, 24), entering: phase === 'entering' }}>
       <h2>Create a workspace</h2>
       <p>Sign-up creates your organisation, and you become its Admin. Add services, on-call schedules and monitoring tools next.</p>
+      <OAuthButtons />
       <form className="auth-form" noValidate onSubmit={onSubmit}>
         <AuthField form={form} name="orgName" label="Organisation" type="text" autoComplete="organization" />
         <AuthField form={form} name="displayName" label="Your name" type="text" autoComplete="name" />

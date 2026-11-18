@@ -200,6 +200,36 @@ public class SecurityMatrixTest {
 						null,
 						400, 400, 400, 400
 				),
+				// Google and GitHub sign-in (D50): public. The list answers everyone; the code endpoints get no body
+				// from the matrix, so every caller gets 400, which shows they are reachable without login.
+				new MatrixRow(
+						"GET /api/auth/oauth/providers",
+						HttpMethod.GET,
+						"/api/auth/oauth/providers",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
+						"POST /api/auth/oauth/exchange",
+						HttpMethod.POST,
+						"/api/auth/oauth/exchange",
+						null,
+						400, 400, 400, 400
+				),
+				new MatrixRow(
+						"POST /api/auth/oauth/signup/details",
+						HttpMethod.POST,
+						"/api/auth/oauth/signup/details",
+						null,
+						400, 400, 400, 400
+				),
+				new MatrixRow(
+						"POST /api/auth/oauth/signup",
+						HttpMethod.POST,
+						"/api/auth/oauth/signup",
+						null,
+						400, 400, 400, 400
+				),
 				new MatrixRow(
 						"GET /api/auth/me",
 						HttpMethod.GET,

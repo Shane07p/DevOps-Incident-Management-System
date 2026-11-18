@@ -27,5 +27,7 @@ public enum AuditAction {
     HEARTBEAT_CREATED,
     HEARTBEAT_UPDATED,
     TELEMETRY_CONNECTED,
-    TELEMETRY_DISCONNECTED
+    TELEMETRY_DISCONNECTED,
+    // A Google or GitHub account was linked to an existing person (D50).
+    ACCOUNT_LINKED
 }

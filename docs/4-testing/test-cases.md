@@ -564,6 +564,18 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | Automated |
 | TC-FR-18.4c | Transaction boundary | Duplicate-check and semantic-search requests embed a query before database access | The AI embedding request runs without an open database transaction | `IncidentSimilarityTransactionTest` | Automated |
 
+### AI-2 AI SRE in the app with Accept and Reject (Issue #242, FR-18, FR-19)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-18.1d | Equivalence | An Engineer/Admin investigates an incident with telemetry, timeline, and deploys | Result is stored with hypotheses and evidence attribution and returned; get latest returns it | `InvestigationIntegrationTest.investigateStoresVerifiedResultAndGetLatestReturnsIt` | Automated |
+| TC-FR-18.4d | Negative | The AI service is down or slow (503) | 503 returned, incident unaffected and still loads cleanly | `InvestigationIntegrationTest.aiDownReturns503AndIncidentStillLoadsUnaffected`, `AiInvestigationClientTest` | Automated |
+| TC-FR-18.4e | Transaction boundary | Investigation gathers evidence, calls AI service, and stores result | The AI investigation call runs outside database transaction | `InvestigationTransactionTest.investigationCallsAiOutsideDatabaseTransaction` | Automated |
+| TC-FR-19.1a | Role-based access | Viewer attempts to trigger investigation or decide on an action | Refused with 403 Forbidden | `InvestigationIntegrationTest.viewerCannotInvestigateOrDecide`, `SecurityMatrixTest` | Automated |
+| TC-FR-19.2a | Equivalence | An Engineer/Admin accepts or rejects an action | Decision is recorded with actor and timestamp; timeline entry is appended | `InvestigationIntegrationTest.acceptAndRejectActionsAreAttributedOnTimelineAndExecuteNothing` | Automated |
+| TC-FR-19.2b | Concurrency / conflict | An action that has already been decided is decided again | Refused with 409 Conflict | `InvestigationIntegrationTest.decideAlreadyDecidedActionReturnsConflict` | Automated |
+| TC-FR-19.3a | Negative | An action is accepted or rejected | Nothing is executed; incident status remains unchanged | `InvestigationIntegrationTest.acceptAndRejectActionsAreAttributedOnTimelineAndExecuteNothing` | Automated |
+
 ### AI-4 Triage hint on declare form (Issue #247)
 
 | ID | Technique | Input or condition | Expected | Test | Status |

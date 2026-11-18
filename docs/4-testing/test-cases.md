@@ -573,7 +573,14 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Automated |
 | TC-FR-28.1b | Negative | The API answers 401, 403, 429, or any other error status | A readable tool error, never data; a 429 says when to try again | `test_mcp_server.py` | Automated |
-| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Automated |
+| TC-FR-28.2a | Negative | List the server's tools | Permits only `add_comment` and `acknowledge`; none that changes status, declares, or closes | `test_mcp_server.py` | Automated |
+| TC-FR-28.2b | Equivalence | Call `add_comment` and `acknowledge` | Both write tools forward the caller's PAT to backend REST endpoints | `test_mcp_server.py` | Automated |
+| TC-FR-28.2c | Negative | Viewer PAT calls `add_comment` or `acknowledge` | Viewer role is refused with a readable HTTP 403 error | `test_mcp_server.py`, `McpAttributionTest` | Automated |
+| TC-FR-28.2d | Negative | Call `acknowledge` with a stale expected version | Returns a readable HTTP 409 conflict error with retry guidance | `test_mcp_server.py`, `McpAttributionTest` | Automated |
+| TC-FR-28.2e | Equivalence | Add comment using a PAT | Timeline entry and audit log record "(via MCP)" attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2f | Equivalence | Acknowledge incident using a PAT | Timeline entry and audit log record "via MCP" attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2g | Negative | Add comment or acknowledge incident using regular browser JWT | Timeline entry and audit log do NOT contain MCP attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2h | Negative | Call `add_comment` or `acknowledge` with a browser session token instead of a PAT | A readable tool error, and no request reaches the backend | `test_mcp_server.py` | Automated |
 
 ### Pages: audit log, service map, SLA clocks
 

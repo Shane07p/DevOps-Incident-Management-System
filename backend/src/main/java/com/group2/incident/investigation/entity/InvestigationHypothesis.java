@@ -16,6 +16,7 @@ import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "investigation_hypothesis")
@@ -27,6 +28,10 @@ public class InvestigationHypothesis {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
+
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "investigation_id", nullable = false, updatable = false)
 	private Investigation investigation;
@@ -34,7 +39,7 @@ public class InvestigationHypothesis {
 	@Column(nullable = false)
 	private int rank;
 
-	@Column(nullable = false, length = 500)
+	@Column(nullable = false, columnDefinition = "text")
 	private String title;
 
 	@Column(nullable = false)

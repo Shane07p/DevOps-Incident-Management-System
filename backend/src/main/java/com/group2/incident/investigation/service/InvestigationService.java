@@ -2,6 +2,7 @@ package com.group2.incident.investigation.service;
 
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.error.ServiceUnavailableException;
 import com.group2.incident.deploy.entity.Deployment;
@@ -49,7 +50,9 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +63,9 @@ public class InvestigationService {
 	private static final Duration TELEMETRY_LOOKBACK = Duration.ofHours(1);
 	private static final Duration DEPLOY_LOOKBACK = Duration.ofHours(2);
 	private static final int LOG_LIMIT = 100;
+	private static final int MAX_DESCRIPTION_LENGTH = 5000;
+	private static final int MAX_HYPOTHESIS_TITLE_LENGTH = 500;
+	private static final int MAX_EVIDENCE_KIND_LENGTH = 100;
 
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
@@ -71,112 +77,221 @@ public class InvestigationService {
 	private final InvestigationActionRepository investigationActionRepository;
 	private final AppUserRepository appUserRepository;
 	private final Clock clock;
+	private final TransactionTemplate transactionTemplate;
 
 	/**
 	 * Gathers incident evidence (timeline, recent deploys, logs, metrics), runs an AI investigation,
 	 * and stores the verified result. If AI is unset, down, or slow, throws 503 without mutating the incident.
+	 *
+	 * Holds no database transaction while calling telemetry or ai-service.
 	 */
-	@Transactional
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public InvestigationResponse investigate(Long incidentId, Long actorId) {
-		Incident incident = incidentRepository.findWithDetailsById(incidentId)
-				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
-		AppUser actor = appUserRepository.findById(actorId)
-				.orElseThrow(() -> new NotFoundException("User " + actorId + " not found"));
-
-		// Verify AI is enabled before doing telemetry calls; if down/slow, AI client throws 503.
 		if (!aiInvestigationClient.isEnabled()) {
 			throw new ServiceUnavailableException("AI investigation service is not set up on this server");
 		}
 
-		AiInvestigationRequest request = buildInvestigationRequest(incident);
-		AiInvestigationResult result = aiInvestigationClient.investigate(request);
+		// 1. Gather incident data, timeline, and deploys in a short read transaction
+		IncidentSnapshot snapshot = transactionTemplate.execute(status -> {
+			Incident incident = incidentRepository.findWithDetailsById(incidentId)
+					.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
+			appUserRepository.findById(actorId)
+					.orElseThrow(() -> new NotFoundException("User " + actorId + " not found"));
 
+			List<TimelineEntry> timeline = timelineEntryRepository
+					.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId());
+			List<TimelineBundleItem> timelineItems = timeline.stream()
+					.map(t -> new TimelineBundleItem(
+							t.getId(),
+							t.getEventType().name(),
+							t.getActor() != null ? t.getActor().getDisplayName() : null,
+							t.getDetails(),
+							t.getRecordedAt()
+					))
+					.toList();
+
+			List<Deployment> deploys = gatherDeploys(incident);
+			List<DeployBundleItem> deployItems = deploys.stream()
+					.map(d -> new DeployBundleItem(
+							d.getId(),
+							d.getService().getName(),
+							d.getVersion(),
+							d.getCommit(),
+							d.getAuthor(),
+							d.getDeployedAt()
+					))
+					.toList();
+
+			return new IncidentSnapshot(
+					incident.getId(),
+					incident.getReference(),
+					incident.getTitle(),
+					incident.getDescription(),
+					incident.getService().getName(),
+					incident.getService().getId(),
+					incident.getSeverity().name(),
+					incident.getStatus().name(),
+					incident.getCreatedAt(),
+					timelineItems,
+					deployItems
+			);
+		});
+
+		if (snapshot == null) {
+			throw new IllegalStateException("Failed to snapshot incident " + incidentId);
+		}
+
+		// 2. Telemetry window: starts at createdAt minus 1h and ends at min(now, start plus 24h)
 		Instant now = clock.instant();
-		String summary = result.summary() != null && !result.summary().isBlank()
-				? result.summary()
-				: "Investigation completed.";
-		String status = result.status() != null && !result.status().isBlank()
-				? result.status()
-				: "completed";
+		Instant windowStart = snapshot.createdAt().minus(TELEMETRY_LOOKBACK);
+		Instant maxEnd = windowStart.plus(TELEMETRY_MAX_RANGE);
+		Instant windowEnd = now.isBefore(maxEnd) ? now : maxEnd;
+		if (windowEnd.isBefore(windowStart)) {
+			windowEnd = windowStart;
+		}
 
-		Investigation investigation = new Investigation(
-				incident,
-				summary,
-				status,
-				result.stepsTaken(),
-				result.tokensUsed(),
-				result.durationMs(),
-				now
+		// Gather telemetry logs and metrics outside DB transaction
+		List<LogBundleItem> logItems = gatherLogs(snapshot.serviceId(), windowStart, windowEnd);
+		List<MetricBundleSeries> metricSeries = gatherMetrics(snapshot.serviceId(), windowStart, windowEnd);
+
+		// Truncate description to 5000 characters for ai-service
+		String description = snapshot.description();
+		if (description != null && description.length() > MAX_DESCRIPTION_LENGTH) {
+			description = description.substring(0, MAX_DESCRIPTION_LENGTH);
+		}
+
+		String serviceLabel = snapshot.serviceName().trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "-");
+		IncidentEvidenceContext incidentContext = new IncidentEvidenceContext(
+				snapshot.incidentId(),
+				snapshot.reference(),
+				snapshot.title(),
+				description,
+				snapshot.serviceName(),
+				snapshot.severity(),
+				snapshot.status(),
+				snapshot.createdAt()
 		);
 
-		Map<String, AiEvidenceItem> evidenceById = new LinkedHashMap<>();
-		if (result.evidence() != null) {
-			for (AiEvidenceItem item : result.evidence()) {
-				if (item != null && item.id() != null && !item.id().isBlank()) {
-					evidenceById.put(item.id(), item);
-				}
-			}
-		}
+		EvidenceBundle bundle = new EvidenceBundle(
+				incidentContext,
+				snapshot.timelineItems(),
+				snapshot.deployItems(),
+				logItems,
+				metricSeries
+		);
+		AiInvestigationRequest request = new AiInvestigationRequest(
+				serviceLabel,
+				snapshot.createdAt().toString(),
+				null,
+				description,
+				bundle
+		);
 
-		int rank = 1;
-		if (result.hypotheses() != null) {
-			for (AiHypothesis hyp : result.hypotheses()) {
-				if (hyp == null || hyp.hypothesis() == null || hyp.hypothesis().isBlank()
-						|| hyp.evidenceRefs() == null || hyp.evidenceRefs().isEmpty()) {
-					continue;
-				}
-				List<AiEvidenceItem> citedItems = new ArrayList<>();
-				boolean allValid = true;
-				for (String refId : hyp.evidenceRefs()) {
-					AiEvidenceItem item = evidenceById.get(refId);
-					if (item == null) {
-						allValid = false;
-						break;
+		// 3. Call AI service outside DB transaction
+		AiInvestigationResult result = aiInvestigationClient.investigate(request);
+
+		// 4. Save result in a short write transaction
+		return transactionTemplate.execute(status -> {
+			Incident incident = incidentRepository.findWithDetailsById(incidentId)
+					.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
+			AppUser actor = appUserRepository.findById(actorId)
+					.orElseThrow(() -> new NotFoundException("User " + actorId + " not found"));
+
+			Instant recordedAt = clock.instant();
+			String summary = result.summary() != null && !result.summary().isBlank()
+					? result.summary()
+					: "Investigation completed.";
+			String invStatus = result.status() != null && !result.status().isBlank()
+					? result.status()
+					: "completed";
+
+			Investigation investigation = new Investigation(
+					incident,
+					summary,
+					invStatus,
+					result.stepsTaken(),
+					result.tokensUsed(),
+					result.durationMs(),
+					recordedAt
+			);
+
+			Map<String, AiEvidenceItem> evidenceById = new LinkedHashMap<>();
+			if (result.evidence() != null) {
+				for (AiEvidenceItem item : result.evidence()) {
+					if (item != null && item.id() != null && !item.id().isBlank()) {
+						evidenceById.put(item.id(), item);
 					}
-					citedItems.add(item);
-				}
-				if (!allValid || citedItems.isEmpty()) {
-					continue;
-				}
-
-				InvestigationHypothesis entityHyp = new InvestigationHypothesis(
-						investigation,
-						rank++,
-						hyp.hypothesis(),
-						Math.max(0.0, Math.min(1.0, hyp.confidence())),
-						hyp.reasoning()
-				);
-				for (AiEvidenceItem ev : citedItems) {
-					String kind = ev.evidenceType() != null && !ev.evidenceType().isBlank()
-							? ev.evidenceType()
-							: "evidence";
-					String text = ev.content() != null ? ev.content() : "";
-					entityHyp.addEvidence(new InvestigationEvidence(entityHyp, kind, text));
-				}
-				investigation.addHypothesis(entityHyp);
-			}
-		}
-
-		if (result.suggestedActions() != null) {
-			for (String actionText : result.suggestedActions()) {
-				if (actionText != null && !actionText.isBlank()) {
-					investigation.addAction(new InvestigationAction(investigation, actionText.strip()));
 				}
 			}
-		}
 
-		Investigation saved = investigationRepository.saveAndFlush(investigation);
+			int rank = 1;
+			if (result.hypotheses() != null) {
+				for (AiHypothesis hyp : result.hypotheses()) {
+					if (hyp == null || hyp.hypothesis() == null || hyp.hypothesis().isBlank()
+							|| hyp.evidenceRefs() == null || hyp.evidenceRefs().isEmpty()) {
+						continue;
+					}
+					List<AiEvidenceItem> citedItems = new ArrayList<>();
+					boolean allValid = true;
+					for (String refId : hyp.evidenceRefs()) {
+						AiEvidenceItem item = evidenceById.get(refId);
+						if (item == null) {
+							allValid = false;
+							break;
+						}
+						citedItems.add(item);
+					}
+					if (!allValid || citedItems.isEmpty()) {
+						continue;
+					}
 
-		timelineEntryRepository.save(new TimelineEntry(
-				incident,
-				actor,
-				TimelineEventType.INVESTIGATION_COMPLETED,
-				"AI SRE investigation #" + saved.getId() + " completed with "
-						+ saved.getHypotheses().size() + " hypothesis(es)",
-				now
-		));
+					String title = hyp.hypothesis();
+					if (title != null && title.length() > MAX_HYPOTHESIS_TITLE_LENGTH) {
+						title = title.substring(0, MAX_HYPOTHESIS_TITLE_LENGTH);
+					}
 
-		return toResponse(saved);
+					InvestigationHypothesis entityHyp = new InvestigationHypothesis(
+							investigation,
+							rank++,
+							title,
+							Math.max(0.0, Math.min(1.0, hyp.confidence())),
+							hyp.reasoning()
+					);
+					for (AiEvidenceItem ev : citedItems) {
+						String kind = ev.evidenceType() != null && !ev.evidenceType().isBlank()
+								? ev.evidenceType()
+								: "evidence";
+						if (kind.length() > MAX_EVIDENCE_KIND_LENGTH) {
+							kind = kind.substring(0, MAX_EVIDENCE_KIND_LENGTH);
+						}
+						String text = ev.content() != null ? ev.content() : "";
+						entityHyp.addEvidence(new InvestigationEvidence(entityHyp, kind, text));
+					}
+					investigation.addHypothesis(entityHyp);
+				}
+			}
+
+			if (result.suggestedActions() != null) {
+				for (String act : result.suggestedActions()) {
+					if (act != null && !act.isBlank()) {
+						investigation.addAction(new InvestigationAction(investigation, act.trim()));
+					}
+				}
+			}
+
+			Investigation saved = investigationRepository.saveAndFlush(investigation);
+
+			timelineEntryRepository.save(new TimelineEntry(
+					incident,
+					actor,
+					TimelineEventType.INVESTIGATION_COMPLETED,
+					"AI investigation completed with "
+							+ saved.getHypotheses().size() + " hypothesis(es)",
+					recordedAt
+			));
+
+			return toResponse(saved);
+		});
 	}
 
 	@Transactional(readOnly = true)
@@ -192,20 +307,30 @@ public class InvestigationService {
 	/**
 	 * Records an Engineer/Admin Accept or Reject decision on a suggested action and appends a timeline entry.
 	 * Nothing is executed (FR-19.3).
+	 * Fails with 409 Conflict if the action has already been decided.
 	 */
 	@Transactional
 	public SuggestedActionDto decideAction(Long investigationId, Long actionId, ActionDecision decision, Long actorId) {
 		Investigation investigation = investigationRepository.findById(investigationId)
 				.orElseThrow(() -> new NotFoundException("Investigation " + investigationId + " not found"));
-		InvestigationAction action = investigationActionRepository.findByIdAndInvestigationId(actionId, investigationId)
-				.orElseThrow(() -> new NotFoundException(
-						"Action " + actionId + " not found for investigation " + investigationId));
 		AppUser actor = appUserRepository.findById(actorId)
 				.orElseThrow(() -> new NotFoundException("User " + actorId + " not found"));
 
 		Instant now = clock.instant();
-		action.decide(decision, actor, now);
-		InvestigationAction saved = investigationActionRepository.saveAndFlush(action);
+		int updated = investigationActionRepository.recordDecision(actionId, investigationId, decision, actor, now);
+		if (updated == 0) {
+			InvestigationAction existing = investigationActionRepository.findByIdAndInvestigationId(actionId, investigationId)
+					.orElseThrow(() -> new NotFoundException(
+							"Action " + actionId + " not found for investigation " + investigationId));
+			if (existing.getDecision() != null) {
+				throw new ConflictException("Action " + actionId + " has already been decided");
+			}
+			throw new ConflictException("Action " + actionId + " could not be updated");
+		}
+
+		InvestigationAction action = investigationActionRepository.findByIdAndInvestigationId(actionId, investigationId)
+				.orElseThrow(() -> new NotFoundException(
+						"Action " + actionId + " not found for investigation " + investigationId));
 
 		TimelineEventType eventType = decision == ActionDecision.ACCEPTED
 				? TimelineEventType.ACTION_ACCEPTED
@@ -215,68 +340,11 @@ public class InvestigationService {
 				investigation.getIncident(),
 				actor,
 				eventType,
-				verb + " AI suggested action: " + saved.getText(),
+				verb + " AI suggested action: " + action.getText(),
 				now
 		));
 
-		return toActionDto(saved);
-	}
-
-	private AiInvestigationRequest buildInvestigationRequest(Incident incident) {
-		List<TimelineEntry> timeline = timelineEntryRepository
-				.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incident.getId());
-		List<TimelineBundleItem> timelineItems = timeline.stream()
-				.map(t -> new TimelineBundleItem(
-						t.getId(),
-						t.getEventType().name(),
-						t.getActor() != null ? t.getActor().getDisplayName() : null,
-						t.getDetails(),
-						t.getRecordedAt()
-				))
-				.toList();
-
-		List<Deployment> deploys = gatherDeploys(incident);
-		List<DeployBundleItem> deployItems = deploys.stream()
-				.map(d -> new DeployBundleItem(
-						d.getId(),
-						d.getService().getName(),
-						d.getVersion(),
-						d.getCommit(),
-						d.getAuthor(),
-						d.getDeployedAt()
-				))
-				.toList();
-
-		Instant now = clock.instant();
-		Instant windowEnd = now.isBefore(incident.getCreatedAt()) ? incident.getCreatedAt() : now;
-		Instant desiredStart = incident.getCreatedAt().minus(TELEMETRY_LOOKBACK);
-		Instant minAllowedStart = windowEnd.minus(TELEMETRY_MAX_RANGE);
-		Instant windowStart = desiredStart.isBefore(minAllowedStart) ? minAllowedStart : desiredStart;
-
-		long serviceId = incident.getService().getId();
-		List<LogBundleItem> logItems = gatherLogs(serviceId, windowStart, windowEnd);
-		List<MetricBundleSeries> metricSeries = gatherMetrics(serviceId, windowStart, windowEnd);
-
-		String serviceLabel = incident.getService().getName().trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "-");
-		IncidentEvidenceContext incidentContext = new IncidentEvidenceContext(
-				incident.getId(),
-				incident.getReference(),
-				incident.getTitle(),
-				incident.getDescription(),
-				incident.getService().getName(),
-				incident.getSeverity().name(),
-				incident.getStatus().name(),
-				incident.getCreatedAt()
-		);
-
-		EvidenceBundle bundle = new EvidenceBundle(incidentContext, timelineItems, deployItems, logItems, metricSeries);
-		return new AiInvestigationRequest(
-				serviceLabel,
-				incident.getCreatedAt().toString(),
-				null,
-				incident.getDescription(),
-				bundle
-		);
+		return toActionDto(action);
 	}
 
 	private List<Deployment> gatherDeploys(Incident incident) {
@@ -364,4 +432,18 @@ public class InvestigationService {
 				action.getDecidedAt()
 		);
 	}
+
+	private record IncidentSnapshot(
+			long incidentId,
+			String reference,
+			String title,
+			String description,
+			String serviceName,
+			long serviceId,
+			String severity,
+			String status,
+			Instant createdAt,
+			List<TimelineBundleItem> timelineItems,
+			List<DeployBundleItem> deployItems
+	) {}
 }

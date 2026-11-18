@@ -162,8 +162,8 @@ class OrgIsolationTest {
 				"insert into investigation (org_id, incident_id, summary, status, created_at) values (?, ?, 'Summary B', 'completed', now()) returning id",
 				Long.class, b.orgId(), incidentOfB);
 		long actionOfB = jdbcTemplate.queryForObject(
-				"insert into investigation_action (investigation_id, text) values (?, 'Restart') returning id",
-				Long.class, invOfB);
+				"insert into investigation_action (org_id, investigation_id, text) values (?, ?, 'Restart') returning id",
+				Long.class, b.orgId(), invOfB);
 		idsOfB.put("investigationId", invOfB);
 		idsOfB.put("actionId", actionOfB);
 	}

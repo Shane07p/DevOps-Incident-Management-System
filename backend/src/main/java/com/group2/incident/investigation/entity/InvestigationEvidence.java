@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
 
 @Entity
 @Table(name = "investigation_evidence")
@@ -23,11 +24,15 @@ public class InvestigationEvidence {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
+
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "hypothesis_id", nullable = false, updatable = false)
 	private InvestigationHypothesis hypothesis;
 
-	@Column(nullable = false, length = 100)
+	@Column(nullable = false, columnDefinition = "text")
 	private String kind;
 
 	@Column(nullable = false, columnDefinition = "text")

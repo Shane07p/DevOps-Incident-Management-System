@@ -276,4 +276,28 @@ class InvestigationIntegrationTest {
 						.content("{\"decision\":\"ACCEPTED\"}"))
 				.andExpect(status().isForbidden());
 	}
+
+	@Test
+	void decideAlreadyDecidedActionReturnsConflict() throws Exception {
+		String invBody = mvc.perform(post("/api/incidents/{id}/investigations", incidentId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+
+		Long invId = JsonPath.<Number>read(invBody, "$.id").longValue();
+		Long actionId = JsonPath.<Number>read(invBody, "$.suggestedActions[0].id").longValue();
+
+		mvc.perform(post("/api/investigations/{id}/actions/{actionId}/decision", invId, actionId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"decision\":\"ACCEPTED\"}"))
+				.andExpect(status().isOk());
+
+		mvc.perform(post("/api/investigations/{id}/actions/{actionId}/decision", invId, actionId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"decision\":\"REJECTED\"}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409));
+	}
 }

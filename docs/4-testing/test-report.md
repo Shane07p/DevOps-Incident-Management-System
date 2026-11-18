@@ -66,3 +66,15 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Manual demo | |
 | Defects | |
 | Notes | |
+
+## Sprint 6 (Accessibility pass, Issue #251)
+
+Measured on local branch `feature/251-accessibility`.
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Frontend: 8 tests in `src/pages/Accessibility.test.tsx` (automated axe audit across Home light/dark themes, Incidents list, Incident Detail, Services catalog, Public Status Page, modal dialog focus trap & restoration, skip link visibility on focus) + 13 tests in `src/components/shell/AppShell.test.tsx`. All 21 tests passed. |
+| Axe Audit Findings | Automated scan with axe-core: 0 critical and 0 serious accessibility violations across all primary views in both light and dark themes. Interactive modal dialogs properly trap and restore focus on dismiss (`Escape`). Skip link is reachable by keyboard tab with visible focus styling. |
+| Defects | 0 serious or critical violations found. |
+| Notes | Issue #251 acceptance criteria fully satisfied with automated Vitest + axe-core suite. |
+

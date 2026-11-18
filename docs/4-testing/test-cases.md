@@ -510,6 +510,22 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | Automated |
 | TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | Automated |
 
+### Google and GitHub sign-in (D50)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-D50a | Equivalence | A verified Google account with no Settle account signs in, then names an org | A sign-up code; its details show the email; finishing creates the person with no password, the provider link, and an Admin membership; the code works once | `OAuthSignInServiceTest.aNewVerifiedAccountNamesItsOrgThenSignsUpWithNoPassword` (Testcontainers) | In review |
+| TC-D50b | Equivalence | A linked account signs in again | A login code that becomes a token once; a second exchange gets 401 | `OAuthSignInServiceTest.aLinkedAccountSignsInWithACodeThatWorksOnce` | In review |
+| TC-D50c | State transition | A verified GitHub account whose email matches a password account | Linked; the password is dropped; the old token gets 401; `ACCOUNT_LINKED` is audited; the code signs in to the same org | `OAuthSignInServiceTest.theFirstSignInLinksTheAccountWithThatEmailDropsItsPasswordAndEndsItsSessions` | In review |
+| TC-D50d | Negative | An unverified email, and no email at all | Sent to `/login?oauth=unverified`; no code and no person created | `OAuthSignInServiceTest.anUnverifiedOrMissingEmailIsRefusedAndCreatesNothing` | In review |
+| TC-D50e | Negative | A disabled member signs in with Google | Sent to `/login?oauth=disabled`; nothing is linked and the password stays | `OAuthSignInServiceTest.aDisabledMemberIsRefusedAndTheirAccountIsLeftAsItWas` | In review |
+| TC-D50f | Negative | A sign-up code exchanged as a login code, a login code read as a sign-up code, an expired code, a made-up code | 401 each time | `OAuthSignInServiceTest.aCodeOfTheWrongKindOrPastItsLifetimeIsRefused` | In review |
+| TC-D50g | Equivalence | Start Google and GitHub sign-in, with a forged Host header; a provider that isn't set up; a callback with no sign-in behind it | 302 to the provider with the registered callback on `APP_PUBLIC_URL` and the right scopes; 404; back to `/login?oauth=failed` | `OAuthControllerTest` | In review |
+| TC-D50h | Equivalence | Sign-up details, sign-up, then a login code, over HTTP | 200 with the email; 201 with the new org and an Admin token; 200, then 401 for the reused code | `OAuthControllerTest.aSignUpCodeShowsItsDetailsThenCreatesTheOrgAndALoginCodeWorksOnce` | In review |
+| TC-D50i | Equivalence | Sign-in and sign-up pages with two, then no, providers set up; a return with `?oauth=unverified` | A button per provider linking to its sign-in; none when the server has none; the reason shown | `OAuth.test.tsx` | In review |
+| TC-D50j | Concurrency | The callback page with a code, rendered under React's StrictMode | The code is sent once, leaves the address bar, and the person lands on Home; a used code shows the server's message | `OAuth.test.tsx` | In review |
+| TC-D50k | Equivalence | The finish-sign-up page with a code, then with an expired one | The provider's email shown and the name filled in; it sends the org name and lands on Home; an expired code shows a way back | `OAuth.test.tsx` | In review |
+
 ### Evidence links (FR-09.3)
 
 | ID | Technique | Input or condition | Expected | Test | Status |

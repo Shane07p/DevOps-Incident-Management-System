@@ -825,3 +825,22 @@ def test_write_tools_never_leak_tokens(caplog):
             assert secret_pat not in record.getMessage()
     finally:
         set_request_token(None)
+
+
+# 35. A write tool refuses a token that is not a personal access token, before it calls the backend:
+# the backend marks only what a personal access token does as "via MCP".
+def test_write_tools_refuse_a_browser_session_token():
+    session_token = "eyJhbGciOiJIUzI1NiJ9.browser.session"
+    set_request_token(session_token)
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ToolError, match="personal access token") as comment_error:
+                asyncio.run(add_comment(incident_id=1, comment="test"))
+            with pytest.raises(ToolError, match="personal access token") as ack_error:
+                asyncio.run(acknowledge(incident_id=1))
+
+            assert mock_req.call_count == 0
+            assert session_token not in str(comment_error.value)
+            assert session_token not in str(ack_error.value)
+    finally:
+        set_request_token(None)

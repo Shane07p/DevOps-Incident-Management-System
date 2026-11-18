@@ -580,6 +580,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-28.2e | Equivalence | Add comment using a PAT | Timeline entry and audit log record "(via MCP)" attribution | `McpAttributionTest` | Automated |
 | TC-FR-28.2f | Equivalence | Acknowledge incident using a PAT | Timeline entry and audit log record "via MCP" attribution | `McpAttributionTest` | Automated |
 | TC-FR-28.2g | Negative | Add comment or acknowledge incident using regular browser JWT | Timeline entry and audit log do NOT contain MCP attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2h | Negative | Call `add_comment` or `acknowledge` with a browser session token instead of a PAT | A readable tool error, and no request reaches the backend | `test_mcp_server.py` | Automated |
 
 ### Pages: audit log, service map, SLA clocks
 

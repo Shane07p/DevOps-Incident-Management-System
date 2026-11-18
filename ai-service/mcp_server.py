@@ -303,6 +303,18 @@ async def get_runbook(service_id: int) -> Any:
 # read dynamically from the incident entity to ensure safe concurrency (D38).
 # ---------------------------------------------------------------------------
 
+def _require_personal_access_token() -> None:
+    """
+    Write tools act only with a personal access token: the backend marks what a token does as
+    "via MCP", so a browser session token sent here would write without that mark.
+    """
+    if not get_caller_token().startswith("pat_"):
+        raise ToolError(
+            "Write tools need a personal access token (it starts with pat_). "
+            "Create one on the Access tokens page in Settle."
+        )
+
+
 async def add_comment(incident_id: int, comment: str) -> Any:
     """
     Add a comment to an incident timeline.
@@ -318,6 +330,7 @@ async def add_comment(incident_id: int, comment: str) -> Any:
     clean_comment = comment.strip()
     if len(clean_comment) > 5000:
         raise ToolError("comment must not exceed 5000 characters")
+    _require_personal_access_token()
 
     return await _call_backend_api(
         f"api/incidents/{incident_id}/comments",
@@ -336,6 +349,7 @@ async def acknowledge(incident_id: int) -> Any:
     """
     if not isinstance(incident_id, int) or isinstance(incident_id, bool) or incident_id <= 0:
         raise ToolError("incident_id must be a positive integer")
+    _require_personal_access_token()
 
     # Retrieve current incident to obtain latest version dynamically (never hardcoded)
     incident = await _call_backend_api(f"api/incidents/{incident_id}", method="GET")

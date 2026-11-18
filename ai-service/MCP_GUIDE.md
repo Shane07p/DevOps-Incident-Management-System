@@ -147,13 +147,10 @@ Or configure via `.claude.json`:
 > - A HTTP 409 conflict (concurrent modification) returns a readable retry message.
 > - A HTTP 403 (Viewer role) returns a readable permission-denied message.
 > - Tokens are never logged or exposed in error messages.
+> - Write tools refuse any token that is not a personal access token (`pat_...`), so everything they do shows **via MCP**.
 
 > [!NOTE]
-> **Permanently prohibited write operations (will never be added):**
-> `declare_incident`, `close_incident`, `resolve_incident`, `update_incident`, `delete_incident`,
-> `reassign`, `assign_role`, `create_service`, `update_service`, `delete_service`,
-> `create_runbook`, `update_runbook`, `delete_runbook`.
-> These operations require UI-level confirmation or multi-step workflows inappropriate for a text channel.
+> The server never changes an incident's status, and never declares or closes an incident (FR-28.2).
 
 ---
 

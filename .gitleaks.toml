@@ -1,0 +1,17 @@
+# Secret scanning (CI job "Secret scan", and the pre-commit hook). Gitleaks' default rules, plus an allowlist for
+# tests: their sample tokens (pat_…, tt_…, card tokens) are fixed fake values that the tests compare against.
+# Never add a real path here to silence a finding: remove the secret, rotate it, and rewrite nothing by hand.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake tokens in tests, and the placeholders in .env.example"
+paths = [
+  '''^frontend/src/.*\.test\.tsx?$''',
+  '''^frontend/src/test/''',
+  '''^backend/src/test/''',
+  '''^ai-service/tests/''',
+  '''^demo-shop/tests/''',
+  '''^\.env\.example$''',
+  '''^demo-shop/\.env\.example$''',
+]

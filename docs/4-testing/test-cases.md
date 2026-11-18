@@ -143,6 +143,17 @@ Target T is the copied target in minutes. Exceeding T is a breach; reaching it e
 | TC-FR-16.4a | Equivalence | An incident open across a night and a weekend | All elapsed time counts | `SlaTest` | Automated |
 | TC-FR-16.1a | Equivalence | A new incident | `responseDueAt` and `resolutionDueAt` are creation time plus each target | `IncidentTest` | Automated |
 
+### Property-based checks: generated cases for the rules
+
+jqwik (backend) and fast-check (frontend) generate the inputs, check a rule that must hold for all of them, and
+shrink a failure to the smallest case. They add to the hand-picked boundaries above; they don't replace them.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-16.3e | Property-based (boundary) | 1,000 generated starts, targets (1 to 100,000 min), and elapsed times, negative ones included | Breached exactly when elapsed is over the target; at the due time itself, not breached; 1 ns later, breached | `SlaPropertyTest` | In review |
+| TC-FR-06.3b | Property-based (state transition) | All 49 (from, to) pairs, generated exhaustively | Legal exactly for the 8 pairs in AGENTS.md; nothing returns to OPEN or leaves CLOSED; every status can still reach CLOSED, and only RESOLVED goes straight to it | `TransitionPolicyPropertyTest` | In review |
+| TC-FR-15.2f | Property-based (equivalence) | 200 generated sets of non-overlapping shifts and windows, and a moment in each window | The coverage bar tiles the window with no hole, overlap, or two gaps in a row; at any moment it agrees with who gets a new incident (the shift, else the fallback) | `schedule.property.test.ts` | In review |
+
 ### Append-only records (FR-08, FR-13)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -245,11 +256,11 @@ The monitor raises an alert after N = 3 consecutive failures.
 | TC-FR-22.1f | Negative | A monitor URL on our own network: loopback, private ranges, `169.254.169.254`, IPv6 local | Refused on save with a field error, and never contacted by a check | `MonitorTargetGuardTest`, `HttpProbeTest.refusedTargetIsNotContacted`, `MonitorControllerTest.internalUrlIsRefused` | Automated |
 | TC-FR-22.1g | State transition | A monitor in an outage is moved to another service | The count starts again; the new service gets its own alert at the threshold; its pass does not recover the old service's alert | `MonitorCheckTest.movingToAnotherServiceStartsAfresh` (Testcontainers) | Automated |
 | TC-FR-22.1h | Boundary value | A target that answers at once and then keeps sending its body | The check ends with the status, well within its 10-second deadline | `HttpProbeTest.streamingBodyDoesNotHoldTheCheck` | Automated |
-| TC-FR-22.1i | Equivalence | Monitors page with a healthy and a down monitor | Each shows its real state (Up; Down since …); no uptime bars or figures are invented; a Viewer has no New monitor button | `MonitorsPage.test.tsx` | In review |
-| TC-FR-22.1j | Boundary value | Monitor form: an `ftp://` URL and a 10-second interval, then a URL the server refuses | Both are refused before the request with the server's own messages; the server's URL error shows on the URL field; create and edit send the server's body | `MonitorsPage.test.tsx` | In review |
+| TC-FR-22.1i | Equivalence | Monitors page with a healthy and a down monitor | Each shows its real state (Up; Down since …); no uptime bars or figures are invented; a Viewer has no New monitor button | `MonitorsPage.test.tsx` | Automated |
+| TC-FR-22.1j | Boundary value | Monitor form: an `ftp://` URL and a 10-second interval, then a URL the server refuses | Both are refused before the request with the server's own messages; the server's URL error shows on the URL field; create and edit send the server's body | `MonitorsPage.test.tsx` | Automated |
 | TC-HBa | Boundary value | A ping 1 second before due time plus grace | Nothing raised | `HeartbeatTest` | Automated |
 | TC-HBb | Boundary value | No ping by due time plus grace | An alert is raised | `HeartbeatTest` | Automated |
-| TC-HBc | Equivalence | Heartbeats page: on time, late, missed, waiting, paused | Each status is read from the job's own fields; a missed job is named at the top; no sample data | `HeartbeatsPage.test.tsx` | In review |
+| TC-HBc | Equivalence | Heartbeats page: on time, late, missed, waiting, paused | Each status is read from the job's own fields; a missed job is named at the top; no sample data | `HeartbeatsPage.test.tsx` | Automated |
 
 ---
 
@@ -274,10 +285,10 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | In review |
-| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | In review |
-| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | In review |
-| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | In review |
+| TC-FR-06.3a | State transition | Each of the 8 ✓ pairs | Accepted; one timeline entry with actor and time | `TransitionPolicyTest` (parameterized) | Automated |
+| TC-FR-06.4a | State transition | Each of the 41 ✗ pairs | Rejected; status and timeline unchanged | `TransitionPolicyTest` (parameterized) | Automated |
+| TC-FR-06.4b | Negative | A change sent with a stale incident version | 409; nothing changes | `IncidentStatusTest` | Automated |
+| TC-FR-06.1a | Scenario | Walk OPEN through to CLOSED on the normal path | Every status saved and shown | `IncidentStatusTest` | Automated |
 
 ### Acknowledgement (FR-06, FR-07.4, FR-16.2, US-08)
 
@@ -293,8 +304,8 @@ incident unchanged. OPEN → ACKNOWLEDGED happens only through acknowledgement.
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | In review |
-| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | In review |
+| TC-FR-04.2a | Equivalence | Change the severity with a reason | Saved, with actor and reason on the timeline; SLA targets unchanged | `SeverityChangeTest` | Automated |
+| TC-FR-04.2b | Equivalence (invalid) | Change it with no reason | 400; nothing changes | `SeverityChangeTest` | Automated |
 
 ### Escalation (FR-07.3 to FR-07.7): decision table
 
@@ -355,7 +366,7 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 | TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
 | TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | In review |
 | TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | In review |
-| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | In review |
+| TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | Automated |
 
 ### Demo-shop scenario table (Issue #64)
 
@@ -482,20 +493,22 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-27.1a | Equivalence | Each metric (`requestRate`, `errorRate`, `latencyP50`, `latencyP95`) against a stubbed Prometheus | The query built for it; the series returned | `TelemetryServiceTest` | Automated |
 | TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not connected) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
-| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Planned (Himanshu) |
+| TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Automated (Himanshu) |
+| TC-FR-27.3b | Equivalence (invalid) | Metrics page opened with `?serviceId=999&timeRange=2d`, or with `?from=abc&to=xyz` | The first service and the last hour; `from` and `to` are ignored and the page still renders | `MetricsPage.test.tsx` (URL values that are not options) | In review |
+| TC-FR-27.3c | Equivalence | Refresh clicked once on the Metrics page | Each of the four metrics is requested once more, not twice | `MetricsPage.test.tsx` (refresh) | In review |
 
 ### Each org's own Grafana (D49, #260)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D49a | Org isolation | Two orgs, each with a service named Payments and its own Grafana, read logs and metrics | Each org's requests reach only its own Grafana, with its own token | `TelemetryConnectionTest.eachOrgReadsLogsAndMetricsOnlyFromItsOwnGrafana` (Testcontainers) | In review |
-| TC-D49b | Negative | An org with no connection reads logs | 503 "Telemetry isn't connected for your organization"; no Grafana is called | `TelemetryConnectionTest.withoutItsOwnConnectionAnOrgGets503AndNeverAnotherOrgsData`, `TelemetryServiceTest` | In review |
-| TC-D49c | Negative | Save a connection, then read it, the database row, and the audit log | The token is never returned, stored in the clear, or audited; a ciphertext moved to another org does not decrypt | `TelemetryConnectionTest.theTokenIsNeverReturnedStoredInTheClearOrAudited`, `TokenCipherTest` | In review |
-| TC-D49d | Equivalence (invalid) | A URL that is http, has no host, has user info, or points at loopback, private, link-local, or another internal address | 400 on that field | `TelemetryHttpTest` | In review |
-| TC-D49e | Negative | A name that passed the check resolves to our own machine when the call is made | Refused while connecting; the request never leaves | `TelemetryHttpTest.theConnectionItselfRefusesAnInternalAddressEvenIfTheCheckWasSkipped` | In review |
-| TC-D49f | Equivalence | The org names its label, counter, and status label; a service sets its own label value | The queries use those names and that value | `TelemetryConnectionTest.aServiceCanSayHowItIsLabelledAndTheOrgItsMetricNames` | In review |
-| TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | In review |
-| TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | In review |
+| TC-D49a | Org isolation | Two orgs, each with a service named Payments and its own Grafana, read logs and metrics | Each org's requests reach only its own Grafana, with its own token | `TelemetryConnectionTest.eachOrgReadsLogsAndMetricsOnlyFromItsOwnGrafana` (Testcontainers) | Automated |
+| TC-D49b | Negative | An org with no connection reads logs | 503 "Telemetry isn't connected for your organization"; no Grafana is called | `TelemetryConnectionTest.withoutItsOwnConnectionAnOrgGets503AndNeverAnotherOrgsData`, `TelemetryServiceTest` | Automated |
+| TC-D49c | Negative | Save a connection, then read it, the database row, and the audit log | The token is never returned, stored in the clear, or audited; a ciphertext moved to another org does not decrypt | `TelemetryConnectionTest.theTokenIsNeverReturnedStoredInTheClearOrAudited`, `TokenCipherTest` | Automated |
+| TC-D49d | Equivalence (invalid) | A URL that is http, has no host, has user info, or points at loopback, private, link-local, or another internal address | 400 on that field | `TelemetryHttpTest` | Automated |
+| TC-D49e | Negative | A name that passed the check resolves to our own machine when the call is made | Refused while connecting; the request never leaves | `TelemetryHttpTest.theConnectionItselfRefusesAnInternalAddressEvenIfTheCheckWasSkipped` | Automated |
+| TC-D49f | Equivalence | The org names its label, counter, and status label; a service sets its own label value | The queries use those names and that value | `TelemetryConnectionTest.aServiceCanSayHowItIsLabelledAndTheOrgItsMetricNames` | Automated |
+| TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | Automated |
+| TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | Automated |
 
 ### Evidence links (FR-09.3)
 
@@ -568,15 +581,17 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-US-17a | Equivalence | Audit log page: set the filters and go to page 2 | The request carries the filters and the page | `AuditLogPage.test.tsx` | Automated |
 | TC-US-17b | Equivalence | Audit log page | Times in IST; no edit or delete controls | `AuditLogPage.test.tsx` | Automated |
-| TC-US-26a | Equivalence | Select a service on the map | Its blast radius is highlighted | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26a | Equivalence | Choose Blast radius, then a service on the map | Everything that depends on it, directly or not, is highlighted and named | `ServiceMapPage.test.tsx` | Automated |
 | TC-US-26b | Decision table | A Viewer opens the map and a service form | No dependency editing | `ServiceMapPage.test.tsx`, `ServicesPage.test.tsx` | Automated |
+| TC-US-26c | Equivalence | Move between Dependencies and Blast radius with the arrow keys, then choose a service with Enter | The view changes and focus stays on the chosen view; the service opens in it | `ServiceMapPage.test.tsx` | Automated |
+| TC-US-26d | Equivalence | In Dependencies, choose a service | It lists what it calls and what calls it, with a link to the service | `ServiceMapPage.test.tsx` | Automated |
 | TC-FR-16.3e | Boundary value | A controlled clock one second before, exactly at, and one second after the target | Time left; not breached at the target; Breached one second after | `SlaClock.test.tsx` | Automated |
 | TC-FR-16.3f | Equivalence | Sort the board by severity, then by time left | The order follows each key | `IncidentsPage.test.tsx` (Incident board sorting) | Automated |
-| TC-US-08d | Equivalence | Overview: Acknowledge and take Lead on an OPEN incident | The request carries the version the list showed | `HomePage.test.tsx` | In review |
-| TC-US-08e | State | Overview: acknowledge after the incident changed: someone acknowledged it, or an escalation step ran (409) | Says it changed and reads the list again | `HomePage.test.tsx` | In review |
-| TC-US-12a | Equivalence | Incident list: search and a severity filter, then the board, then a reload | The URL keeps both filters and the view; both views show only the matches | `IncidentsPage.test.tsx` (Incident list views and filters) | In review |
-| TC-US-12b | Equivalence (invalid) | Incident list link with a severity, status and scope that do not exist | Falls back to every severity, status and scope | `incidents/filters.test.ts` | In review |
-| TC-US-03a | Equivalence | Declare dialog: choose SEV1, then Payments | Shows SEV1's meaning and Payments' SEV1 targets | `IncidentsPage.test.tsx` (Incident list views and filters) | In review |
+| TC-US-08d | Equivalence | Overview: Acknowledge and take Lead on an OPEN incident | The request carries the version the list showed | `HomePage.test.tsx` | Automated |
+| TC-US-08e | State | Overview: acknowledge after the incident changed: someone acknowledged it, or an escalation step ran (409) | Says it changed and reads the list again | `HomePage.test.tsx` | Automated |
+| TC-US-12a | Equivalence | Incident list: search and a severity filter, then the board, then a reload | The URL keeps both filters and the view; both views show only the matches | `IncidentsPage.test.tsx` (Incident list views and filters) | Automated |
+| TC-US-12b | Equivalence (invalid) | Incident list link with a severity, status and scope that do not exist | Falls back to every severity, status and scope | `incidents/filters.test.ts` | Automated |
+| TC-US-03a | Equivalence | Declare dialog: choose SEV1, then Payments | Shows SEV1's meaning and Payments' SEV1 targets | `IncidentsPage.test.tsx` (Incident list views and filters) | Automated |
 
 ### Audit log API (FR-13, #153)
 
@@ -607,14 +622,62 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-11.3a | Equivalence | An Engineer adds a CORRECTIVE and an Admin a PREVENTIVE follow-up | 201 with owner, due date, OPEN, not overdue; a timeline entry for each | `FollowUpControllerTest.createsACorrectiveAndAPreventiveFollowUp` | In review |
-| TC-FR-11.3b | Boundary | Due date the day before today (UTC), then today (UTC) while it is already tomorrow in IST | 400 on `dueDate`, then 201 | `FollowUpControllerTest.aDueDateBeforeTodayInUtcIsRefusedAndTodayIsAccepted` | In review |
-| TC-FR-11.3c | Equivalence (invalid) | Owner from another org, or an id that does not exist | 400 on `ownerId`, nothing saved | `FollowUpControllerTest.anOwnerFromAnotherOrgOrNoOneIsRefused`, `OrgIsolationTest` | In review |
-| TC-FR-11.3d | Boundary | Clock at 23:59:59 UTC on the due date, then 00:00 the day after | `overdue` false, then true | `FollowUpControllerTest.overdueIsFalseOnTheDueDateAndTrueTheDayAfter` | In review |
-| TC-FR-11.3e | State | Status to DONE, DONE again, then IN_PROGRESS | `completedAt` set and one timeline entry; nothing more; cleared on reopening | `FollowUpControllerTest.doneSetsCompletedAtAddsATimelineEntryAndIsNeverOverdue` | In review |
-| TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | In review |
-| TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | In review |
-| TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | In review |
+| TC-FR-11.3a | Equivalence | An Engineer adds a CORRECTIVE and an Admin a PREVENTIVE follow-up | 201 with owner, due date, OPEN, not overdue; a timeline entry for each | `FollowUpControllerTest.createsACorrectiveAndAPreventiveFollowUp` | Automated |
+| TC-FR-11.3b | Boundary | Due date the day before today (UTC), then today (UTC) while it is already tomorrow in IST | 400 on `dueDate`, then 201 | `FollowUpControllerTest.aDueDateBeforeTodayInUtcIsRefusedAndTodayIsAccepted` | Automated |
+| TC-FR-11.3c | Equivalence (invalid) | Owner from another org, or an id that does not exist | 400 on `ownerId`, nothing saved | `FollowUpControllerTest.anOwnerFromAnotherOrgOrNoOneIsRefused`, `OrgIsolationTest` | Automated |
+| TC-FR-11.3d | Boundary | Clock at 23:59:59 UTC on the due date, then 00:00 the day after | `overdue` false, then true | `FollowUpControllerTest.overdueIsFalseOnTheDueDateAndTrueTheDayAfter` | Automated |
+| TC-FR-11.3e | State | Status to DONE, DONE again, then IN_PROGRESS | `completedAt` set and one timeline entry; nothing more; cleared on reopening | `FollowUpControllerTest.doneSetsCompletedAtAddsATimelineEntryAndIsNeverOverdue` | Automated |
+| TC-FR-11.3f | Decision table | A Viewer adds, changes, and reads follow-ups | 403, 403, 200 | `FollowUpControllerTest.aViewerReadsFollowUpsButCannotAddOrChangeThem`, `SecurityMatrixTest` | Automated |
+| TC-FR-11.3g | Equivalence | `GET /api/follow-ups` with `owner=me`, a user id, `status`, and `overdue` true and false | Only the matching follow-ups, soonest due first, across incidents; 400 for an unknown owner or status | `FollowUpControllerTest.theOrgListFiltersByOwnerStatusAndOverdue` | Automated |
+| TC-FR-11.3h | Concurrency | A rename read the follow-up, then another request marked it DONE before the rename saved | The rename is refused (409 through the API); the follow-up stays DONE | `FollowUpControllerTest.aSaveFromAStaleReadIsRefusedInsteadOfUndoingAnotherSave` | Automated |
+
+### Insights API (FR-12.1, #243): aggregate metrics across incidents, follow-ups, and notifications
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.1a | Equivalence | GET /api/insights with days=7, 30, and 90 (or omitted default 30) | 200 with from, to half-open window, MTTA/MTTR, breakdowns, SLA breach rates, follow-ups, and outOfHoursPages | `InsightsControllerTest.validDays_returns200WithCompleteStructure`, `defaultDays_defaultsTo30` | Automated |
+| TC-FR-12.1b | Boundary | Half-open window: incident created at exactly `from` included; incident created at exactly `to` excluded | `from` included in counts, `to` excluded | `InsightsServiceTest.dateBoundaries_halfOpenIntervalVerified` | Automated |
+| TC-FR-12.1c | Equivalence (invalid) | GET /api/insights with days=0, 1, 14, 60, 365, -7, or abc | 400 Bad Request with field error on days | `InsightsControllerTest.invalidDays_returns400` | Automated |
+| TC-FR-12.1d | Boundary | SLA exact target matches duration (response or resolution) | Not counted as breach (breach is strictly > target) | `InsightsServiceTest.slaBreachRate_exactTargetIsNotBreach_exceededIsBreach` | Automated |
+| TC-FR-12.1e | Equivalence | In-flight incident within target vs overdue | In-flight within target excluded from SLA denominator; in-flight overdue counted as breach | `InsightsServiceTest.slaBreachRate_inFlightEventsExcludedFromDenominator`, `slaBreachRate_overdueInFlightIncidentsCountedAsBreached` | Automated |
+| TC-FR-12.1f | Decision table | Roles Admin, Engineer, Viewer, and unauthenticated | Admin, Engineer, Viewer get 200; unauthenticated gets 401 | `InsightsControllerTest.roleAccess_permittedRoles`, `unauthenticated_returns401`, `SecurityMatrixTest.endpointSecurityMatrix` | Automated |
+| TC-FR-12.1g | Equivalence | Multi-tenant isolation: requests from Org B cannot see Org A incidents, follow-ups, or notifications | Org B receives empty/zero metrics | `InsightsOrgTest.crossOrganizationDataIsolation` | Automated |
+| TC-FR-12.1h | Boundary | Out-of-hours pages: weekday 09:00 to 18:00 IST working hours vs weekend / off-hours; genuine pages only, excluding reassignments and role assignments | Only off-hours or weekend incident pages count towards outOfHoursPages | `InsightsServiceTest.outOfHoursPages_countsOnlyOutOfHoursNotifications`, `InsightsControllerTest.endToEndAggregations` | Automated |
+
+### Insights page (FR-12.1, #244): range selection, stat tiles, and breakdown bars
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.1i | Equivalence | Select 7, 30, or 90-day range on `/insights` | Selected range updates URL search parameter `?days=`, sends matching API request, and preserves unrelated URL parameters | `InsightsPage.test.tsx` (URL and date ranges) | Automated |
+| TC-FR-12.1j | Boundary value | Null metrics and empty breakdown lists vs genuine numeric zeros | Null metric, null rate, empty service list, and zero total incidents display "No data yet"; numeric 0 displays as 0 | `InsightsPage.test.tsx` (Missing values handling, Zero values handling), `format.test.ts` | Automated |
+| TC-FR-12.1k | Equivalence | Controlled fixture data rendered into dashboard tiles and breakdown bars | MTTA/MTTR formatted in hours and minutes (mean with median and P90), SLA breach percentages, follow-up metrics, out-of-hours pages, severity proportional bars, and service breakdown rows linking to `/services/{serviceId}` | `InsightsPage.test.tsx` (Successful response rendering) | Automated |
+
+### Postmortems (FR-11.1, DR-06, D17, #239)
+
+| ID | Technique | Input or condition | Expected | Test | Status | Owner |
+| --- | --- | --- | --- | --- | --- | --- |
+| TC-FR-11.1a | Equivalence | Save all six fields, reload from PostgreSQL, then edit as another responder | One DRAFT with all fields preserved, the last editor as author, and an incremented postmortem version; incident version unchanged | `PostmortemTest.saveReloadsEveryFieldAndNamesTheLastEditor` | Automated | Shane |
+| TC-FR-11.1b | Boundary value | Each of the six fields has 10,000, then 10,001 characters | 10,000 accepted; 10,001 gives 400 on that field and preserves the saved text | `PostmortemTest.everyFieldAcceptsTenThousandAndRejectsTenThousandAndOne` | Automated | Shane |
+| TC-FR-11.1c | Concurrency | Save or review with a version superseded by another edit | 409; the saved draft, version, author, and timeline stay unchanged | `PostmortemTest.staleUpdateAndReviewLeaveTheSavedDraftAndTimelineUnchanged` | Automated | Shane |
+| TC-FR-11.1d | State transition | The author reviews, another responder reviews, then a responder edits | Author gets 409; independent review records reviewer/time and one attributed timeline entry; editing returns to DRAFT and clears review metadata | `PostmortemTest.onlyAnotherPersonCanReviewAndEditingClearsThatReview` | Automated | Shane |
+| TC-FR-11.1e | Negative | GET or review with no postmortem; PUT for a missing incident | 404 | `PostmortemTest.missingPostmortemIsNotFoundOnGetAndReview` | Automated | Shane |
+| TC-FR-11.1f | Decision table | Each role and no token calls each postmortem endpoint | All authenticated roles read; Engineer/Admin save and review; Viewer gets 403 on writes; no token gets 401 | `SecurityMatrixTest.endpointSecurityMatrix` | Automated | Shane |
+| TC-FR-11.1g | Org isolation | Another org's incident has a saved postmortem | GET, PUT, and review return 404 to the caller from the other org | `OrgIsolationTest.anotherOrgsIdsAreNotFound` | Automated | Shane |
+| TC-FR-11.1h | Concurrency | PUT has a version when no postmortem exists, or null when a draft already exists | 409; null means the caller saw no postmortem and cannot overwrite a saved draft | `PostmortemTest.nullVersionMeansCreateAndCannotOverwriteAnExistingDraft` | Automated | Shane |
+| TC-FR-11.1i | Idempotency | Review an already REVIEWED postmortem using its current version, then repeat with the old version | Current version returns the existing review unchanged and adds no timeline entry; old version gets 409 | `PostmortemTest.repeatingACurrentReviewKeepsItsOriginalReviewerTimeAndTimeline` | Automated | Shane |
+| TC-FR-11.1j | Concurrency | Two first drafts overlap, or two edits overlap after reading the same version | Exactly one wins; the loser gets 409 from the unique incident key or optimistic lock, preserving the winner's text and version | `PostmortemConcurrencyTest.overlappingCreatesAndEditsKeepOnlyTheWinningDraft` (PostgreSQL) | Automated | Shane |
+| TC-DR-06a | Decision table | Close a RESOLVED SEV1 or SEV2 incident through `POST /api/incidents/{id}/transitions` with no postmortem, a DRAFT, a REVIEWED one edited back to DRAFT, then after a second review | 409 "A reviewed postmortem is required to close a SEV1 or SEV2 incident" and the incident stays RESOLVED until the postmortem is REVIEWED; then 200 and CLOSED | `PostmortemTest.majorIncidentClosesOnlyWithAReviewedPostmortem` | Automated | Shane |
+| TC-DR-06b | Decision table | Close a RESOLVED SEV3 or SEV4 incident through `POST /api/incidents/{id}/transitions` with no postmortem | 200 and CLOSED | `PostmortemTest.minorIncidentClosesWithoutAPostmortem` | Automated | Shane |
+| TC-DR-06c | Concurrency | An edit has written a reviewed postmortem back to DRAFT and not committed when a close of the SEV2 incident reads it (PostgreSQL) | The close waits for the edit, then gets 409; the incident stays RESOLVED and the postmortem is DRAFT | `PostmortemConcurrencyTest.aClosureOverlappingAnEditWaitsForItAndThenRefuses` | Automated | Shane |
+| TC-DR-06d | State transition | A SEV1 incident is lowered to SEV3, then closed without, then with, a reviewed postmortem | 409 until the postmortem is REVIEWED (judged by the highest severity reached, DR-06.3); then 200 and CLOSED | `PostmortemTest.aDowngradedIncidentStillNeedsAReviewedPostmortemToClose` | Automated | Shane |
+
+### Performance and latency (NFR-01, Issue #250)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-NFR-01.1a | Performance | 10 concurrent VUs query the incident board (`GET /api/incidents`) with 1,000 stored incidents | 95th percentile response time $< 2,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-1-incidents.js` | Automated |
+| TC-NFR-01.1b | Performance | 10 concurrent VUs query incident detail (`GET /api/incidents/{id}`) with 1,000 stored incidents | 95th percentile response time $< 2,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-1-incidents.js` | Automated |
+| TC-NFR-01.2a | Performance | Webhook alert intake (`POST /webhooks/alerts`) at a constant arrival rate of 10 alerts/sec for 30s | 95th percentile response time $< 1,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-2-alerts.js` | Automated |
 
 ---
 
@@ -642,14 +705,14 @@ Ten decisions: the two null checks, six branches of the seven-case `switch (from
 
 | ID | Path | Expected | Test | Status |
 | --- | --- | --- | --- | --- |
-| TC-WB-01 | `from` is null | false | `path1_nullFromReturnsFalse` | In review |
-| TC-WB-02 | `to` is null | false | `path2_nullToReturnsFalse` | In review |
-| TC-WB-03 | OPEN | `to == ACKNOWLEDGED` | `path3_openToAcknowledgedReturnsTrue`, `path4_openToOtherReturnsFalse` | In review |
-| TC-WB-04 | ACKNOWLEDGED | `to == INVESTIGATING` | `path5_acknowledgedToInvestigatingReturnsTrue`, `path6_acknowledgedToOtherReturnsFalse` | In review |
-| TC-WB-05 | INVESTIGATING, `to == IDENTIFIED` | true, without the second test | `path7_investigatingToIdentifiedReturnsTrue` | In review |
-| TC-WB-06 | INVESTIGATING, `to != IDENTIFIED` | `to == MONITORING` | `path8_investigatingToMonitoringReturnsTrue`, `path9_investigatingToOtherReturnsFalse` | In review |
-| TC-WB-07 | IDENTIFIED | `to == MONITORING` | `path10_identifiedToMonitoringReturnsTrue`, `path11_identifiedToOtherReturnsFalse` | In review |
-| TC-WB-08 | MONITORING, `to == INVESTIGATING` | true, without the second test | `path12_monitoringToInvestigatingReturnsTrue` | In review |
-| TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | In review |
-| TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | In review |
-| TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | In review |
+| TC-WB-01 | `from` is null | false | `path1_nullFromReturnsFalse` | Automated |
+| TC-WB-02 | `to` is null | false | `path2_nullToReturnsFalse` | Automated |
+| TC-WB-03 | OPEN | `to == ACKNOWLEDGED` | `path3_openToAcknowledgedReturnsTrue`, `path4_openToOtherReturnsFalse` | Automated |
+| TC-WB-04 | ACKNOWLEDGED | `to == INVESTIGATING` | `path5_acknowledgedToInvestigatingReturnsTrue`, `path6_acknowledgedToOtherReturnsFalse` | Automated |
+| TC-WB-05 | INVESTIGATING, `to == IDENTIFIED` | true, without the second test | `path7_investigatingToIdentifiedReturnsTrue` | Automated |
+| TC-WB-06 | INVESTIGATING, `to != IDENTIFIED` | `to == MONITORING` | `path8_investigatingToMonitoringReturnsTrue`, `path9_investigatingToOtherReturnsFalse` | Automated |
+| TC-WB-07 | IDENTIFIED | `to == MONITORING` | `path10_identifiedToMonitoringReturnsTrue`, `path11_identifiedToOtherReturnsFalse` | Automated |
+| TC-WB-08 | MONITORING, `to == INVESTIGATING` | true, without the second test | `path12_monitoringToInvestigatingReturnsTrue` | Automated |
+| TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | Automated |
+| TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | Automated |
+| TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | Automated |

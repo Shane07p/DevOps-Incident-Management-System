@@ -217,6 +217,14 @@ class AuthControllerTest {
 		mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
 	}
 
+	// The deploy check reads the running commit here; on Render it is RENDER_GIT_COMMIT, in tests "local".
+	@Test
+	void infoNamesTheRunningCommitWithoutAToken() throws Exception {
+		mvc.perform(get("/actuator/info"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.app.commit").value("local"));
+	}
+
 	@Test
 	void theTokenCarriesTheOrgAndTheRole() throws Exception {
 		createUser("ana", Role.ENGINEER);

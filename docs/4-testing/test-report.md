@@ -96,26 +96,30 @@ Evaluated against non-functional performance requirements **NFR-01.1** (incident
 >   2. *Full new-incident-path benchmark:* Generated a strictly unique correlation key per iteration, resulting in 301 distinct new incidents verified in the database (incident count increased from 1,029 to 1,330; 301 alerts with `status: NEW`, 0 with `ATTACHED`). This verified the slower creation path including SLA copying, organization row-locking for atomic sequence numbering, on-call assignment, notifications, and timeline logging (p95: 37.88 ms, 26x headroom below 1,000 ms).
 > - Zero requests failed across all local runs (13,530 incident queries on original run, 11,620 on validation run, and 608 total webhook requests). Detailed execution instructions are in [perf/README.md](../../perf/README.md).
 
-### Deployed Low-Load Testing Status (Render / Supabase)
+### Deployed low-load run (Render / Supabase)
 
-- **Target URL:** `https://incident-backend-f340.onrender.com`
-- **Health Verification:** `GET /actuator/health` responded with HTTP 200 `{"groups":["liveness","readiness"],"status":"UP"}`.
-- **Access Attempts:** Requests to `POST /api/auth/login` and `POST /webhooks/alerts` returned **HTTP 401 Unauthorized**.
-- **Execution Status:** **Not Completed (Blocked)**. Deployed performance tests have **not** completed because authorized credentials and tool tokens are not available in the test environment. In compliance with `AGENTS.md` and `application.properties`, development seed accounts (`admin@settle.local` / `DevPassw0rd!`) are restricted to local databases (`R__dev_seed.sql`) and are not populated in the production database.
-- **Reporting Note:** Deployed performance metrics are **not** reported, and deployed testing is **not** marked as passed.
-- **Execution Instructions Once Authorized Credentials Are Supplied:**
-  To run the gentle deployed suite once credentials or tool tokens are provided in the environment:
-  ```powershell
-  # 1. Gentle incident latency check (2 VUs, 30s):
-  k6 run perf/nfr-01-1-incidents.js `
-    -e BASE_URL=https://incident-backend-f340.onrender.com `
-    -e WORKLOAD_PROFILE=deployed `
-    -e ADMIN_EMAIL=<authorized_admin_email> `
-    -e ADMIN_PASSWORD=<authorized_admin_password>
+Run on 18 November 2026 against `https://incident-backend-f340.onrender.com`, serving commit `2b2e2cf`
+(read from `/actuator/info`), with k6 v2.1.0 from a laptop in India. The dev seed users exist only in local
+databases, so the run used a throwaway org made through the public sign-up ("k6 perf check (deployed)"), with one
+`Payments` service. The alert script registered its own tool and revoked it at the end. The alert script ran first
+so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deployed`).
 
-  # 2. Gentle alert intake check (1 alert/s, 30s):
-  k6 run perf/nfr-01-2-alerts.js `
-    -e BASE_URL=https://incident-backend-f340.onrender.com `
-    -e WORKLOAD_PROFILE=deployed `
-    -e TOOL_TOKEN=<authorized_tool_token>
-  ```
+| Benchmark | Workload | Requests | Latency (min / median / p90 / p95 / max) | Failed | Threshold | Status |
+|---|---|---|---|---|---|---|
+| **NFR-01.2 Alert intake, new-incident path** (`POST /webhooks/alerts`) | 1 alert/s for 30 s, a new correlation key per alert | 29 alerts (2 dropped by k6's arrival scheduler), 29 incidents opened | 1.51 s / 2.29 s / 3.02 s / **3.12 s** / 3.16 s | 0% (0 / 32) | p(95) < 1,000 ms | **Failed** |
+| **NFR-01.1 Incident board** (`GET /api/incidents`) | 2 VUs for 30 s | 46 | 330 ms / 471 ms / 643 ms / **709 ms** / 1.01 s | 0% | p(95) < 2,000 ms | **Passed** |
+| **NFR-01.1 Incident detail** (`GET /api/incidents/{id}`) | 2 VUs for 30 s | 46 | 544 ms / 622 ms / 736 ms / **806 ms** / 925 ms | 0% | p(95) < 2,000 ms | **Passed** |
+
+> **Notes on the deployed run:**
+> - Every request succeeded and every check passed, but alert intake misses NFR-01.2 on the deployed setup: each
+>   alert that opens an incident took 1.5 to 3.2 s, against a p95 of 37.88 ms (max 69.73 ms) locally on the same path.
+> - From this laptop a request with no database work (`/actuator/info`) takes about 0.24 to 0.39 s, and
+>   `/actuator/health` (one database check) about 0.41 to 0.47 s. Opening an incident makes many database calls one
+>   after another (SLA copy, org lock and number, on-call lookup, timeline entries, notification, audit, escalation
+>   task), and each one crosses from Render to Supabase, so the likely cause is that per-query latency on the free
+>   tier, not the code path itself. Grouping into an open incident (fewer writes) was not measured on the deployed app.
+> - The incident board and detail pass NFR-01.1 with the network round trip included, but this org held 29
+>   incidents, not 1,000: the seed is for local databases only.
+> - To rerun: sign up a throwaway org on the deployed app, add a service named `Payments`, then
+>   `k6 run perf/nfr-01-2-alerts.js -e BASE_URL=… -e WORKLOAD_PROFILE=deployed -e ADMIN_EMAIL=… -e ADMIN_PASSWORD=…`
+>   and the same for `perf/nfr-01-1-incidents.js`. Credentials come from the environment, never from the repository.

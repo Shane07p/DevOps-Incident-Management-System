@@ -172,9 +172,9 @@ holds the codes, by SHA-256. Neither has `org_id`: like `app_user`, they belong 
    `https://dev-ops-incident-management-system.vercel.app/api/auth/oauth2/callback/google`, and for local runs
    `http://localhost:5173/api/auth/oauth2/callback/google`. On the consent screen, ask only for the email, profile
    and openid scopes, which need no Google review, and publish it.
-2. GitHub, Settings, Developer settings, OAuth Apps: one app for the deployed site with the callback URL
-   `https://dev-ops-incident-management-system.vercel.app/api/auth/oauth2/callback/github`, and a second one for
-   `http://localhost:5173/api/auth/oauth2/callback/github`, because a GitHub OAuth app has one callback URL.
+2. GitHub, Settings, Developer settings, OAuth Apps: one app with two redirect URIs,
+   `https://dev-ops-incident-management-system.vercel.app/api/auth/oauth2/callback/github` and, for local runs,
+   `http://localhost:5173/api/auth/oauth2/callback/github`. Leave wildcard matching and the device flow off.
 3. Put each client id and secret on Render, set `APP_PUBLIC_URL` to the deployed address, and redeploy. Secrets
    never go in the repository or in chat.
 

@@ -139,8 +139,9 @@ class SecurityConfig {
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.bearerTokenResolver(request -> {
-							// A logged-in browser may send an expired token to the public page; it needs none.
-							if (request.getRequestURI().startsWith("/api/public/")) {
+							// A logged-in browser may send an expired token to the public page; it needs none. The same goes for
+							// redeeming a Google or GitHub sign-in code: linking may just have revoked the token the tab still holds.
+							if (request.getRequestURI().startsWith("/api/public/") || request.getRequestURI().startsWith("/api/auth/oauth/")) {
 								return null;
 							}
 							String header = request.getHeader(HttpHeaders.AUTHORIZATION);

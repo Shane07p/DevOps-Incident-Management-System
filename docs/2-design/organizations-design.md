@@ -153,12 +153,12 @@ throws the session away, and redirects to the app with a one-time code in the UR
 | Who | Goes to | Then |
 | --- | --- | --- |
 | A person this provider account is linked to | `/auth/callback#code=…` | The page swaps the code for a token (`POST /api/auth/oauth/exchange`) and opens Home |
-| Nobody linked yet, but a person with this verified email | `/auth/callback#code=…` | Linked first: their password is dropped and their old sessions end (D50), and the audit log gets `ACCOUNT_LINKED` |
+| Nobody linked yet, but a person with this verified email | `/auth/callback#code=…` | Linked first: their password is dropped, their old sessions and personal access tokens stop working (D50), and the audit log gets `ACCOUNT_LINKED` |
 | Nobody with this email | `/signup/finish#code=…` | They name their org and confirm their name (`POST /api/auth/oauth/signup`); no password is set |
 | An unverified or missing email, a disabled member, or a cancelled sign-in | `/login?oauth=…` | The sign-in page says why |
 
 A fragment never reaches a server or a `Referer` header, and the pages take the code out of the address bar at
-once. The code works once: one `UPDATE … WHERE used_at IS NULL` claims it. GitHub's `/user` may hide the email, so
+once. The code endpoints ignore any bearer token the tab still sends, since linking may just have revoked it. The code works once: one `UPDATE … WHERE used_at IS NULL` claims it. GitHub's `/user` may hide the email, so
 the backend reads the primary verified address from `/user/emails`.
 
 **Data.** `user_identity` links a provider account (Google's `sub`, GitHub's numeric id) to a person; `oauth_ticket`

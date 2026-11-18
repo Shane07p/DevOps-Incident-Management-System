@@ -3,6 +3,7 @@ package com.group2.incident.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.group2.incident.auth.dto.LoginResponse;
@@ -14,10 +15,13 @@ import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.auth.repository.UserIdentityRepository;
 import com.group2.incident.common.error.UnauthorizedException;
 import com.group2.incident.support.IntegrationTest;
+import com.group2.incident.support.TestAccounts;
 import com.group2.incident.support.TestOrgs;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.jayway.jsonpath.JsonPath;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,6 +40,9 @@ class OAuthSignInServiceTest {
 
 	@Autowired
 	private TestOrgs orgs;
+
+	@Autowired
+	private TestAccounts accounts;
 
 	@Autowired
 	private MockMvc mvc;
@@ -92,26 +99,35 @@ class OAuthSignInServiceTest {
 
 	// TC-D50c: the provider proved the email; a password set before never was, so it goes and old tokens stop.
 	@Test
-	void theFirstSignInLinksTheAccountWithThatEmailDropsItsPasswordAndEndsItsSessions() throws Exception {
-		TestOrgs.SignedUp ana = orgs.signUp("ana@link.test", "Link org");
+	void theFirstSignInLinksTheAccountWithThatEmailDropsItsPasswordAndEndsItsSessionsAndAccessTokens() throws Exception {
+		// A password account in the test's org, as an Admin might have added it; its email was never verified.
+		AppUser ana = accounts.create("ana@link.test", Role.ADMIN);
+		String sessionToken = accounts.token("ana@link.test");
+		// Whoever held the account before could have made a personal access token; it must stop too (Codex, #298).
+		String accessToken = JsonPath.read(mvc.perform(post("/api/me/tokens").header(HttpHeaders.AUTHORIZATION, "Bearer " + sessionToken)
+						.contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"ci\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.token");
+		mvc.perform(get("/api/incidents").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)).andExpect(status().isOk());
 		int versionBefore = users.findByEmail("ana@link.test").orElseThrow().getTokenVersion();
 
 		String path = signIn.finish(new ProviderAccount(OAuthProvider.GITHUB, "4242", "ANA@link.test", true, "Ana"));
 
 		assertThat(path).startsWith("/auth/callback#code=");
-		AppUser ana2 = users.findByEmail("ana@link.test").orElseThrow();
-		assertThat(ana2.getPasswordHash()).isNull();
-		assertThat(ana2.getTokenVersion()).isEqualTo(versionBefore + 1);
+		AppUser linked = users.findByEmail("ana@link.test").orElseThrow();
+		assertThat(linked.getPasswordHash()).isNull();
+		assertThat(linked.getTokenVersion()).isEqualTo(versionBefore + 1);
 		assertThat(identities.findByProviderAndSubject(OAuthProvider.GITHUB, "4242")).isPresent();
-		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + ana.adminToken()))
+		mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + sessionToken))
+				.andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/incidents").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
 				.andExpect(status().isUnauthorized());
 		assertThat(jdbc.queryForObject(
-				"select count(*) from audit_entry where action = 'ACCOUNT_LINKED' and item_id = ?", Integer.class, ana.adminId()))
+				"select count(*) from audit_entry where action = 'ACCOUNT_LINKED' and item_id = ?", Integer.class, ana.getId()))
 				.isEqualTo(1);
 
 		LoginResponse session = signIn.exchange(codeIn(path));
-		assertThat(session.user().id()).isEqualTo(ana.adminId());
-		assertThat(session.org().id()).isEqualTo(ana.orgId());
+		assertThat(session.user().id()).isEqualTo(ana.getId());
+		assertThat(session.org().id()).isEqualTo(accounts.membership(ana).getOrg().getId());
 	}
 
 	// TC-D50d

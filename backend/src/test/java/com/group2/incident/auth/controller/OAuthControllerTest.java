@@ -94,6 +94,19 @@ class OAuthControllerTest {
 		assertThat(location(result)).isEqualTo("https://settle.test/login?oauth=failed");
 	}
 
+	// The tab may still hold the token that linking just revoked; redeeming a code must not depend on it (Codex, #298).
+	@Test
+	void aCodeIsRedeemedEvenWhenTheBrowserStillSendsAnOldToken() throws Exception {
+		signIn.completeSignup(codeIn(signIn.finish(new ProviderAccount(OAuthProvider.GOOGLE, "g-stale", "stale@http.test", true, "Stale"))),
+				"Stale org", "Stale");
+		String code = codeIn(signIn.finish(new ProviderAccount(OAuthProvider.GOOGLE, "g-stale", "stale@http.test", true, "Stale")));
+
+		mvc.perform(post("/api/auth/oauth/exchange").header(HttpHeaders.AUTHORIZATION, "Bearer revoked.or.expired.jwt")
+						.contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.user.email").value("stale@http.test"));
+	}
+
 	// TC-D50h
 	@Test
 	void aSignUpCodeShowsItsDetailsThenCreatesTheOrgAndALoginCodeWorksOnce() throws Exception {

@@ -10,6 +10,7 @@ import com.group2.incident.auth.entity.OAuthTicket;
 import com.group2.incident.auth.entity.UserIdentity;
 import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.auth.repository.OAuthTicketRepository;
+import com.group2.incident.auth.repository.PersonalAccessTokenRepository;
 import com.group2.incident.auth.repository.UserIdentityRepository;
 import com.group2.incident.common.error.UnauthorizedException;
 import com.group2.incident.common.tenancy.OrgContext;
@@ -36,8 +37,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Turns a finished Google or GitHub sign-in into a Settle session (D50).
  *
  * <p>The provider's own id finds the person. The first time, a person with the same email is the same person:
- * the provider has verified that email, while Settle never did, so a password set before is dropped and every
- * token issued so far stops working. Nobody with that email yet means a new person, who names their org first.
+ * the provider has verified that email, while Settle never did, so a password set before is dropped, and every
+ * session and personal access token issued so far stops working. Nobody with that email yet means a new person, who names their org first.
  *
  * <p>The browser never gets a token in a URL: it gets a one-time code in the URL fragment and swaps it with a POST.
  */
@@ -53,6 +54,7 @@ public class OAuthSignInService {
 	private final AppUserRepository users;
 	private final UserIdentityRepository identities;
 	private final OAuthTicketRepository tickets;
+	private final PersonalAccessTokenRepository accessTokens;
 	private final MembershipRepository memberships;
 	private final AuditService auditService;
 	private final AuthService authService;
@@ -99,6 +101,8 @@ public class OAuthSignInService {
 			if (user.getPasswordHash() != null) {
 				users.dropPasswordAndRevokeTokens(user.getId());
 			}
+			// Whoever held the account before the email was proved may have made access tokens; they stop too.
+			accessTokens.revokeAllOfUser(user.getId(), clock.instant());
 			linkedIn = membership.get();
 		}
 		return new Outcome("/auth/callback#code=" + issue(OAuthTicket.Kind.LOGIN, user, account), linkedIn);

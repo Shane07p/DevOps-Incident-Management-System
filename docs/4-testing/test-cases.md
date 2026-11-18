@@ -546,6 +546,15 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | Automated |
 | TC-FR-18.4c | Transaction boundary | Duplicate-check and semantic-search requests embed a query before database access | The AI embedding request runs without an open database transaction | `IncidentSimilarityTransactionTest` | Automated |
 
+### AI-4 Triage hint on declare form (Issue #247)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-4a | Equivalence | Stubbed `/triage` with valid title, similar incidents, and org services | 200 with `aiGenerated: true`, suggested severity, valid org service, and human-readable reason | `TriageHintServiceTest`, `test_triage.py` | Automated |
+| TC-AI-4b | Scenario | Click Apply button on displayed AI triage hint | Form's severity and service fields are populated with the suggested values | `TriageHint.test.tsx` | Automated |
+| TC-AI-4c | Scenario | AI triage hint displayed without clicking Apply | Form values remain untouched/unchanged; user retains full manual control | `TriageHint.test.tsx` | Automated |
+| TC-AI-4d | Negative | AI service returns 503, times out, or is offline | Triage hint is silently hidden and incident declaration proceeds normally without blocking | `TriageHint.test.tsx`, `IncidentControllerTest` | Automated |
+
 ### Public status page (FR-21, D45): decision table on who may publish
 
 | ID | Technique | Input or condition | Expected | Test | Status |

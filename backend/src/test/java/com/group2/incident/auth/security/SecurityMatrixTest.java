@@ -467,6 +467,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"POST /api/incidents/triage-hint",
+						HttpMethod.POST,
+						"/api/incidents/triage-hint",
+						"{\"title\":\"Payment gateway timeout\",\"description\":\"Checkout requests failing with gateway timeouts.\"}",
+						503, 503, 403, 401
+				),
+				new MatrixRow(
 						"POST /api/incidents",
 						HttpMethod.POST,
 						"/api/incidents",

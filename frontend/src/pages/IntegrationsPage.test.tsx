@@ -59,6 +59,16 @@ describe('IntegrationsPage', () => {
     expect(screen.getByLabelText('Read-only token')).toHaveValue('')
   })
 
+  // The browser must not take the Grafana fields for the Settle sign-in and fill in its email and password.
+  it('keeps the browser from filling in a saved sign-in', async () => {
+    mockFetch({ 'GET /api/settings/telemetry': { body: notConnected } })
+    renderPage()
+
+    expect(await screen.findByLabelText('Read-only token')).toHaveAttribute('autocomplete', 'new-password')
+    expect(screen.getByLabelText('Prometheus user')).toHaveAttribute('autocomplete', 'off')
+    expect(screen.getByLabelText('Loki user')).toHaveAttribute('autocomplete', 'off')
+  })
+
   it('never shows the saved token, and an empty token field keeps it', async () => {
     const user = userEvent.setup()
     const fetchMock = mockFetch({

@@ -262,7 +262,16 @@ function TextField({
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input type={type} placeholder={placeholder} autoComplete="off" {...field} />
+            {/* Browsers ignore "off" next to a password field and fill in the Settle sign-in, which Save would
+                then send to Grafana; "new-password" stops that, and the data attributes stop password managers. */}
+            <Input
+              type={type}
+              placeholder={placeholder}
+              autoComplete={type === 'password' ? 'new-password' : 'off'}
+              data-1p-ignore
+              data-lpignore="true"
+              {...field}
+            />
           </FormControl>
           {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />

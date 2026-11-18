@@ -7,9 +7,11 @@ import { incidentStatusSchema, severitySchema } from '@/api/schemas'
 import { useAuth } from '@/auth/AuthProvider'
 import { Avatar } from '@/components/app/Avatar'
 import { SeverityBadge, StatusBadge } from '@/components/app/badges'
+import { BackendUnreachableBanner } from '@/components/app/BackendUnreachableBanner'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { PageHeader } from '@/components/app/PageHeader'
+import { useLiveUpdates } from '@/lib/useLiveUpdates'
 import { Panel } from '@/components/app/Panel'
 import { SlaBadge } from '@/components/app/SlaClock'
 import { Button } from '@/components/ui/button'
@@ -223,8 +225,14 @@ function IncidentBoard({ incidents, now, onPeek }: { incidents: IncidentSummary[
  */
 export function IncidentsPage() {
   const { user } = useAuth()
+  const { isBackendUnreachable } = useLiveUpdates()
   const now = useNow()
-  const incidents = useQuery({ queryKey: ['incidents'], queryFn: listIncidents })
+  const incidents = useQuery({
+    queryKey: ['incidents'],
+    queryFn: listIncidents,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
+  })
   const [params, setParams] = useSearchParams()
   const [peek, setPeek] = useState<IncidentSummary | null>(null)
   const sort = SORTS.find((candidate) => candidate.id === params.get('sort')) ?? SORTS[0]
@@ -248,6 +256,8 @@ export function IncidentsPage() {
         title="Incidents"
         description="Active and past incidents, with the SLA clock that still runs. Times are IST. Declare from the top bar or with C."
       />
+
+      {(isBackendUnreachable || incidents.isError) && <BackendUnreachableBanner />}
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b">
         <div role="group" aria-label="Show" className="-mb-px flex gap-1 overflow-x-auto">

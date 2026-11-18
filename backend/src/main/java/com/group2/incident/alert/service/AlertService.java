@@ -14,6 +14,8 @@ import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.common.error.FieldValidationException;
+import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.event.model.IncidentChangeEvent;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
 import com.group2.incident.incident.dto.IncidentResponse;
 import com.group2.incident.incident.entity.Incident;
@@ -29,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +47,7 @@ public class AlertService {
 	private final IncidentService incidentService;
 	private final AlertDeduplicationService alertDeduplicationService;
 	private final AlertCorrelationService alertCorrelationService;
+	private final ApplicationEventPublisher applicationEventPublisher;
 	private final Clock clock;
 
 	@Transactional
@@ -104,6 +108,9 @@ public class AlertService {
 				"Alert from " + request.source() + " attached to incident " + incident.getReference(),
 				now
 		));
+		if (match.isPresent()) {
+			applicationEventPublisher.publishEvent(new IncidentChangeEvent(OrgContext.current(), incident.getId()));
+		}
 		return alert;
 	}
 

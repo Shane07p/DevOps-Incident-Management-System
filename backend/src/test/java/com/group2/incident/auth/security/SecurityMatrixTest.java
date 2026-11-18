@@ -467,6 +467,13 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/events",
+						HttpMethod.GET,
+						"/api/events",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
 						"POST /api/incidents",
 						HttpMethod.POST,
 						"/api/incidents",

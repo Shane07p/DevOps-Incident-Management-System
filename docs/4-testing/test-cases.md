@@ -643,6 +643,14 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-12.1j | Boundary value | Null metrics and empty breakdown lists vs genuine numeric zeros | Null metric, null rate, empty service list, and zero total incidents display "No data yet"; numeric 0 displays as 0 | `InsightsPage.test.tsx` (Missing values handling, Zero values handling), `format.test.ts` | Automated |
 | TC-FR-12.1k | Equivalence | Controlled fixture data rendered into dashboard tiles and breakdown bars | MTTA/MTTR formatted in hours and minutes (mean with median and P90), SLA breach percentages, follow-up metrics, out-of-hours pages, severity proportional bars, and service breakdown rows linking to `/services/{serviceId}` | `InsightsPage.test.tsx` (Successful response rendering) | Automated |
 
+### Live updates (FR-12.3, NFR-14, D46, #241)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.3a | Transaction and org isolation | Commit an incident change in one org while both orgs are subscribed; then roll back another change | Only the matching org receives the committed incident ID; rollback sends nothing | `LiveUpdatesTest.committedChangeReachesSubscriberOfSameOrgAndNeverAnotherOrg`, `LiveUpdatesTest.rolledBackChangeSendsNothing` | In review |
+| TC-FR-12.3b | Equivalence | An `incident-changed` event arrives while the incident detail and incident list are cached | The incident and list refetch without manual reload; the event request sends its token in the Authorization header | `LiveUpdates.test.tsx` (event refetches incident and list) | In review |
+| TC-NFR-14.2a | Recovery | The backend is unavailable, then responds again | The incident list shows an unreachable banner until its request and SSE connection recover | `LiveUpdates.test.tsx` (banner recovery) | In review |
+
 ### Postmortems (FR-11.1, DR-06, D17, #239)
 
 | ID | Technique | Input or condition | Expected | Test | Status | Owner |

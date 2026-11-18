@@ -1,3 +1,4 @@
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -78,8 +79,12 @@ describe('IncidentAIPanel', () => {
 
     renderPanel()
 
-    expect(await screen.findByText('The payment gateway is timing out.')).toBeInTheDocument()
-    expect(screen.getByText(/Gateway connection pool exhausted/)).toBeInTheDocument()
+    expect(
+      await screen.findByText('The payment gateway is timing out.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Gateway connection pool exhausted/),
+    ).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Accept' }))
 
@@ -88,8 +93,48 @@ describe('IncidentAIPanel', () => {
     })
   })
 
+  it('refreshes investigation results when another user already decided an action (409)', async () => {
+    const updatedInvestigation = {
+      ...investigation,
+      suggestedActions: [
+        {
+          ...investigation.suggestedActions[0],
+          decision: 'ACCEPTED' as const,
+          decidedBy: 'Another Engineer',
+          decidedAt: '2026-11-12T10:05:00Z',
+        },
+      ],
+    }
+
+    vi.mocked(getLatestInvestigation)
+      .mockResolvedValueOnce(investigation)
+      .mockResolvedValueOnce(updatedInvestigation)
+
+    vi.mocked(decideSuggestedAction).mockRejectedValue(
+      new ApiRequestError(409, 'Action already decided'),
+    )
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Accept' }))
+
+    expect(
+      await screen.findByText(/already decided by another user/i),
+    ).toBeInTheDocument()
+
+    expect(
+      await screen.findByText('Accepted by Another Engineer'),
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(getLatestInvestigation).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('allows an Engineer to start an investigation', async () => {
-    vi.mocked(getLatestInvestigation).mockRejectedValue(new ApiRequestError(404, 'Not found'))
+    vi.mocked(getLatestInvestigation).mockRejectedValue(
+      new ApiRequestError(404, 'Not found'),
+    )
     vi.mocked(runInvestigation).mockResolvedValue(investigation)
 
     renderPanel()
@@ -108,10 +153,18 @@ describe('IncidentAIPanel', () => {
 
     renderPanel('VIEWER')
 
-    expect(await screen.findByText('The payment gateway is timing out.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Investigate incident' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+    expect(
+      await screen.findByText('The payment gateway is timing out.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Investigate incident' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Accept' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Reject' }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows an unavailable message when investigation returns 503', async () => {
@@ -127,7 +180,9 @@ describe('IncidentAIPanel', () => {
   })
 
   it('generates an editable Catch me up summary draft', async () => {
-    vi.mocked(getLatestInvestigation).mockRejectedValue(new ApiRequestError(404, 'Not found'))
+    vi.mocked(getLatestInvestigation).mockRejectedValue(
+      new ApiRequestError(404, 'Not found'),
+    )
     vi.mocked(generateIncidentDraft).mockResolvedValue({
       kind: 'SUMMARY',
       text: 'Payments are failing because the gateway is timing out.',
@@ -137,10 +192,16 @@ describe('IncidentAIPanel', () => {
 
     renderPanel()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Catch me up' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Catch me up' }),
+    )
 
-    const draft = await screen.findByRole('textbox', { name: 'AI summary draft' })
-    expect(draft).toHaveValue('Payments are failing because the gateway is timing out.')
+    const draft = await screen.findByRole('textbox', {
+      name: 'AI summary draft',
+    })
+    expect(draft).toHaveValue(
+      'Payments are failing because the gateway is timing out.',
+    )
 
     fireEvent.change(draft, { target: { value: 'Edited summary' } })
 

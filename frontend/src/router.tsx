@@ -14,26 +14,38 @@ import { IncidentsPage } from '@/pages/IncidentsPage'
 import { IntegrationsPage } from '@/pages/IntegrationsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { LogsPage } from '@/pages/LogsPage'
+import { MetricsPage } from '@/pages/MetricsPage'
 import { SignupPage } from '@/pages/SignupPage'
+import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
+import { OAuthSignupPage } from '@/pages/auth/OAuthSignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { ServiceMapPage } from '@/pages/ServiceMapPage'
 import { ServicesPage } from '@/pages/ServicesPage'
+import { ServicePage } from '@/pages/services/ServicePage'
 import { RunbooksPage } from '@/pages/RunbooksPage'
 import { ToolsPage } from '@/pages/ToolsPage'
 import { UsersPage } from '@/pages/UsersPage'
+import { MonitorsPage } from '@/pages/MonitorsPage'
+import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
+import { InsightsPage } from '@/pages/InsightsPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
   '/escalation': <EscalationPage />,
   '/logs': <LogsPage />,
+  '/metrics': <MetricsPage />,
   '/schedules': <SchedulesPage />,
   '/service-map': <ServiceMapPage />,
   '/services': <ServicesPage />,
+  '/services/:id': <ServicePage />,
   '/runbooks': <RunbooksPage />,
   '/tokens': <AccessTokensPage />,
+  '/monitors': <MonitorsPage />,
+  '/heartbeats': <HeartbeatsPage />,
+  '/insights': <InsightsPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.
@@ -65,6 +77,9 @@ export const routes: RouteObject[] = [
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  // Where a Google or GitHub sign-in comes back (D50).
+  { path: '/auth/callback', element: <OAuthCallbackPage /> },
+  { path: '/signup/finish', element: <OAuthSignupPage /> },
   // Each org's public page (D45); without a slug the page says how to find one.
   { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
   { path: '/status/:slug', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },

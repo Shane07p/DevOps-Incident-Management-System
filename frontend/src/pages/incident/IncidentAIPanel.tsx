@@ -1,3 +1,4 @@
+
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
@@ -62,6 +63,11 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey })
     },
+    onError: async (error) => {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        await queryClient.invalidateQueries({ queryKey })
+      }
+    },
   })
 
   const errorMessage = (error: unknown) =>
@@ -87,6 +93,7 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
             AI incident investigation
           </h2>
         </div>
+
         <span
           data-testid="incident-ai-label"
           className="rounded-full border border-ring bg-accent px-2 py-1 text-xs font-medium text-accent-foreground"
@@ -126,7 +133,10 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
       {summaryDraft && (
         <div className="flex flex-col gap-2">
           <h3 className="font-semibold">AI summary draft</h3>
-          <span className="text-xs text-muted-foreground">AI-generated · Editable</span>
+          <span className="text-xs text-muted-foreground">
+            AI-generated · Editable
+          </span>
+
           <textarea
             aria-label="AI summary draft"
             className="min-h-32 w-full rounded-md border bg-background p-3 text-sm"
@@ -144,7 +154,9 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
       )}
 
       {investigation.isPending && (
-        <p className="text-sm text-muted-foreground">Loading investigation...</p>
+        <p className="text-sm text-muted-foreground">
+          Loading investigation...
+        </p>
       )}
 
       {investigation.data === null && !investigation.isError && (
@@ -158,7 +170,11 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <h3 className="font-semibold">Investigation summary</h3>
-            <p className="whitespace-pre-line text-sm">{investigation.data.summary}</p>
+
+            <p className="whitespace-pre-line text-sm">
+              {investigation.data.summary}
+            </p>
+
             <span className="text-xs text-muted-foreground">
               Generated {formatIst(investigation.data.createdAt)}
             </span>
@@ -166,20 +182,27 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
 
           <div className="flex flex-col gap-3">
             <h3 className="font-semibold">Ranked hypotheses</h3>
+
             {investigation.data.hypotheses.map((hypothesis) => (
-              <article key={hypothesis.rank} className="rounded-lg border p-3">
+              <article
+                key={hypothesis.rank}
+                className="rounded-lg border p-3"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="font-medium">
                     {hypothesis.rank}. {hypothesis.title}
                   </h4>
+
                   <span className="text-xs text-muted-foreground">
                     Confidence: {Math.round(hypothesis.confidence * 100)}%
                   </span>
                 </div>
+
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
                   {hypothesis.evidence.map((item, index) => (
                     <li key={`${item.kind}-${index}`}>
-                      <span className="font-medium">{item.kind}:</span> {item.text}
+                      <span className="font-medium">{item.kind}:</span>{' '}
+                      {item.text}
                     </li>
                   ))}
                 </ul>
@@ -189,8 +212,12 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
 
           <div className="flex flex-col gap-3">
             <h3 className="font-semibold">Suggested actions</h3>
+
             {investigation.data.suggestedActions.map((action) => (
-              <article key={action.id} className="flex flex-col gap-2 rounded-lg border p-3">
+              <article
+                key={action.id}
+                className="flex flex-col gap-2 rounded-lg border p-3"
+              >
                 <p className="text-sm">{action.text}</p>
 
                 {action.decision ? (
@@ -213,6 +240,7 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
                     >
                       Accept
                     </Button>
+
                     <Button
                       type="button"
                       size="sm"
@@ -229,7 +257,9 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Not decided yet</p>
+                  <p className="text-xs text-muted-foreground">
+                    Not decided yet
+                  </p>
                 )}
               </article>
             ))}
@@ -237,7 +267,10 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
 
           {decide.isError && (
             <p role="alert" className="text-sm text-destructive">
-              Could not record that decision. Please try again.
+              {decide.error instanceof ApiRequestError &&
+              decide.error.status === 409
+                ? 'This suggested action was already decided by another user. The latest results have been refreshed.'
+                : 'Could not record that decision. Please try again.'}
             </p>
           )}
         </div>

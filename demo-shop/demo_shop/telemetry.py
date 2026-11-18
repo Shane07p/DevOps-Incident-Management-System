@@ -13,6 +13,7 @@ import json
 import logging
 import sys
 from typing import Any, Dict, Optional
+from urllib.parse import unquote
 
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
@@ -32,15 +33,19 @@ def parse_otlp_headers(raw_h: str) -> dict:
     1. "Basic <base64>" or "Bearer <token>" – returned as Authorization header.
     2. "k1=v1,k2=v2" – split into key/value pairs.
     3. Any other string – treated as raw Authorization header.
+
+    Keys and values are percent-decoded, as the OTel spec says for OTEL_EXPORTER_OTLP_HEADERS, so the
+    value Grafana Cloud generates ("Authorization=Basic%20<base64>") works as pasted.
     """
     headers: dict = {}
-    if raw_h.lower().startswith(("basic ", "bearer ")):
-        headers["Authorization"] = raw_h
+    raw_h = raw_h.strip()
+    if unquote(raw_h).lower().startswith(("basic ", "bearer ")):
+        headers["Authorization"] = unquote(raw_h)
     elif "=" in raw_h:
         for part in raw_h.split(","):
             if "=" in part:
                 k, v = part.split("=", 1)
-                headers[k.strip()] = v.strip()
+                headers[unquote(k.strip())] = unquote(v.strip())
     else:
         headers["Authorization"] = raw_h
     return headers
@@ -83,6 +88,7 @@ class TelemetryManager:
 
         if Config.is_remote_telemetry_enabled():
             try:
+                from opentelemetry.exporter.otlp.proto.http import Compression
                 from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
                     OTLPMetricExporter,
                 )
@@ -104,16 +110,20 @@ class TelemetryManager:
                     endpoint=f"{endpoint.rstrip('/')}/v1/metrics",
                     headers=headers,
                     timeout=5.0,
+                    # Metric payloads are repetitive text; gzip keeps the outbound traffic small.
+                    compression=Compression.Gzip,
                 )
 
                 readers.append(
                     PeriodicExportingMetricReader(
-                        otlp_exporter, export_interval_millis=5000
+                        otlp_exporter,
+                        export_interval_millis=Config.OTEL_METRIC_EXPORT_INTERVAL_MS,
                     )
                 )
                 logger.info(
-                    "OpenTelemetry remote OTLP metric exporter initialized for %s",
+                    "OpenTelemetry remote OTLP metric exporter initialized for %s, every %d ms",
                     endpoint,
+                    Config.OTEL_METRIC_EXPORT_INTERVAL_MS,
                 )
             except Exception as exc:
                 logger.warning(

@@ -62,7 +62,64 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Automated tests | |
 | Coverage | |
 | Mutation | |
-| Test cases | |
+| Test cases | TC-D36a to f (#88), by hand on Grafana Cloud with the demo shop's fault switches, 13 November, `cec3c87`, checks from Singapore and Mumbai: b Pass (both failing for one check: Pending, nothing sent); c Pass (`bad_deploy`: Checkout is down fired after 2 failing checks, and Settle opened INC-1, SEV1); f Pass (still failing 8 minutes later: the same INC-1, each alert counted once); d Pass (`slow_gateway`: Payments is slow Pending after 2 slow checks, nothing sent); e Pass (3 slow checks: Settle opened INC-4, SEV2). Screenshots: [evidence/tc-d36](evidence/tc-d36/README.md). a (1 of 2 locations failing) was not run on the live stack, since a fault switch fails every location at once; it passed on 12 November in a local Grafana 12.2 with simulated check results, where one failing location left Search is down quiet. TC-D36g is automated |
 | Manual demo | |
 | Defects | |
 | Notes | |
+
+---
+
+## Sprint 6 – Performance Testing with k6 (Issue #250)
+
+Evaluated against non-functional performance requirements **NFR-01.1** (incident board and detail latency with 1,000 incidents) and **NFR-01.2** (incoming alert intake throughput and latency at 10 alerts/sec) using the k6 automated test suite in `perf/`.
+
+- **Test Date:** 16 November 2026
+- **Application Commit Under Test:** `d6e7f95`
+- **Environment:** Local Docker Compose stack on Windows 11 / WSL2, Docker Desktop 4.96.0, Docker Engine 29.9.1, k6 v2.4.0 (commit/dd9395906d, linux/amd64), PostgreSQL 16.15 (pgvector 0.8.6), Spring Boot 4.1 backend (`incident-app`), Nginx 1.31.8 (`incident-web`).
+- **Database Stored Incidents:** 1,000 valid synthetic incidents seeded via `perf/seed_1000_incidents.sql` with associated timeline entries. Incident references are assigned sequentially starting from `organization.next_incident_number` (e.g. `INC-<number>`) rather than assuming a fixed `INC-1` through `INC-1000` sequence, preserving organization numbering constraints and per-org uniqueness. The k6 test suite dynamically discovers the actual incident IDs via `GET /api/incidents` during test setup.
+
+### Local Benchmark Results
+
+| Benchmark Run | Target Requirement | Workload Profile | Target Rate / Concurrency | Metrics (p50 / p90 / p95 / Max) | Failed Rate | Threshold | Status |
+|---|---|---|---|---|---|---|---|
+| **NFR-01.1 Original Benchmark: Incident Board** (`GET /api/incidents`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total board requests) | p50: 24.65 ms<br>p90: 43.48 ms<br>p95: **52.89 ms**<br>Max: 173.85 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Original Benchmark: Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total detail requests) | p50: 7.58 ms<br>p90: 19.53 ms<br>p95: **25.03 ms**<br>Max: 112.06 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Additional Validation: Incident Board** (`GET /api/incidents`) | NFR-01.1 | Additional validation run on 1,330 stored incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (5,810 completed iterations, 5,810 board requests) | p50: 35.01 ms<br>p90: 52.75 ms<br>p95: **60.14 ms**<br>Max: 193.13 ms | 0.00% (0 / 5,810) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Additional Validation: Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | Additional validation run on 1,330 stored incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (5,810 completed iterations, 5,810 detail requests) | p50: 7.91 ms<br>p90: 16.63 ms<br>p95: **20.51 ms**<br>Max: 61.80 ms | 0.00% (0 / 5,810) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.2 Grouping-Path Benchmark** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s with reused correlation keys (exercises alert grouping into existing incidents) | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 11.83 ms<br>p90: 17.04 ms<br>p95: **20.39 ms**<br>Max: 64.00 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.2 New-Incident-Path Benchmark** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s with strictly unique correlation keys (exercises full incident creation path) | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 24.30 ms<br>p90: 32.36 ms<br>p95: **37.88 ms**<br>Max: 69.73 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+
+> **Notes on Local Execution Results:**
+> - **NFR-01.1:** The original benchmark met the threshold with 1,000 seeded incidents (Board p95: 52.89 ms; Detail p95: 25.03 ms). The subsequent validation run on an expanded dataset of 1,330 incidents confirmed sustained compliance (Board p95: 60.14 ms; Detail p95: 20.51 ms), well below the 2,000 ms ceiling.
+> - **NFR-01.2:** Two distinct workloads were evaluated:
+>   1. *Grouping-path benchmark:* Reused 4 correlation keys, resulting in 4 incidents created and 297 alerts attached (`status: ATTACHED`), measuring intake and grouping latency (p95: 20.39 ms).
+>   2. *Full new-incident-path benchmark:* Generated a strictly unique correlation key per iteration, resulting in 301 distinct new incidents verified in the database (incident count increased from 1,029 to 1,330; 301 alerts with `status: NEW`, 0 with `ATTACHED`). This verified the slower creation path including SLA copying, organization row-locking for atomic sequence numbering, on-call assignment, notifications, and timeline logging (p95: 37.88 ms, 26x headroom below 1,000 ms).
+> - Zero requests failed across all local runs (13,530 incident queries on original run, 11,620 on validation run, and 608 total webhook requests). Detailed execution instructions are in [perf/README.md](../../perf/README.md).
+
+### Deployed low-load run (Render / Supabase)
+
+Run on 18 November 2026 against `https://incident-backend-f340.onrender.com`, serving commit `2b2e2cf`
+(read from `/actuator/info`), with k6 v2.1.0 from a laptop in India. The dev seed users exist only in local
+databases, so the run used a throwaway org made through the public sign-up ("k6 perf check (deployed)"), with one
+`Payments` service. The alert script registered its own tool and revoked it at the end. The alert script ran first
+so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deployed`).
+
+| Benchmark | Workload | Requests | Latency (min / median / p90 / p95 / max) | Failed | Threshold | Status |
+|---|---|---|---|---|---|---|
+| **NFR-01.2 Alert intake, new-incident path** (`POST /webhooks/alerts`) | 1 alert/s for 30 s, a new correlation key per alert | 29 alerts (2 dropped by k6's arrival scheduler), 29 incidents opened | 1.51 s / 2.29 s / 3.02 s / **3.12 s** / 3.16 s | 0% (0 / 32) | p(95) < 1,000 ms | **Failed** |
+| **NFR-01.1 Incident board** (`GET /api/incidents`) | 2 VUs for 30 s | 46 | 330 ms / 471 ms / 643 ms / **709 ms** / 1.01 s | 0% | p(95) < 2,000 ms | **Passed** |
+| **NFR-01.1 Incident detail** (`GET /api/incidents/{id}`) | 2 VUs for 30 s | 46 | 544 ms / 622 ms / 736 ms / **806 ms** / 925 ms | 0% | p(95) < 2,000 ms | **Passed** |
+
+> **Notes on the deployed run:**
+> - Every request succeeded and every check passed, but alert intake misses NFR-01.2 on the deployed setup: each
+>   alert that opens an incident took 1.5 to 3.2 s, against a p95 of 37.88 ms (max 69.73 ms) locally on the same path.
+> - From this laptop a request with no database work (`/actuator/info`) takes about 0.24 to 0.39 s, and
+>   `/actuator/health` (one database check) about 0.41 to 0.47 s. Opening an incident makes many database calls one
+>   after another (SLA copy, org lock and number, on-call lookup, timeline entries, notification, audit, escalation
+>   task), and each one crosses from Render to Supabase, so the likely cause is that per-query latency on the free
+>   tier, not the code path itself. Grouping into an open incident (fewer writes) was not measured on the deployed app.
+> - The incident board and detail pass NFR-01.1 with the network round trip included, but this org held 29
+>   incidents, not 1,000: the seed is for local databases only.
+> - To rerun: sign up a throwaway org on the deployed app, add a service named `Payments`, then
+>   `k6 run perf/nfr-01-2-alerts.js -e BASE_URL=… -e WORKLOAD_PROFILE=deployed -e ADMIN_EMAIL=… -e ADMIN_PASSWORD=…`
+>   and the same for `perf/nfr-01-1-incidents.js`. Credentials come from the environment, never from the repository.

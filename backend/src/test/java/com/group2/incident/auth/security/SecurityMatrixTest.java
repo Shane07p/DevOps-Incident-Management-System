@@ -21,6 +21,9 @@ import com.group2.incident.catalog.repository.RunbookRepository;
 import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
+import com.group2.incident.followup.entity.FollowUp;
+import com.group2.incident.followup.entity.FollowUpKind;
+import com.group2.incident.followup.repository.FollowUpRepository;
 import com.group2.incident.heartbeat.entity.Heartbeat;
 import com.group2.incident.heartbeat.repository.HeartbeatRepository;
 import com.group2.incident.incident.entity.EscalationPolicy;
@@ -33,12 +36,15 @@ import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
+import com.group2.incident.postmortem.entity.Postmortem;
+import com.group2.incident.postmortem.repository.PostmortemRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
 import com.group2.incident.support.TestOrgExecutionListener;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -124,6 +130,12 @@ public class SecurityMatrixTest {
 	@Autowired
 	private DeploymentRepository deployments;
 
+	@Autowired
+	private FollowUpRepository followUps;
+
+	@Autowired
+	private PostmortemRepository postmortems;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -142,6 +154,7 @@ public class SecurityMatrixTest {
 	private Long targetDeployId;
 	private Long targetMonitorId;
 	private Long targetHeartbeatId;
+	private Long targetFollowUpId;
 	private String targetHeartbeatToken;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
@@ -184,6 +197,36 @@ public class SecurityMatrixTest {
 						"POST /api/auth/signup",
 						HttpMethod.POST,
 						"/api/auth/signup",
+						null,
+						400, 400, 400, 400
+				),
+				// Google and GitHub sign-in (D50): public. The list answers everyone; the code endpoints get no body
+				// from the matrix, so every caller gets 400, which shows they are reachable without login.
+				new MatrixRow(
+						"GET /api/auth/oauth/providers",
+						HttpMethod.GET,
+						"/api/auth/oauth/providers",
+						null,
+						200, 200, 200, 200
+				),
+				new MatrixRow(
+						"POST /api/auth/oauth/exchange",
+						HttpMethod.POST,
+						"/api/auth/oauth/exchange",
+						null,
+						400, 400, 400, 400
+				),
+				new MatrixRow(
+						"POST /api/auth/oauth/signup/details",
+						HttpMethod.POST,
+						"/api/auth/oauth/signup/details",
+						null,
+						400, 400, 400, 400
+				),
+				new MatrixRow(
+						"POST /api/auth/oauth/signup",
+						HttpMethod.POST,
+						"/api/auth/oauth/signup",
 						null,
 						400, 400, 400, 400
 				),
@@ -426,11 +469,39 @@ public class SecurityMatrixTest {
 						200, 200, 200, 401
 				),
 				new MatrixRow(
+						"GET /api/incidents/{id}/postmortem",
+						HttpMethod.GET,
+						"/api/incidents/{id}/postmortem",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/postmortem",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/postmortem",
+						"{\"summary\":\"Updated\",\"expectedVersion\":${POSTMORTEM_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/postmortem/review",
+						HttpMethod.POST,
+						"/api/incidents/{id}/postmortem/review",
+						"{\"expectedVersion\":${POSTMORTEM_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
 						"GET /api/alerts",
 						HttpMethod.GET,
 						"/api/alerts",
 						null,
 						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/triage-hint",
+						HttpMethod.POST,
+						"/api/incidents/triage-hint",
+						"{\"title\":\"Payment gateway timeout\",\"description\":\"Checkout requests failing with gateway timeouts.\"}",
+						503, 503, 403, 401
 				),
 				new MatrixRow(
 						"POST /api/incidents",
@@ -444,6 +515,20 @@ public class SecurityMatrixTest {
 						HttpMethod.POST,
 						"/api/incidents/{id}/acknowledge",
 						"{\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/transitions",
+						HttpMethod.POST,
+						"/api/incidents/{id}/transitions",
+						"{\"status\":\"INVESTIGATING\",\"expectedVersion\":${INCIDENT_VERSION}}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/incidents/{id}/severity",
+						HttpMethod.PUT,
+						"/api/incidents/{id}/severity",
+						"{\"severity\":\"SEV1\",\"reason\":\"Customers can't pay\",\"expectedVersion\":${INCIDENT_VERSION}}",
 						200, 200, 403, 401
 				),
 				new MatrixRow(
@@ -582,6 +667,41 @@ public class SecurityMatrixTest {
 						"{\"status\":\"INVESTIGATING\",\"message\":\"Matrix update\"}",
 						201, 403, 403, 401
 				),
+				new MatrixRow(
+						"GET /api/incidents/{id}/follow-ups",
+						HttpMethod.GET,
+						"/api/incidents/{id}/follow-ups",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/follow-ups",
+						HttpMethod.POST,
+						"/api/incidents/{id}/follow-ups",
+						"{\"title\":\"Matrix follow-up\",\"kind\":\"CORRECTIVE\",\"ownerId\":${OWNER_ID},\"dueDate\":\"2099-12-31\"}",
+						201, 201, 403, 401
+				),
+				new MatrixRow(
+						"PUT /api/follow-ups/{id}",
+						HttpMethod.PUT,
+						"/api/follow-ups/{id}",
+						"{\"status\":\"IN_PROGRESS\"}",
+						200, 200, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/follow-ups",
+						HttpMethod.GET,
+						"/api/follow-ups",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/insights",
+						HttpMethod.GET,
+						"/api/insights",
+						null,
+						200, 200, 200, 401
+				),
 				// The matrix sends no serviceId, so every signed-in role reaches the endpoint and gets 400, not 403.
 				new MatrixRow(
 						"GET /api/telemetry/logs",
@@ -666,6 +786,10 @@ public class SecurityMatrixTest {
 		unsaved.assignNumber(990_001L);
 		Incident incident = incidents.saveAndFlush(unsaved);
 		targetIncidentId = incident.getId();
+		targetFollowUpId = followUps.saveAndFlush(new FollowUp(incident, "Matrix follow-up", FollowUpKind.CORRECTIVE, admin,
+				LocalDate.of(2099, 12, 31), clock.instant())).getId();
+		postmortems.saveAndFlush(new Postmortem(incident, "Summary", "Impact", "Cause", "Recovery",
+				"Worked", "Failed", target, clock.instant()));
 
 		// A documentation-only address (RFC 5737): nothing is ever contacted, since the worker is off in tests.
 		targetMonitorId = monitors.saveAndFlush(new UptimeMonitor(savedService, "Matrix monitor", "https://203.0.113.10/health",
@@ -758,6 +882,7 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/heartbeats/") ? targetHeartbeatId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
+				: pathTemplate.startsWith("/api/follow-ups/") ? targetFollowUpId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
 				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
@@ -778,9 +903,22 @@ public class SecurityMatrixTest {
 			entityManager.clear();
 			jdbc.update("UPDATE incident SET status = 'OPEN', assignee_id = NULL, acknowledged_at = NULL WHERE id = ?", targetIncidentId);
 		}
+		if (path.endsWith("/severity")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET severity = 'SEV2', status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/transitions")) {
+			entityManager.clear();
+			jdbc.update("UPDATE incident SET status = 'ACKNOWLEDGED' WHERE id = ?", targetIncidentId);
+		}
 		if (path.endsWith("/assignee")) {
 			entityManager.clear();
 			jdbc.update("UPDATE incident SET assignee_id = NULL WHERE id = ?", targetIncidentId);
+		}
+		if (path.endsWith("/postmortem/review")) {
+			entityManager.clear();
+			jdbc.update("UPDATE postmortem SET status = 'DRAFT', reviewed_by = NULL, reviewed_at = NULL WHERE incident_id = ?",
+					targetIncidentId);
 		}
 		if (token != null) {
 			req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
@@ -793,7 +931,9 @@ public class SecurityMatrixTest {
 					.replace("${SERVICE_ID}", targetServiceId.toString())
 					// The version the incident has now, as a screen that just loaded it would send.
 					.replace("${INCIDENT_VERSION}", String.valueOf(jdbc.queryForObject(
-							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)));
+							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)))
+					.replace("${POSTMORTEM_VERSION}", String.valueOf(jdbc.queryForObject(
+							"SELECT version FROM postmortem WHERE incident_id = ?", Long.class, targetIncidentId)));
 			req.contentType(MediaType.APPLICATION_JSON).content(body);
 		}
 		mvc.perform(req).andExpect(status().is(expectedStatus));

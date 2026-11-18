@@ -115,4 +115,35 @@ class IncidentTest {
 				.hasMessageContaining("Only OPEN incidents can be acknowledged");
 	}
 
+	@Test
+	@DisplayName("transitionTo updates incident status")
+	void transitionToUpdatesStatus() {
+		Instant created = Instant.parse("2026-10-19T10:00:00Z");
+		AppUser user = new AppUser("user@test.local", "User", "hash", created);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, created);
+		Incident incident = new Incident("Checkout failing", "Timeouts", service, Severity.SEV2, IncidentStatus.ACKNOWLEDGED, user, created, 60, 480);
+
+		incident.transitionTo(IncidentStatus.INVESTIGATING, created.plusSeconds(60));
+		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.INVESTIGATING);
+
+		incident.transitionTo(IncidentStatus.IDENTIFIED, created.plusSeconds(120));
+		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.IDENTIFIED);
+		assertThat(incident.getResolvedAt()).isNull();
+	}
+
+	@Test
+	@DisplayName("RESOLVED stops the resolution clock once; closing keeps that time")
+	void resolvingRecordsTheTimeOnce() {
+		Instant created = Instant.parse("2026-10-19T10:00:00Z");
+		AppUser user = new AppUser("user@test.local", "User", "hash", created);
+		ServiceEntity service = new ServiceEntity("Payments", "Payments service", user, Criticality.HIGH, created);
+		Incident incident = new Incident("Checkout failing", "Timeouts", service, Severity.SEV2, IncidentStatus.MONITORING, user, created, 60, 480);
+
+		incident.transitionTo(IncidentStatus.RESOLVED, created.plusSeconds(600));
+		incident.transitionTo(IncidentStatus.CLOSED, created.plusSeconds(900));
+
+		assertThat(incident.getResolvedAt()).isEqualTo(created.plusSeconds(600));
+		assertThat(incident.getResolutionDueAt()).isEqualTo(created.plusSeconds(480 * 60));
+	}
+
 }

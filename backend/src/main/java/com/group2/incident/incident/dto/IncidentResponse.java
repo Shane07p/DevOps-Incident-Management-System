@@ -11,7 +11,8 @@ import java.util.List;
  * {@code roleWarning} is set while one person holds more than one role on a SEV1 or SEV2 incident
  * (FR-05.5), and null otherwise. {@code version} goes back as {@code expectedVersion} on a change, so
  * a change made from an out-of-date screen is refused (NFR-11.2). {@code acknowledgedAt} is when the
- * first accepted acknowledgement stopped the response clock (FR-16.2), and null while it runs.
+ * first accepted acknowledgement stopped the response clock (FR-16.2), and {@code resolvedAt} when RESOLVED stopped
+ * the resolution clock; each is null while its clock runs.
  */
 public record IncidentResponse(
 		long id,
@@ -32,6 +33,7 @@ public record IncidentResponse(
 		Instant responseDueAt,
 		Instant resolutionDueAt,
 		Instant acknowledgedAt,
+		Instant resolvedAt,
 		List<TimelineEntryResponse> timeline,
 		List<DeployResponse> deploys
 ) {
@@ -63,6 +65,7 @@ public record IncidentResponse(
 			Instant responseDueAt,
 			Instant resolutionDueAt,
 			Instant acknowledgedAt,
+			Instant resolvedAt,
 			List<TimelineEntryResponse> timeline
 	) {
 		this(
@@ -84,6 +87,7 @@ public record IncidentResponse(
 				responseDueAt,
 				resolutionDueAt,
 				acknowledgedAt,
+				resolvedAt,
 				timeline,
 				List.of()
 		);

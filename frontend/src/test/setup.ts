@@ -26,3 +26,17 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 }
+
+// jsdom has no IntersectionObserver; Motion's whileInView (the landing's reveal on scroll) observes with one.
+// This one never reports, so revealed content keeps its starting style; tests query it by role and text.
+globalThis.IntersectionObserver ??= class {
+  readonly root = null
+  readonly rootMargin = ''
+  readonly thresholds = []
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return []
+  }
+} as unknown as typeof IntersectionObserver

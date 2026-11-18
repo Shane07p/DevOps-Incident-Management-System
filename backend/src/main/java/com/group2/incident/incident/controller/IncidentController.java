@@ -13,8 +13,16 @@ import com.group2.incident.incident.dto.IncidentSummaryResponse;
 import com.group2.incident.incident.dto.ReassignRequest;
 import com.group2.incident.incident.dto.SimilarIncidentResponse;
 import com.group2.incident.incident.dto.TimelineEntryResponse;
+import com.group2.incident.incident.dto.SeverityChangeRequest;
+import com.group2.incident.incident.dto.TransitionRequest;
+import com.group2.incident.incident.dto.TriageHintRequest;
+import com.group2.incident.incident.dto.TriageHintResponse;
+import com.group2.incident.incident.dto.TriageHintServiceDto;
+import com.group2.incident.incident.dto.TriageSimilarIncidentDto;
 import com.group2.incident.incident.service.IncidentService;
 import com.group2.incident.incident.service.IncidentSimilarityService;
+import com.group2.incident.incident.service.TriageHintService;
+import com.group2.incident.catalog.repository.ServiceRepository;
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.common.error.FieldValidationException;
 import com.group2.incident.incident.entity.IncidentStatus;
@@ -44,6 +52,8 @@ public class IncidentController {
 
 	private final IncidentService incidentService;
 	private final IncidentSimilarityService incidentSimilarityService;
+	private final TriageHintService triageHintService;
+	private final ServiceRepository serviceRepository;
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
@@ -115,7 +125,26 @@ public class IncidentController {
 			@PathVariable Long id,
 			@Valid @RequestBody AcknowledgeRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		return incidentService.acknowledgeIncident(id, request, Long.parseLong(jwt.getSubject()));
+		boolean viaMcp = jwt != null && Boolean.TRUE.equals(jwt.getClaim("pat"));
+		return incidentService.acknowledgeIncident(id, request, Long.parseLong(jwt.getSubject()), viaMcp);
+	}
+
+	@PostMapping("/{id}/transitions")
+	@Operation(summary = "Transition an incident to a new status")
+	public IncidentResponse transition(
+			@PathVariable Long id,
+			@Valid @RequestBody TransitionRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.transitionIncident(id, request, Long.parseLong(jwt.getSubject()));
+	}
+
+	@PutMapping("/{id}/severity")
+	@Operation(summary = "Change an incident's severity with a reason; the SLA targets stay as they were")
+	public IncidentResponse changeSeverity(
+			@PathVariable Long id,
+			@Valid @RequestBody SeverityChangeRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
+		return incidentService.changeSeverity(id, request, Long.parseLong(jwt.getSubject()));
 	}
 
 	@PutMapping("/{id}/roles")
@@ -135,7 +164,8 @@ public class IncidentController {
 			@PathVariable Long id,
 			@Valid @RequestBody CommentRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		return incidentService.addComment(id, request.comment(), Long.parseLong(jwt.getSubject()));
+		boolean viaMcp = jwt != null && Boolean.TRUE.equals(jwt.getClaim("pat"));
+		return incidentService.addComment(id, request.comment(), Long.parseLong(jwt.getSubject()), viaMcp);
 	}
 
 	/** Attach an evidence link to an incident. */
@@ -171,5 +201,21 @@ public class IncidentController {
 			@PathVariable Long deployId,
 			@AuthenticationPrincipal Jwt jwt) {
 		return incidentService.linkDeployment(id, deployId, Long.parseLong(jwt.getSubject()));
+	}
+
+	@PostMapping("/triage-hint")
+	@Operation(summary = "Get an AI triage hint for a new incident (AI-4)")
+	public org.springframework.http.ResponseEntity<TriageHintResponse> triageHint(
+			@Valid @RequestBody TriageHintRequest request) {
+		List<TriageSimilarIncidentDto> similar = incidentSimilarityService.findSimilarForTriage(
+				request.title(), request.description());
+		List<TriageHintServiceDto> services = serviceRepository.findAllByOrderByNameAsc().stream()
+				.map(s -> new TriageHintServiceDto(s.getId(), s.getName()))
+				.toList();
+		return triageHintService.fetchHint(request, similar, services)
+				.map(hint -> org.springframework.http.ResponseEntity.ok(hint))
+				.orElseGet(() -> org.springframework.http.ResponseEntity
+						.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+						.build());
 	}
 }

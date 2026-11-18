@@ -25,6 +25,12 @@ version. To run the app, see the [README](README.md).
    gh repo set-default Shane07p/DevOps-Incident-Management-System
    ```
 4. **Install Docker Desktop.** The backend's integration tests start PostgreSQL in Docker.
+5. **Optional: the pre-commit hooks.** They stop a commit that holds a secret, a private key, leftover merge
+   markers, or a file over 1 MB, before it leaves your machine. CI runs the same secret scan on every PR.
+   ```
+   pip install pre-commit
+   pre-commit install
+   ```
 
 ## For every issue
 

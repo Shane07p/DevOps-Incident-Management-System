@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MotionConfig } from 'motion/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
@@ -9,21 +10,21 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { router } from '@/router'
 import './index.css'
 
-// The dock floats 20 px above the bottom and is 56 px tall (Dock.tsx); toasts sit 12 px above it (#121).
-const ABOVE_THE_DOCK = { bottom: 88 }
-
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="light">
+    <ThemeProvider defaultTheme="system">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
-            <RouterProvider router={router} />
-            <Toaster offset={ABOVE_THE_DOCK} mobileOffset={ABOVE_THE_DOCK} />
+            {/* "user": Motion follows the system's reduced-motion setting, as the CSS in index.css does. */}
+            <MotionConfig reducedMotion="user">
+              <RouterProvider router={router} />
+            </MotionConfig>
+            <Toaster />
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>

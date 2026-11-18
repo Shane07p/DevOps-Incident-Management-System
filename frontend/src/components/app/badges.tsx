@@ -1,3 +1,4 @@
+import { Activity, Check, CheckCircle2, Crosshair, Search, type LucideIcon } from 'lucide-react'
 import type { Role } from '@/api/schemas'
 import { ROLE_LABEL } from '@/auth/roles'
 import { cn } from '@/lib/utils'
@@ -23,20 +24,21 @@ export const LIFECYCLE: IncidentStatus[] = [
   'CLOSED',
 ]
 
+// Only SEV1 (red, boxed) and SEV2 (amber) are coloured; SEV3 and SEV4 stay neutral (index.css).
 const SEVERITY_STYLE: Record<Severity, string> = {
-  SEV1: 'bg-sev-1-bg text-sev-1-fg',
-  SEV2: 'bg-sev-2-bg text-sev-2-fg',
-  SEV3: 'bg-sev-3-bg text-sev-3-fg',
-  SEV4: 'bg-sev-4-bg text-sev-4-fg',
+  SEV1: 'rounded-[6px] bg-sev-1-bg pr-[7px] pl-[6px] text-sev-1-fg shadow-[inset_0_0_0_1px_var(--sev-1-line)]',
+  SEV2: 'text-sev-2-fg',
+  SEV3: 'text-sev-3-fg',
+  SEV4: 'text-sev-4-fg',
 }
 
-/** Square tag with signal bars: SEV1 fills all four, SEV4 fills one. */
+/** Signal bars and the severity as text: SEV1 fills all four bars, SEV4 fills one. */
 export function SeverityBadge({ severity, className }: { severity: Severity; className?: string }) {
   const filled = 5 - Number(severity.slice(3))
   return (
     <span
       className={cn(
-        'inline-flex h-[22px] items-center gap-[5px] rounded-xs px-[7px] font-mono text-[11.5px] leading-none font-semibold',
+        'inline-flex h-[22px] shrink-0 items-center gap-[5px] text-[12px] leading-none font-semibold whitespace-nowrap',
         SEVERITY_STYLE[severity],
         className,
       )}
@@ -60,41 +62,36 @@ export function SeverityBadge({ severity, className }: { severity: Severity; cla
   )
 }
 
-const STATUS_STYLE: Record<IncidentStatus, string> = {
-  OPEN: 'bg-status-open-bg text-status-open',
-  ACKNOWLEDGED: 'bg-status-acknowledged-bg text-status-acknowledged',
-  INVESTIGATING: 'bg-status-investigating-bg text-status-investigating',
-  IDENTIFIED: 'bg-status-identified-bg text-status-identified',
-  MONITORING: 'bg-status-monitoring-bg text-status-monitoring',
-  RESOLVED: 'bg-status-resolved-bg text-status-resolved',
-  CLOSED: 'bg-status-closed-bg text-status-closed',
+/** "INVESTIGATING" → "Investigating". */
+const statusLabel = (status: IncidentStatus) => status.charAt(0) + status.slice(1).toLowerCase()
+
+const STATUS_ICON: Record<Exclude<IncidentStatus, 'OPEN'>, LucideIcon> = {
+  ACKNOWLEDGED: Check,
+  INVESTIGATING: Search,
+  IDENTIFIED: Crosshair,
+  MONITORING: Activity,
+  RESOLVED: CheckCircle2,
+  CLOSED: CheckCircle2,
 }
 
-/** Pill with a ring that fills as the incident moves through its lifecycle. */
+/** An icon and a word. Only a finished incident (resolved or closed) is coloured, in green. */
 export function StatusBadge({ status, className }: { status: IncidentStatus; className?: string }) {
-  const progress = LIFECYCLE.indexOf(status) / (LIFECYCLE.length - 1)
+  const finished = status === 'RESOLVED' || status === 'CLOSED'
+  const Icon = status === 'OPEN' ? null : STATUS_ICON[status]
   return (
     <span
       className={cn(
-        'inline-flex h-[22px] items-center gap-[5px] rounded-full pr-[9px] pl-[7px] font-mono text-[11px] leading-none font-semibold',
-        STATUS_STYLE[status],
+        'inline-flex h-[22px] shrink-0 items-center gap-[5px] text-[12px] leading-none whitespace-nowrap',
+        finished ? 'text-status-resolved' : 'text-foreground',
         className,
       )}
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-        <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <circle
-          cx="6"
-          cy="6"
-          r="2.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="5"
-          strokeDasharray={`${(progress * 15.71).toFixed(2)} 15.71`}
-          transform="rotate(-90 6 6)"
-        />
-      </svg>
-      {status}
+      {Icon ? (
+        <Icon className={cn('size-[13px]', !finished && 'text-status-open')} aria-hidden="true" />
+      ) : (
+        <span className="mx-[3px] size-[7px] rounded-full bg-status-open" aria-hidden="true" />
+      )}
+      {statusLabel(status)}
     </span>
   )
 }

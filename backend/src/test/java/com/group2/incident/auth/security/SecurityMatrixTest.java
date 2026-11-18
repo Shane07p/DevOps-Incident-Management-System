@@ -34,6 +34,9 @@ import com.group2.incident.monitor.repository.UptimeMonitorRepository;
 import com.group2.incident.incident.entity.IncidentStatus;
 import com.group2.incident.incident.repository.EscalationPolicyRepository;
 import com.group2.incident.incident.repository.IncidentRepository;
+import com.group2.incident.investigation.entity.Investigation;
+import com.group2.incident.investigation.entity.InvestigationAction;
+import com.group2.incident.investigation.repository.InvestigationRepository;
 import com.group2.incident.notification.entity.Notification;
 import com.group2.incident.notification.repository.NotificationRepository;
 import com.group2.incident.postmortem.entity.Postmortem;
@@ -136,6 +139,9 @@ public class SecurityMatrixTest {
 	@Autowired
 	private PostmortemRepository postmortems;
 
+	@Autowired
+	private InvestigationRepository investigations;
+
 	private String adminToken;
 
 	private String engineerToken;
@@ -156,6 +162,8 @@ public class SecurityMatrixTest {
 	private Long targetHeartbeatId;
 	private Long targetFollowUpId;
 	private String targetHeartbeatToken;
+	private Long targetInvestigationId;
+	private Long targetActionId;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
@@ -746,6 +754,29 @@ public class SecurityMatrixTest {
 						"/api/settings/telemetry/test",
 						null,
 						503, 403, 403, 401
+				),
+				// AI service URL is unset in IntegrationTest, so Admin and Engineer reach the handler and receive 503.
+				new MatrixRow(
+						"POST /api/incidents/{id}/investigations",
+						HttpMethod.POST,
+						"/api/incidents/{id}/investigations",
+						null,
+						503, 503, 403, 401
+				),
+				new MatrixRow(
+						"GET /api/incidents/{id}/investigations/latest",
+						HttpMethod.GET,
+						"/api/incidents/{id}/investigations/latest",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"POST /api/investigations/{id}/actions/{actionId}/decision",
+						HttpMethod.POST,
+						"/api/investigations/{id}/actions/{actionId}/decision",
+						"{\"decision\":\"ACCEPTED\"}",
+						200, 200, 403, 401
+				)
 				)
 		);
 	}
@@ -828,6 +859,13 @@ public class SecurityMatrixTest {
 		));
 		targetHeartbeatId = targetHeartbeat.getId();
 		targetHeartbeatToken = targetHeartbeat.getToken();
+
+		Investigation inv = new Investigation(incident, "Matrix investigation summary", "completed", 1, 10, 5.0, clock.instant());
+		InvestigationAction action = new InvestigationAction(inv, "Check connection pool");
+		inv.addAction(action);
+		Investigation savedInv = investigations.saveAndFlush(inv);
+		targetInvestigationId = savedInv.getId();
+		targetActionId = savedInv.getSuggestedActions().getFirst().getId();
 	}
 
 	@Test
@@ -882,13 +920,15 @@ public class SecurityMatrixTest {
 				: pathTemplate.startsWith("/api/heartbeats/") ? targetHeartbeatId.toString()
 				: pathTemplate.startsWith("/api/me/tokens/") ? (patId != null ? patId.toString() : "999999")
 				: pathTemplate.startsWith("/api/runbooks/") ? runbookId.toString()
+				: pathTemplate.startsWith("/api/investigations/") ? targetInvestigationId.toString()
 				: pathTemplate.startsWith("/api/follow-ups/") ? targetFollowUpId.toString()
 				: targetUserId.toString();
 		return pathTemplate.replace("{id}", id)
 				.replace("{slug}", TestOrgExecutionListener.TEST_ORG_SLUG)
 				.replace("{entryId}", "999999999")
 				.replace("{token}", targetHeartbeatToken != null ? targetHeartbeatToken : "dummy_token")
-				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999");
+				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999")
+				.replace("{actionId}", targetActionId != null ? targetActionId.toString() : "999999999");
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {

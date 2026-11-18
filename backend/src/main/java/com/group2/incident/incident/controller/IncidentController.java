@@ -117,7 +117,8 @@ public class IncidentController {
 			@PathVariable Long id,
 			@Valid @RequestBody AcknowledgeRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		return incidentService.acknowledgeIncident(id, request, Long.parseLong(jwt.getSubject()));
+		boolean viaMcp = jwt != null && Boolean.TRUE.equals(jwt.getClaim("pat"));
+		return incidentService.acknowledgeIncident(id, request, Long.parseLong(jwt.getSubject()), viaMcp);
 	}
 
 	@PostMapping("/{id}/transitions")
@@ -155,7 +156,8 @@ public class IncidentController {
 			@PathVariable Long id,
 			@Valid @RequestBody CommentRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		return incidentService.addComment(id, request.comment(), Long.parseLong(jwt.getSubject()));
+		boolean viaMcp = jwt != null && Boolean.TRUE.equals(jwt.getClaim("pat"));
+		return incidentService.addComment(id, request.comment(), Long.parseLong(jwt.getSubject()), viaMcp);
 	}
 
 	/** Attach an evidence link to an incident. */

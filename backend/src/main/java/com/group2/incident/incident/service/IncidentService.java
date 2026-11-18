@@ -60,8 +60,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -401,11 +399,10 @@ public class IncidentService {
 
 	/** Persists a comment as an independent timeline insert, including for closed incidents. */
 	@Transactional
-	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId, boolean viaMcp) {
 		Incident incident = requireIncident(incidentId);
 		AppUser actor = requireActor(actorId);
-		boolean isPat = isPatRequest();
-		String details = isPat ? comment + " (via MCP)" : comment;
+		String details = viaMcp ? comment + " (via MCP)" : comment;
 		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
 				incident,
 				actor,
@@ -413,7 +410,7 @@ public class IncidentService {
 				details,
 				clock.instant()
 		));
-		if (isPat) {
+		if (viaMcp) {
 			auditService.record(
 					actor,
 					AuditAction.INCIDENT_COMMENT_ADDED,
@@ -423,6 +420,11 @@ public class IncidentService {
 			);
 		}
 		return toTimelineEntryResponse(entry);
+	}
+
+	@Transactional
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+		return addComment(incidentId, comment, actorId, false);
 	}
 
 	/** Adds an evidence link without changing incident version or status. */
@@ -524,7 +526,7 @@ public class IncidentService {
 	 * stops the response clock, and cancels pending escalation.
 	 */
 	@Transactional
-	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId, boolean viaMcp) {
 		if (request == null || request.expectedVersion() == null) {
 			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
 		}
@@ -550,8 +552,7 @@ public class IncidentService {
 
 		escalationService.cancelTaskForIncident(incidentId, now);
 
-		boolean isPat = isPatRequest();
-		String details = "Acknowledged by " + actor.getDisplayName() + (isPat ? " via MCP" : "");
+		String details = "Acknowledged by " + actor.getDisplayName() + (viaMcp ? " via MCP" : "");
 		TimelineEntry timelineEntry = new TimelineEntry(
 				incident,
 				actor,
@@ -561,7 +562,7 @@ public class IncidentService {
 		);
 		timelineEntryRepository.save(timelineEntry);
 
-		if (isPat) {
+		if (viaMcp) {
 			auditService.record(
 					actor,
 					AuditAction.INCIDENT_ACKNOWLEDGED,
@@ -575,13 +576,9 @@ public class IncidentService {
 		return toResponse(incident, timeline);
 	}
 
-	private boolean isPatRequest() {
-		var auth = SecurityContextHolder.getContext().getAuthentication();
-		if (auth instanceof JwtAuthenticationToken jwtAuth) {
-			Object patClaim = jwtAuth.getToken().getClaims().get("pat");
-			return Boolean.TRUE.equals(patClaim);
-		}
-		return false;
+	@Transactional
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+		return acknowledgeIncident(incidentId, request, actorId, false);
 	}
 
 	/**

@@ -37,6 +37,9 @@ export default defineConfig({
     coverage: {
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx', 'src/**/*.d.ts'],
+      // `npm run test:coverage` (and CI) fails below these floors, set a point or so under main on 17 Nov 2026
+      // (statements 90.51%, branches 83.48%, functions 87.14%, lines 91.97%). Raise them as coverage grows.
+      thresholds: { statements: 89, branches: 82, functions: 86, lines: 91 },
     },
   },
 })

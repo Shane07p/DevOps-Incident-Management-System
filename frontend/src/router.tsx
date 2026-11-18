@@ -17,6 +17,8 @@ import { LoginPage } from '@/pages/LoginPage'
 import { LogsPage } from '@/pages/LogsPage'
 import { MetricsPage } from '@/pages/MetricsPage'
 import { SignupPage } from '@/pages/SignupPage'
+import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
+import { OAuthSignupPage } from '@/pages/auth/OAuthSignupPage'
 import { NewIncidentPage } from '@/pages/NewIncidentPage'
 import { NotBuiltYetPage } from '@/pages/NotBuiltYetPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -77,6 +79,9 @@ export const routes: RouteObject[] = [
   { path: '/', lazy: () => import('@/pages/LandingPage').then((m) => ({ Component: m.LandingPage })) },
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  // Where a Google or GitHub sign-in comes back (D50).
+  { path: '/auth/callback', element: <OAuthCallbackPage /> },
+  { path: '/signup/finish', element: <OAuthSignupPage /> },
   // Each org's public page (D45); without a slug the page says how to find one.
   { path: '/status', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },
   { path: '/status/:slug', lazy: () => import('@/pages/StatusPage').then((m) => ({ Component: m.StatusPage })) },

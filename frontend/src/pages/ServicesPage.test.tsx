@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -279,5 +279,56 @@ describe('ServicesPage', () => {
 
     expect(await within(dialog).findByText('A service named Payments already exists')).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Name')).toHaveAccessibleDescription('A service named Payments already exists')
+  })
+
+  it('says when the service is saved but its dependencies are not', async () => {
+    const fetchMock = renderServices('ADMIN', {
+      'PUT /api/services/1': { body: payments },
+      'GET /api/service-map': {
+        body: {
+          nodes: [{ id: 1, name: 'Payments', criticality: 'CRITICAL', health: 'OPERATIONAL' }, { id: 2, name: 'Checkout', criticality: 'HIGH', health: 'OPERATIONAL' }],
+          edges: [{ from: 1, to: 2 }],
+        },
+      },
+      'PUT /api/services/1/dependencies': { status: 400, body: { status: 400, message: 'Checkout already depends on Payments, so this would be a loop' } },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Payments' })
+
+    await userEvent.click(await within(dialog).findByRole('checkbox', { name: 'Checkout' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Payments is saved, but its dependencies are not: Checkout already depends on Payments, so this would be a loop.',
+    )
+    expect(callsWith(fetchMock, 'PUT').map(([url]) => url)).toEqual(['/api/services/1', '/api/services/1/dependencies'])
+  })
+
+  it('says when there are no other services to depend on, or the map does not load', async () => {
+    renderServices('ADMIN', { 'GET /api/service-map': { body: { nodes: [{ id: 1, name: 'Payments', criticality: 'CRITICAL', health: 'OPERATIONAL' }], edges: [] } } })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    expect(await within(await screen.findByRole('dialog', { name: 'Edit Payments' })).findByText('No other services yet.')).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderServices('ADMIN', { 'GET /api/service-map': { status: 500, body: { status: 500, message: 'The map is unavailable' } } })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    expect(await within(await screen.findByRole('dialog', { name: 'Edit Payments' })).findByText('Dependencies could not be loaded: The map is unavailable')).toBeInTheDocument()
+  })
+
+  it('says the service was not saved when Settle is unreachable, and Cancel closes the form', async () => {
+    renderServices('ADMIN', {
+      'PUT /api/services/1': () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Payments' })
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('The service was not saved. Try again.')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 })

@@ -3,6 +3,8 @@ package com.group2.incident.investigation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -46,6 +48,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -98,15 +101,19 @@ class InvestigationServiceTest {
 	@Test
 	void investigateTruncatesLongDescriptionAndTitleAndHandlesFilters() {
 		AppUser user = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
+		ReflectionTestUtils.setField(user, "id", 10L);
 		ServiceEntity svc = new ServiceEntity("Checkout Service", "Checkout description", user, Criticality.HIGH, fixedTime);
+		ReflectionTestUtils.setField(svc, "id", 5L);
 		String longDescription = "a".repeat(6000);
 		Incident incident = new Incident("Checkout slow", longDescription, svc, Severity.SEV2, IncidentStatus.OPEN, user, fixedTime, 15, 60);
+		ReflectionTestUtils.setField(incident, "id", 1L);
+		ReflectionTestUtils.setField(incident, "number", 42L);
 
 		when(incidentRepository.findWithDetailsById(1L)).thenReturn(Optional.of(incident));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
 		when(timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(1L)).thenReturn(List.of());
 		when(incidentDeploymentRepository.findDeploymentsByIncidentId(1L)).thenReturn(List.of());
-		when(deploymentRepository.findInWindow(any(), any(), any())).thenReturn(List.of());
+		when(deploymentRepository.findInWindow(anyLong(), any(), any())).thenReturn(List.of());
 		when(aiInvestigationClient.isEnabled()).thenReturn(true);
 
 		String longHypothesisTitle = "h".repeat(600);
@@ -123,7 +130,11 @@ class InvestigationServiceTest {
 				5.0
 		));
 
-		when(investigationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(investigationRepository.saveAndFlush(any())).thenAnswer(inv -> {
+			Investigation i = inv.getArgument(0);
+			ReflectionTestUtils.setField(i, "id", 100L);
+			return i;
+		});
 
 		InvestigationResponse resp = service.investigate(1L, 10L);
 
@@ -138,25 +149,33 @@ class InvestigationServiceTest {
 	@Test
 	void investigateHandlesTelemetryFailuresGracefully() {
 		AppUser user = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
+		ReflectionTestUtils.setField(user, "id", 10L);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", user, Criticality.HIGH, fixedTime);
+		ReflectionTestUtils.setField(svc, "id", 5L);
 		Incident incident = new Incident("Orders down", null, svc, Severity.SEV1, IncidentStatus.OPEN, user, fixedTime, 15, 60);
+		ReflectionTestUtils.setField(incident, "id", 2L);
+		ReflectionTestUtils.setField(incident, "number", 43L);
 
 		when(incidentRepository.findWithDetailsById(2L)).thenReturn(Optional.of(incident));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
 		when(timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(2L)).thenReturn(List.of());
 		when(incidentDeploymentRepository.findDeploymentsByIncidentId(2L)).thenReturn(List.of());
-		when(deploymentRepository.findInWindow(any(), any(), any())).thenReturn(List.of());
+		when(deploymentRepository.findInWindow(anyLong(), any(), any())).thenReturn(List.of());
 		when(aiInvestigationClient.isEnabled()).thenReturn(true);
 
-		when(telemetryService.queryLogs(any(), any(), any(), any(), any(), any(Integer.class)))
+		when(telemetryService.queryLogs(anyLong(), any(), any(), any(), any(), anyInt()))
 				.thenThrow(new ServiceUnavailableException("No telemetry"));
-		when(telemetryService.queryMetric(any(), any(), any(), any(), any()))
+		when(telemetryService.queryMetric(anyLong(), any(), any(), any(), any()))
 				.thenThrow(new ServiceUnavailableException("No telemetry"));
 
 		when(aiInvestigationClient.investigate(any())).thenReturn(new AiInvestigationResult(
 				true, "completed", "Summary", List.of(), List.of(), List.of(), 1, 10, 5.0
 		));
-		when(investigationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+		when(investigationRepository.saveAndFlush(any())).thenAnswer(inv -> {
+			Investigation i = inv.getArgument(0);
+			ReflectionTestUtils.setField(i, "id", 101L);
+			return i;
+		});
 
 		InvestigationResponse resp = service.investigate(2L, 10L);
 		assertThat(resp.summary()).isEqualTo("Summary");
@@ -165,11 +184,18 @@ class InvestigationServiceTest {
 	@Test
 	void investigateFailsWhenAiDisabled() {
 		AppUser user = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
+		ReflectionTestUtils.setField(user, "id", 10L);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", user, Criticality.HIGH, fixedTime);
+		ReflectionTestUtils.setField(svc, "id", 5L);
 		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, user, fixedTime, 15, 60);
+		ReflectionTestUtils.setField(incident, "id", 3L);
+		ReflectionTestUtils.setField(incident, "number", 44L);
 
 		when(incidentRepository.findWithDetailsById(3L)).thenReturn(Optional.of(incident));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
+		when(timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(3L)).thenReturn(List.of());
+		when(incidentDeploymentRepository.findDeploymentsByIncidentId(3L)).thenReturn(List.of());
+		when(deploymentRepository.findInWindow(anyLong(), any(), any())).thenReturn(List.of());
 		when(aiInvestigationClient.isEnabled()).thenReturn(false);
 
 		assertThatThrownBy(() -> service.investigate(3L, 10L))
@@ -194,10 +220,16 @@ class InvestigationServiceTest {
 	@Test
 	void decideActionSuccessWithRejected() {
 		AppUser actor = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
+		ReflectionTestUtils.setField(actor, "id", 10L);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", actor, Criticality.HIGH, fixedTime);
+		ReflectionTestUtils.setField(svc, "id", 5L);
 		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime, 15, 60);
+		ReflectionTestUtils.setField(incident, "id", 1L);
+		ReflectionTestUtils.setField(incident, "number", 42L);
 		Investigation inv = new Investigation(incident, "Summary", "completed", 1, 10, 5.0, fixedTime);
+		ReflectionTestUtils.setField(inv, "id", 1L);
 		InvestigationAction action = new InvestigationAction(inv, "Restart service");
+		ReflectionTestUtils.setField(action, "id", 2L);
 
 		when(investigationRepository.findById(1L)).thenReturn(Optional.of(inv));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(actor));
@@ -217,10 +249,16 @@ class InvestigationServiceTest {
 	@Test
 	void decideActionThrowsConflictWhenAlreadyDecided() {
 		AppUser actor = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
+		ReflectionTestUtils.setField(actor, "id", 10L);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", actor, Criticality.HIGH, fixedTime);
+		ReflectionTestUtils.setField(svc, "id", 5L);
 		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime, 15, 60);
+		ReflectionTestUtils.setField(incident, "id", 1L);
+		ReflectionTestUtils.setField(incident, "number", 42L);
 		Investigation inv = new Investigation(incident, "Summary", "completed", 1, 10, 5.0, fixedTime);
+		ReflectionTestUtils.setField(inv, "id", 1L);
 		InvestigationAction action = new InvestigationAction(inv, "Restart service");
+		ReflectionTestUtils.setField(action, "id", 2L);
 
 		when(investigationRepository.findById(1L)).thenReturn(Optional.of(inv));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(actor));
@@ -236,9 +274,14 @@ class InvestigationServiceTest {
 	@Test
 	void decideActionThrowsNotFoundWhenActionMissing() {
 		AppUser actor = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
+		ReflectionTestUtils.setField(actor, "id", 10L);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", actor, Criticality.HIGH, fixedTime);
+		ReflectionTestUtils.setField(svc, "id", 5L);
 		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime, 15, 60);
+		ReflectionTestUtils.setField(incident, "id", 1L);
+		ReflectionTestUtils.setField(incident, "number", 42L);
 		Investigation inv = new Investigation(incident, "Summary", "completed", 1, 10, 5.0, fixedTime);
+		ReflectionTestUtils.setField(inv, "id", 1L);
 
 		when(investigationRepository.findById(1L)).thenReturn(Optional.of(inv));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(actor));

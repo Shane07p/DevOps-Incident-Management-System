@@ -162,13 +162,11 @@ class InvestigationIntegrationTest {
 
 		long serviceId = testOrgs.createService(org.adminToken(), "Checkout", org.adminId());
 
-		OrgContext.runAs(org.orgId(), () -> {
-			transactionTemplate.executeWithoutResult(status -> {
-				ServiceEntity checkout = services.findById(serviceId).orElseThrow();
-				deployments.saveAndFlush(new Deployment(
-						checkout, "v1.0.1-broken", "deadbeef", "ci-bot", clock.instant().minus(10, ChronoUnit.MINUTES)));
-			});
-		});
+		OrgContext.runAs(org.orgId(), () -> transactionTemplate.execute(status -> {
+			ServiceEntity checkout = services.findById(serviceId).orElseThrow();
+			return deployments.saveAndFlush(new Deployment(
+					checkout, "v1.0.1-broken", "deadbeef", "ci-bot", clock.instant().minus(10, ChronoUnit.MINUTES)));
+		}));
 
 		String created = mvc.perform(post("/api/incidents")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)

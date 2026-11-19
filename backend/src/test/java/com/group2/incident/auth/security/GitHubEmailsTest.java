@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 /** GitHub's email list, read from a local server that answers like api.github.com (D50). */
@@ -64,5 +65,37 @@ class GitHubEmailsTest {
 		assertThat(answering(401, "{\"message\":\"Bad credentials\"}").primaryVerified("gho_token")).isEmpty();
 		stop();
 		assertThat(answering(200, "not json").primaryVerified("gho_token")).isEmpty();
+	}
+
+	@Test
+	void aPrimaryVerifiedEntryWithoutAnAddressIsSkipped() throws IOException {
+		GitHubEmails emails = answering(200, """
+				[{"email":null,"primary":true,"verified":true}]""");
+
+		assertThat(emails.primaryVerified("gho_token")).isEmpty();
+	}
+
+	@Test
+	void anInterruptedLookupGivesNoEmailAndKeepsTheInterrupt() throws IOException {
+		GitHubEmails emails = answering(200, "[]");
+		Thread.currentThread().interrupt();
+		try {
+			assertThat(emails.primaryVerified("gho_token")).isEmpty();
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		}
+		finally {
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	void withoutAnApiUrlItAsksGitHubItself() {
+		GitHubEmails unset = new GitHubEmails(new OAuthSettings(null, null, null, null), JsonMapper.builder().build());
+		GitHubEmails blank = new GitHubEmails(new OAuthSettings(null, null, null, "  "), JsonMapper.builder().build());
+		GitHubEmails slash = new GitHubEmails(new OAuthSettings(null, null, null, "https://github.example/api/v3/"), JsonMapper.builder().build());
+
+		assertThat(ReflectionTestUtils.getField(unset, "emailsEndpoint")).hasToString("https://api.github.com/user/emails");
+		assertThat(ReflectionTestUtils.getField(blank, "emailsEndpoint")).hasToString("https://api.github.com/user/emails");
+		assertThat(ReflectionTestUtils.getField(slash, "emailsEndpoint")).hasToString("https://github.example/api/v3/user/emails");
 	}
 }

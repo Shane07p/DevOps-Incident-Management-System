@@ -87,10 +87,6 @@ public class InvestigationService {
 	 */
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public InvestigationResponse investigate(Long incidentId, Long actorId) {
-		if (!aiInvestigationClient.isEnabled()) {
-			throw new ServiceUnavailableException("AI investigation service is not set up on this server");
-		}
-
 		// 1. Gather incident data, timeline, and deploys in a short read transaction
 		IncidentSnapshot snapshot = transactionTemplate.execute(status -> {
 			Incident incident = incidentRepository.findWithDetailsById(incidentId)
@@ -139,6 +135,10 @@ public class InvestigationService {
 
 		if (snapshot == null) {
 			throw new IllegalStateException("Failed to snapshot incident " + incidentId);
+		}
+
+		if (!aiInvestigationClient.isEnabled()) {
+			throw new ServiceUnavailableException("AI investigation service is not set up on this server");
 		}
 
 		// 2. Telemetry window: starts at createdAt minus 1h and ends at min(now, start plus 24h)

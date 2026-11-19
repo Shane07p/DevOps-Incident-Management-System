@@ -164,6 +164,8 @@ public class SecurityMatrixTest {
 	private String targetHeartbeatToken;
 	private Long targetInvestigationId;
 	private Long targetActionId;
+	private Long adminActionId;
+	private Long engineerActionId;
 	private Long adminNotificationId;
 	private Long engineerNotificationId;
 	private Long viewerNotificationId;
@@ -860,11 +862,15 @@ public class SecurityMatrixTest {
 		targetHeartbeatToken = targetHeartbeat.getToken();
 
 		Investigation inv = new Investigation(incident, "Matrix investigation summary", "completed", 1, 10, 5.0, clock.instant());
-		InvestigationAction action = new InvestigationAction(inv, "Check connection pool");
-		inv.addAction(action);
+		InvestigationAction adminAction = new InvestigationAction(inv, "Check connection pool");
+		InvestigationAction engineerAction = new InvestigationAction(inv, "Scale deployment");
+		inv.addAction(adminAction);
+		inv.addAction(engineerAction);
 		Investigation savedInv = investigations.saveAndFlush(inv);
 		targetInvestigationId = savedInv.getId();
-		targetActionId = savedInv.getSuggestedActions().getFirst().getId();
+		adminActionId = savedInv.getSuggestedActions().get(0).getId();
+		engineerActionId = savedInv.getSuggestedActions().get(1).getId();
+		targetActionId = adminActionId;
 	}
 
 	@Test
@@ -898,19 +904,19 @@ public class SecurityMatrixTest {
 	@MethodSource("matrixRows")
 	void endpointSecurityMatrix(MatrixRow row) throws Exception {
 		// Admin
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId, adminRunbookId), row.bodyTemplate(), adminToken, row.adminStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId, adminRunbookId, adminActionId), row.bodyTemplate(), adminToken, row.adminStatus());
 
 		// Engineer
-		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId, engineerPatId, engineerRunbookId), row.bodyTemplate(), engineerToken, row.engineerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), engineerNotificationId, engineerPatId, engineerRunbookId, engineerActionId), row.bodyTemplate(), engineerToken, row.engineerStatus());
 
 		// Viewer
-		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId, viewerPatId, viewerRunbookId), row.bodyTemplate(), viewerToken, row.viewerStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), viewerNotificationId, viewerPatId, viewerRunbookId, adminActionId), row.bodyTemplate(), viewerToken, row.viewerStatus());
 
 		// Unauthenticated
-		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId, adminRunbookId), row.bodyTemplate(), null, row.unauthenticatedStatus());
+		execute(row.method(), resolvePath(row.pathTemplate(), adminNotificationId, adminPatId, adminRunbookId, adminActionId), row.bodyTemplate(), null, row.unauthenticatedStatus());
 	}
 
-	private String resolvePath(String pathTemplate, Long notificationId, Long patId, Long runbookId) {
+	private String resolvePath(String pathTemplate, Long notificationId, Long patId, Long runbookId, Long actionId) {
 		String id = pathTemplate.startsWith("/api/tools/") ? targetToolId.toString()
 				: pathTemplate.startsWith("/api/services/") ? targetServiceId.toString()
 				: pathTemplate.startsWith("/api/incidents/") ? targetIncidentId.toString()
@@ -927,7 +933,7 @@ public class SecurityMatrixTest {
 				.replace("{entryId}", "999999999")
 				.replace("{token}", targetHeartbeatToken != null ? targetHeartbeatToken : "dummy_token")
 				.replace("{deployId}", targetDeployId != null ? targetDeployId.toString() : "999999999")
-				.replace("{actionId}", targetActionId != null ? targetActionId.toString() : "999999999");
+				.replace("{actionId}", actionId != null ? actionId.toString() : (targetActionId != null ? targetActionId.toString() : "999999999"));
 	}
 
 	private void execute(HttpMethod method, String path, String bodyTemplate, String token, int expectedStatus) throws Exception {

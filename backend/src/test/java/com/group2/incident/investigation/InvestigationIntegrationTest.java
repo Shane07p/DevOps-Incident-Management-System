@@ -8,16 +8,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.entity.Role;
-import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
+import com.group2.incident.support.TestOrgs;
 import com.jayway.jsonpath.JsonPath;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -27,9 +25,11 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,8 +39,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @IntegrationTest
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 class InvestigationIntegrationTest {
 
 	private static HttpServer aiStubServer;
@@ -79,10 +83,13 @@ class InvestigationIntegrationTest {
 
 	@Autowired private MockMvc mvc;
 	@Autowired private TestAccounts accounts;
+	@Autowired private TestOrgs testOrgs;
 	@Autowired private ServiceRepository services;
 	@Autowired private DeploymentRepository deployments;
+	@Autowired private TransactionTemplate transactionTemplate;
 	@Autowired private Clock clock;
 
+	private TestOrgs.SignedUp org;
 	private String engineerToken;
 	private String viewerToken;
 	private Long incidentId;
@@ -128,26 +135,57 @@ class InvestigationIntegrationTest {
 				}
 				""");
 
-		AppUser engineer = accounts.create("inv-engineer@test.local", Role.ENGINEER);
-		accounts.create("inv-viewer@test.local", Role.VIEWER);
-		engineerToken = accounts.token("inv-engineer@test.local");
-		viewerToken = accounts.token("inv-viewer@test.local");
+		String suffix = UUID.randomUUID().toString().replace("-", "");
+		org = testOrgs.signUp("inv-it-" + suffix + "@test.local", "Inv IT " + suffix);
 
-		ServiceEntity checkout = new ServiceEntity("Checkout", "Checkout service", engineer, Criticality.HIGH, clock.instant());
-		checkout.putTarget(Severity.SEV2, 30, 240);
-		checkout = services.saveAndFlush(checkout);
+		String engineerEmail = "inv-engineer-" + suffix + "@test.local";
+		String viewerEmail = "inv-viewer-" + suffix + "@test.local";
 
-		deployments.saveAndFlush(new Deployment(
-				checkout, "v1.0.1-broken", "deadbeef", "ci-bot", clock.instant().minus(10, ChronoUnit.MINUTES)));
+		mvc.perform(post("/api/users")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"email":"%s","displayName":"inv-engineer","password":"%s","role":"ENGINEER"}
+						""".formatted(engineerEmail, TestOrgs.PASSWORD)))
+				.andExpect(status().isCreated());
+
+		mvc.perform(post("/api/users")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"email":"%s","displayName":"inv-viewer","password":"%s","role":"VIEWER"}
+						""".formatted(viewerEmail, TestOrgs.PASSWORD)))
+				.andExpect(status().isCreated());
+
+		engineerToken = accounts.token(engineerEmail, TestOrgs.PASSWORD);
+		viewerToken = accounts.token(viewerEmail, TestOrgs.PASSWORD);
+
+		long serviceId = testOrgs.createService(org.adminToken(), "Checkout", org.adminId());
+
+		OrgContext.runAs(org.orgId(), () -> {
+			transactionTemplate.executeWithoutResult(status -> {
+				ServiceEntity checkout = services.findById(serviceId).orElseThrow();
+				deployments.saveAndFlush(new Deployment(
+						checkout, "v1.0.1-broken", "deadbeef", "ci-bot", clock.instant().minus(10, ChronoUnit.MINUTES)));
+			});
+		});
 
 		String created = mvc.perform(post("/api/incidents")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"title\":\"Checkout 500s\",\"description\":\"Errors spiking\",\"serviceId\":"
-								+ checkout.getId() + ",\"severity\":\"SEV2\"}"))
+								+ serviceId + ",\"severity\":\"SEV2\"}"))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		incidentId = JsonPath.<Number>read(created, "$.id").longValue();
+	}
+
+	@AfterEach
+	void cleanUp() {
+		if (org != null) {
+			testOrgs.delete(org.orgId());
+			org = null;
+		}
 	}
 
 	@Test

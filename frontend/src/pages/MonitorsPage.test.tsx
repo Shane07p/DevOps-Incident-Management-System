@@ -122,6 +122,33 @@ describe('MonitorsPage', () => {
     expect(await within(dialog).findByText('The URL must not point to a private or local network address')).toBeInTheDocument()
   })
 
+  it('shows a reason for a field the form does not have, a failure with no field, and can be paused or cancelled', async () => {
+    const user = userEvent.setup()
+    let attempts = 0
+    const fetchMock = renderMonitors('ADMIN', {
+      'POST /api/monitors': () => {
+        attempts += 1
+        if (attempts === 1) return { status: 400, body: { status: 400, message: 'Validation failed', errors: { orgId: 'Monitors are limited to 50 per org' } } }
+        return { status: 503, body: { status: 503, message: 'Settle is restarting' } }
+      },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'New monitor' }))
+    const dialog = await screen.findByRole('dialog', { name: 'New monitor' })
+    await user.type(within(dialog).getByLabelText('Name'), 'Orders')
+    await user.type(within(dialog).getByLabelText('URL'), 'https://shop.example.com/orders')
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Check it now' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Create monitor' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Monitors are limited to 50 per org')
+    expect(bodyOf(fetchMock, 'POST')).toMatchObject({ enabled: false })
+
+    await user.click(within(dialog).getByRole('button', { name: 'Create monitor' }))
+    await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('Settle is restarting'))
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('edits the selected monitor with a PUT to its id', async () => {
     const user = userEvent.setup()
     const fetchMock = renderMonitors('ADMIN', { 'PUT /api/monitors/7': { body: { ...healthy, failureThreshold: 5 } } })

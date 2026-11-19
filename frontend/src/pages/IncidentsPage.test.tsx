@@ -191,6 +191,24 @@ describe('Declare incident form', () => {
     expect(await screen.findByText('Service not found')).toBeInTheDocument()
     expect(screen.getByLabelText('Service')).toHaveAccessibleDescription('Service not found')
   })
+
+  it('says the incident was not declared when Settle cannot be reached', async () => {
+    const { router } = renderApp('ENGINEER', '/incidents/new', {
+      'POST /api/incidents': () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
+
+    await userEvent.type(await screen.findByLabelText('Title'), 'Checkout failing')
+    await userEvent.type(screen.getByLabelText('Description'), 'Card payments fail.')
+    await waitFor(() => expect(screen.getByLabelText('Service')).toBeEnabled())
+    await choose('Service', 'Payments')
+    await choose('Severity', /SEV2/)
+    await userEvent.click(screen.getByRole('button', { name: 'Declare incident' }))
+
+    expect(await screen.findByText('The incident was not declared. Try again.')).toHaveAttribute('role', 'alert')
+    expect(router.state.location.pathname).toBe('/incidents/new')
+  })
 })
 
 describe('Incident detail', () => {

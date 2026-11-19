@@ -162,6 +162,9 @@ export function IncidentDetailPage() {
                 <span className="text-muted-foreground">No Lead yet</span>
               )}
             </div>
+            <Link to={`/incidents/${incident.data.id}/postmortem`} className="w-fit text-sm font-medium text-primary underline">
+              Open postmortem →
+            </Link>
           </header>
 
           <Lifecycle status={incident.data.status} />

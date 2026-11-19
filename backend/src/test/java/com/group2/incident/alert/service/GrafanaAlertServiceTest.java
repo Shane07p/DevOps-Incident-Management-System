@@ -1,10 +1,25 @@
 package com.group2.incident.alert.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.group2.incident.alert.dto.AlertAcceptedResponse;
 import com.group2.incident.alert.dto.AlertRequest;
 import com.group2.incident.alert.dto.GrafanaWebhookRequest;
+import com.group2.incident.alert.dto.GrafanaWebhookResponse;
+import com.group2.incident.alert.dto.GrafanaWebhookResponse.Skipped;
+import com.group2.incident.alert.entity.MonitoringTool;
+import com.group2.incident.common.error.ConflictException;
+import com.group2.incident.common.error.FieldValidationException;
+import jakarta.validation.Validation;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -74,6 +89,89 @@ class GrafanaAlertServiceTest {
 		assertThat(request.title()).isEqualTo("Disk full");
 		assertThat(request.description()).isEqualTo("Disk full is firing");
 		assertThat(request.details()).doesNotContainKey("generatorURL");
+	}
+
+	@Test
+	void aNotificationWithoutAlertsTakesNothing() {
+		GrafanaWebhookResponse response = receiver(mock(AlertIntakeService.class))
+				.receive(mock(MonitoringTool.class), new GrafanaWebhookRequest("firing", null));
+
+		assertThat(response.accepted()).isEmpty();
+		assertThat(response.skipped()).isEmpty();
+	}
+
+	// Grafana sends the whole group; each alert that can't become an incident alert is listed with the reason.
+	@Test
+	void eachAlertThatIsNotTakenSaysWhy() {
+		AlertIntakeService intake = mock(AlertIntakeService.class);
+		MonitoringTool tool = mock(MonitoringTool.class);
+		when(intake.processAlert(eq(tool), any())).thenAnswer(inv -> {
+			AlertRequest request = inv.getArgument(1);
+			return switch (request.service()) {
+				case "unknown" -> throw new FieldValidationException("service", "Service not found");
+				case "duplicate" -> throw new ConflictException("This alert was already received");
+				default -> AlertAcceptedResponse.of(request.eventId(), request.source());
+			};
+		});
+		List<GrafanaWebhookRequest.Alert> alerts = Arrays.asList(
+				null,
+				new GrafanaWebhookRequest.Alert("resolved", Map.of("service", "search"), null, STARTS, "r1", null),
+				new GrafanaWebhookRequest.Alert("firing", Map.of("service", "search"), null, STARTS, " ", null),
+				new GrafanaWebhookRequest.Alert("firing", Map.of("service", "search"), null, null, "n1", null),
+				new GrafanaWebhookRequest.Alert("firing", null, null, STARTS, "l1", null),
+				new GrafanaWebhookRequest.Alert("firing", Map.of("service", "s".repeat(101)), null, STARTS, "v1", null),
+				new GrafanaWebhookRequest.Alert("FIRING", Map.of("service", "unknown"), null, STARTS, "u1", null),
+				new GrafanaWebhookRequest.Alert("firing", Map.of("service", "duplicate"), null, STARTS, "d1", null),
+				new GrafanaWebhookRequest.Alert("firing", Map.of("service", "search"), null, STARTS, "ok1", null));
+
+		GrafanaWebhookResponse response = receiver(intake).receive(tool, new GrafanaWebhookRequest("firing", alerts));
+
+		assertThat(response.skipped()).extracting(Skipped::fingerprint, Skipped::reason).containsExactly(
+				tuple(null, "empty alert"),
+				tuple("r1", "not firing"),
+				tuple(" ", "no fingerprint or start time"),
+				tuple("n1", "no fingerprint or start time"),
+				tuple("l1", "no settle_service or service label"),
+				tuple("v1", "service service must not exceed 100 characters"),
+				tuple("u1", "Service not found: unknown"),
+				tuple("d1", "This alert was already received"));
+		assertThat(response.accepted()).extracting(AlertAcceptedResponse::eventId)
+				.containsExactly("gf-ok1-" + STARTS.getEpochSecond());
+	}
+
+	@Test
+	void alertsPastTheFirstHundredInOneNotificationAreSkipped() {
+		AlertIntakeService intake = mock(AlertIntakeService.class);
+		when(intake.processAlert(any(), any())).thenAnswer(inv -> {
+			AlertRequest request = inv.getArgument(1);
+			return AlertAcceptedResponse.of(request.eventId(), request.source());
+		});
+		List<GrafanaWebhookRequest.Alert> alerts = new ArrayList<>();
+		for (int i = 0; i <= GrafanaAlertService.MAX_ALERTS; i++) {
+			alerts.add(new GrafanaWebhookRequest.Alert("firing", Map.of("service", "search"), null, STARTS, "fp" + i, null));
+		}
+
+		GrafanaWebhookResponse response = receiver(intake).receive(mock(MonitoringTool.class), new GrafanaWebhookRequest("firing", alerts));
+
+		assertThat(response.accepted()).hasSize(GrafanaAlertService.MAX_ALERTS);
+		assertThat(response.skipped()).extracting(Skipped::fingerprint, Skipped::reason)
+				.containsExactly(tuple("fp100", "more than 100 alerts in one notification"));
+	}
+
+	@Test
+	void aLongSummaryIsCutToTheTitleLimit() {
+		GrafanaWebhookRequest.Alert alert = new GrafanaWebhookRequest.Alert("firing", Map.of("service", "search"),
+				Map.of("summary", "x".repeat(250)), STARTS, "ab12", null);
+
+		AlertRequest request = GrafanaAlertService.toRequest(alert);
+
+		assertThat(request.title()).hasSize(200);
+		assertThat(request.description()).hasSize(250);
+		assertThat(request.correlationKey()).isEqualTo("grafana-Grafana alert-search");
+	}
+
+	private static GrafanaAlertService receiver(AlertIntakeService intake) {
+		return new GrafanaAlertService(intake, Validation.buildDefaultValidatorFactory().getValidator());
 	}
 
 	private static GrafanaWebhookRequest.Alert alert(Instant startsAt) {

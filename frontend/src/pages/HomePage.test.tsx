@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearToken, writeToken } from '@/api/token'
 import { AuthProvider } from '@/auth/AuthProvider'
@@ -79,6 +80,7 @@ afterEach(() => {
   clearToken()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('Overview', () => {
@@ -131,5 +133,57 @@ describe('Overview', () => {
     const queue = await waiting()
     expect(within(queue).getByRole('link', { name: 'Checkout failing' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Acknowledge and take Lead/ })).not.toBeInTheDocument()
+  })
+
+  it('confirms an acknowledgement, and shows why one failed', async () => {
+    const success = vi.spyOn(toast, 'success')
+    const failure = vi.spyOn(toast, 'error')
+    renderOverview(engineer, {
+      'POST /api/incidents/7/acknowledge': {
+        body: {
+          id: 7, reference: 'INC-7', title: 'Checkout failing', description: 'Card payments fail at the last step.', service: { id: 1, name: 'Payments' },
+          severity: 'SEV2', status: 'ACKNOWLEDGED', version: 5, reporter: { id: 2, displayName: 'Dev Engineer' },
+          assignee: { id: 2, displayName: 'Dev Engineer' }, roles: { comms: null, ops: null }, roleWarning: null,
+          createdAt: '2026-10-20T08:30:00Z', responseTargetMinutes: 60, resolutionTargetMinutes: 480,
+          responseDueAt: '2026-10-20T09:30:00Z', resolutionDueAt: '2026-10-20T16:30:00Z', timeline: [],
+        },
+      },
+      'POST /api/incidents/8/acknowledge': { status: 403, body: { status: 403, message: 'You do not have permission to do that' } },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge and take Lead: INC-7' }))
+    await waitFor(() => expect(success).toHaveBeenCalledWith('INC-7 acknowledged. You are Lead, and escalation has stopped.'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Acknowledge and take Lead: INC-8' }))
+    await waitFor(() => expect(failure).toHaveBeenCalledWith('You do not have permission to do that'))
+  })
+
+  it('says when nothing is waiting or in progress', async () => {
+    renderOverview(engineer, { 'GET /api/incidents': { body: [] } })
+
+    expect(await screen.findByText('Nothing is waiting. Every open incident has a Lead.')).toBeInTheDocument()
+    expect(screen.getByText('No incident is being worked on.')).toBeInTheDocument()
+  })
+
+  it('shows an incident in progress with no Lead, and counts those past a target', async () => {
+    renderOverview(engineer, {
+      'GET /api/incidents': {
+        body: [
+          row({ id: 9, reference: 'INC-9', title: 'Queue backlog', status: 'MONITORING', createdAt: '2026-10-20T01:00:00Z', resolutionDueAt: '2026-10-20T08:00:00Z', acknowledgedAt: '2026-10-20T01:05:00Z' }),
+          row({ id: 10, reference: 'INC-10', title: 'Login slow', status: 'IDENTIFIED', createdAt: '2026-10-20T02:00:00Z', resolutionDueAt: '2026-10-20T08:30:00Z', acknowledgedAt: '2026-10-20T02:05:00Z', assignee: { id: 2, displayName: 'Dev Engineer' } }),
+        ],
+      },
+    })
+
+    const inProgress = await screen.findByRole('region', { name: 'In progress' })
+    expect(within(inProgress).getByRole('row', { name: /Queue backlog/ })).toHaveTextContent('No Lead yet')
+    expect(within(inProgress).getByText('2 incidents are past an SLA target')).toBeInTheDocument()
+  })
+
+  it('shows a failed load with a retry', async () => {
+    renderOverview(engineer, { 'GET /api/incidents': { status: 500, body: { status: 500, message: 'Incidents are unavailable' } } })
+
+    expect(await screen.findByText('Incidents are unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 })

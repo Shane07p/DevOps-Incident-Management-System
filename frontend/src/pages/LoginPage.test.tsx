@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { clearToken } from '@/api/token'
+import { clearToken, writeToken } from '@/api/token'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { mockFetch } from '@/test/fetchMock'
@@ -64,6 +64,39 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password')
+  })
+
+  it('shows a rate limit as the server words it, and anything else as Settle being unreachable', async () => {
+    let attempts = 0
+    mockFetch({
+      'POST /api/auth/login': () => {
+        attempts += 1
+        return attempts === 1
+          ? { status: 429, body: { status: 429, message: 'Too many sign-in attempts. Try again in 60 seconds.' } }
+          : { status: 502, body: { status: 502, message: 'Bad gateway' } }
+      },
+    })
+    renderLogin()
+
+    await userEvent.type(screen.getByLabelText('Work email'), 'engineer@settle.local')
+    await userEvent.type(screen.getByLabelText('Password'), 'DevPassw0rd!')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many sign-in attempts. Try again in 60 seconds.')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Settle could not be reached. Try again in a moment.'))
+  })
+
+  it('sends someone already signed in straight on', async () => {
+    writeToken('test-token')
+    mockFetch({
+      'GET /api/auth/me': {
+        body: { user: { id: 2, email: 'engineer@settle.local', displayName: 'Dev Engineer', role: 'ENGINEER' }, org: { id: 1, name: 'Dev org', slug: 'dev-org' } },
+      },
+    })
+    renderLogin()
+
+    expect(await screen.findByText('Home page')).toBeInTheDocument()
   })
 
   it('posts the email and password, then goes to Home', async () => {

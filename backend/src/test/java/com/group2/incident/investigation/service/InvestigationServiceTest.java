@@ -90,8 +90,8 @@ class InvestigationServiceTest {
 				investigationRepository,
 				investigationActionRepository,
 				appUserRepository,
-				transactionTemplate,
-				clock
+				clock,
+				transactionTemplate
 		);
 	}
 

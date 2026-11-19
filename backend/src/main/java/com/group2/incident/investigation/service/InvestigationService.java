@@ -133,10 +133,6 @@ public class InvestigationService {
 			);
 		});
 
-		if (snapshot == null) {
-			throw new IllegalStateException("Failed to snapshot incident " + incidentId);
-		}
-
 		if (!aiInvestigationClient.isEnabled()) {
 			throw new ServiceUnavailableException("AI investigation service is not set up on this server");
 		}
@@ -146,9 +142,6 @@ public class InvestigationService {
 		Instant windowStart = snapshot.createdAt().minus(TELEMETRY_LOOKBACK);
 		Instant maxEnd = windowStart.plus(TELEMETRY_MAX_RANGE);
 		Instant windowEnd = now.isBefore(maxEnd) ? now : maxEnd;
-		if (windowEnd.isBefore(windowStart)) {
-			windowEnd = windowStart;
-		}
 
 		// Gather telemetry logs and metrics outside DB transaction
 		List<LogBundleItem> logItems = gatherLogs(snapshot.serviceId(), windowStart, windowEnd);
@@ -319,13 +312,10 @@ public class InvestigationService {
 		Instant now = clock.instant();
 		int updated = investigationActionRepository.recordDecision(actionId, investigationId, decision, actor, now);
 		if (updated == 0) {
-			InvestigationAction existing = investigationActionRepository.findByIdAndInvestigationId(actionId, investigationId)
+			investigationActionRepository.findByIdAndInvestigationId(actionId, investigationId)
 					.orElseThrow(() -> new NotFoundException(
 							"Action " + actionId + " not found for investigation " + investigationId));
-			if (existing.getDecision() != null) {
-				throw new ConflictException("Action " + actionId + " has already been decided");
-			}
-			throw new ConflictException("Action " + actionId + " could not be updated");
+			throw new ConflictException("Action " + actionId + " has already been decided");
 		}
 
 		InvestigationAction action = investigationActionRepository.findByIdAndInvestigationId(actionId, investigationId)

@@ -277,7 +277,7 @@ class DraftIntegrationTest {
 					"kind": "POSTMORTEM",
 					"text": "%s mirrors INC-99999 and entry #88888, while entry #%d is real.",
 					"postmortem": {
-						"summary": "Real %s, fake INC-99999.",
+						"summary": "Real %s, incident #%d, fake INC-99999 and incident #99999.",
 						"impact": "See entry #88888.",
 						"rootCause": "Timeout.",
 						"resolution": "Mitigated.",
@@ -285,7 +285,7 @@ class DraftIntegrationTest {
 						"wentBadly": "Lacked alert."
 					}
 				}
-				""".formatted(incidentRef, timelineEntryId, incidentRef));
+				""".formatted(incidentRef, timelineEntryId, incidentRef, incidentId));
 
 		String response = mvc.perform(post("/api/incidents/{id}/drafts", incidentId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
@@ -300,8 +300,29 @@ class DraftIntegrationTest {
 
 		assertThat(text).contains(incidentRef, "entry #" + timelineEntryId);
 		assertThat(text).doesNotContain("INC-99999", "88888");
-		assertThat(pmSummary).contains(incidentRef).doesNotContain("INC-99999");
+		assertThat(pmSummary).contains(incidentRef, "incident #" + incidentId).doesNotContain("99999");
 		assertThat(pmImpact).doesNotContain("88888");
+	}
+
+	@Test
+	void missingPostmortemUsesSanitizedOverviewAndKeepsAllSixFields() throws Exception {
+		for (String textJson : List.of("null", "\"\"", "\"  \"", "\"Overview for " + incidentRef + ", fake INC-99999.\"")) {
+			aiResponseBody.set("""
+					{"aiGenerated":true,"kind":"POSTMORTEM","text":%s,"postmortem":null}
+					""".formatted(textJson));
+			String response = mvc.perform(post("/api/incidents/{id}/drafts", incidentId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"kind\":\"POSTMORTEM\"}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.generatedAt").isNotEmpty())
+					.andReturn().getResponse().getContentAsString();
+			String expected = textJson.contains("Overview") ? "Overview for " + incidentRef + ", fake." : "";
+			assertThat(JsonPath.<String>read(response, "$.text")).isEqualTo(expected);
+			assertThat(JsonPath.<Map<String, String>>read(response, "$.postmortem"))
+					.isEqualTo(Map.of("summary", expected, "impact", "", "rootCause", "",
+							"resolution", "", "wentWell", "", "wentBadly", ""));
+		}
 	}
 
 	@Test

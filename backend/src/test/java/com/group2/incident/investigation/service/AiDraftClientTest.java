@@ -22,6 +22,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class AiDraftClientTest {
@@ -70,6 +72,44 @@ class AiDraftClientTest {
 
 		assertThat(disabled.isEnabled()).isFalse();
 		assertThatThrownBy(() -> disabled.generateDraft(sampleRequest()))
+				.isInstanceOf(ServiceUnavailableException.class);
+	}
+
+	@Test
+	void nullUrlDisablesDrafting() {
+		assertThat(client(null, Duration.ofSeconds(2)).isEnabled()).isFalse();
+	}
+
+	@Test
+	void acceptsHttpsBaseUrlWithTrailingSlashAndWhitespace() {
+		assertThat(client(" https://ai.example.test/ai/ ", Duration.ofSeconds(2)).isEnabled()).isTrue();
+	}
+
+	@ParameterizedTest
+	@ValueSource(longs = {0, -1})
+	void rejectsNonPositiveTimeout(long seconds) {
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(seconds)))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("AI draft timeout must be positive");
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"ftp://localhost/", "http:/draft/", "http://user@localhost/",
+			"http://localhost/?debug=true", "http://localhost/#fragment"
+	})
+	void rejectsInvalidBaseUrls(String url) {
+		assertThatThrownBy(() -> client(url, Duration.ofSeconds(2)))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("AI service URL must be an HTTP(S) base URL without credentials or query parameters");
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"null", "not JSON"})
+	void unusableResponseThrowsServiceUnavailable(String body) {
+		responseBody.set(body);
+
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(2)).generateDraft(sampleRequest()))
 				.isInstanceOf(ServiceUnavailableException.class);
 	}
 

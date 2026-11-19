@@ -1,4 +1,4 @@
--- V30: Investigation tables for AI SRE (Issue #242)
+-- V31: Investigation tables for AI SRE (Issue #242)
 
 CREATE TABLE investigation (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -6,36 +6,38 @@ No live Ollama instance required.
 
 from __future__ import annotations
 
+import asyncio
 import json
-import sys
 from pathlib import Path
 
-import pytest
-
-from drafting import DraftRequest, DraftResponse, sanitize_draft_text, generate_draft
-from main import _classify_severity
-from providers import MockProvider, ModelTurnResponse, ToolCallRequest
 from ai_evaluation import (
-    ScenarioEvaluatorProvider,
     DraftingAdversarialProvider,
+    ScenarioEvaluatorProvider,
+    _find_invented_ids,
+    _load_scenario_bundle,
     check_cause_match,
+    evaluate_ai2_scenarios,
+    evaluate_ai3_drafting,
     evaluate_ai4_triage,
+    format_markdown_report,
 )
+from drafting import DraftRequest, generate_draft, sanitize_draft_text
+from main import _classify_severity
+from providers import MockProvider, ModelTurnResponse
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 TRIAGE_EVAL_FILE = DATA_DIR / "triage_eval_set.jsonl"
 
 
 # ---------------------------------------------------------------------------
-# AI-4 Triage: Unit Tests (Scoring PR #283's Triage Service)
+# AI-4 Triage: Unit Tests (Scoring PR #283's POST /triage)
 # ---------------------------------------------------------------------------
-
 
 class TestTriageClassifier:
     """Deterministic rule-based severity classification tests using PR #283's classifier."""
 
     def test_sev1_total_outage(self):
-        sev, reason = _classify_severity("Payment gateway total outage", "All payments down globally.", [])
+        sev, _ = _classify_severity("Payment gateway total outage", "All payments down globally.", [])
         assert sev == "SEV1"
 
     def test_sev1_data_loss(self):
@@ -74,7 +76,7 @@ class TestTriageClassifier:
 
 
 class TestTriageEvalDataset:
-    """Validates the labelled evaluation dataset and classifier accuracy."""
+    """Validates the labelled evaluation dataset and PR #283 POST /triage scoring."""
 
     def test_triage_eval_set_exists(self):
         assert TRIAGE_EVAL_FILE.exists(), "triage_eval_set.jsonl missing"
@@ -91,11 +93,11 @@ class TestTriageEvalDataset:
                 assert item["severity"] in ("SEV1", "SEV2", "SEV3", "SEV4")
 
     def test_triage_scoring_runs_deterministically(self):
-        """Evaluation runner scores PR #283's hint across the 25 labelled cases."""
+        """Evaluation runner scores PR #283's POST /triage across all 25 labelled cases."""
         result = evaluate_ai4_triage(TRIAGE_EVAL_FILE)
         assert result["feature"] == "AI-4"
         assert result["total_cases"] == 25
-        assert result["exact_matches"] >= 10
+        assert result["exact_matches"] == 11
         assert "per_severity" in result
         for sev in ("SEV1", "SEV2", "SEV3", "SEV4"):
             assert sev in result["per_severity"]
@@ -103,41 +105,63 @@ class TestTriageEvalDataset:
 
 
 # ---------------------------------------------------------------------------
-# AI-2 & AI-3: Scripted Provider Unit Tests
+# AI-2: Scenario Fixture Loading & Scripted End-to-End Pipeline Unit Tests
 # ---------------------------------------------------------------------------
 
+class TestScenarioFixturesAndPipeline:
+    """Verifies all 5 scenario fixtures load fault logs/metrics/deploys cleanly."""
 
-class TestScriptedProviders:
-    """Scripted providers preserved strictly as unit test fixtures."""
+    def test_all_five_scenario_bundles_load_fault_signals(self):
+        expected_log_substr = {
+            "SCN-01": "payment.gateway.slow",
+            "SCN-02": "checkout.transaction_failed",
+            "SCN-03": "checkout.null_pointer_exception",
+            "SCN-04": "queue.paused",
+            "SCN-05": "ssl.cert_expiring",
+        }
+        for sid, needle in expected_log_substr.items():
+            bundle, fault_started_at = _load_scenario_bundle(sid, "payments", "Fault test")
+            assert fault_started_at
+            assert len(bundle.logs) > 0, f"{sid} loaded no logs"
+            assert any(needle in (log.get("message") or "") for log in bundle.logs), (
+                f"{sid} missing expected fault log '{needle}'"
+            )
+            assert len(bundle.metrics) > 0, f"{sid} loaded no metrics"
+            for m in bundle.metrics:
+                assert len(m["points"]) == 2, f"{sid} metric {m['metric']} should have baseline + fault points"
+            if sid == "SCN-03":
+                assert len(bundle.deploys) == 1
+                assert bundle.deploys[0]["version"] == "v1.0.1-broken"
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
     def test_scenario_evaluator_scripted_turn_1(self):
-        import asyncio
         scenario = {
             "scenario_id": "SCN-01",
             "service": "payments",
             "what_it_breaks": "Slow gateway",
             "real_cause": "Gateway latency",
-            "ai_first_hypothesis": "Latency bug",
+            "ai_first_hypothesis": "Payment gateway latency degradation.",
         }
         provider = ScenarioEvaluatorProvider(scenario)
         resp = asyncio.run(provider.generate(messages=[], tools=[]))
         assert len(resp.tool_calls) == 3
         assert resp.tool_calls[0].tool_name == "query_log_patterns"
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
-    def test_drafting_adversarial_scripted(self):
-        import asyncio
-        provider = DraftingAdversarialProvider(kind="SUMMARY")
-        resp = asyncio.run(provider.generate(messages=[], tools=[]))
-        assert "INC-999" in resp.content
-        assert "entry #999" in resp.content
+    def test_ai2_evaluation_pipeline_with_scripted_provider(self):
+        """Hermetic end-to-end check of evaluate_ai2_scenarios using ScenarioEvaluatorProvider."""
+        result = asyncio.run(evaluate_ai2_scenarios(use_mock=True, timeout_seconds=10.0))
+        assert result["feature"] == "AI-2"
+        assert result["provider"] == "mock"
+        assert result["total_scenarios"] == 5
+        assert result["top_1_matches"] == 5
+        for sc in result["scenarios"]:
+            assert sc["status"] == "completed"
+            assert sc["top_1_match"] is True
+            assert sc["evidence_citations"] >= 1
 
 
 # ---------------------------------------------------------------------------
-# AI-3 Drafting: Fabricated ID Rejection Tests
+# AI-3 Drafting: Sanitization, Regex Detection & Scripted Pipeline Tests
 # ---------------------------------------------------------------------------
-
 
 class TestDraftingSanitization:
     """Test that the sanitizer strips fabricated IDs and keeps real ones."""
@@ -179,11 +203,40 @@ class TestDraftingSanitization:
         assert "entry #999" not in text
         assert "999" not in text
 
+    def test_find_invented_ids_catches_arbitrary_hallucinations(self):
+        req = DraftRequest(
+            kind="SUMMARY",
+            incident={"id": 42, "number": 42, "reference": "INC-42", "title": "Gateway timeout"},
+            timeline=[{"id": 1, "details": "Created"}],
+        )
+        leaked = _find_invented_ids("See INC-42, INC-123, incident #55, entry #1, and entry #88.", req)
+        assert "INC-123" in leaked
+        assert "incident #55" in leaked
+        assert "entry #88" in leaked
+        assert "INC-42" not in leaked
+        assert "entry #1" not in leaked
 
-@pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
+
+def test_drafting_adversarial_scripted():
+    provider = DraftingAdversarialProvider(kind="SUMMARY")
+    resp = asyncio.run(provider.generate(messages=[], tools=[]))
+    assert "INC-999" in resp.content
+    assert "entry #999" in resp.content
+
+
+def test_ai3_evaluation_pipeline_with_scripted_provider():
+    """Hermetic end-to-end check of evaluate_ai3_drafting using DraftingAdversarialProvider."""
+    result = asyncio.run(evaluate_ai3_drafting(use_mock=True))
+    assert result["feature"] == "AI-3"
+    assert result["provider"] == "mock"
+    assert result["total_draft_evaluations"] == 3
+    assert result["checklist_passed_count"] == 3
+    assert result["fabricated_id_leak_rate"] == 0.0
+    assert result["mean_latency_ms"] >= 0.0
+
+
 def test_draft_postmortem_structure():
     """Generate a POSTMORTEM draft and verify all six sections are populated."""
-    import asyncio
     provider = MockProvider(responses=[
         ModelTurnResponse(
             content=json.dumps({
@@ -218,10 +271,8 @@ def test_draft_postmortem_structure():
     assert pm.went_badly
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
 def test_draft_rejects_fabricated_ids():
     """Adversarial provider that injects INC-999 and entry #999 must have them stripped."""
-    import asyncio
     provider = MockProvider(responses=[
         ModelTurnResponse(
             content=json.dumps({
@@ -244,7 +295,7 @@ def test_draft_rejects_fabricated_ids():
 
 
 # ---------------------------------------------------------------------------
-# AI-2 Scenario Investigation: Cause Matching Tests
+# AI-2 Cause Matching & Markdown Formatter Tests
 # ---------------------------------------------------------------------------
 
 class TestCauseMatching:
@@ -267,3 +318,11 @@ class TestCauseMatching:
 
     def test_wrong_cause_rejected(self):
         assert not check_cause_match("SCN-01", "The queue worker is paused.")
+
+
+def test_format_markdown_report_handles_partial_results():
+    ai4 = evaluate_ai4_triage(TRIAGE_EVAL_FILE)
+    md = format_markdown_report({"ai4": ai4}, "qwen2.5:0.5b", "abc1234", "2026-11-19")
+    assert "AI-4: Triage Severity Classification" in md
+    assert "11/25" in md
+    assert "abc1234" in md

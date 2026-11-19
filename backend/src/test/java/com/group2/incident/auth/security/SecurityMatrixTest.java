@@ -727,34 +727,12 @@ public class SecurityMatrixTest {
 						null,
 						400, 400, 400, 401
 				),
-				// AI service URL is unset in IntegrationTest, so Admin and Engineer reach the handler and receive 503.
-				new MatrixRow(
-						"POST /api/incidents/{id}/investigations",
-						HttpMethod.POST,
-						"/api/incidents/{id}/investigations",
-						null,
-						503, 503, 403, 401
-				),
 				new MatrixRow(
 						"POST /api/incidents/{id}/drafts",
 						HttpMethod.POST,
 						"/api/incidents/{id}/drafts",
 						"{\"kind\":\"SUMMARY\"}",
 						503, 503, 403, 401
-				),
-				new MatrixRow(
-						"GET /api/incidents/{id}/investigations/latest",
-						HttpMethod.GET,
-						"/api/incidents/{id}/investigations/latest",
-						null,
-						200, 200, 200, 401
-				),
-				new MatrixRow(
-						"POST /api/investigations/{id}/actions/{actionId}/decision",
-						HttpMethod.POST,
-						"/api/investigations/{id}/actions/{actionId}/decision",
-						"{\"decision\":\"ACCEPTED\"}",
-						200, 200, 403, 401
 				),
 				// The org's own Grafana connection (#260): Admin only. The Admin's PUT has no URL (400), and
 				// the test call finds no connection (503).

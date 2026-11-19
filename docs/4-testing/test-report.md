@@ -67,18 +67,77 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Defects | |
 | Notes | |
 
+---
+
+## Sprint 6 – Performance Testing with k6 (Issue #250)
+
+Evaluated against non-functional performance requirements **NFR-01.1** (incident board and detail latency with 1,000 incidents) and **NFR-01.2** (incoming alert intake throughput and latency at 10 alerts/sec) using the k6 automated test suite in `perf/`.
+
+- **Test Date:** 16 November 2026
+- **Application Commit Under Test:** `d6e7f95`
+- **Environment:** Local Docker Compose stack on Windows 11 / WSL2, Docker Desktop 4.96.0, Docker Engine 29.9.1, k6 v2.4.0 (commit/dd9395906d, linux/amd64), PostgreSQL 16.15 (pgvector 0.8.6), Spring Boot 4.1 backend (`incident-app`), Nginx 1.31.8 (`incident-web`).
+- **Database Stored Incidents:** 1,000 valid synthetic incidents seeded via `perf/seed_1000_incidents.sql` with associated timeline entries. Incident references are assigned sequentially starting from `organization.next_incident_number` (e.g. `INC-<number>`) rather than assuming a fixed `INC-1` through `INC-1000` sequence, preserving organization numbering constraints and per-org uniqueness. The k6 test suite dynamically discovers the actual incident IDs via `GET /api/incidents` during test setup.
+
+### Local Benchmark Results
+
+| Benchmark Run | Target Requirement | Workload Profile | Target Rate / Concurrency | Metrics (p50 / p90 / p95 / Max) | Failed Rate | Threshold | Status |
+|---|---|---|---|---|---|---|---|
+| **NFR-01.1 Original Benchmark: Incident Board** (`GET /api/incidents`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total board requests) | p50: 24.65 ms<br>p90: 43.48 ms<br>p95: **52.89 ms**<br>Max: 173.85 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Original Benchmark: Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | 1,000 seeded incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (6,764 total detail requests) | p50: 7.58 ms<br>p90: 19.53 ms<br>p95: **25.03 ms**<br>Max: 112.06 ms | 0.00% (0 / 6,764) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Additional Validation: Incident Board** (`GET /api/incidents`) | NFR-01.1 | Additional validation run on 1,330 stored incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (5,810 completed iterations, 5,810 board requests) | p50: 35.01 ms<br>p90: 52.75 ms<br>p95: **60.14 ms**<br>Max: 193.13 ms | 0.00% (0 / 5,810) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.1 Additional Validation: Incident Detail** (`GET /api/incidents/{id}`) | NFR-01.1 | Additional validation run on 1,330 stored incidents, 10 VUs (10s ramp, 60s steady, 10s ramp-down) | 10 concurrent VUs (5,810 completed iterations, 5,810 detail requests) | p50: 7.91 ms<br>p90: 16.63 ms<br>p95: **20.51 ms**<br>Max: 61.80 ms | 0.00% (0 / 5,810) | p(95) < 2,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.2 Grouping-Path Benchmark** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s with reused correlation keys (exercises alert grouping into existing incidents) | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 11.83 ms<br>p90: 17.04 ms<br>p95: **20.39 ms**<br>Max: 64.00 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+| **NFR-01.2 New-Incident-Path Benchmark** (`POST /webhooks/alerts`) | NFR-01.2 | Constant arrival rate for 30s with strictly unique correlation keys (exercises full incident creation path) | Target: 10 alerts/s<br>Achieved: **10.00 alerts/s** (301 iterations, 0 dropped) | p50: 24.30 ms<br>p90: 32.36 ms<br>p95: **37.88 ms**<br>Max: 69.73 ms | 0.00% (0 / 304) | p(95) < 1,000 ms<br>Failure rate < 1% | **Pass** |
+
+> **Notes on Local Execution Results:**
+> - **NFR-01.1:** The original benchmark met the threshold with 1,000 seeded incidents (Board p95: 52.89 ms; Detail p95: 25.03 ms). The subsequent validation run on an expanded dataset of 1,330 incidents confirmed sustained compliance (Board p95: 60.14 ms; Detail p95: 20.51 ms), well below the 2,000 ms ceiling.
+> - **NFR-01.2:** Two distinct workloads were evaluated:
+>   1. *Grouping-path benchmark:* Reused 4 correlation keys, resulting in 4 incidents created and 297 alerts attached (`status: ATTACHED`), measuring intake and grouping latency (p95: 20.39 ms).
+>   2. *Full new-incident-path benchmark:* Generated a strictly unique correlation key per iteration, resulting in 301 distinct new incidents verified in the database (incident count increased from 1,029 to 1,330; 301 alerts with `status: NEW`, 0 with `ATTACHED`). This verified the slower creation path including SLA copying, organization row-locking for atomic sequence numbering, on-call assignment, notifications, and timeline logging (p95: 37.88 ms, 26x headroom below 1,000 ms).
+> - Zero requests failed across all local runs (13,530 incident queries on original run, 11,620 on validation run, and 608 total webhook requests). Detailed execution instructions are in [perf/README.md](../../perf/README.md).
+
+### Deployed low-load run (Render / Supabase)
+
+Run on 18 November 2026 against `https://incident-backend-f340.onrender.com`, serving commit `2b2e2cf`
+(read from `/actuator/info`), with k6 v2.1.0 from a laptop in India. The dev seed users exist only in local
+databases, so the run used a throwaway org made through the public sign-up ("k6 perf check (deployed)"), with one
+`Payments` service. The alert script registered its own tool and revoked it at the end. The alert script ran first
+so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deployed`).
+
+| Benchmark | Workload | Requests | Latency (min / median / p90 / p95 / max) | Failed | Threshold | Status |
+|---|---|---|---|---|---|---|
+| **NFR-01.2 Alert intake, new-incident path** (`POST /webhooks/alerts`) | 1 alert/s for 30 s, a new correlation key per alert | 29 alerts (2 dropped by k6's arrival scheduler), 29 incidents opened | 1.51 s / 2.29 s / 3.02 s / **3.12 s** / 3.16 s | 0% (0 / 32) | p(95) < 1,000 ms | **Failed** |
+| **NFR-01.1 Incident board** (`GET /api/incidents`) | 2 VUs for 30 s | 46 | 330 ms / 471 ms / 643 ms / **709 ms** / 1.01 s | 0% | p(95) < 2,000 ms | **Passed** |
+| **NFR-01.1 Incident detail** (`GET /api/incidents/{id}`) | 2 VUs for 30 s | 46 | 544 ms / 622 ms / 736 ms / **806 ms** / 925 ms | 0% | p(95) < 2,000 ms | **Passed** |
+
+> **Notes on the deployed run:**
+> - Every request succeeded and every check passed, but alert intake misses NFR-01.2 on the deployed setup: each
+>   alert that opens an incident took 1.5 to 3.2 s, against a p95 of 37.88 ms (max 69.73 ms) locally on the same path.
+> - From this laptop a request with no database work (`/actuator/info`) takes about 0.24 to 0.39 s, and
+>   `/actuator/health` (one database check) about 0.41 to 0.47 s. Opening an incident makes many database calls one
+>   after another (SLA copy, org lock and number, on-call lookup, timeline entries, notification, audit, escalation
+>   task), and each one crosses from Render to Supabase, so the likely cause is that per-query latency on the free
+>   tier, not the code path itself. Grouping into an open incident (fewer writes) was not measured on the deployed app.
+> - The incident board and detail pass NFR-01.1 with the network round trip included, but this org held 29
+>   incidents, not 1,000: the seed is for local databases only.
+> - To rerun: sign up a throwaway org on the deployed app, add a service named `Payments`, then
+>   `k6 run perf/nfr-01-2-alerts.js -e BASE_URL=… -e WORKLOAD_PROFILE=deployed -e ADMIN_EMAIL=… -e ADMIN_PASSWORD=…`
+>   and the same for `perf/nfr-01-1-incidents.js`. Credentials come from the environment, never from the repository.
+
+---
 
 ## Sprint 6 — AI Evaluation Runs (Issue #252)
 
-Evaluated on 15 November 2026, commit `d24b254` (branch `feat/ai-evaluation-runs`), using deterministic mock providers and rule-based classifiers.
-Model identifier: `qwen2.5:0.5b` (evaluation script default; mock providers used for CI).
+Evaluated on 19 November 2026 across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
+Model evaluated: `qwen2.5:0.5b` (the model configured in `.env.example` and `compose.yaml` for `OllamaProvider`).
 
 ### AI-2: AI SRE Scenario Investigation
 
 Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml`.
 
-- **Top-1 Cause Accuracy:** 5/5 (100% on 5 demo scenarios)
-- **Mean Time to First Hypothesis:** < 50 ms (mock provider; production latency depends on Ollama)
+- **Top-1 Cause Accuracy:** 5/5 on 5 demo scenarios
+- **Production Provider Execution (`qwen2.5:0.5b` via `OllamaProvider`):** Mean time to first hypothesis: 6.4 s (1.2 s – 2.8 s per turn over multi-turn tool investigation).
+- **Unit Test Baseline (Hermetic `ScenarioEvaluatorProvider`):** < 50 ms for hermetic CI assertions.
 
 | Scenario | Service | Fault Switch | Top-1 Hypothesis Matches Real Cause |
 |---|---|---|---|
@@ -92,10 +151,12 @@ Demo data is cleaner than real production; report results as "5/5 on 5 demo scen
 
 ### AI-3: Drafting Verification Checklist
 
-Evaluation across all writing kinds (SUMMARY, STATUS_UPDATE, POSTMORTEM) with adversarial mock provider injecting fabricated references (`INC-999`, `entry #999`).
+Evaluation across all writing kinds (SUMMARY, STATUS_UPDATE, POSTMORTEM) with real and adversarial inputs to verify reference sanitization and schema adherence.
 
 - **Checklist Pass Rate:** 3/3 (100%)
-- **Fabricated Reference Leakage Rate:** 0.0% (100% rejection of `INC-999` and `entry #999`)
+- **Fabricated Reference Leakage Rate:** 0.0% (100% rejection of fabricated `INC-999` and `entry #999`)
+- **Production Provider Execution (`qwen2.5:0.5b` via `OllamaProvider`):** Real generation latency 2.1 s – 4.5 s per draft.
+- **Unit Test Baseline (Hermetic `DraftingAdversarialProvider`):** < 20 ms for CI assertions.
 
 | Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Checklist Result |
 |---|---|---|---|---|
@@ -105,24 +166,20 @@ Evaluation across all writing kinds (SUMMARY, STATUS_UPDATE, POSTMORTEM) with ad
 
 ### AI-4: Triage Severity Classification
 
-Evaluation against 25 labelled test cases in `ai-service/data/triage_eval_set.jsonl`.
+Evaluated against the 25 hand-labelled cases in `ai-service/data/triage_eval_set.jsonl` using the app's actual rule-based triage hint service (`TriageHintService` in #283 / `_classify_severity` in `ai-service/main.py`), replacing the earlier circular `triage.py` script.
 
-- **Overall Triage Accuracy:** 25/25 (100% on 25 labelled cases)
+- **Overall Triage Accuracy:** 11/25 (44.0% on 25 labelled cases across 13 services)
 
 | Severity Level | Labelled Cases | Correctly Classified | Accuracy |
 |---|---|---|---|
-| **SEV1** | 6 | 6 | 100% |
-| **SEV2** | 7 | 7 | 100% |
-| **SEV3** | 6 | 6 | 100% |
-| **SEV4** | 6 | 6 | 100% |
+| **SEV1** | 6 | 3 | 50.0% |
+| **SEV2** | 7 | 2 | 28.6% |
+| **SEV3** | 6 | 5 | 83.3% |
+| **SEV4** | 6 | 1 | 16.7% |
 
 ### Notes
 
-- Evaluation script: `ai-service/ai_evaluation.py`
+- Evaluation runner: `ai-service/ai_evaluation.py`
 - Automated tests: `ai-service/tests/test_ai_evaluation.py`
-- All evaluations run hermetically in CI with mock providers (no Ollama required)
-- The triage classifier uses deterministic keyword patterns aligned with `docs/2-design/severity-guide.md`
-- Triage evaluation set: 25 hand-labelled cases covering SEV1–SEV4 across 13 service types
-- AI-2 uses `ScenarioEvaluatorProvider` replaying recorded fixture data from `ai-service/data/fixtures/scenarios/`
-- AI-3 uses `DraftingAdversarialProvider` injecting fabricated IDs to test `sanitize_draft_text` rejection
-- These results are on small evaluation sets with mock providers; they are not general model accuracy
+- AI-4 evaluation scores the app's real `_classify_severity` from PR #283 against `ai-service/data/triage_eval_set.jsonl` rather than an isolated rule file.
+- AI-2 and AI-3 evaluation runs use `OllamaProvider` with the app's configured model `qwen2.5:0.5b`; deterministic scripted providers (`ScenarioEvaluatorProvider` and `DraftingAdversarialProvider`) are maintained strictly as hermetic unit test fixtures.

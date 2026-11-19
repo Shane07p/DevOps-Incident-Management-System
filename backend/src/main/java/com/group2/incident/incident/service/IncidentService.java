@@ -41,6 +41,7 @@ import com.group2.incident.incident.repository.IncidentSearchRow;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
 import com.group2.incident.notification.entity.NotificationKind;
 import com.group2.incident.notification.service.NotificationService;
+import com.group2.incident.postmortem.service.PostmortemService;
 import com.group2.incident.deploy.entity.IncidentDeployment;
 import com.group2.incident.deploy.repository.IncidentDeploymentRepository;
 import com.group2.incident.org.entity.Membership;
@@ -85,6 +86,7 @@ public class IncidentService {
 	private final DeploymentRepository deploymentRepository;
 	private final IncidentDeploymentRepository incidentDeploymentRepository;
 	private final TransitionPolicy transitionPolicy;
+	private final PostmortemService postmortemService;
 	private final Clock clock;
 
 	@Transactional
@@ -401,17 +403,32 @@ public class IncidentService {
 
 	/** Persists a comment as an independent timeline insert, including for closed incidents. */
 	@Transactional
-	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId, boolean viaMcp) {
 		Incident incident = requireIncident(incidentId);
 		AppUser actor = requireActor(actorId);
+		String details = viaMcp ? comment + " (via MCP)" : comment;
 		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
 				incident,
 				actor,
 				TimelineEventType.COMMENT,
-				comment,
+				details,
 				clock.instant()
 		));
+		if (viaMcp) {
+			auditService.record(
+					actor,
+					AuditAction.INCIDENT_COMMENT_ADDED,
+					AuditItemType.INCIDENT,
+					incident.getId(),
+					details
+			);
+		}
 		return toTimelineEntryResponse(entry);
+	}
+
+	@Transactional
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+		return addComment(incidentId, comment, actorId, false);
 	}
 
 	/** Adds an evidence link without changing incident version or status. */
@@ -513,7 +530,7 @@ public class IncidentService {
 	 * stops the response clock, and cancels pending escalation.
 	 */
 	@Transactional
-	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId, boolean viaMcp) {
 		if (request == null || request.expectedVersion() == null) {
 			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
 		}
@@ -539,7 +556,7 @@ public class IncidentService {
 
 		escalationService.cancelTaskForIncident(incidentId, now);
 
-		String details = "Acknowledged by " + actor.getDisplayName();
+		String details = "Acknowledged by " + actor.getDisplayName() + (viaMcp ? " via MCP" : "");
 		TimelineEntry timelineEntry = new TimelineEntry(
 				incident,
 				actor,
@@ -549,8 +566,23 @@ public class IncidentService {
 		);
 		timelineEntryRepository.save(timelineEntry);
 
+		if (viaMcp) {
+			auditService.record(
+					actor,
+					AuditAction.INCIDENT_ACKNOWLEDGED,
+					AuditItemType.INCIDENT,
+					incident.getId(),
+					"Acknowledged via MCP by " + actor.getDisplayName()
+			);
+		}
+
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		return toResponse(incident, timeline);
+	}
+
+	@Transactional
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+		return acknowledgeIncident(incidentId, request, actorId, false);
 	}
 
 	/**
@@ -581,6 +613,11 @@ public class IncidentService {
 
 		if (!transitionPolicy.isLegal(currentStatus, newStatus)) {
 			throw new ConflictException("Cannot transition incident from " + currentStatus + " to " + newStatus);
+		}
+
+		// D17: a SEV1 or SEV2 incident closes only with a REVIEWED postmortem; SEV3 and SEV4 close without one.
+		if (newStatus == IncidentStatus.CLOSED) {
+			postmortemService.requireReviewedForClosure(incident);
 		}
 
 		if (newStatus == IncidentStatus.RESOLVED) {

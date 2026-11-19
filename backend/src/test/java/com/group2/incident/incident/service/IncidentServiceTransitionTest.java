@@ -71,6 +71,9 @@ class IncidentServiceTransitionTest {
 	@Mock
 	private com.group2.incident.auth.repository.AppUserRepository appUserRepository;
 
+	@Mock
+	private com.group2.incident.postmortem.service.PostmortemService postmortemService;
+
 	@Captor
 	private ArgumentCaptor<TimelineEntry> timelineCaptor;
 
@@ -97,6 +100,7 @@ class IncidentServiceTransitionTest {
 				null,
 				null,
 				transitionPolicy,
+				postmortemService,
 				FIXED_CLOCK
 		);
 

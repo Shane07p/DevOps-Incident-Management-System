@@ -109,7 +109,8 @@ class IncidentStatusTest {
 	@Test
 	@DisplayName("TC-FR-06.1a: Walk OPEN through to CLOSED on the normal path")
 	void tcFr06_1a_walkOpenThroughToClosedOnNormalPath() throws Exception {
-		Incident incident = createIncident(IncidentStatus.OPEN, engineer);
+		// SEV3 closes without a postmortem (D17); PostmortemTest covers the SEV1 and SEV2 closure rule.
+		Incident incident = createIncident(IncidentStatus.OPEN, engineer, Severity.SEV3);
 		String token = tokenFor("status-engineer");
 		long currentVersion = incident.getVersion();
 
@@ -384,7 +385,8 @@ class IncidentStatusTest {
 	@Test
 	@DisplayName("FR-16.2: RESOLVED stops the resolution clock once; the due times stay as they were")
 	void resolvingStopsTheResolutionClockAndKeepsTheTargets() throws Exception {
-		Incident incident = createIncident(IncidentStatus.MONITORING, engineer);
+		// SEV3, so closing needs no postmortem (D17) and the test stays on the resolution clock.
+		Incident incident = createIncident(IncidentStatus.MONITORING, engineer, Severity.SEV3);
 		String token = tokenFor("status-engineer");
 		String dueBefore = incident.getResolutionDueAt().toString();
 
@@ -424,11 +426,15 @@ class IncidentStatusTest {
 	}
 
 	private Incident createIncident(IncidentStatus status, AppUser assignee) {
+		return createIncident(status, assignee, Severity.SEV2);
+	}
+
+	private Incident createIncident(IncidentStatus status, AppUser assignee, Severity severity) {
 		Incident incident = new Incident(
 				"Test Incident " + nextIncidentNumber,
 				"Testing incident status transitions",
 				paymentsService,
-				Severity.SEV2,
+				severity,
 				status,
 				engineer,
 				clock.instant(),

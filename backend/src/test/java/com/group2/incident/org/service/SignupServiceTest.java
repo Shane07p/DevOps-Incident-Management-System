@@ -11,6 +11,7 @@ import com.group2.incident.audit.service.AuditService;
 import com.group2.incident.auth.dto.LoginResponse;
 import com.group2.incident.auth.entity.AppUser;
 import com.group2.incident.auth.repository.AppUserRepository;
+import com.group2.incident.auth.repository.UserIdentityRepository;
 import com.group2.incident.auth.service.AuthService;
 import com.group2.incident.common.error.ConflictException;
 import com.group2.incident.org.dto.SignupRequest;
@@ -49,6 +50,7 @@ class SignupServiceTest {
 	private static final Instant NOW = Instant.parse("2026-11-03T10:00:00Z");
 
 	@Mock private AppUserRepository users;
+	@Mock private UserIdentityRepository identities;
 	@Mock private OrganizationRepository orgs;
 	@Mock private MembershipRepository memberships;
 	@Mock private PasswordEncoder passwordEncoder;
@@ -62,7 +64,7 @@ class SignupServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		signupService = new SignupService(users, orgs, memberships, passwordEncoder, auditService, authService, tx,
+		signupService = new SignupService(users, identities, orgs, memberships, passwordEncoder, auditService, authService, tx,
 				Clock.fixed(NOW, ZoneOffset.UTC));
 		when(tx.execute(any())).thenAnswer(inv -> inv.<TransactionCallback<?>>getArgument(0).doInTransaction(null));
 		when(users.findByEmail("ana@same.test")).thenReturn(Optional.empty());

@@ -160,7 +160,9 @@ describe('Declare incident form', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Declare incident' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/incidents/7'))
-    const [[url, init]] = postsTo(fetchMock)
+    const post = postsTo(fetchMock).find(([url]) => url === '/api/incidents')
+    expect(post).toBeDefined()
+    const [url, init] = post!
     expect(url).toBe('/api/incidents')
     expect(JSON.parse(String(init?.body))).toEqual({
       title: 'Checkout failing',

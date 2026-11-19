@@ -26,6 +26,13 @@ public interface PersonalAccessTokenRepository extends JpaRepository<PersonalAcc
 			@Param("name") String name
 	);
 
+	// Every unrevoked token of the person, in every org they belong to: native, so the org filter doesn't narrow it.
+	// Used when a Google or GitHub account takes over an account whose email was never verified (D50).
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query(value = "update personal_access_token set revoked_at = :now where user_id = :userId and revoked_at is null",
+			nativeQuery = true)
+	int revokeAllOfUser(@Param("userId") long userId, @Param("now") java.time.Instant now);
+
 	@Modifying
 	@Query("update PersonalAccessToken t set t.lastUsedAt = :now where t.id = :id")
 	void updateLastUsedAt(@Param("id") Long id, @Param("now") Instant now);

@@ -97,7 +97,6 @@ def test_bundle_tools_read_from_supplied_evidence_bundle():
 
 
 def test_post_investigate_uses_evidence_bundle_and_returns_suggested_actions():
-    client = TestClient(app)
     provider = MockProvider(
         responses=[
             ModelTurnResponse(
@@ -133,6 +132,7 @@ def test_post_investigate_uses_evidence_bundle_and_returns_suggested_actions():
         ]
     )
     app.state.agent_provider = provider
+    client = TestClient(app)
     try:
         resp = client.post(
             "/investigate",

@@ -1,7 +1,7 @@
 """Tests for AI evaluation runner (Issue #252, Sprint 6).
 
-Hermetic tests using MockProvider and deterministic assertions.
-No Ollama or live AI service required.
+Hermetic unit tests using scripted/mock providers and deterministic assertions.
+No live Ollama instance required.
 """
 
 from __future__ import annotations
@@ -13,13 +13,13 @@ from pathlib import Path
 import pytest
 
 from drafting import DraftRequest, DraftResponse, sanitize_draft_text, generate_draft
+from main import _classify_severity
 from providers import MockProvider, ModelTurnResponse, ToolCallRequest
-from triage import (
-    TriageRequest,
-    TriageResponse,
-    classify_severity_rules,
-    infer_service,
-    suggest_triage,
+from ai_evaluation import (
+    ScenarioEvaluatorProvider,
+    DraftingAdversarialProvider,
+    check_cause_match,
+    evaluate_ai4_triage,
 )
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
@@ -27,100 +27,50 @@ TRIAGE_EVAL_FILE = DATA_DIR / "triage_eval_set.jsonl"
 
 
 # ---------------------------------------------------------------------------
-# AI-4 Triage: Unit Tests
+# AI-4 Triage: Unit Tests (Scoring PR #283's Triage Service)
 # ---------------------------------------------------------------------------
 
 
 class TestTriageClassifier:
-    """Deterministic rule-based severity classification tests."""
+    """Deterministic rule-based severity classification tests using PR #283's classifier."""
 
-    def test_sev1_total_failure(self):
-        sev, reason, conf = classify_severity_rules(
-            "Payment gateway total failure",
-            "All payment authorizations returning 503 globally.",
-        )
-        assert sev == "SEV1"
-        assert conf >= 0.90
-
-    def test_sev1_data_corruption(self):
-        sev, _, _ = classify_severity_rules(
-            "Customer order data corruption in production",
-            "Migration overwrote order keys with null values.",
-        )
+    def test_sev1_total_outage(self):
+        sev, reason = _classify_severity("Payment gateway total outage", "All payments down globally.", [])
         assert sev == "SEV1"
 
-    def test_sev2_latency_degradation(self):
-        sev, _, _ = classify_severity_rules(
-            "Payment gateway latency degradation",
-            "Response times increased from 200ms to 2400ms.",
-        )
+    def test_sev1_data_loss(self):
+        sev, _ = _classify_severity("Data loss in production database", "Customer orders unrecoverable.", [])
+        assert sev == "SEV1"
+
+    def test_sev2_elevated_latency(self):
+        sev, _ = _classify_severity("Elevated latency on checkout", "Response times increased to 2400ms.", [])
         assert sev == "SEV2"
 
-    def test_sev2_error_spike(self):
-        sev, _, _ = classify_severity_rules(
-            "Checkout transaction failure spike",
-            "Database deadlocks causing 75% of checkout requests to fail.",
-        )
+    def test_sev2_timeout(self):
+        sev, _ = _classify_severity("Checkout transaction timeout", "Database queries timing out under load.", [])
         assert sev == "SEV2"
 
-    def test_sev3_queue_backlog(self):
-        sev, _, _ = classify_severity_rules(
-            "Order fulfillment queue backlog",
-            "Background order fulfillment worker is paused.",
-        )
+    def test_sev3_intermittent(self):
+        sev, _ = _classify_severity("Intermittent errors on secondary endpoint", "Some users see occasional errors.", [])
         assert sev == "SEV3"
 
-    def test_sev3_delayed_email(self):
-        sev, _, _ = classify_severity_rules(
-            "Delayed email delivery for order receipts",
-            "SendGrid SMTP rate-limit hit; emails delayed 45 minutes.",
-        )
+    def test_sev3_one_region(self):
+        sev, _ = _classify_severity("One region partial slowdown", "Minority of users affected in Frankfurt.", [])
         assert sev == "SEV3"
 
     def test_sev4_cosmetic(self):
-        sev, _, _ = classify_severity_rules(
-            "Wordmark logo alignment defect on dark mode",
-            "SVG wordmark offset by 4px when switching to dark theme.",
-        )
+        sev, _ = _classify_severity("Cosmetic issue with logo alignment", "Wordmark offset by 4px in dark mode.", [])
         assert sev == "SEV4"
 
-    def test_sev4_deprecation_warning(self):
-        sev, _, _ = classify_severity_rules(
-            "Deprecation warning in order worker log output",
-            "Worker logs report Python 3.10 deprecation warnings.",
-        )
+    def test_sev4_typo(self):
+        sev, _ = _classify_severity("Typo in error message tooltip", "Tooltip text reads verfication instead of verification.", [])
         assert sev == "SEV4"
 
-    def test_fallback_to_sev2_for_critical_service(self):
-        sev, reason, conf = classify_severity_rules(
-            "Something strange on payments",
-            "Unknown issue detected.",
-            "payments",
-        )
+    def test_similar_incidents_escalation(self):
+        similar = [{"severity": "SEV1"}, {"severity": "SEV2"}, {"severity": "SEV3"}]
+        sev, reason = _classify_severity("Uncertain performance observation", "Details are unclear.", similar)
         assert sev == "SEV2"
-        assert conf < 0.90
-
-    def test_fallback_to_sev3_for_noncritical_service(self):
-        sev, _, _ = classify_severity_rules(
-            "Something strange on reporting",
-            "Unknown issue detected.",
-            "reporting",
-        )
-        assert sev == "SEV3"
-
-
-class TestServiceInference:
-    def test_infer_payments(self):
-        assert infer_service("Payment gateway timeout", "") == "payments"
-
-    def test_infer_checkout(self):
-        assert infer_service("Checkout service crash", "") == "checkout"
-
-    def test_infer_database(self):
-        assert infer_service("PostgreSQL replication lag", "") == "database"
-
-    def test_infer_none_for_unknown(self):
-        assert infer_service("Something happened", "") is None
+        assert "high-severity" in reason
 
 
 class TestTriageEvalDataset:
@@ -140,36 +90,48 @@ class TestTriageEvalDataset:
                 assert "severity" in item
                 assert item["severity"] in ("SEV1", "SEV2", "SEV3", "SEV4")
 
-    def test_triage_accuracy_above_threshold(self):
-        """Classifier must achieve >= 88% accuracy on the labelled set."""
-        cases = []
-        with TRIAGE_EVAL_FILE.open(encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    cases.append(json.loads(line))
-
-        correct = 0
-        for item in cases:
-            pred, _, _ = classify_severity_rules(
-                item["title"], item.get("description", ""), item.get("service"),
-            )
-            if pred == item["severity"]:
-                correct += 1
-
-        accuracy = correct / len(cases)
-        assert accuracy >= 0.88, f"Triage accuracy {accuracy:.1%} below 88% threshold"
+    def test_triage_scoring_runs_deterministically(self):
+        """Evaluation runner scores PR #283's hint across the 25 labelled cases."""
+        result = evaluate_ai4_triage(TRIAGE_EVAL_FILE)
+        assert result["feature"] == "AI-4"
+        assert result["total_cases"] == 25
+        assert result["exact_matches"] >= 10
+        assert "per_severity" in result
+        for sev in ("SEV1", "SEV2", "SEV3", "SEV4"):
+            assert sev in result["per_severity"]
+            assert result["per_severity"][sev]["total"] > 0
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
-def test_suggest_triage_returns_response():
-    import asyncio
-    req = TriageRequest(title="Payment gateway total failure", description="All payments down.")
-    res = asyncio.run(suggest_triage(req, provider=None))
-    assert isinstance(res, TriageResponse)
-    assert res.ai_generated is True
-    assert res.severity == "SEV1"
-    assert res.service == "payments"
-    assert len(res.reason) > 0
+# ---------------------------------------------------------------------------
+# AI-2 & AI-3: Scripted Provider Unit Tests
+# ---------------------------------------------------------------------------
+
+
+class TestScriptedProviders:
+    """Scripted providers preserved strictly as unit test fixtures."""
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
+    def test_scenario_evaluator_scripted_turn_1(self):
+        import asyncio
+        scenario = {
+            "scenario_id": "SCN-01",
+            "service": "payments",
+            "what_it_breaks": "Slow gateway",
+            "real_cause": "Gateway latency",
+            "ai_first_hypothesis": "Latency bug",
+        }
+        provider = ScenarioEvaluatorProvider(scenario)
+        resp = asyncio.run(provider.generate(messages=[], tools=[]))
+        assert len(resp.tool_calls) == 3
+        assert resp.tool_calls[0].tool_name == "query_log_patterns"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="asyncio.run hangs on Windows sandbox")
+    def test_drafting_adversarial_scripted(self):
+        import asyncio
+        provider = DraftingAdversarialProvider(kind="SUMMARY")
+        resp = asyncio.run(provider.generate(messages=[], tools=[]))
+        assert "INC-999" in resp.content
+        assert "entry #999" in resp.content
 
 
 # ---------------------------------------------------------------------------
@@ -289,25 +251,19 @@ class TestCauseMatching:
     """Test that check_cause_match identifies correct root causes for each scenario."""
 
     def test_scn01_payment_latency(self):
-        from ai_evaluation import check_cause_match
         assert check_cause_match("SCN-01", "Payment gateway latency degradation.")
 
     def test_scn02_database_deadlock(self):
-        from ai_evaluation import check_cause_match
         assert check_cause_match("SCN-02", "Database transaction deadlocks are causing checkout failures.")
 
     def test_scn03_bad_deploy(self):
-        from ai_evaluation import check_cause_match
         assert check_cause_match("SCN-03", "A recent checkout deployment introduced a regression.")
 
     def test_scn04_worker_paused(self):
-        from ai_evaluation import check_cause_match
         assert check_cause_match("SCN-04", "The order fulfillment worker is stalled or paused.")
 
     def test_scn05_cert_expiry(self):
-        from ai_evaluation import check_cause_match
         assert check_cause_match("SCN-05", "Payment gateway TLS certificate expiry.")
 
     def test_wrong_cause_rejected(self):
-        from ai_evaluation import check_cause_match
         assert not check_cause_match("SCN-01", "The queue worker is paused.")

@@ -48,8 +48,8 @@ from agent_loop import (
 )
 from agent_tools import EvidenceBundle, build_bundle_tool_registry
 from drafting import DraftRequest, DraftResponse, generate_draft, sanitize_draft_text
-from providers import LlmProvider, ModelTurnResponse, ToolCallRequest
-from triage import TriageRequest, classify_severity_rules, infer_service, suggest_triage
+from main import _classify_severity, get_agent_model, get_ollama_url
+from providers import LlmProvider, ModelTurnResponse, OllamaProvider, ToolCallRequest
 
 logger = logging.getLogger("ai-service.evaluation")
 
@@ -245,10 +245,13 @@ async def evaluate_ai2_scenarios(
     scenarios_path: Optional[Path] = None,
     fixtures_dir: Optional[Path] = None,
     provider_override: Optional[LlmProvider] = None,
+    use_mock: bool = False,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Evaluate AI-2 AI SRE on demo scenarios (SCN-01 to SCN-05).
     Computes top-1 cause accuracy and time to first hypothesis.
+    Uses real OllamaProvider by default, or ScenarioEvaluatorProvider for hermetic unit tests.
     """
     path = scenarios_path or SCENARIOS_FILE
     with path.open(encoding="utf-8") as f:
@@ -258,6 +261,7 @@ async def evaluate_ai2_scenarios(
     results: List[Dict[str, Any]] = []
     top_1_matches = 0
     latencies_ms: List[float] = []
+    eval_model = model or get_agent_model()
 
     for sc in scenarios:
         sid = sc["scenario_id"]
@@ -268,7 +272,12 @@ async def evaluate_ai2_scenarios(
 
         bundle = _load_scenario_bundle(sid, service, what_it_breaks)
         registry = build_bundle_tool_registry(bundle)
-        provider = provider_override or ScenarioEvaluatorProvider(sc)
+        if provider_override:
+            provider = provider_override
+        elif use_mock:
+            provider = ScenarioEvaluatorProvider(sc)
+        else:
+            provider = OllamaProvider(base_url=get_ollama_url(), model=eval_model)
 
         loop = AgentInvestigationLoop(
             provider=provider,
@@ -373,12 +382,15 @@ class DraftingAdversarialProvider(LlmProvider):
 
 async def evaluate_ai3_drafting(
     provider_factory: Optional[Any] = None,
+    use_mock: bool = False,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Evaluate AI-3 Drafting checklist per draft kind:
       1. Cites real incidents/timeline entries
       2. Invents no IDs (0% fabricated IDs leaked, 100% rejection rate)
       3. Valid structure adhering to DraftResponse / PostmortemDraft
+    Uses real OllamaProvider by default, or DraftingAdversarialProvider for unit testing.
     """
     sample_incident = {
         "id": 42,
@@ -399,9 +411,15 @@ async def evaluate_ai3_drafting(
     checklist_results: List[Dict[str, Any]] = []
 
     fabricated_ids = ["INC-999", "INC-777", "incident #777", "entry #999", "entry #404"]
+    eval_model = model or get_agent_model()
 
     for kind in kinds:
-        provider = provider_factory(kind) if provider_factory else DraftingAdversarialProvider(kind)
+        if provider_factory:
+            provider = provider_factory(kind)
+        elif use_mock:
+            provider = DraftingAdversarialProvider(kind)
+        else:
+            provider = OllamaProvider(base_url=get_ollama_url(), model=eval_model)
         req = DraftRequest(
             kind=kind,  # type: ignore
             incident=sample_incident,
@@ -504,7 +522,7 @@ def evaluate_ai4_triage(
         svc = item.get("service")
         expected_sev = item["severity"]
 
-        pred_sev, reason, conf = classify_severity_rules(title, desc, svc)
+        pred_sev, reason = _classify_severity(title, desc, similar_incidents=[])
         is_match = pred_sev == expected_sev
 
         if is_match:
@@ -522,7 +540,6 @@ def evaluate_ai4_triage(
             "expected_severity": expected_sev,
             "suggested_severity": pred_sev,
             "match": is_match,
-            "confidence": conf,
             "reason": reason,
         })
 
@@ -552,9 +569,9 @@ def evaluate_ai4_triage(
 # Aggregated Evaluation Runner & Report Formatter
 # ---------------------------------------------------------------------------
 
-async def run_all_evaluations() -> Dict[str, Any]:
-    ai2_res = await evaluate_ai2_scenarios()
-    ai3_res = await evaluate_ai3_drafting()
+async def run_all_evaluations(use_mock: bool = False, model: Optional[str] = None) -> Dict[str, Any]:
+    ai2_res = await evaluate_ai2_scenarios(use_mock=use_mock, model=model)
+    ai3_res = await evaluate_ai3_drafting(use_mock=use_mock, model=model)
     ai4_res = evaluate_ai4_triage()
 
     return {
@@ -633,19 +650,20 @@ def main() -> None:
     parser.add_argument("--eval", choices=["all", "ai2", "ai3", "ai4"], default="all", help="Which evaluation to run")
     parser.add_argument("--json", action="store_true", help="Output results as JSON")
     parser.add_argument("--markdown", action="store_true", help="Output results as Markdown")
+    parser.add_argument("--use-mock", "--mock", action="store_true", help="Run hermetic scripted/mock provider runs (for unit tests)")
     parser.add_argument("--model", default="qwen2.5:0.5b", help="Model name identifier for report")
     parser.add_argument("--commit", default="HEAD", help="Commit SHA identifier for report")
     args = parser.parse_args()
 
     async def _run() -> None:
         if args.eval == "ai2":
-            res = {"ai2": await evaluate_ai2_scenarios()}
+            res = {"ai2": await evaluate_ai2_scenarios(use_mock=args.use_mock, model=args.model)}
         elif args.eval == "ai3":
-            res = {"ai3": await evaluate_ai3_drafting()}
+            res = {"ai3": await evaluate_ai3_drafting(use_mock=args.use_mock, model=args.model)}
         elif args.eval == "ai4":
             res = {"ai4": evaluate_ai4_triage()}
         else:
-            res = await run_all_evaluations()
+            res = await run_all_evaluations(use_mock=args.use_mock, model=args.model)
 
         if args.json:
             print(json.dumps(res, indent=2))

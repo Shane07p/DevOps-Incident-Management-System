@@ -12,6 +12,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -114,15 +115,25 @@ public class AiDraftClient {
 			DraftKind kind,
 			IncidentEvidenceContext incident,
 			List<TimelineBundleItem> timeline,
-			List<AcceptedHypothesisInput> acceptedHypotheses,
-			List<String> followUps
+			List<HypothesisInput> hypotheses,
+			List<FollowUpInput> followUps,
+			List<String> acceptedActions
 	) {
 	}
 
-	public record AcceptedHypothesisInput(
+	public record HypothesisInput(
 			int rank,
 			String title,
 			double confidence
+	) {
+	}
+
+	public record FollowUpInput(
+			String title,
+			String kind,
+			String owner,
+			LocalDate dueDate,
+			String status
 	) {
 	}
 

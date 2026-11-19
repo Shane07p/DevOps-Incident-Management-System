@@ -112,6 +112,7 @@ class AiDraftClientTest {
 						"Payments", "SEV2", "OPEN", Instant.parse("2026-11-10T10:00:00Z")),
 				List.of(),
 				List.of(),
+				List.of(),
 				List.of()
 		);
 	}

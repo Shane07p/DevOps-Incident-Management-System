@@ -576,6 +576,18 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-19.2b | Concurrency / conflict | An action that has already been decided is decided again | Refused with 409 Conflict | `InvestigationIntegrationTest.decideAlreadyDecidedActionReturnsConflict` | Automated |
 | TC-FR-19.3a | Negative | An action is accepted or rejected | Nothing is executed; incident status remains unchanged | `InvestigationIntegrationTest.acceptAndRejectActionsAreAttributedOnTimelineAndExecuteNothing` | Automated |
 
+### AI-3 drafting (Issue #246, FR-11.4)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-11.4a | Equivalence | Request SUMMARY, STATUS_UPDATE, and POSTMORTEM drafts | Each returns kind, text, generatedAt, and the six postmortem fields only for POSTMORTEM; drafting saves no timeline entries | `DraftIntegrationTest.eachDraftKindReturnsItsExpectedShapeWithoutSavingAnything`, `test_drafting.py` | In review |
+| TC-FR-11.4b | Negative | AI output invents an INC- reference or timeline entry reference | Fabricated references are removed from text and structured postmortem fields; real references remain | `DraftIntegrationTest.inventedIncidentAndEntryReferencesAreRemoved`, `test_drafting.py::test_draft_drops_invented_references` | In review |
+| TC-FR-11.4c | Negative | AI is unset, down, or slow | Existing incident gets 503 and remains usable; incident lookup runs first, so missing or other-org incidents get 404 | `DraftTransactionTest.disabledAiReturns503OnlyAfterIncidentLookup`, `DraftIntegrationTest.aiDownReturns503AndIncidentStillWorks`, `AiDraftClientTest`, `OrgIsolationTest` | In review |
+| TC-FR-11.4d | Role-based access | Viewer requests a draft | 403 Forbidden; Engineer/Admin requests follow the incident lookup and AI availability rules | `DraftIntegrationTest.viewerGets403`, `SecurityMatrixTest` | In review |
+| TC-FR-11.4e | Transaction boundary | A draft loads its evidence and calls AI | Evidence is copied into plain records in a short transaction; the AI call runs outside a transaction | `DraftTransactionTest.draftingCallsAiOutsideDatabaseTransaction` | In review |
+| TC-FR-11.4f | Prompt contract | Any draft kind includes AI hypotheses | Prompt marks hypotheses unconfirmed; a suspected cause is never a confirmed root cause unless the timeline confirms it | `test_drafting.py::test_prompt_marks_hypotheses_unconfirmed` | In review |
+| TC-FR-11.4g | Evidence contract | Incident has follow-ups and an investigation with accepted, rejected, and pending actions | Real follow-ups include title, kind, owner display name, due date, status; latest hypotheses retain rank/title/confidence; accepted AI suggestions are sent separately and are not treated as executed | `DraftIntegrationTest.sendsRealFollowUpsAndLatestHypothesesSeparatelyFromAcceptedActions`, `test_drafting.py::test_prompt_keeps_follow_ups_separate_from_accepted_ai_suggestions` | In review |
+
 ### AI-4 Triage hint on declare form (Issue #247)
 
 | ID | Technique | Input or condition | Expected | Test | Status |

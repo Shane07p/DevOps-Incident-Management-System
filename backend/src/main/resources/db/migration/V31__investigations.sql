@@ -1,4 +1,4 @@
--- V24: Investigation tables for AI SRE (Issue #242)
+-- V31: Investigation tables for AI SRE (Issue #242)
 
 CREATE TABLE investigation (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -17,26 +17,31 @@ CREATE INDEX idx_investigation_org      ON investigation(org_id);
 
 CREATE TABLE investigation_hypothesis (
     id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    org_id            BIGINT NOT NULL REFERENCES organization(id),
     investigation_id  BIGINT NOT NULL REFERENCES investigation(id) ON DELETE CASCADE,
     rank              INT    NOT NULL,
-    title             VARCHAR(500) NOT NULL,
+    title             TEXT   NOT NULL,
     confidence        DOUBLE PRECISION NOT NULL,
     reasoning         TEXT
 );
 
 CREATE INDEX idx_inv_hyp_investigation ON investigation_hypothesis(investigation_id);
+CREATE INDEX idx_inv_hyp_org           ON investigation_hypothesis(org_id);
 
 CREATE TABLE investigation_evidence (
     id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    org_id        BIGINT NOT NULL REFERENCES organization(id),
     hypothesis_id BIGINT NOT NULL REFERENCES investigation_hypothesis(id) ON DELETE CASCADE,
-    kind          VARCHAR(100) NOT NULL,
+    kind          TEXT NOT NULL,
     text          TEXT NOT NULL
 );
 
 CREATE INDEX idx_inv_ev_hypothesis ON investigation_evidence(hypothesis_id);
+CREATE INDEX idx_inv_ev_org        ON investigation_evidence(org_id);
 
 CREATE TABLE investigation_action (
     id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    org_id            BIGINT NOT NULL REFERENCES organization(id),
     investigation_id  BIGINT NOT NULL REFERENCES investigation(id) ON DELETE CASCADE,
     text              TEXT   NOT NULL,
     decision          VARCHAR(20),
@@ -46,3 +51,4 @@ CREATE TABLE investigation_action (
 );
 
 CREATE INDEX idx_inv_action_investigation ON investigation_action(investigation_id);
+CREATE INDEX idx_inv_action_org           ON investigation_action(org_id);

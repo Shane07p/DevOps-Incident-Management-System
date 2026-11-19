@@ -2,9 +2,10 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { useState, type MouseEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
-import { fetchLogs, fetchMetric, METRIC_LABEL, METRICS, type MetricName, type MetricSeries } from '@/api/telemetry'
+import { fetchLogs, fetchMetric, METRIC_LABEL, METRICS, type MetricSeries } from '@/api/telemetry'
 import { formatIst } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { formatMetric } from './formatMetric'
 
 const HOUR_MS = 3_600_000
 
@@ -16,18 +17,6 @@ function incidentWindow(createdAt: string, now: number) {
   const from = Date.parse(createdAt) - HOUR_MS
   const to = Math.min(now, from + 24 * HOUR_MS)
   return { from: new Date(from).toISOString(), to: new Date(to).toISOString() }
-}
-
-/** requestRate is per second, errorRate a 0-1 ratio, and latency in seconds. */
-function formatMetric(metric: MetricName, value: number) {
-  switch (metric) {
-    case 'requestRate':
-      return `${value < 10 ? value.toFixed(2) : Math.round(value)} req/s`
-    case 'errorRate':
-      return `${(value * 100).toFixed(value < 0.1 ? 2 : 1)}%`
-    default:
-      return `${Math.round(value * 1000)} ms`
-  }
 }
 
 const LEVEL_STYLE: Record<string, string> = {
@@ -46,7 +35,7 @@ const WIDTH = 300
 const HEIGHT = 96
 
 /** One metric as a line, with the moment the incident was declared marked. Hover reads a point. */
-function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt: string }) {
+export function MetricChart({ series, declaredAt, className }: { series: MetricSeries; declaredAt?: string; className?: string }) {
   const [hovered, setHovered] = useState<number | null>(null)
   const label = METRIC_LABEL[series.metric]
   const { points } = series
@@ -58,13 +47,15 @@ function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt:
   const x = (at: string) => ((Date.parse(at) - start) / span) * WIDTH
   const y = (value: number) => HEIGHT - (value / top) * (HEIGHT - 6)
   const line = points.map((point) => `${x(point.timestamp).toFixed(1)},${y(point.value).toFixed(1)}`).join(' ')
-  const declaredX = x(declaredAt)
+  const declaredX = declaredAt ? x(declaredAt) : -1
   const latest = points.at(-1)
   const shown = hovered === null ? null : points[hovered]
 
   const onMove = (event: MouseEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect()
-    const at = start + ((event.clientX - box.left) / box.width) * span
+    const width = box.width > 0 ? box.width : WIDTH
+    const left = box.left || 0
+    const at = start + ((event.clientX - left) / width) * span
     let nearest = 0
     for (let index = 1; index < points.length; index++) {
       if (Math.abs(Date.parse(points[index].timestamp) - at) < Math.abs(Date.parse(points[nearest].timestamp) - at)) nearest = index
@@ -73,7 +64,7 @@ function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt:
   }
 
   return (
-    <figure className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+    <figure className={cn('flex flex-col gap-2 rounded-lg border bg-card p-4', className)}>
       <figcaption className="flex items-baseline justify-between gap-2">
         <span className="text-sm font-semibold">{label}</span>
         <span className="font-mono text-xs text-muted-foreground tnum">
@@ -123,7 +114,7 @@ function MetricChart({ series, declaredAt }: { series: MetricSeries; declaredAt:
           </svg>
           <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
             <span>Peak {formatMetric(series.metric, max)}</span>
-            <span>Dashed line: declared</span>
+            {declaredAt && <span>Dashed line: declared</span>}
           </div>
         </>
       )}

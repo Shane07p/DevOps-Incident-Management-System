@@ -118,7 +118,9 @@ Or configure via `.claude.json`:
 
 ---
 
-## 4. Available Read Tools
+## 4. Available Tools
+
+### Read Tools
 
 | Tool | Parameters | Description | Backend API |
 |---|---|---|---|
@@ -131,10 +133,24 @@ Or configure via `.claude.json`:
 | `service_map` | none | Service dependency graph and health status | `GET /api/service-map` |
 | `get_runbook` | `service_id` (int) | Service runbooks and mitigation steps | `GET /api/services/{id}/runbooks` |
 
+### Write Tools (Sprint 5, Issue #248)
+
+| Tool | Parameters | Description | Backend API | Minimum Role |
+|---|---|---|---|---|
+| `add_comment` | `incident_id` (int), `comment` (str, 1–5000 chars) | Add a comment to an incident timeline. Shows **via MCP** attribution in the timeline and audit log. | `POST /api/incidents/{id}/comments` | ENGINEER |
+| `acknowledge` | `incident_id` (int) | Acknowledge an OPEN incident. Automatically retrieves the current incident version first to prevent stale acknowledgements. Shows **via MCP** attribution. | `POST /api/incidents/{id}/acknowledge` | ENGINEER |
+
+> [!IMPORTANT]
+> **Write Tool Security Rules:**
+> - Both write tools use the caller's personal access token exclusively. The token is never accepted as a tool argument.
+> - `acknowledge` automatically reads the current `version` from `GET /api/incidents/{id}` before submitting. The version is never hardcoded.
+> - A HTTP 409 conflict (concurrent modification) returns a readable retry message.
+> - A HTTP 403 (Viewer role) returns a readable permission-denied message.
+> - Tokens are never logged or exposed in error messages.
+> - Write tools refuse any token that is not a personal access token (`pat_...`), so everything they do shows **via MCP**.
+
 > [!NOTE]
-> - All write tools (e.g. `add_comment`, `acknowledge`, `declare_incident`) are deferred to Sprint 5 (Decision D38).
-> - All read tools require authentication via `Authorization: Bearer <token>` connection header.
-> - `get_runbook` retrieves runbooks by service ID (`GET /api/services/{id}/runbooks`).
+> The server never changes an incident's status, and never declares or closes an incident (FR-28.2).
 
 ---
 
@@ -146,9 +162,12 @@ Verify that your client can communicate with the MCP server:
    - *"List the active incidents in Settle."*
    - *"Who is currently on call for the Payments service?"*
    - *"Search past incidents for payment gateway timeouts."*
+   - *"Add a comment to incident 42: Investigating database pool exhaustion."*
+   - *"Acknowledge incident 42."*
 2. **Observe Tool Execution:**
-   - The client will invoke `list_incidents`, `who_is_on_call(service_id=1)`, or `search_incidents(query="payment gateway timeout")`.
+   - The client will invoke `list_incidents`, `who_is_on_call(service_id=1)`, `search_incidents(query="payment gateway timeout")`, `add_comment(incident_id=42, comment="Investigating database pool exhaustion.")`, or `acknowledge(incident_id=42)`.
    - Results are returned in structured format based on your access permissions in Settle.
+   - Comments and acknowledgements made via MCP show **via MCP** in the incident timeline and audit log.
 
 ---
 
@@ -159,6 +178,10 @@ Verify that your client can communicate with the MCP server:
   - Verify the header format in your client config: `Authorization: Bearer pat_...`.
 - **HTTP 403 Permission Denied:**
   - Your user role (e.g., Viewer vs. Engineer) determines which endpoints you can access.
+  - Viewers can read incidents but cannot add comments or acknowledge (ENGINEER or ADMIN required).
+- **HTTP 409 Conflict (acknowledge):**
+  - Another user or operation modified the incident between the version read and the acknowledgement submit.
+  - The tool returns a readable message: re-read the incident and retry.
 - **Connection Refused / Failed to Connect:**
   - Verify the standalone MCP server is running on `http://localhost:8001`: `python mcp_server.py`.
   - Verify `SETTLE_API_URL` points to an active Settle backend instance (default: `http://localhost:8080`).

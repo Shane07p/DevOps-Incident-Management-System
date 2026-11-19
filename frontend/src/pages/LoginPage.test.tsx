@@ -9,6 +9,10 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { mockFetch } from '@/test/fetchMock'
 import { LoginPage } from './LoginPage'
 
+// The page also asks which sign-in providers are set up (D50); these find the login request itself.
+const loginCalls = (fetchMock: ReturnType<typeof mockFetch>) =>
+  fetchMock.mock.calls.filter(([url, init]) => url === '/api/auth/login' && init?.method === 'POST')
+
 function renderLogin() {
   return render(
     <ThemeProvider>
@@ -48,7 +52,7 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Write your work email, like name@company.com.')).toBeInTheDocument()
     expect(screen.getByText('Write your password.')).toBeInTheDocument()
     expect(screen.getByLabelText('Work email')).toHaveAccessibleDescription('Write your work email, like name@company.com.')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(loginCalls(fetchMock)).toHaveLength(0)
   })
 
   it('says the email or password is wrong without saying which', async () => {
@@ -82,7 +86,7 @@ describe('LoginPage', () => {
     // The wall turns to face you first, then the app opens.
     await waitFor(() => expect(document.querySelector('.product-wall')).toHaveAttribute('data-entering', 'true'))
     expect(await screen.findByText('Home page', {}, { timeout: 3000 })).toBeInTheDocument()
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ email: 'engineer@settle.local', password: 'DevPassw0rd!' })
+    expect(JSON.parse(String(loginCalls(fetchMock)[0][1]?.body))).toEqual({ email: 'engineer@settle.local', password: 'DevPassw0rd!' })
   })
 
   it('links to sign-up', async () => {

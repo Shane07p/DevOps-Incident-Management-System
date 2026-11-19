@@ -22,6 +22,8 @@ import pytest
 
 from mcp_server import (
     _call_backend_api,
+    acknowledge,
+    add_comment,
     get_backend_api_url,
     get_backend_timeout,
     get_caller_token,
@@ -57,10 +59,10 @@ def _mock_response(status_code: int = 200, json_data=None, text=""):
     return httpx.Response(status_code=status_code, content=content, headers=headers, request=request)
 
 
-# 1. Registered tools check (all 8 read tools registered now that #154 and #155 merged)
+# 1. Registered tools check (8 read tools + 2 write tools from Sprint 5 Issue #248)
 def test_each_registered_mcp_tool_exists_with_expected_name():
     tool_names = registered_tool_names()
-    expected_read_tools = {
+    expected_tools = {
         "list_incidents",
         "get_incident",
         "search_incidents",
@@ -69,8 +71,10 @@ def test_each_registered_mcp_tool_exists_with_expected_name():
         "list_alerts",
         "service_map",
         "get_runbook",
+        "add_comment",
+        "acknowledge",
     }
-    for expected in expected_read_tools:
+    for expected in expected_tools:
         assert expected in tool_names, f"Expected tool '{expected}' not registered in FastMCP"
 
 
@@ -85,6 +89,8 @@ def test_no_tool_accepts_token_argument():
         list_alerts,
         service_map,
         get_runbook,
+        add_comment,
+        acknowledge,
     ]
     for func in tool_funcs:
         sig = inspect.signature(func)
@@ -489,13 +495,12 @@ def test_no_token_leaks_in_tool_output_or_error_messages(caplog):
         set_request_token(None)
 
 
-# 18. No write tools are exposed
+# 18. Prohibited write tools check (Issue #248 permits ONLY add_comment and acknowledge)
 def test_no_write_tools_exposed():
     tool_names = registered_tool_names()
 
+    # All lifecycle, declaration, status-changing, role assignment, service and runbook write operations remain forbidden
     prohibited_write_tools = {
-        "add_comment",
-        "acknowledge",
         "create_incident",
         "update_incident",
         "delete_incident",
@@ -599,3 +604,243 @@ def test_mcp_port_env_configuration(monkeypatch):
     import os
     port = int(os.getenv("MCP_PORT", "8001"))
     assert port == 8005
+
+
+# ===========================================================================
+# Sprint 5 Write Tools Tests (Issue #248)
+# ===========================================================================
+
+# 25. add_comment succeeds and forwards caller's PAT
+def test_add_comment_success():
+    sample_pat = "pat_engineer_comment_write_123"
+    set_request_token(sample_pat)
+    mock_payload = {
+        "id": 42,
+        "eventType": "COMMENT",
+        "actor": "Dev Engineer",
+        "details": "Investigating checkout latency spike. (via MCP)",
+        "recordedAt": "2026-11-15T10:00:00Z",
+    }
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(201, mock_payload)
+            res = asyncio.run(add_comment(incident_id=1, comment="Investigating checkout latency spike."))
+
+            assert res == mock_payload
+            assert mock_req.call_count == 1
+            call_args = mock_req.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1].endswith("/api/incidents/1/comments")
+            assert call_args[1].get("headers", {}).get("Authorization") == f"Bearer {sample_pat}"
+            assert call_args[1].get("json") == {"comment": "Investigating checkout latency spike."}
+    finally:
+        set_request_token(None)
+
+
+# 26. add_comment input validation
+def test_add_comment_validation():
+    set_request_token("pat_valid")
+    try:
+        # Invalid incident_id
+        for invalid_id in [-1, 0, True, False, "1"]:
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(add_comment(incident_id=invalid_id, comment="Hello"))
+            assert "positive integer" in str(exc_info.value)
+
+        # Empty or blank comment
+        for invalid_comment in ["", "   ", "\n\t"]:
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(add_comment(incident_id=1, comment=invalid_comment))
+            assert "non-empty" in str(exc_info.value)
+
+        # Exceeds max length (5000 chars)
+        too_long = "x" * 5001
+        with pytest.raises(ToolError) as exc_info:
+            asyncio.run(add_comment(incident_id=1, comment=too_long))
+        assert "5000 characters" in str(exc_info.value)
+    finally:
+        set_request_token(None)
+
+
+# 27. add_comment handles 403 (Viewer role refused)
+def test_add_comment_forbidden_for_viewer_403():
+    set_request_token("pat_viewer_readonly")
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(403, text="Forbidden")
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(add_comment(incident_id=1, comment="Read-only trying to write"))
+            assert "Permission denied" in str(exc_info.value)
+            assert "HTTP 403" in str(exc_info.value)
+    finally:
+        set_request_token(None)
+
+
+# 28. add_comment handles 404 (Incident not found)
+def test_add_comment_incident_not_found_404():
+    set_request_token("pat_valid")
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(404, text="Incident not found")
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(add_comment(incident_id=9999, comment="Comment on missing incident"))
+            assert "Resource not found" in str(exc_info.value)
+            assert "HTTP 404" in str(exc_info.value)
+    finally:
+        set_request_token(None)
+
+
+# 29. acknowledge succeeds: GET current version then POST with expectedVersion
+def test_acknowledge_success():
+    sample_pat = "pat_engineer_ack_456"
+    set_request_token(sample_pat)
+
+    incident_get_payload = {
+        "id": 7,
+        "title": "Payment gateway timeout",
+        "status": "OPEN",
+        "version": 3,
+    }
+    ack_post_payload = {
+        "id": 7,
+        "title": "Payment gateway timeout",
+        "status": "ACKNOWLEDGED",
+        "version": 4,
+        "acknowledgedAt": "2026-11-15T10:05:00Z",
+    }
+
+    async def mock_handler(method, url, headers=None, json=None, **kwargs):
+        assert headers.get("Authorization") == f"Bearer {sample_pat}"
+        if method == "GET" and url.endswith("/api/incidents/7"):
+            return _mock_response(200, incident_get_payload)
+        elif method == "POST" and url.endswith("/api/incidents/7/acknowledge"):
+            assert json == {"expectedVersion": 3}
+            return _mock_response(200, ack_post_payload)
+        return _mock_response(404, {})
+
+    try:
+        with patch("httpx.AsyncClient.request", side_effect=mock_handler):
+            res = asyncio.run(acknowledge(incident_id=7))
+            assert res == ack_post_payload
+            assert res["status"] == "ACKNOWLEDGED"
+            assert res["version"] == 4
+    finally:
+        set_request_token(None)
+
+
+# 30. acknowledge input validation
+def test_acknowledge_validation():
+    set_request_token("pat_valid")
+    try:
+        for invalid_id in [-1, 0, True, False, "7"]:
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(acknowledge(incident_id=invalid_id))
+            assert "positive integer" in str(exc_info.value)
+    finally:
+        set_request_token(None)
+
+
+# 31. acknowledge handles missing version in GET response
+def test_acknowledge_missing_version_raises_tool_error():
+    set_request_token("pat_valid")
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(200, {"id": 7, "title": "No version field"})
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(acknowledge(incident_id=7))
+            assert "Could not determine incident version" in str(exc_info.value)
+    finally:
+        set_request_token(None)
+
+
+# 32. acknowledge handles 409 conflict with readable retry guidance
+def test_acknowledge_conflict_409():
+    set_request_token("pat_valid")
+
+    async def mock_handler(method, url, headers=None, json=None, **kwargs):
+        if method == "GET":
+            return _mock_response(200, {"id": 7, "version": 2, "status": "OPEN"})
+        elif method == "POST":
+            # Concurrently modified between GET and POST
+            return _mock_response(409, {"message": "This record was changed by another request; reload and try again"})
+        return _mock_response(404, {})
+
+    try:
+        with patch("httpx.AsyncClient.request", side_effect=mock_handler):
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(acknowledge(incident_id=7))
+            error_msg = str(exc_info.value)
+            assert "Conflict" in error_msg
+            assert "HTTP 409" in error_msg
+            assert "refresh and retry" in error_msg.lower() or "reload and try again" in error_msg.lower()
+    finally:
+        set_request_token(None)
+
+
+# 33. acknowledge handles 403 (Viewer role refused)
+def test_acknowledge_forbidden_for_viewer_403():
+    set_request_token("pat_viewer_readonly")
+
+    async def mock_handler(method, url, headers=None, json=None, **kwargs):
+        if method == "GET":
+            # Viewer can read the incident
+            return _mock_response(200, {"id": 7, "version": 1, "status": "OPEN"})
+        elif method == "POST":
+            # But cannot acknowledge (Viewer is 403 on POST /acknowledge)
+            return _mock_response(403, text="Forbidden")
+        return _mock_response(404, {})
+
+    try:
+        with patch("httpx.AsyncClient.request", side_effect=mock_handler):
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(acknowledge(incident_id=7))
+            assert "Permission denied" in str(exc_info.value)
+            assert "HTTP 403" in str(exc_info.value)
+    finally:
+        set_request_token(None)
+
+
+# 34. Tokens are never leaked in write tool outputs, logs, or error exceptions
+def test_write_tools_never_leak_tokens(caplog):
+    secret_pat = "pat_ultra_secret_write_token_xyz"
+    set_request_token(secret_pat)
+
+    try:
+        # Error path: add_comment server error
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(500, text="Internal Server Error")
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(add_comment(incident_id=1, comment="test"))
+            assert secret_pat not in str(exc_info.value)
+
+        # Error path: acknowledge 409 conflict
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = _mock_response(409, text="Stale version")
+            with pytest.raises(ToolError) as exc_info:
+                asyncio.run(acknowledge(incident_id=1))
+            assert secret_pat not in str(exc_info.value)
+
+        # Check logs
+        for record in caplog.records:
+            assert secret_pat not in record.getMessage()
+    finally:
+        set_request_token(None)
+
+
+# 35. A write tool refuses a token that is not a personal access token, before it calls the backend:
+# the backend marks only what a personal access token does as "via MCP".
+def test_write_tools_refuse_a_browser_session_token():
+    session_token = "eyJhbGciOiJIUzI1NiJ9.browser.session"
+    set_request_token(session_token)
+    try:
+        with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ToolError, match="personal access token") as comment_error:
+                asyncio.run(add_comment(incident_id=1, comment="test"))
+            with pytest.raises(ToolError, match="personal access token") as ack_error:
+                asyncio.run(acknowledge(incident_id=1))
+
+            assert mock_req.call_count == 0
+            assert session_token not in str(comment_error.value)
+            assert session_token not in str(ack_error.value)
+    finally:
+        set_request_token(None)

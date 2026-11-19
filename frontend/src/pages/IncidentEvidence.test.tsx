@@ -187,6 +187,82 @@ describe('Incident evidence (#169)', () => {
   })
 })
 
+describe('Incident deploys and evidence, more cases', () => {
+  it('writes how long before the incident each deploy went out', async () => {
+    renderIncident('VIEWER', {
+      'GET /api/incidents/7': {
+        body: {
+          ...incident,
+          deploys: [
+            { ...deploy, id: 41, version: 'v2.4.1', deployedAt: '2026-10-20T07:55:00Z' },
+            { ...deploy, id: 42, version: 'v2.4.0', deployedAt: '2026-10-20T06:30:00Z' },
+            { ...deploy, id: 43, version: 'v2.3.9', deployedAt: '2026-10-20T06:55:00Z' },
+            { ...deploy, id: 44, version: 'v2.4.2', deployedAt: '2026-10-20T08:40:00Z' },
+          ],
+        },
+      },
+    })
+
+    const deploys = await section('Recent deploys')
+    const line = (version: string) => within(deploys).getByText(version, { exact: false }).closest('li')!
+    expect(line('v2.4.1')).toHaveTextContent('35 min before')
+    expect(line('v2.4.0')).toHaveTextContent('2 h before')
+    expect(line('v2.3.9')).toHaveTextContent('1 h 35 min before')
+    expect(line('v2.4.2')).toHaveTextContent('after it was declared')
+  })
+
+  it('says why a deploy could not be linked', async () => {
+    renderIncident('ENGINEER', {
+      'GET /api/incidents/7': { body: { ...incident, deploys: [deploy] } },
+      'POST /api/incidents/7/deploys/41': { status: 404, body: { status: 404, message: 'Deployment 41 not found' } },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Link v2.4.1' }))
+
+    expect(await within(await section('Recent deploys')).findByRole('alert')).toHaveTextContent('Deployment 41 not found')
+  })
+
+  it('skips an evidence entry that is not a label and a link, and names the system when nobody added it', async () => {
+    renderIncident('VIEWER', {
+      'GET /api/incidents/7': {
+        body: {
+          ...incident,
+          timeline: [
+            ...incident.timeline,
+            { id: 5, eventType: 'EVIDENCE_ADDED', actor: null, details: 'Grafana alert: https://grafana.example.com/alerting/1', recordedAt: '2026-10-20T09:10:00Z', correctsEntryId: null },
+            { id: 6, eventType: 'EVIDENCE_ADDED', actor: 'Dev Engineer', details: 'see the ticket', recordedAt: '2026-10-20T09:12:00Z', correctsEntryId: null },
+          ],
+        },
+      },
+    })
+
+    const evidence = await section('Evidence')
+    expect(within(evidence).getAllByRole('link')).toHaveLength(1)
+    expect(within(evidence).getByRole('link', { name: 'Grafana alert' }).closest('li')).toHaveTextContent(/^Grafana alert.*System ·/)
+    expect(within(evidence).queryByText('see the ticket')).not.toBeInTheDocument()
+  })
+
+  it("puts the server's reason on the link field, and an unreachable server above the button", async () => {
+    let attempts = 0
+    renderIncident('ENGINEER', {
+      'POST /api/incidents/7/evidence': () => {
+        attempts += 1
+        if (attempts === 1) return { status: 400, body: { status: 400, message: 'Validation failed', errors: { url: 'The link is too long' } } }
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    const evidence = await section('Evidence')
+    await userEvent.type(within(evidence).getByLabelText('Label'), 'Trace')
+    await userEvent.type(within(evidence).getByLabelText('Link'), 'https://traces.example.com/t/1')
+
+    await userEvent.click(within(evidence).getByRole('button', { name: 'Add evidence' }))
+    expect(await within(evidence).findByText('The link is too long')).toBeInTheDocument()
+
+    await userEvent.click(within(evidence).getByRole('button', { name: 'Add evidence' }))
+    expect(await within(evidence).findByRole('alert')).toHaveTextContent('Settle could not be reached. Try again in a moment.')
+  })
+})
+
 describe('Incident telemetry (#169)', () => {
   it('reads logs and metrics for the hour before the incident onward, at most 24 hours', async () => {
     const fetchMock = renderIncident('VIEWER')

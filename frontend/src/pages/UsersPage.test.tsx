@@ -99,6 +99,42 @@ describe('UsersPage', () => {
   })
 
   // TC-US-01k: a role change waits for confirmation; cancelling sends nothing.
+  it("puts the server's field reasons on their fields, and a failed request above the buttons", async () => {
+    let attempts = 0
+    mockFetch({
+      'GET /api/users': { body: users },
+      'POST /api/users': () => {
+        attempts += 1
+        if (attempts === 1) {
+          return { status: 400, body: { status: 400, message: 'Validation failed', errors: { password: 'The password is too common' } } }
+        }
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    renderUsers()
+    const dialog = await openCreateDialog()
+
+    await fillCreateForm(dialog, 'password1')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add member' }))
+    expect(await within(dialog).findByText('The password is too common')).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add member' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Failed to fetch')
+  })
+
+  it('Escape closes the form and clears what was typed', async () => {
+    mockFetch({ 'GET /api/users': { body: users } })
+    renderUsers()
+    const dialog = await openCreateDialog()
+    await fillCreateForm(dialog, 'eight888')
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    const again = await openCreateDialog()
+    expect(within(again).getByLabelText('Email')).toHaveValue('')
+  })
+
   it('asks before changing a role, and only sends it once confirmed', async () => {
     const fetchMock = mockFetch({
       'GET /api/users': { body: users },

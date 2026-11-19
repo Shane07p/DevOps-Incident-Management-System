@@ -1,6 +1,7 @@
 package com.group2.incident.incident.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class AiEmbeddingClientTest {
@@ -119,6 +122,68 @@ class AiEmbeddingClientTest {
 
 		assertThat(client("http://127.0.0.1:" + closedPort, Duration.ofSeconds(2))
 				.embedDocument("Title: API outage")).isEmpty();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"null", "{\"model\":\"nomic-embed-text\"}", "<html>Bad gateway</html>"})
+	@DisplayName("A missing or unreadable answer leaves embedding for retry")
+	void missingOrUnreadableAnswerLeavesEmbeddingForRetry(String body) {
+		responseBody.set(body);
+
+		assertThat(client(baseUrl, Duration.ofSeconds(2)).embedDocument("Title: API outage")).isEmpty();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"null", "1e400"})
+	@DisplayName("A vector with a missing or infinite value is rejected")
+	void rejectsVectorWithMissingOrInfiniteValue(String value) {
+		responseBody.set(vectorResponse(768).replaceFirst("0\\.25", value));
+
+		assertThat(client(baseUrl, Duration.ofSeconds(2)).embedDocument("Title: API outage")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("An interrupted request gives up and keeps the interrupt")
+	void interruptedRequestKeepsTheInterrupt() {
+		delayMillis.set(1000);
+		Thread.currentThread().interrupt();
+		try {
+			assertThat(client(baseUrl, Duration.ofSeconds(5)).embedQuery("checkout latency")).isEmpty();
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		}
+		finally {
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	@DisplayName("A null URL disables embedding; an https URL with a trailing slash enables it")
+	void nullUrlDisablesAndHttpsUrlEnables() {
+		assertThat(client(null, Duration.ofSeconds(2)).isEnabled()).isFalse();
+		assertThat(client("https://ai.example.test/", Duration.ofSeconds(2)).isEnabled()).isTrue();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"ftp://127.0.0.1",
+			"http:/no-host",
+			"http://user:secret@127.0.0.1",
+			"http://127.0.0.1?key=1",
+			"http://127.0.0.1#part"
+	})
+	@DisplayName("A URL that is not a plain HTTP(S) base URL is refused at startup")
+	void refusesAUrlThatIsNotAPlainHttpBaseUrl(String url) {
+		assertThatThrownBy(() -> client(url, Duration.ofSeconds(2)))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageNotContaining("secret");
+	}
+
+	@ParameterizedTest
+	@ValueSource(longs = {0, -1})
+	@DisplayName("A timeout that is not positive is refused at startup")
+	void refusesATimeoutThatIsNotPositive(long seconds) {
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(seconds)))
+				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private AiEmbeddingClient client(String url, Duration timeout) {

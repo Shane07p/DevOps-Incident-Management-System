@@ -1,6 +1,7 @@
 package com.group2.incident.incident.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.group2.incident.catalog.entity.Severity;
 import com.group2.incident.incident.dto.TriageHintRequest;
@@ -11,6 +12,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -20,6 +22,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class TriageHintServiceTest {
@@ -146,6 +150,113 @@ class TriageHintServiceTest {
 		var result = service.fetchHint(new TriageHintRequest("Title", "Desc"), List.of());
 
 		assertThat(result).isEmpty();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"null",
+			"{\"aiGenerated\":true,\"severity\":null,\"service\":null,\"reason\":\"No severity\"}",
+			"{\"aiGenerated\":true,\"severity\":\"SEV2\",\"service\":null,\"reason\":null}"
+	})
+	@DisplayName("Returns empty optional when the answer has no severity or no reason")
+	void returnsEmptyWithoutSeverityOrReason(String body) {
+		responseBody.set(body);
+
+		assertThat(service(baseUrl).fetchHint(new TriageHintRequest("Title", "Desc"), List.of())).isEmpty();
+	}
+
+	@Test
+	@DisplayName("Reads a severity in any case and with spaces around it")
+	void readsSeverityInAnyCase() {
+		responseBody.set("{\"aiGenerated\":true,\"severity\":\" sev1 \",\"service\":null,\"reason\":\"Checkout is down\"}");
+
+		assertThat(service(baseUrl).fetchHint(new TriageHintRequest("Checkout down", "Desc"), List.of()))
+				.hasValueSatisfying(hint -> assertThat(hint.severity()).isEqualTo(Severity.SEV1));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"{\"id\":null,\"name\":\"Payments\"}", "{\"id\":1,\"name\":null}"})
+	@DisplayName("Drops a suggested service that has no id or no name, and keeps the severity")
+	void dropsIncompleteServiceSuggestion(String suggested) {
+		responseBody.set("{\"aiGenerated\":true,\"severity\":\"SEV2\",\"service\":" + suggested + ",\"reason\":\"High urgency\"}");
+
+		var result = service(baseUrl).fetchHint(new TriageHintRequest("Title", "Desc"), List.of(),
+				List.of(new TriageHintServiceDto(1L, "Payments")));
+
+		assertThat(result).hasValueSatisfying(hint -> {
+			assertThat(hint.severity()).isEqualTo(Severity.SEV2);
+			assertThat(hint.service()).isNull();
+		});
+	}
+
+	@Test
+	@DisplayName("Without a list of org services, sends an empty one and suggests no service")
+	void withoutOrgServicesSuggestsNoService() {
+		var result = service(baseUrl).fetchHint(new TriageHintRequest("Payment timeout", "504 errors"), List.of(), null);
+
+		assertThat(result).hasValueSatisfying(hint -> assertThat(hint.service()).isNull());
+		assertThat(requestBody.get()).contains("\"services\":[]");
+	}
+
+	@Test
+	@DisplayName("Returns empty optional when the AI service refuses the connection")
+	void returnsEmptyOnRefusedConnection() throws IOException {
+		int closedPort;
+		try (ServerSocket socket = new ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))) {
+			closedPort = socket.getLocalPort();
+		}
+
+		assertThat(service("http://127.0.0.1:" + closedPort).fetchHint(new TriageHintRequest("Title", "Desc"), List.of()))
+				.isEmpty();
+	}
+
+	@Test
+	@DisplayName("An interrupted request gives up and keeps the interrupt")
+	void interruptedRequestKeepsTheInterrupt() {
+		delayMillis.set(1000);
+		var service = new TriageHintService(baseUrl, Duration.ofSeconds(5), JsonMapper.builder().build());
+		Thread.currentThread().interrupt();
+		try {
+			assertThat(service.fetchHint(new TriageHintRequest("Title", "Desc"), List.of())).isEmpty();
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		}
+		finally {
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	@DisplayName("A null URL turns hints off; an https URL with a trailing slash turns them on")
+	void nullUrlDisablesAndHttpsUrlEnables() {
+		assertThat(service(null).isEnabled()).isFalse();
+		assertThat(service("https://ai.example.test/").isEnabled()).isTrue();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"ftp://127.0.0.1",
+			"http:/no-host",
+			"http://user:secret@127.0.0.1",
+			"http://127.0.0.1?key=1",
+			"http://127.0.0.1#part"
+	})
+	@DisplayName("A URL that is not a plain HTTP(S) base URL is refused at startup")
+	void refusesAUrlThatIsNotAPlainHttpBaseUrl(String url) {
+		assertThatThrownBy(() -> service(url))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageNotContaining("secret");
+	}
+
+	@ParameterizedTest
+	@ValueSource(longs = {0, -1})
+	@DisplayName("A timeout that is not positive is refused at startup")
+	void refusesATimeoutThatIsNotPositive(long seconds) {
+		assertThatThrownBy(() -> new TriageHintService(baseUrl, Duration.ofSeconds(seconds), JsonMapper.builder().build()))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	private static TriageHintService service(String url) {
+		return new TriageHintService(url, Duration.ofSeconds(2), JsonMapper.builder().build());
 	}
 
 	private void respond(HttpExchange exchange) throws IOException {

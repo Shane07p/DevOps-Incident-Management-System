@@ -91,6 +91,35 @@ class RateLimitServiceTest {
 		assertThat(service.tryConsumeLogin("1.1.1.4", "dave").allowed()).isTrue();
 	}
 
+	@Test
+	void aUsernameCountsTheSameWhateverItsCaseOrSurroundingSpaces() {
+		RateLimitService service = new RateLimitService(properties(2, Duration.ofSeconds(60), 50, Duration.ofSeconds(1), 10_000), FIXED);
+
+		assertThat(service.tryConsumeLogin("1.1.1.1", "Alice").allowed()).isTrue();
+		assertThat(service.tryConsumeLogin(" 1.1.1.1 ", "  alice ").allowed()).isTrue();
+		assertThat(service.tryConsumeLogin("1.1.1.1", "ALICE").allowed()).isFalse();
+	}
+
+	// A missing username and a missing address each share one bucket, so leaving them out does not dodge the limit.
+	@Test
+	void aMissingUsernameOrAddressSharesOneBucket() {
+		RateLimitService service = new RateLimitService(properties(2, Duration.ofSeconds(60), 50, Duration.ofSeconds(1), 10_000), FIXED);
+
+		assertThat(service.tryConsumeLogin(null, null).allowed()).isTrue();
+		assertThat(service.tryConsumeLogin("  ", "  ").allowed()).isTrue();
+		assertThat(service.tryConsumeLogin("127.0.0.1", "anonymous").allowed()).isFalse();
+	}
+
+	@Test
+	void aCallWithoutAToolOrTokenIdIsNotCounted() {
+		RateLimitService service = new RateLimitService(properties(1, Duration.ofSeconds(60), 1, Duration.ofSeconds(60), 10_000), FIXED);
+
+		for (int i = 0; i < 3; i++) {
+			assertThat(service.tryConsumeWebhook(null).allowed()).isTrue();
+			assertThat(service.tryConsumePat(null).allowed()).isTrue();
+		}
+	}
+
 	private static RateLimitProperties properties(long loginCapacity, Duration loginWindow, long webhookCapacity,
 			Duration webhookWindow, int maxBuckets) {
 		return new RateLimitProperties(

@@ -1,4 +1,4 @@
-﻿
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -149,8 +149,10 @@ describe('Postmortem editor and follow-ups (#245)', () => {
       'What went badly': 'Escalation was delayed',
     }
 
+    // Pasting, not typing: typing about 180 characters one key at a time ran past the 5 s test timeout.
     for (const [label, value] of Object.entries(values)) {
-      await user.type(await screen.findByLabelText(label), value)
+      await user.click(await screen.findByLabelText(label))
+      await user.paste(value)
     }
 
     await user.click(screen.getByRole('button', { name: 'Save draft' }))
@@ -305,6 +307,19 @@ describe('Postmortem editor and follow-ups (#245)', () => {
     )
 
     expect(reviewRequest).toBe(false)
+  })
+
+  it('warns that saving a reviewed postmortem sends it back for review', async () => {
+    renderPostmortem('ADMIN', {
+      'GET /api/incidents/7/postmortem': {
+        body: { ...draft, status: 'REVIEWED', reviewedBy: { id: 1, displayName: 'Dev Admin' }, reviewedAt: '2026-11-13T09:00:00Z' },
+      },
+    })
+
+    expect(await screen.findByText(/Saving changes sends it back to draft/)).toBeInTheDocument()
+    // Each field is labelled, with the field name as its id.
+    expect(screen.getByLabelText('Summary')).toHaveValue('Checkout outage')
+    expect(screen.getByLabelText('Root cause')).toHaveAttribute('id', 'rootCause')
   })
 
   it('reloads the latest saved text and explains a 409 save conflict', async () => {

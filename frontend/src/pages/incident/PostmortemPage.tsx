@@ -1,4 +1,3 @@
-﻿
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
@@ -12,6 +11,8 @@ import {
 } from '@/api/postmortems'
 import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
 import { PageHeader } from '@/components/app/PageHeader'
@@ -231,13 +232,10 @@ export function PostmortemPage() {
         <Panel title="Postmortem details">
           <div className="flex flex-col gap-5 p-5">
             {fields.map(([key, label]) => (
-              <label
-                key={key}
-                className="flex flex-col gap-2 text-sm font-medium"
-              >
-                {label}
-
-                <textarea
+              <div key={key} className="flex flex-col gap-2">
+                <Label htmlFor={key}>{label}</Label>
+                <Textarea
+                  id={key}
                   value={form[key]}
                   disabled={!canEdit || busy}
                   maxLength={10000}
@@ -249,10 +247,9 @@ export function PostmortemPage() {
                     }))
                     setMessage('')
                   }}
-                  className="w-full rounded-md border bg-background p-3 font-normal"
                   placeholder={`Enter ${label.toLowerCase()}...`}
                 />
-              </label>
+              </div>
             ))}
 
             {!canEdit && (
@@ -264,6 +261,7 @@ export function PostmortemPage() {
             {reviewed && (
               <p className="text-sm text-muted-foreground">
                 This postmortem has been reviewed.
+                {canEdit && ' Saving changes sends it back to draft, and it needs another review.'}
               </p>
             )}
 

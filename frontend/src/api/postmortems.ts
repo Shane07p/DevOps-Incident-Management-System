@@ -1,4 +1,4 @@
-﻿import { z } from 'zod'
+import { z } from 'zod'
 import { apiFetch } from './client'
 
 const personSchema = z.object({

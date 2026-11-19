@@ -292,4 +292,85 @@ class EscalationServiceTest {
 		// D14 & TC-FR-07.6a rule: next deadline is restartTime + 30m, giving responder 2 full wait
 		assertThat(task.getNextDueAt()).isEqualTo(restartTime.plus(30, ChronoUnit.MINUTES));
 	}
+
+	@Test
+	@DisplayName("A service without a policy, or with a policy that has no levels, gets no escalation task")
+	void noPolicyOrNoLevelsMeansNoTask() {
+		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.OPEN, admin, T0, 15, 240);
+		when(escalationPolicyRepository.findByServiceId(service.getId())).thenReturn(Optional.empty());
+
+		escalationService.createTaskForIncident(incident, T0);
+
+		when(escalationPolicyRepository.findByServiceId(service.getId())).thenReturn(Optional.of(new EscalationPolicy(service, T0)));
+
+		escalationService.createTaskForIncident(incident, T0);
+
+		verify(escalationTaskRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("Acknowledging cancels a pending task and leaves a finished one as it was")
+	void cancellingTouchesOnlyAPendingTask() {
+		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.OPEN, admin, T0, 15, 240);
+		EscalationTask pending = new EscalationTask(incident, T0.plus(15, ChronoUnit.MINUTES), T0);
+		EscalationTask exhausted = new EscalationTask(incident, T0.plus(15, ChronoUnit.MINUTES), T0);
+		exhausted.markExhausted(T0.plus(20, ChronoUnit.MINUTES));
+		when(escalationTaskRepository.findByIncidentId(1L)).thenReturn(Optional.of(pending));
+		when(escalationTaskRepository.findByIncidentId(2L)).thenReturn(Optional.of(exhausted));
+		when(escalationTaskRepository.findByIncidentId(3L)).thenReturn(Optional.empty());
+
+		escalationService.cancelTaskForIncident(1L, T0.plus(5, ChronoUnit.MINUTES));
+		escalationService.cancelTaskForIncident(2L, T0.plus(30, ChronoUnit.MINUTES));
+		escalationService.cancelTaskForIncident(3L, T0.plus(30, ChronoUnit.MINUTES));
+
+		assertThat(pending.getState()).isEqualTo(EscalationTaskState.CANCELLED);
+		assertThat(exhausted.getState()).isEqualTo(EscalationTaskState.EXHAUSTED);
+		assertThat(exhausted.getUpdatedAt()).isEqualTo(T0.plus(20, ChronoUnit.MINUTES));
+	}
+
+	@Test
+	@DisplayName("A missing task, a cancelled one, or one with no deadline is not escalated")
+	void missingCancelledOrUndatedTasksAreNotEscalated() {
+		Incident incident = new Incident("Down", "Outage", service, Severity.SEV1, IncidentStatus.OPEN, admin, T0, 15, 240);
+		EscalationTask cancelled = new EscalationTask(incident, T0.plus(15, ChronoUnit.MINUTES), T0);
+		cancelled.addCopiedStep(1, responder1, 15);
+		cancelled.cancel(T0.plus(1, ChronoUnit.MINUTES));
+		EscalationTask undated = new EscalationTask(incident, null, T0);
+		undated.addCopiedStep(1, responder1, 15);
+		when(escalationTaskRepository.findById(1L)).thenReturn(Optional.empty());
+		when(escalationTaskRepository.findById(2L)).thenReturn(Optional.of(cancelled));
+		when(escalationTaskRepository.findById(3L)).thenReturn(Optional.of(undated));
+		Instant late = T0.plus(2, ChronoUnit.HOURS);
+
+		assertThat(escalationService.executeEscalationStep(1L, late)).isFalse();
+		assertThat(escalationService.escalateTaskInNewTransaction(2L, late)).isFalse();
+		assertThat(escalationService.executeEscalationStep(3L, late)).isFalse();
+
+		assertThat(undated.getCurrentStep()).isZero();
+		verify(timelineEntryRepository, never()).save(any());
+		verify(notificationService, never()).createNotification(any(), any(), any(), any());
+	}
+
+	@Test
+	@DisplayName("TC-FR-07.5b: With no fallback contact, running out of levels is recorded once and nobody is paged")
+	void withoutAFallbackContactExhaustionIsRecordedOnce() {
+		ServiceEntity noFallback = new ServiceEntity("Search", "Search", admin, Criticality.LOW, T0);
+		Incident incident = new Incident("Slow", "Latency", noFallback, Severity.SEV3, IncidentStatus.OPEN, admin, T0, 240, 2880);
+		Instant dueAt = T0.plus(15, ChronoUnit.MINUTES);
+		EscalationTask task = new EscalationTask(incident, dueAt, T0);
+		task.addCopiedStep(1, responder1, 15);
+		task.advanceToStep(1, dueAt, T0);
+		when(escalationTaskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+		assertThat(escalationService.executeEscalationStep(1L, dueAt)).isTrue();
+		assertThat(escalationService.executeEscalationStep(1L, dueAt.plus(10, ChronoUnit.MINUTES))).isFalse();
+
+		verify(timelineEntryRepository).save(timelineCaptor.capture());
+		assertThat(timelineCaptor.getValue().getDetails()).isEqualTo("All escalation levels exhausted (no fallback contact configured)");
+		assertThat(task.isFallbackNotified()).isTrue();
+		assertThat(task.getState()).isEqualTo(EscalationTaskState.EXHAUSTED);
+		assertThat(incident.getStatus()).isEqualTo(IncidentStatus.OPEN);
+		verify(notificationService, never()).createNotification(any(), any(), any(), any());
+		verify(outboxRepository, never()).save(any());
+	}
 }

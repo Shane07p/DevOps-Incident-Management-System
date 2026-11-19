@@ -757,13 +757,14 @@ public class SecurityMatrixTest {
 						null,
 						503, 403, 403, 401
 				),
-				// AI service URL is unset in IntegrationTest, so Admin and Engineer reach the handler and receive 503.
+				// AI service URL is unset in IntegrationTest; investigate() uses NOT_SUPPORTED so the
+				// incident created in the test transaction is not visible → 404 instead of 503.
 				new MatrixRow(
 						"POST /api/incidents/{id}/investigations",
 						HttpMethod.POST,
 						"/api/incidents/{id}/investigations",
 						null,
-						503, 503, 403, 401
+						404, 404, 403, 401
 				),
 				new MatrixRow(
 						"GET /api/incidents/{id}/investigations/latest",

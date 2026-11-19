@@ -83,9 +83,6 @@ public class TestOrgs {
 			jdbc.execute("SET LOCAL session_replication_role = 'replica'");
 			jdbc.update("DELETE FROM service_sla_target WHERE service_id IN (SELECT id FROM service WHERE org_id = ?)", orgId);
 			jdbc.update("DELETE FROM runbook_step WHERE runbook_id IN (SELECT id FROM runbook WHERE org_id = ?)", orgId);
-			jdbc.update("DELETE FROM investigation_evidence WHERE hypothesis_id IN (SELECT h.id FROM investigation_hypothesis h JOIN investigation i ON h.investigation_id = i.id WHERE i.org_id = ?)", orgId);
-			jdbc.update("DELETE FROM investigation_hypothesis WHERE investigation_id IN (SELECT id FROM investigation WHERE org_id = ?)", orgId);
-			jdbc.update("DELETE FROM investigation_action WHERE investigation_id IN (SELECT id FROM investigation WHERE org_id = ?)", orgId);
 			for (String table : ORG_TABLES) {
 				jdbc.update("DELETE FROM " + table + " WHERE org_id = ?", orgId);
 			}

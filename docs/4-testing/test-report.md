@@ -128,7 +128,7 @@ so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deploye
 
 ## Sprint 6 — AI Evaluation Runs (Issue #252)
 
-Evaluated on 19 November 2026 across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
+Evaluated on 19 November 2026, commit `c860689` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
 Model evaluated: `qwen2.5:0.5b` (the model configured in `.env.example` and `compose.yaml` for `OllamaProvider`).
 
 ### AI-2: AI SRE Scenario Investigation

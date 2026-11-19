@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,7 @@ import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
-import { devOrg, mockFetch } from '@/test/fetchMock'
+import { devOrg, mockFetch, payments } from '@/test/fetchMock'
 
 const viewer = { id: 3, email: 'viewer@settle.local', displayName: 'Dev Viewer', role: 'VIEWER' }
 
@@ -26,13 +26,14 @@ const map = {
   ],
 }
 
-function renderMap() {
+function renderMap(extra: Parameters<typeof mockFetch>[0] = {}) {
   writeToken('test-token')
   const fetchMock = mockFetch({
     'GET /api/auth/me': { body: { user: viewer, org: devOrg } },
     'GET /api/service-map': { body: map },
     'GET /api/services/1/blast-radius': { body: [{ id: 2, name: 'Checkout' }, { id: 3, name: 'Storefront' }] },
     'GET /api/services/4/blast-radius': { body: [] },
+    ...extra,
   })
   const router = createMemoryRouter(routes, { initialEntries: ['/service-map'] })
   render(
@@ -133,5 +134,92 @@ describe('ServiceMapPage', () => {
 
     await userEvent.click(within(panel).getByRole('button', { name: 'Clear selection' }))
     expect(node('Checkout')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('marks each service with its worst open incident and lists them, with the owner, when chosen', async () => {
+    const open = (id: number, title: string, serviceName: string, severity: string, status = 'OPEN') => ({
+      id, reference: `INC-${id}`, title, serviceName, severity, status, createdAt: `2026-11-1${id}T08:00:00Z`,
+      responseDueAt: '2026-11-20T08:00:00Z', resolutionDueAt: '2026-11-21T08:00:00Z', version: 1,
+    })
+    renderMap({
+      'GET /api/incidents': {
+        body: [
+          open(1, 'Card payments failing', 'Payments', 'SEV3'),
+          open(2, 'Refunds stuck', 'Payments', 'SEV1'),
+          open(3, 'Slow basket', 'Checkout', 'SEV2'),
+          open(4, 'Typo in results', 'Search', 'SEV4'),
+          open(5, 'Old outage', 'Storefront', 'SEV1', 'RESOLVED'),
+        ],
+      },
+      'GET /api/services': { body: [{ ...payments, id: 1, owner: { id: 1, displayName: 'Dev Admin' } }] },
+    })
+
+    expect(await screen.findByRole('button', { name: 'Payments, Down, 2 open incidents' })).toHaveTextContent('SEV1 +1')
+    expect(node('Checkout')).toHaveAccessibleName('Checkout, Degraded, 1 open incident')
+    expect(node('Checkout')).toHaveTextContent('SEV2')
+    expect(node('Search')).toHaveTextContent('SEV4')
+    expect(node('Storefront')).toHaveAccessibleName('Storefront, Operational')
+
+    await userEvent.click(node('Payments'))
+    const panel = screen.getByRole('region', { name: 'Payments' })
+    const incidents = within(panel).getByRole('heading', { name: 'Open incidents' }).nextElementSibling as HTMLElement
+    expect(within(incidents).getAllByRole('link').map((link) => link.textContent)).toEqual(['Refunds stuck', 'Card payments failing'])
+    expect(within(incidents).getByRole('link', { name: 'Refunds stuck' })).toHaveAttribute('href', '/incidents/2')
+    expect(panel).toHaveTextContent('Owner · Dev Admin')
+  })
+
+  it('draws services that call each other in a loop, a link that skips a column, and ignores a link to nothing', async () => {
+    renderMap({
+      'GET /api/service-map': {
+        body: {
+          nodes: [
+            { id: 1, name: 'Payments', criticality: 'CRITICAL', health: 'DOWN' },
+            { id: 2, name: 'Checkout', criticality: 'HIGH', health: 'DEGRADED' },
+            { id: 3, name: 'Storefront', criticality: 'MEDIUM', health: 'OPERATIONAL' },
+            { id: 5, name: 'Ledger', criticality: 'HIGH', health: 'OPERATIONAL' },
+            { id: 6, name: 'Audit', criticality: 'LOW', health: 'OPERATIONAL' },
+          ],
+          edges: [
+            { from: 3, to: 2 },
+            { from: 2, to: 1 },
+            { from: 3, to: 1 },
+            { from: 5, to: 6 },
+            { from: 6, to: 5 },
+            { from: 2, to: 99 },
+          ],
+        },
+      },
+    })
+
+    expect(await screen.findByRole('button', { name: 'Ledger, Operational' })).toBeInTheDocument()
+    expect(node('Audit')).toBeInTheDocument()
+    const links = within(screen.getByRole('list', { name: 'Dependencies' })).getAllByRole('listitem').map((link) => link.textContent)
+    expect(links).toEqual(expect.arrayContaining(['Storefront depends on Payments', 'Ledger depends on Audit', 'Audit depends on Ledger']))
+    expect(links.join(' ')).not.toMatch(/undefined|99/)
+  })
+
+  it('says when there are no services, and shows a failed load with a retry', async () => {
+    renderMap({ 'GET /api/service-map': { body: { nodes: [], edges: [] } } })
+    expect(await screen.findByText(/No services yet/)).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderMap({ 'GET /api/service-map': { status: 500, body: { status: 500, message: 'The service map is unavailable' } } })
+    expect(await screen.findByText('The service map is unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('in Blast radius, says one service when one may break, and shows a failed lookup', async () => {
+    renderMap({
+      'GET /api/services/2/blast-radius': { body: [{ id: 3, name: 'Storefront' }] },
+      'GET /api/services/3/blast-radius': { status: 500, body: { status: 500, message: 'Could not work out the blast radius' } },
+    })
+    await userEvent.click(await screen.findByRole('radio', { name: 'Blast radius' }))
+
+    await userEvent.click(node('Checkout'))
+    expect(await screen.findByText(/If Checkout fails, 1 service may be affected/)).toHaveTextContent('Storefront')
+
+    await userEvent.click(node('Storefront'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not work out the blast radius')
   })
 })

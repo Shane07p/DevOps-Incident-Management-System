@@ -295,4 +295,66 @@ describe('Reassign and roles', () => {
     expect(await screen.findByText('Assignee must be an enabled user')).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
+
+  const conflict = { status: 409, body: { status: 409, message: 'This record was changed by another request; reload and try again' } }
+
+  it('closes the severity, Lead and role dialogs on a 409 and reports it on the page', async () => {
+    renderIncident('ADMIN', { status: 'INVESTIGATING', assignee: { id: 1, displayName: 'Dev Admin' } }, {
+      'PUT /api/incidents/7/severity': conflict,
+      'PUT /api/incidents/7/assignee': conflict,
+      'PUT /api/incidents/7/roles': conflict,
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change severity' }))
+    await choose('New severity', 'SEV1')
+    await userEvent.type(screen.getByLabelText('Reason'), 'Every region is down')
+    await userEvent.click(screen.getByRole('button', { name: 'Change severity' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent('INC-7 changed while you were looking at it')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reassign' }))
+    await choose('New Lead', 'Dev Engineer')
+    await userEvent.click(screen.getByRole('button', { name: 'Reassign' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Give a role' }))
+    await choose('Role', 'Ops: investigates and fixes')
+    await choose('Person', 'Dev Engineer')
+    await userEvent.click(screen.getByRole('button', { name: 'Give role' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent('INC-7 changed while you were looking at it')
+  })
+})
+
+describe('When a change does not go through', () => {
+  it('needs a status chosen, says when Settle is unreachable, and Escape closes the dialog', async () => {
+    const fetchMock = renderIncident('ENGINEER', { status: 'INVESTIGATING' }, {
+      'POST /api/incidents/7/transitions': () => {
+        throw new TypeError('Failed to fetch')
+      },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change status' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Change status' }))
+    expect(await screen.findByText('Choose the new status', { selector: 'p' })).toBeInTheDocument()
+    expect(sent(fetchMock, 'POST', '/api/incidents/7/transitions')).toHaveLength(0)
+
+    await choose('New status', 'IDENTIFIED')
+    await userEvent.click(screen.getByRole('button', { name: 'Change status' }))
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('Settle could not be reached. Try again in a moment.')
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('shows why an acknowledgement failed, other than a 409, and keeps Acknowledge', async () => {
+    renderIncident('ENGINEER', {}, {
+      'POST /api/incidents/7/acknowledge': { status: 403, body: { status: 403, message: 'You do not have permission to do that' } },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge' }))
+
+    expect(await within(actions()).findByRole('alert')).toHaveTextContent('You do not have permission to do that')
+    expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeEnabled()
+  })
 })

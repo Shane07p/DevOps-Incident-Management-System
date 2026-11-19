@@ -100,7 +100,7 @@ class InvestigationServiceTest {
 		AppUser user = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
 		ServiceEntity svc = new ServiceEntity("Checkout Service", "Checkout description", user, Criticality.HIGH, fixedTime);
 		String longDescription = "a".repeat(6000);
-		Incident incident = new Incident("INC-1", "Checkout slow", longDescription, svc, Severity.SEV2, IncidentStatus.OPEN, user, fixedTime);
+		Incident incident = new Incident("Checkout slow", longDescription, svc, Severity.SEV2, IncidentStatus.OPEN, user, fixedTime, 15, 60);
 
 		when(incidentRepository.findWithDetailsById(1L)).thenReturn(Optional.of(incident));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
@@ -139,7 +139,7 @@ class InvestigationServiceTest {
 	void investigateHandlesTelemetryFailuresGracefully() {
 		AppUser user = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", user, Criticality.HIGH, fixedTime);
-		Incident incident = new Incident("INC-2", "Orders down", null, svc, Severity.SEV1, IncidentStatus.OPEN, user, fixedTime);
+		Incident incident = new Incident("Orders down", null, svc, Severity.SEV1, IncidentStatus.OPEN, user, fixedTime, 15, 60);
 
 		when(incidentRepository.findWithDetailsById(2L)).thenReturn(Optional.of(incident));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
@@ -166,7 +166,7 @@ class InvestigationServiceTest {
 	void investigateFailsWhenAiDisabled() {
 		AppUser user = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", user, Criticality.HIGH, fixedTime);
-		Incident incident = new Incident("INC-3", "Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, user, fixedTime);
+		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, user, fixedTime, 15, 60);
 
 		when(incidentRepository.findWithDetailsById(3L)).thenReturn(Optional.of(incident));
 		when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
@@ -195,7 +195,7 @@ class InvestigationServiceTest {
 	void decideActionSuccessWithRejected() {
 		AppUser actor = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", actor, Criticality.HIGH, fixedTime);
-		Incident incident = new Incident("INC-1", "Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime);
+		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime, 15, 60);
 		Investigation inv = new Investigation(incident, "Summary", "completed", 1, 10, 5.0, fixedTime);
 		InvestigationAction action = new InvestigationAction(inv, "Restart service");
 
@@ -218,7 +218,7 @@ class InvestigationServiceTest {
 	void decideActionThrowsConflictWhenAlreadyDecided() {
 		AppUser actor = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", actor, Criticality.HIGH, fixedTime);
-		Incident incident = new Incident("INC-1", "Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime);
+		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime, 15, 60);
 		Investigation inv = new Investigation(incident, "Summary", "completed", 1, 10, 5.0, fixedTime);
 		InvestigationAction action = new InvestigationAction(inv, "Restart service");
 
@@ -237,7 +237,7 @@ class InvestigationServiceTest {
 	void decideActionThrowsNotFoundWhenActionMissing() {
 		AppUser actor = new AppUser("eng@test.local", "Engineer", "hash", fixedTime);
 		ServiceEntity svc = new ServiceEntity("Orders", "Orders description", actor, Criticality.HIGH, fixedTime);
-		Incident incident = new Incident("INC-1", "Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime);
+		Incident incident = new Incident("Orders down", "Desc", svc, Severity.SEV1, IncidentStatus.OPEN, actor, fixedTime, 15, 60);
 		Investigation inv = new Investigation(incident, "Summary", "completed", 1, 10, 5.0, fixedTime);
 
 		when(investigationRepository.findById(1L)).thenReturn(Optional.of(inv));

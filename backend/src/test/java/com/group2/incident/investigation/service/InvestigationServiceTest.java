@@ -36,6 +36,7 @@ import com.group2.incident.investigation.repository.InvestigationRepository;
 import com.group2.incident.investigation.service.AiInvestigationClient.AiEvidenceItem;
 import com.group2.incident.investigation.service.AiInvestigationClient.AiHypothesis;
 import com.group2.incident.investigation.service.AiInvestigationClient.AiInvestigationResult;
+import com.group2.incident.telemetry.dto.MetricSeriesResponse;
 import com.group2.incident.telemetry.service.TelemetryService;
 import java.time.Clock;
 import java.time.Instant;
@@ -114,6 +115,11 @@ class InvestigationServiceTest {
 		when(timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(1L)).thenReturn(List.of());
 		when(incidentDeploymentRepository.findDeploymentsByIncidentId(1L)).thenReturn(List.of());
 		when(deploymentRepository.findInWindow(anyLong(), any(), any())).thenReturn(List.of());
+		when(telemetryService.queryLogs(anyLong(), any(), any(), any(), any(), anyInt())).thenReturn(List.of());
+		when(telemetryService.queryMetric(anyLong(), any(), any(), any(), any()))
+				.thenAnswer(inv -> new MetricSeriesResponse(
+						inv.getArgument(1), 5L, "Checkout Service", fixedTime.minusSeconds(3600), fixedTime, 60, List.of()
+				));
 		when(aiInvestigationClient.isEnabled()).thenReturn(true);
 
 		String longHypothesisTitle = "h".repeat(600);

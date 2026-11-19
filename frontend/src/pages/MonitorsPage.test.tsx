@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -135,5 +135,44 @@ describe('MonitorsPage', () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true))
     expect(bodyOf(fetchMock, 'PUT')).toMatchObject({ failureThreshold: 5, name: 'Checkout health' })
+  })
+
+  it('writes intervals in the largest whole unit, and a monitor not checked yet as such', async () => {
+    renderMonitors('VIEWER', {
+      'GET /api/monitors': {
+        body: [
+          { ...healthy, id: 1, name: 'Hourly export', intervalSeconds: 3600 },
+          { ...healthy, id: 2, name: 'Fast probe', intervalSeconds: 45, lastCheckedAt: null, nextCheckAt: null },
+        ],
+      },
+    })
+
+    const row = (name: string) => screen.getByRole('button', { name }).closest('tr')!
+    expect(await screen.findByRole('button', { name: 'Hourly export' })).toBeInTheDocument()
+    expect(row('Hourly export')).toHaveTextContent('1 h')
+    expect(row('Fast probe')).toHaveTextContent('45 s')
+    expect(row('Fast probe')).toHaveTextContent('Not yet')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fast probe' }))
+    const details = screen.getByRole('region', { name: 'Fast probe details' })
+    expect(details).toHaveTextContent('Next check—')
+    expect(screen.queryByRole('button', { name: 'Edit Fast probe' })).not.toBeInTheDocument()
+  })
+
+  it('says when there are no monitors, inviting only an Admin to create one', async () => {
+    renderMonitors('ADMIN', { 'GET /api/monitors': { body: [] } })
+    expect(await screen.findByText('No monitors yet. Create one to start checking a URL.')).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderMonitors('VIEWER', { 'GET /api/monitors': { body: [] } })
+    expect(await screen.findByText('No monitors yet.')).toBeInTheDocument()
+  })
+
+  it('shows a failed load with a retry', async () => {
+    renderMonitors('VIEWER', { 'GET /api/monitors': { status: 500, body: { status: 500, message: 'Monitors are unavailable' } } })
+
+    expect(await screen.findByText('Monitors are unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 })

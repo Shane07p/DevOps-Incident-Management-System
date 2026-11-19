@@ -433,6 +433,36 @@ describe('Incident list views and filters (#266)', () => {
     expect(titles()).toEqual(['Refunds delayed'])
   })
 
+  it('shows the latest timeline entries in the drawer, says when the details do not load, and Escape closes it', async () => {
+    renderApp('VIEWER', '/incidents', {
+      'GET /api/incidents': { body: board },
+      'GET /api/incidents/7': {
+        body: {
+          ...checkoutFailing,
+          timeline: [
+            { id: 1, eventType: 'INCIDENT_CREATED', actor: 'Dev Engineer', details: 'Reported as SEV2', recordedAt: '2026-10-20T08:30:00Z', correctsEntryId: null },
+            { id: 2, eventType: 'ESCALATED', actor: null, details: null, recordedAt: '2026-10-20T08:45:00Z', correctsEntryId: null },
+          ],
+        },
+      },
+      'GET /api/incidents/8': { status: 500, body: { status: 500, message: 'Internal error' } },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Preview INC-7' }))
+    const drawer = await screen.findByRole('dialog', { name: 'Checkout failing' })
+    const latest = await within(drawer).findByRole('region', { name: 'Latest on the timeline' })
+    expect(within(latest).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      expect.stringContaining('Reported as SEV2'),
+      expect.stringContaining('ESCALATED'),
+    ])
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Preview INC-8' }))
+    expect(await within(await screen.findByRole('dialog')).findByText('The details did not load. Open the incident to see them.')).toBeInTheDocument()
+  })
+
   it('previews an incident in a drawer without leaving the list', async () => {
     const { router } = renderApp('VIEWER', '/incidents', { 'GET /api/incidents': { body: board } })
 

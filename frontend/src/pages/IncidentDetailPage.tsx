@@ -6,6 +6,7 @@ import { getIncident } from '@/api/incidents'
 import { listRunbooks } from '@/api/runbooks'
 import { useAuth } from '@/auth/AuthProvider'
 import { Avatar } from '@/components/app/Avatar'
+import { BackendUnreachableBanner } from '@/components/app/BackendUnreachableBanner'
 import { LIFECYCLE, SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
@@ -14,6 +15,7 @@ import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import type { IncidentStatus } from '@/api/schemas'
 import { cn } from '@/lib/utils'
 import { formatIst } from '@/lib/time'
+import { useLiveUpdates } from '@/lib/useLiveUpdates'
 import { IncidentActions } from './incident/IncidentActions'
 import { IncidentAlerts } from './incident/IncidentAlerts'
 import { IncidentDeploys } from './incident/IncidentDeploys'
@@ -113,10 +115,18 @@ function IncidentRunbooks({
 
 export function IncidentDetailPage() {
   const { user, org } = useAuth()
+  const { isBackendUnreachable } = useLiveUpdates()
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
-  const incident = useQuery({ queryKey: ['incident', id], queryFn: () => getIncident(id), enabled: valid })
+  const incident = useQuery({
+    queryKey: ['incident', id],
+    queryFn: () => getIncident(id),
+    enabled: valid,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
+  })
   const notFound = !valid || (incident.error instanceof ApiRequestError && incident.error.status === 404)
+  const showUnreachableBanner = (isBackendUnreachable || incident.error instanceof TypeError) && !notFound
 
   return (
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
@@ -124,6 +134,8 @@ export function IncidentDetailPage() {
         <ArrowLeft className="size-3.5" aria-hidden="true" />
         All incidents
       </Link>
+
+      {showUnreachableBanner && <BackendUnreachableBanner />}
 
       {notFound ? (
         <ErrorState title="Incident not found" message="It may have been mistyped. Check the incident list." />

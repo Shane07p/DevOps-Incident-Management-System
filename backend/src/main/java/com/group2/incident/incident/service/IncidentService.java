@@ -853,4 +853,5 @@ public class IncidentService {
 				entry.getCorrectsEntry() != null ? entry.getCorrectsEntry().getId() : null
 		);
 	}
+
 }

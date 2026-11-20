@@ -701,6 +701,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-12.1j | Boundary value | Null metrics and empty breakdown lists vs genuine numeric zeros | Null metric, null rate, empty service list, and zero total incidents display "No data yet"; numeric 0 displays as 0 | `InsightsPage.test.tsx` (Missing values handling, Zero values handling), `format.test.ts` | Automated |
 | TC-FR-12.1k | Equivalence | Controlled fixture data rendered into dashboard tiles and breakdown bars | MTTA/MTTR formatted in hours and minutes (mean with median and P90), SLA breach percentages, follow-up metrics, out-of-hours pages, severity proportional bars, and service breakdown rows linking to `/services/{serviceId}` | `InsightsPage.test.tsx` (Successful response rendering) | Automated |
 
+### Live updates (FR-12.3, NFR-14, D46, #241)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.3a | Transaction and org isolation | Commit an incident change in one org while both orgs are subscribed; then roll back another change | Only the matching org receives the committed incident ID; rollback sends nothing; HTTP streams use the authenticated org | `LiveUpdatesTest.committedChangeReachesSubscriberOfSameOrgAndNeverAnotherOrg`, `LiveUpdatesTest.rolledBackChangeSendsNothing`, `OrgIsolationTest.eventStreamsUseTheAuthenticatedOrganization` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3b | Equivalence | An `incident-changed` event arrives while the incident detail and incident list are cached | The incident and list refetch without manual reload; the event request sends its token in the Authorization header | `LiveUpdates.test.tsx` (event refetches incident and list) | Passed (2026-11-20, 0e73cb8) |
+| TC-NFR-14.2a | Recovery | A network query fails or the stream and its first retry fail with network/gateway errors, then recover | A genuine outage shows the banner; successful recovery clears it | `LiveUpdates.test.tsx`, `events.test.ts` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3c | Publication coverage | Escalation, follow-up creation, public update, and investigation action decision each append a timeline entry | Each committed change reaches the same-org subscriber exactly once and never another org | `TimelineChangePublicationTest.otherTimelineWritersReachOnlySameOrgSubscribers` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3d | Stream lifecycle | A scheduled heartbeat sends to a healthy and a dead emitter | A ping comment is sent every 25 seconds; failed sends remove and complete the dead emitter | `EventStreamServiceTest.heartbeatSendsPingAndRemovesADeadEmitter` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3e | Resource boundary | Six streams are opened for one org/user while other users/orgs subscribe | The sixth closes the oldest; other users/orgs remain; streams have a finite 30-minute timeout and completed streams are removed | `EventStreamServiceTest.sixthStreamCompletesOldestWithoutEvictingOtherUsersOrOrgs`, `streamTimeoutIsFiniteAndCompletionRemovesRegistration` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3f | Authentication | Stream responds 401, no token is present, or an old token receives a late 401 | Shared unauthorized handling signs out the current session and stops retries; no-token subscriptions stay idle; newer sessions survive late 401s | `events.test.ts`, `LiveUpdates.test.tsx` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3g | Reconnect | A connection opens after a disconnect without an incident event | Backoff resets to 1 second and the incident list refetches once on reconnect | `events.test.ts`, `useLiveUpdates.test.tsx` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3h | Recovery | A dropped stream reconnects on the first retry | The backend-unreachable banner never flashes | `useLiveUpdates.test.tsx` | Passed (2026-11-20, 0e73cb8) |
+| TC-NFR-14.2b | Error classification | Incident list/detail query or stream returns 403/500 | Application errors are shown without an unreachable banner; only network failures or confirmed gateway outages qualify | `LiveUpdates.test.tsx`, `events.test.ts` | Passed (2026-11-20, 0e73cb8) |
+
 ### Postmortems (FR-11.1, DR-06, D17, #239)
 
 | ID | Technique | Input or condition | Expected | Test | Status | Owner |

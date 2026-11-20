@@ -61,11 +61,12 @@ function renderPanel(role = 'ENGINEER') {
     defaultOptions: { queries: { retry: false } },
   })
 
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <IncidentAIPanel incidentId={7} />
     </QueryClientProvider>,
   )
+  return { ...view, queryClient }
 }
 
 afterEach(() => {
@@ -73,6 +74,26 @@ afterEach(() => {
 })
 
 describe('IncidentAIPanel', () => {
+  it.each([
+    ['Accept', 'ACCEPTED'],
+    ['Reject', 'REJECTED'],
+  ] as const)('%s refreshes both the investigation and incident timeline query', async (button, decision) => {
+    vi.mocked(getLatestInvestigation).mockResolvedValue(investigation)
+    vi.mocked(decideSuggestedAction).mockResolvedValue(undefined)
+    const { queryClient } = renderPanel()
+    queryClient.setQueryData(['incident', 7], { id: 7, timeline: [] })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await userEvent.click(await screen.findByRole('button', { name: button }))
+
+    await waitFor(() => {
+      expect(decideSuggestedAction).toHaveBeenCalledWith(12, 5, decision)
+      expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['incident', 7] }))
+      expect(queryClient.getQueryState(['incident', 7])?.isInvalidated).toBe(true)
+      expect(getLatestInvestigation).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('shows investigation results and lets an Engineer accept a suggested action', async () => {
     vi.mocked(getLatestInvestigation).mockResolvedValue(investigation)
     vi.mocked(decideSuggestedAction).mockResolvedValue(undefined)

@@ -772,9 +772,13 @@ Ten decisions: the two null checks, six branches of the seven-case `switch (from
 | --- | --- | --- | --- | --- | --- |
 | TC-AI-249a | Equivalence | Engineer opens an incident with investigation results | AI summary, ranked hypotheses, confidence and evidence are displayed | `IncidentAIPanel.test.tsx` | Automated |
 | TC-AI-249b | Equivalence | Engineer starts an investigation | Investigation request is sent and results are displayed | `IncidentAIPanel.test.tsx` | Automated |
-| TC-AI-249c | Decision table | Engineer accepts a suggested action | Acceptance decision is submitted and results are refreshed | `IncidentAIPanel.test.tsx` | Automated |
+| TC-AI-249c | Decision table | Engineer accepts or rejects a suggested action | Decision is submitted; investigation results and the incident timeline query are refreshed | `IncidentAIPanel.test.tsx` | Automated |
 | TC-AI-249d | Decision table | Viewer opens an incident with investigation results | Viewer can read results but cannot investigate or accept/reject actions | `IncidentAIPanel.test.tsx` | Automated |
 | TC-AI-249e | Negative | AI investigation endpoint returns 503 | Panel displays an AI-unavailable message; incident page remains usable | `IncidentAIPanel.test.tsx` | Automated |
 | TC-AI-249f | Equivalence | Engineer selects Catch me up | AI summary draft appears in an editable text area | `IncidentAIPanel.test.tsx` | Automated |
 | TC-AI-249g | Equivalence | Engineer selects Draft update | Generated text fills the public update form and remains editable; it is not automatically published | `PublicUpdateForm.test.tsx` | Automated |
 | TC-AI-249h | Negative | AI draft endpoint returns 503 | Public update form displays an AI-unavailable message and remains usable | `PublicUpdateForm.test.tsx` | Automated |
+| TC-AI-249i | Equivalence | Engineer or Admin selects Draft postmortem (AI) | POST sends kind POSTMORTEM; all six form fields fill from postmortem and stay editable; no save occurs until Save draft is clicked; explicit save includes edits and the saved version | `PostmortemPage.test.tsx` | Automated |
+| TC-AI-249j | Negative | Postmortem draft endpoint returns 503 | The panel's AI-unavailable message is shown; existing form values remain and manual editing/saving stays available | `PostmortemPage.test.tsx` | Automated |
+| TC-AI-249k | Role-based access | Viewer opens the postmortem page | Draft postmortem (AI) is hidden along with save controls; the form stays read-only | `PostmortemPage.test.tsx` | Automated |
+| TC-AI-249l | Negative | AI response has a null postmortem | An error is shown and the existing form values are preserved | `PostmortemPage.test.tsx` | Automated |

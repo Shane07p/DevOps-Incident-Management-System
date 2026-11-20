@@ -11,7 +11,9 @@ import {
 } from '@/api/ai'
 import { useAuth } from '@/auth/AuthProvider'
 import { can } from '@/auth/roles'
+import { Panel } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { formatIst } from '@/lib/time'
 
 export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
@@ -61,7 +63,10 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
     }) =>
       decideSuggestedAction(investigation.data!.id, actionId, decision),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ['incident', incidentId], exact: true }),
+      ])
     },
     onError: async (error) => {
       if (error instanceof ApiRequestError && error.status === 409) {
@@ -82,9 +87,9 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
       : 'Could not generate the summary. Please try again.'
 
   return (
-    <section
+    <Panel
       aria-labelledby="incident-ai-heading"
-      className="flex flex-col gap-4 rounded-lg border bg-card p-4"
+      className="flex flex-col gap-4 p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -137,9 +142,9 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
             AI-generated · Editable
           </span>
 
-          <textarea
+          <Textarea
             aria-label="AI summary draft"
-            className="min-h-32 w-full rounded-md border bg-background p-3 text-sm"
+            className="min-h-32"
             value={summaryDraft}
             onChange={(event) => setSummaryDraft(event.target.value)}
             readOnly={!canRespond}
@@ -275,6 +280,6 @@ export function IncidentAIPanel({ incidentId }: { incidentId: number }) {
           )}
         </div>
       )}
-    </section>
+    </Panel>
   )
 }

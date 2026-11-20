@@ -775,6 +775,20 @@ omitted under the issue's 15 November cutoff exception; the approved postmortem 
 
 ---
 
+## Demo warm-up readiness (Issue #253)
+
+These shell regression checks use synthetic HTTP responses from a curl stub, without calling deployed services.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-OPS-253a | Decision table | All required health probes return 200 and traffic returns 200 or 202 | Exit 0; actual HTTP codes are printed; fresh-data banner appears | `scripts/test_demo_warmup.sh` (all-healthy, traffic-202) | Passed (2026-11-20, 55fbb07) |
+| TC-OPS-253b | Negative | Backend, AI service, or demo shop returns 503 through its retries | Exit 1, no traffic request, no fresh-data banner | `scripts/test_demo_warmup.sh` (backend-503, ai-service-503, demo-shop-503) | Passed (2026-11-20, 55fbb07) |
+| TC-OPS-253c | Negative | Traffic is rejected with 401 or 422 | Exit 1, the failing status is printed, no fresh-data banner | `scripts/test_demo_warmup.sh` (traffic-401, traffic-422) | Passed (2026-11-20, 55fbb07) |
+| TC-OPS-253d | Resilience | curl connection fails, or a health probe recovers on retry | Connection failure records HTTP 000 and exits 1; recovered health reaches exit 0 | `scripts/test_demo_warmup.sh` (connection-failed, retry-recovers) | Passed (2026-11-20, 55fbb07) |
+| TC-OPS-253e | Configuration | Public shop control URL, default loopback target, or a custom internal port | Payload targets the configured allowed internal origin, independently of the public control URL | `scripts/test_demo_warmup.sh` (public-shop-internal-target, custom-internal-port) | Passed (2026-11-20, 55fbb07) |
+
+---
+
 ## White-box testing
 
 Two rule methods get basis path testing, done by their owners once the code exists:

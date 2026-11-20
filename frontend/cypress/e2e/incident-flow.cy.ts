@@ -137,7 +137,7 @@ describe('Complete Incident Flow (Issue #57)', () => {
     // Admin registers a monitoring tool on /tools to get tool token
     cy.intercept('POST', '/api/tools').as('createToolReq')
     cy.visit('/tools')
-    cy.findByRole('heading', { name: 'Tools' }).should('be.visible')
+    cy.findByRole('heading', { name: 'Monitoring tools' }).should('be.visible')
     cy.findByRole('button', { name: 'Register tool' }).click()
 
     cy.findByRole('dialog').within(() => {

@@ -14,8 +14,12 @@ import {
   type TelemetryConnection,
   type TelemetryTest,
 } from '@/api/telemetryConnection'
+import { ErrorState } from '@/components/app/ErrorState'
+import { Health } from '@/components/app/Health'
+import { LoadingState } from '@/components/app/LoadingState'
+import { PageHeader } from '@/components/app/PageHeader'
+import { Panel } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -77,19 +81,15 @@ export function IntegrationsPage() {
   const connection = useQuery({ queryKey: ['telemetry-connection'], queryFn: getTelemetryConnection })
 
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="text-[44px] leading-[0.9] font-[750]" style={{ fontStretch: '62%' }}>
-          Integrations
-        </h1>
-        <p className="text-muted-foreground">
-          Connect your own Grafana. Settle reads your logs and metrics from it, and never from anyone else's.
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-[1180px] flex-col">
+      <PageHeader
+        title="Integrations"
+        description="Connect your own Grafana. Settle reads your logs and metrics from it, and never from anyone else's."
+      />
       {connection.isPending ? (
-        <p className="text-muted-foreground">Loading the connection…</p>
+        <LoadingState message="Loading the connection" />
       ) : connection.isError ? (
-        <p role="alert" className="text-destructive">{connection.error.message}</p>
+        <ErrorState message={connection.error.message} onRetry={() => connection.refetch()} />
       ) : (
         <GrafanaCard connection={connection.data} />
       )}
@@ -147,16 +147,16 @@ function GrafanaCard({ connection }: { connection: TelemetryConnection }) {
   })
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Grafana</CardTitle>
-        <CardDescription>
+    <Panel
+      title="Grafana"
+      action={connection.connected ? <Health tone="ok">Connected</Health> : <Health tone="neutral">Not connected</Health>}
+    >
+      <div className="flex flex-col gap-5 px-[19px] pb-[19px]">
+        <p className="text-[13px] text-muted-foreground">
           {connection.connected
-            ? `Connected${connection.updatedBy ? ` by ${connection.updatedBy}` : ''}${connection.updatedAt ? `, ${formatIst(connection.updatedAt)}` : ''}.`
-            : 'Not connected. Logs and metrics stay off until an Admin connects your Grafana.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+            ? `Connected${connection.updatedBy ? ` by ${connection.updatedBy}` : ''}${connection.updatedAt ? `, ${formatIst(connection.updatedAt)}` : ''}. Logs, metrics, and incident telemetry read from it.`
+            : 'Logs and metrics stay off until an Admin connects your Grafana.'}
+        </p>
         <Form {...form}>
           <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -207,7 +207,7 @@ function GrafanaCard({ connection }: { connection: TelemetryConnection }) {
             </div>
           </form>
         </Form>
-      </CardContent>
+      </div>
       <Dialog open={disconnecting} onOpenChange={setDisconnecting}>
         <DialogContent>
           <DialogHeader>
@@ -224,7 +224,7 @@ function GrafanaCard({ connection }: { connection: TelemetryConnection }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </Panel>
   )
 }
 

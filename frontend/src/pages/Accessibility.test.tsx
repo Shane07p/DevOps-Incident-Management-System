@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { isInaccessible, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -30,6 +30,9 @@ const incidents = [
     resolvedAt: null,
   },
 ]
+
+// Exercise both Home panels, including the in-progress incident link.
+incidents.push({ ...incidents[0], id: 8, reference: 'INC-8', title: 'Queue recovering', status: 'MONITORING' })
 
 const incident = {
   id: 7,
@@ -192,22 +195,43 @@ describe('Accessibility axe audit (Issue #251)', () => {
     expect(changeStatusButton).toHaveFocus()
   })
 
-  it('interactive elements on home have visible focus ring styles when tabbed', async () => {
+  it('every Home control is visible, focusable, and has a focus indicator in page order', async () => {
     renderAccessibilityPage('/home')
     await screen.findByRole('region', { name: /Waiting for acknowledgement/ })
 
-    // Tab through interactive elements and verify each focused element carries visible focus styles
-    for (let i = 0; i < 6; i++) {
-      await userEvent.tab()
-      const el = document.activeElement as HTMLElement
-      expect(el).not.toBe(document.body)
-      const className = el.className || ''
-      const hasFocusRing =
-        className.includes('focus:') ||
-        className.includes('focus-visible:') ||
-        className.includes('ring') ||
-        className.includes('outline')
-      expect(hasFocusRing).toBe(true)
+    const user = userEvent.setup()
+    const main = screen.getByRole('main')
+    const mainControls = [
+      within(main).getByRole('link', { name: 'Checkout failing' }),
+      within(main).getByRole('button', { name: 'Acknowledge and take Lead: INC-7' }),
+      within(main).getByRole('link', { name: 'All incidents' }),
+      within(main).getByRole('link', { name: 'Queue recovering' }),
+    ]
+    const controls = Array.from(document.querySelectorAll<HTMLElement>(
+      'a[href], button, input, select, textarea, [tabindex]',
+    )).filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && !isInaccessible(element))
+
+    // Include the shell and every main-page control, in DOM reading order; no fixed Tab limit.
+    expect(controls).toHaveLength(27)
+    expect(controls.filter((element) => main.contains(element))).toEqual(mainControls)
+    for (const control of controls) {
+      await user.tab()
+      expect(control).toHaveFocus()
+      expect(control).toBeVisible()
+      expect(control).not.toBeDisabled()
+
+      const classes = Array.from(control.classList)
+      const ring = classes.some((name) => /^focus-visible:ring-(?:[1-9]\d*|\[[1-9]\d*px\])$/.test(name))
+        && !classes.includes('focus-visible:ring-0')
+      const outline = classes.some((name) => /^focus-visible:outline-(?:[1-9]\d*|\[[1-9]\d*px\])$/.test(name))
+        && !classes.some((name) => /^focus-visible:outline-(?:none|hidden|0)$/.test(name))
+      expect(ring || outline, `Missing visible focus indicator: ${control.outerHTML}`).toBe(true)
+    }
+
+    // Reverse traversal must visit the same controls in reverse order, including the page content.
+    for (const control of controls.slice(0, -1).reverse()) {
+      await user.tab({ shift: true })
+      expect(control).toHaveFocus()
     }
   })
 })

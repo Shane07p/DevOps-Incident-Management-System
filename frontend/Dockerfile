@@ -2,7 +2,8 @@
 FROM node:24-alpine AS build
 WORKDIR /build
 COPY package.json package-lock.json ./
-RUN npm ci
+# Cypress runs on the CI runner; the UI image only needs its build dependencies.
+RUN CYPRESS_INSTALL_BINARY=0 npm ci
 COPY . .
 RUN npm run build
 

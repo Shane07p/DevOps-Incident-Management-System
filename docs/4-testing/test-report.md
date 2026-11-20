@@ -128,47 +128,52 @@ so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deploye
 
 ## Sprint 6 — AI Evaluation Runs (Issue #252)
 
-Evaluated on 19 November 2026, commit `c860689` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
-Model evaluated: `qwen2.5:0.5b` (the model configured in `.env.example` and `compose.yaml` for `OllamaProvider`).
+Evaluated on 2026-11-20, commit `bfa61e4` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
+Configured model: `qwen2.5:0.5b` (configuration only; see each section's provider).
+No live Ollama result is recorded in this report.
+
+Live-run status: **No**. The configured Ollama endpoint was unreachable; no inference with `OllamaProvider` or `qwen2.5:0.5b` was performed. The AI-2 and AI-3 numbers below are scripted pipeline checks.
 
 ### AI-2: AI SRE Scenario Investigation
 
-Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml`.
+Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml` and their recorded fixtures in `ai-service/data/fixtures/scenarios/`.
+All results and timings in this section come from scripted ScenarioEvaluatorProvider.
 
-- **Top-1 Cause Accuracy:** 5/5 on 5 demo scenarios
-- **Production Provider Execution (`qwen2.5:0.5b` via `OllamaProvider`):** Mean time to first hypothesis: 6.4 s (1.2 s – 2.8 s per turn over multi-turn tool investigation).
-- **Unit Test Baseline (Hermetic `ScenarioEvaluatorProvider`):** < 50 ms for hermetic CI assertions.
+- **Scripted cause-match check:** 5/5 on 5 demo scenarios (100.0%)
+- **End-to-end investigation duration (scripted ScenarioEvaluatorProvider):** mean 0.5 ms (min: 0.3 ms, max: 0.6 ms). The timer wraps the complete agent loop, not a streaming first-hypothesis event.
 
-| Scenario | Service | Fault Switch | Top-1 Hypothesis Matches Real Cause |
-|---|---|---|---|
-| `SCN-01` | payments | `slow_gateway` | **Passed** — "Payment gateway latency degradation" |
-| `SCN-02` | checkout | `error_spike` | **Passed** — "Database transaction deadlocks causing checkout failures" |
-| `SCN-03` | checkout | `bad_deploy` | **Passed** — "A recent checkout deployment introduced a regression" |
-| `SCN-04` | order-fulfillment | `queue_backlog` | **Passed** — "The order fulfillment worker is stalled or paused" |
-| `SCN-05` | payments | `expiring_certificate` | **Passed** — "Payment gateway TLS certificate expiry" |
+| Scenario | Service | Fault Switch | Cause Matches Scenario Label | Generated Top-1 Hypothesis | Time (ms) | Status |
+|---|---|---|---|---|---|---|
+| `SCN-01` | payments | `slow_gateway` | **Passed** | Payment gateway latency degradation. | 0.6 | `completed` |
+| `SCN-02` | checkout | `error_spike` | **Passed** | Database transaction deadlocks are causing checkout failures. | 0.3 | `completed` |
+| `SCN-03` | checkout | `bad_deploy` | **Passed** | A recent checkout deployment introduced a regression. | 0.5 | `completed` |
+| `SCN-04` | order-fulfillment | `queue_backlog` | **Passed** | The order fulfillment worker is stalled or paused. | 0.3 | `completed` |
+| `SCN-05` | payments | `expiring_certificate` | **Passed** | Payment gateway TLS certificate expiry. | 0.5 | `completed` |
 
-Demo data is cleaner than real production; report results as "5/5 on 5 demo scenarios".
+ScenarioEvaluatorProvider reads the expected hypotheses from scenarios.yaml. These are scripted pipeline regression checks, not measurements of model accuracy or inference latency.
 
 ### AI-3: Drafting Verification Checklist
 
-Evaluation across all writing kinds (SUMMARY, STATUS_UPDATE, POSTMORTEM) with real and adversarial inputs to verify reference sanitization and schema adherence.
+Evaluation across all writing kinds (`SUMMARY`, `STATUS_UPDATE`, `POSTMORTEM`) using scripted DraftingAdversarialProvider with reference sanitization and schema verification. All results and timings below come from that provider.
+Input is a synthetic INC-42 incident with timeline entries 1 and 2, an unconfirmed hypothesis, a synthetic follow-up record, and an accepted AI suggestion.
 
-- **Checklist Pass Rate:** 3/3 (100%)
-- **Fabricated Reference Leakage Rate:** 0.0% (100% rejection of fabricated `INC-999` and `entry #999`)
-- **Production Provider Execution (`qwen2.5:0.5b` via `OllamaProvider`):** Real generation latency 2.1 s – 4.5 s per draft.
-- **Unit Test Baseline (Hermetic `DraftingAdversarialProvider`):** < 20 ms for CI assertions.
+- **Checklist Pass Rate:** 3/3 (100.0%)
+- **Fabricated Reference Leakage Rate:** 0.0%
+- **Draft pipeline duration (scripted DraftingAdversarialProvider):** mean 0.2 ms (min: 0.1 ms, max: 0.4 ms)
+- Reference leakage is checked after production sanitization. It is not a measurement of raw model hallucinations or model accuracy.
 
-| Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Checklist Result |
-|---|---|---|---|---|
-| `SUMMARY` | Yes | Yes (0 leaked) | Yes | **Passed** |
-| `STATUS_UPDATE` | Yes | Yes (0 leaked) | Yes | **Passed** |
-| `POSTMORTEM` | Yes | Yes (0 leaked) | Yes (6 sections) | **Passed** |
+| Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Latency (ms) | Checklist Result |
+|---|---|---|---|---|---|
+| `SUMMARY` | Yes | Yes (0 leaked) | Yes | 0.4 | **Passed** |
+| `STATUS_UPDATE` | Yes | Yes (0 leaked) | Yes | 0.1 | **Passed** |
+| `POSTMORTEM` | Yes | Yes (0 leaked) | Yes | 0.1 | **Passed** |
 
 ### AI-4: Triage Severity Classification
 
-Evaluated against the 25 hand-labelled cases in `ai-service/data/triage_eval_set.jsonl` using the app's actual rule-based triage hint service (`TriageHintService` in #283 / `_classify_severity` in `ai-service/main.py`), replacing the earlier circular `triage.py` script.
+Evaluated against the 25 hand-labelled cases in `ai-service/data/triage_eval_set.jsonl` using PR #283's `POST /triage` endpoint (called by `TriageHintService` in the backend).
+Every count and percentage below comes from the real rule-based _classify_severity code in main.py through that endpoint; no live model or scripted provider is involved.
 
-- **Overall Triage Accuracy:** 11/25 (44.0% on 25 labelled cases across 13 services)
+- **Overall Triage Accuracy:** 11/25 (44.0%)
 
 | Severity Level | Labelled Cases | Correctly Classified | Accuracy |
 |---|---|---|---|
@@ -180,6 +185,15 @@ Evaluated against the 25 hand-labelled cases in `ai-service/data/triage_eval_set
 ### Notes
 
 - Evaluation runner: `ai-service/ai_evaluation.py`
-- Automated tests: `ai-service/tests/test_ai_evaluation.py`
-- AI-4 evaluation scores the app's real `_classify_severity` from PR #283 against `ai-service/data/triage_eval_set.jsonl` rather than an isolated rule file.
-- AI-2 and AI-3 evaluation runs use `OllamaProvider` with the app's configured model `qwen2.5:0.5b`; deterministic scripted providers (`ScenarioEvaluatorProvider` and `DraftingAdversarialProvider`) are maintained strictly as hermetic unit test fixtures.
+- Automated unit tests: `ai-service/tests/test_ai_evaluation.py`
+- AI-4 scores PR #283's `POST /triage` endpoint (`TriageHintService` backend integration) against `ai-service/data/triage_eval_set.jsonl`.
+- Each AI-2/AI-3 section identifies its actual provider. Scripted checks exercise the pipeline and must not be presented as live model results.
+
+### Reproduction and verification
+
+- Evaluation code: [bfa61e4](https://github.com/Shane07p/DevOps-Incident-Management-System/commit/bfa61e4ed9aa33be4ef3e3a070e9977afc44c1cc).
+- Scripted run: `cd ai-service && python ai_evaluation.py --use-mock --model qwen2.5:0.5b --markdown`.
+- Recorded logs, baseline/fault metric values, and deploys are adapted into evidence bundles; incident/timeline context is synthetic. The metric values are repackaged into baseline/fault points.
+- The triage requests use empty similar-incident and service lists; this run measures severity classification, not service routing.
+- Full AI-service suite on `bfa61e4`: `258 passed, 1 warning in 20.15s`. The warning is a Starlette/httpx dependency deprecation.
+- `python scripts/check_docs.py`: `Docs check passed.`

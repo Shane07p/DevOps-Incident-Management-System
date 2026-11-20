@@ -407,18 +407,33 @@ public class IncidentService {
 
 	/** Persists a comment as an independent timeline insert, including for closed incidents. */
 	@Transactional
-	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId, boolean viaMcp) {
 		Incident incident = requireIncident(incidentId);
 		AppUser actor = requireActor(actorId);
+		String details = viaMcp ? comment + " (via MCP)" : comment;
 		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
 				incident,
 				actor,
 				TimelineEventType.COMMENT,
-				comment,
+				details,
 				clock.instant()
 		));
 		publishIncidentChanged(incident);
+		if (viaMcp) {
+			auditService.record(
+					actor,
+					AuditAction.INCIDENT_COMMENT_ADDED,
+					AuditItemType.INCIDENT,
+					incident.getId(),
+					details
+			);
+		}
 		return toTimelineEntryResponse(entry);
+	}
+
+	@Transactional
+	public TimelineEntryResponse addComment(Long incidentId, String comment, Long actorId) {
+		return addComment(incidentId, comment, actorId, false);
 	}
 
 	/** Adds an evidence link without changing incident version or status. */
@@ -523,7 +538,7 @@ public class IncidentService {
 	 * stops the response clock, and cancels pending escalation.
 	 */
 	@Transactional
-	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId, boolean viaMcp) {
 		if (request == null || request.expectedVersion() == null) {
 			throw new FieldValidationException("expectedVersion", "The incident version you saw is required");
 		}
@@ -549,7 +564,7 @@ public class IncidentService {
 
 		escalationService.cancelTaskForIncident(incidentId, now);
 
-		String details = "Acknowledged by " + actor.getDisplayName();
+		String details = "Acknowledged by " + actor.getDisplayName() + (viaMcp ? " via MCP" : "");
 		TimelineEntry timelineEntry = new TimelineEntry(
 				incident,
 				actor,
@@ -559,9 +574,24 @@ public class IncidentService {
 		);
 		timelineEntryRepository.save(timelineEntry);
 
+		if (viaMcp) {
+			auditService.record(
+					actor,
+					AuditAction.INCIDENT_ACKNOWLEDGED,
+					AuditItemType.INCIDENT,
+					incident.getId(),
+					"Acknowledged via MCP by " + actor.getDisplayName()
+			);
+		}
+
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
 		publishIncidentChanged(incident);
 		return toResponse(incident, timeline);
+	}
+
+	@Transactional
+	public IncidentResponse acknowledgeIncident(Long incidentId, AcknowledgeRequest request, Long actorId) {
+		return acknowledgeIncident(incidentId, request, actorId, false);
 	}
 
 	/**

@@ -510,6 +510,24 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-D49g | Equivalence | Grafana's own webhook body with a firing and a resolved alert, then the same firing alert again | One incident; the resolved alert is listed as skipped; the repeat is counted once | `GrafanaWebhookTest` | Automated |
 | TC-D49h | Equivalence | Integrations page: connect, save again, test, disconnect | The first save needs a token; the saved token is never shown and an empty field keeps it; bad names and URLs are refused before the request; each store's test result shows; disconnecting asks first | `IntegrationsPage.test.tsx` | Automated |
 
+### Google and GitHub sign-in (D50)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-D50a | Equivalence | A verified Google account with no Settle account signs in, then names an org | A sign-up code; its details show the email; finishing creates the person with no password, the provider link, and an Admin membership; the code works once | `OAuthSignInServiceTest.aNewVerifiedAccountNamesItsOrgThenSignsUpWithNoPassword` (Testcontainers) | In review |
+| TC-D50b | Equivalence | A linked account signs in again | A login code that becomes a token once; a second exchange gets 401 | `OAuthSignInServiceTest.aLinkedAccountSignsInWithACodeThatWorksOnce` | In review |
+| TC-D50c | State transition | A verified GitHub account whose email matches a password account | Linked; the password is dropped; the old session token and a personal access token made before get 401; `ACCOUNT_LINKED` is audited; the code signs in to the same org | `OAuthSignInServiceTest.theFirstSignInLinksTheAccountWithThatEmailDropsItsPasswordAndEndsItsSessionsAndAccessTokens` | In review |
+| TC-D50d | Negative | An unverified email, and no email at all | Sent to `/login?oauth=unverified`; no code and no person created | `OAuthSignInServiceTest.anUnverifiedOrMissingEmailIsRefusedAndCreatesNothing` | In review |
+| TC-D50e | Negative | A disabled member signs in with Google | Sent to `/login?oauth=disabled`; nothing is linked and the password stays | `OAuthSignInServiceTest.aDisabledMemberIsRefusedAndTheirAccountIsLeftAsItWas` | In review |
+| TC-D50f | Negative | A sign-up code exchanged as a login code, a login code read as a sign-up code, an expired code, a made-up code | 401 each time | `OAuthSignInServiceTest.aCodeOfTheWrongKindOrPastItsLifetimeIsRefused` | In review |
+| TC-D50g | Equivalence | Start Google and GitHub sign-in, with a forged Host header; a provider that isn't set up; a callback with no sign-in behind it | 302 to the provider with the registered callback on `APP_PUBLIC_URL` and the right scopes; 404; back to `/login?oauth=failed` | `OAuthControllerTest` | In review |
+| TC-D50h | Equivalence | Sign-up details, sign-up, then a login code, over HTTP | 200 with the email; 201 with the new org and an Admin token; 200, then 401 for the reused code | `OAuthControllerTest.aSignUpCodeShowsItsDetailsThenCreatesTheOrgAndALoginCodeWorksOnce` | In review |
+| TC-D50l | Negative | Redeem a login code while the browser still sends a revoked or expired bearer token | 200: the code endpoints ignore the old token | `OAuthControllerTest.aCodeIsRedeemedEvenWhenTheBrowserStillSendsAnOldToken` | In review |
+| TC-D50m | Equivalence | Load a GitHub user from a server that answers like api.github.com; another provider; a primary email GitHub hasn't verified | The primary verified email is added from `/user/emails` with the user's token; no email lookup for another provider; none added when unverified | `ProviderUserServiceTest` | In review |
+| TC-D50i | Equivalence | Sign-in and sign-up pages with two, then no, providers set up; a return with `?oauth=unverified` | A button per provider linking to its sign-in; none when the server has none; the reason shown | `OAuth.test.tsx` | In review |
+| TC-D50j | Concurrency | The callback page with a code, rendered under React's StrictMode | The code is sent once, leaves the address bar, and the person lands on Home; a used code shows the server's message | `OAuth.test.tsx` | In review |
+| TC-D50k | Equivalence | The finish-sign-up page with a code, then with an expired one | The provider's email shown and the name filled in; it sends the org name and lands on Home; an expired code shows a way back | `OAuth.test.tsx` | In review |
+
 ### Evidence links (FR-09.3)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -546,6 +564,39 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | Automated |
 | TC-FR-18.4c | Transaction boundary | Duplicate-check and semantic-search requests embed a query before database access | The AI embedding request runs without an open database transaction | `IncidentSimilarityTransactionTest` | Automated |
 
+### AI-2 AI SRE in the app with Accept and Reject (Issue #242, FR-18, FR-19)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-18.1d | Equivalence | An Engineer/Admin investigates an incident with telemetry, timeline, and deploys | Result is stored with hypotheses and evidence attribution and returned; get latest returns it | `InvestigationIntegrationTest.investigateStoresVerifiedResultAndGetLatestReturnsIt` | Automated |
+| TC-FR-18.4d | Negative | The AI service is down or slow (503) | 503 returned, incident unaffected and still loads cleanly | `InvestigationIntegrationTest.aiDownReturns503AndIncidentStillLoadsUnaffected`, `AiInvestigationClientTest` | Automated |
+| TC-FR-18.4e | Transaction boundary | Investigation gathers evidence, calls AI service, and stores result | The AI investigation call runs outside database transaction | `InvestigationTransactionTest.investigationCallsAiOutsideDatabaseTransaction` | Automated |
+| TC-FR-19.1a | Role-based access | Viewer attempts to trigger investigation or decide on an action | Refused with 403 Forbidden | `InvestigationIntegrationTest.viewerCannotInvestigateOrDecide`, `SecurityMatrixTest` | Automated |
+| TC-FR-19.2a | Equivalence | An Engineer/Admin accepts or rejects an action | Decision is recorded with actor and timestamp; timeline entry is appended | `InvestigationIntegrationTest.acceptAndRejectActionsAreAttributedOnTimelineAndExecuteNothing` | Automated |
+| TC-FR-19.2b | Concurrency / conflict | An action that has already been decided is decided again | Refused with 409 Conflict | `InvestigationIntegrationTest.decideAlreadyDecidedActionReturnsConflict` | Automated |
+| TC-FR-19.3a | Negative | An action is accepted or rejected | Nothing is executed; incident status remains unchanged | `InvestigationIntegrationTest.acceptAndRejectActionsAreAttributedOnTimelineAndExecuteNothing` | Automated |
+
+### AI-3 drafting (Issue #246, FR-11.4)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-11.4a | Equivalence | Request SUMMARY, STATUS_UPDATE, and POSTMORTEM drafts | Each returns kind, text, generatedAt, and the six postmortem fields only for POSTMORTEM; drafting saves no timeline entries | `DraftIntegrationTest.eachDraftKindReturnsItsExpectedShapeWithoutSavingAnything`, `test_drafting.py` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4b | Negative | AI output invents an INC- reference or timeline entry reference | Fabricated references are removed from text and structured postmortem fields; real references remain | `DraftIntegrationTest.inventedIncidentAndEntryReferencesAreRemoved`, `test_drafting.py::test_draft_drops_invented_references` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4c | Negative | AI is unset, down, or slow | Existing incident gets 503 and remains usable; incident lookup runs first, so missing or other-org incidents get 404 | `DraftTransactionTest.disabledAiReturns503OnlyAfterIncidentLookup`, `DraftIntegrationTest.aiDownReturns503AndIncidentStillWorks`, `AiDraftClientTest`, `OrgIsolationTest` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4d | Role-based access | Viewer requests a draft | 403 Forbidden; Engineer/Admin requests follow the incident lookup and AI availability rules | `DraftIntegrationTest.viewerGets403`, `SecurityMatrixTest` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4e | Transaction boundary | A draft loads its evidence and calls AI | Evidence is copied into plain records in a short transaction; the AI call runs outside a transaction | `DraftTransactionTest.draftingCallsAiOutsideDatabaseTransaction` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4f | Prompt contract | Any draft kind includes AI hypotheses | Prompt marks hypotheses unconfirmed; a suspected cause is never a confirmed root cause unless the timeline confirms it | `test_drafting.py::test_prompt_marks_hypotheses_unconfirmed` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4g | Evidence contract | Incident has follow-ups and an investigation with accepted, rejected, and pending actions | Real follow-ups include title, kind, owner display name, due date, status; latest hypotheses retain rank/title/confidence; accepted AI suggestions are sent separately and are not treated as executed | `DraftIntegrationTest.sendsRealFollowUpsAndLatestHypothesesSeparatelyFromAcceptedActions`, `test_drafting.py::test_prompt_keeps_follow_ups_separate_from_accepted_ai_suggestions` | Passed (2026-11-20, 6f16ece) |
+
+### AI-4 Triage hint on declare form (Issue #247)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-4a | Equivalence | Stubbed `/triage` with valid title, similar incidents, and org services | 200 with `aiGenerated: true`, suggested severity, valid org service, and human-readable reason | `TriageHintServiceTest`, `test_triage.py` | Automated |
+| TC-AI-4b | Scenario | Click Apply button on displayed AI triage hint | Form's severity and service fields are populated with the suggested values | `TriageHint.test.tsx` | Automated |
+| TC-AI-4c | Scenario | AI triage hint displayed without clicking Apply | Form values remain untouched/unchanged; user retains full manual control | `TriageHint.test.tsx` | Automated |
+| TC-AI-4d | Negative | AI service returns 503, times out, or is offline | Triage hint is silently hidden and incident declaration proceeds normally without blocking | `TriageHint.test.tsx`, `IncidentControllerTest` | Automated |
+
 ### Public status page (FR-21, D45): decision table on who may publish
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -564,7 +615,14 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | --- | --- | --- | --- | --- | --- |
 | TC-FR-28.1a | Equivalence | Each read tool against a stubbed REST API | The caller's token is forwarded; the result is shaped for the assistant | `test_mcp_server.py` | Automated |
 | TC-FR-28.1b | Negative | The API answers 401, 403, 429, or any other error status | A readable tool error, never data; a 429 says when to try again | `test_mcp_server.py` | Automated |
-| TC-FR-28.2a | Negative | List the server's tools | No write tool, and none that changes status, declares, or closes | `test_mcp_server.py` | Automated |
+| TC-FR-28.2a | Negative | List the server's tools | Permits only `add_comment` and `acknowledge`; none that changes status, declares, or closes | `test_mcp_server.py` | Automated |
+| TC-FR-28.2b | Equivalence | Call `add_comment` and `acknowledge` | Both write tools forward the caller's PAT to backend REST endpoints | `test_mcp_server.py` | Automated |
+| TC-FR-28.2c | Negative | Viewer PAT calls `add_comment` or `acknowledge` | Viewer role is refused with a readable HTTP 403 error | `test_mcp_server.py`, `McpAttributionTest` | Automated |
+| TC-FR-28.2d | Negative | Call `acknowledge` with a stale expected version | Returns a readable HTTP 409 conflict error with retry guidance | `test_mcp_server.py`, `McpAttributionTest` | Automated |
+| TC-FR-28.2e | Equivalence | Add comment using a PAT | Timeline entry and audit log record "(via MCP)" attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2f | Equivalence | Acknowledge incident using a PAT | Timeline entry and audit log record "via MCP" attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2g | Negative | Add comment or acknowledge incident using regular browser JWT | Timeline entry and audit log do NOT contain MCP attribution | `McpAttributionTest` | Automated |
+| TC-FR-28.2h | Negative | Call `add_comment` or `acknowledge` with a browser session token instead of a PAT | A readable tool error, and no request reaches the backend | `test_mcp_server.py` | Automated |
 
 ### Pages: audit log, service map, SLA clocks
 
@@ -670,6 +728,14 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-DR-06c | Concurrency | An edit has written a reviewed postmortem back to DRAFT and not committed when a close of the SEV2 incident reads it (PostgreSQL) | The close waits for the edit, then gets 409; the incident stays RESOLVED and the postmortem is DRAFT | `PostmortemConcurrencyTest.aClosureOverlappingAnEditWaitsForItAndThenRefuses` | Automated | Shane |
 | TC-DR-06d | State transition | A SEV1 incident is lowered to SEV3, then closed without, then with, a reviewed postmortem | 409 until the postmortem is REVIEWED (judged by the highest severity reached, DR-06.3); then 200 and CLOSED | `PostmortemTest.aDowngradedIncidentStillNeedsAReviewedPostmortemToClose` | Automated | Shane |
 
+### Performance and latency (NFR-01, Issue #250)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-NFR-01.1a | Performance | 10 concurrent VUs query the incident board (`GET /api/incidents`) with 1,000 stored incidents | 95th percentile response time $< 2,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-1-incidents.js` | Automated |
+| TC-NFR-01.1b | Performance | 10 concurrent VUs query incident detail (`GET /api/incidents/{id}`) with 1,000 stored incidents | 95th percentile response time $< 2,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-1-incidents.js` | Automated |
+| TC-NFR-01.2a | Performance | Webhook alert intake (`POST /webhooks/alerts`) at a constant arrival rate of 10 alerts/sec for 30s | 95th percentile response time $< 1,000\text{ ms}$; HTTP failure rate $< 1\%$ | `perf/nfr-01-2-alerts.js` | Automated |
+
 ---
 
 ## White-box testing
@@ -707,3 +773,20 @@ Ten decisions: the two null checks, six branches of the seven-case `switch (from
 | TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | Automated |
 | TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | Automated |
 | TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | Automated |
+
+### AI incident panel (#249)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-249a | Equivalence | Engineer opens an incident with investigation results | AI summary, ranked hypotheses, confidence and evidence are displayed | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249b | Equivalence | Engineer starts an investigation | Investigation request is sent and results are displayed | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249c | Decision table | Engineer accepts or rejects a suggested action | Decision is submitted; investigation results and the incident timeline query are refreshed | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249d | Decision table | Viewer opens an incident with investigation results | Viewer can read results but cannot investigate or accept/reject actions | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249e | Negative | AI investigation endpoint returns 503 | Panel displays an AI-unavailable message; incident page remains usable | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249f | Equivalence | Engineer selects Catch me up | AI summary draft appears in an editable text area | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249g | Equivalence | Engineer selects Draft update | Generated text fills the public update form and remains editable; it is not automatically published | `PublicUpdateForm.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249h | Negative | AI draft endpoint returns 503 | Public update form displays an AI-unavailable message and remains usable | `PublicUpdateForm.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249i | Equivalence | Engineer or Admin selects Draft postmortem (AI) | POST sends kind POSTMORTEM; all six form fields fill from postmortem and stay editable; no save occurs until Save draft is clicked; explicit save includes edits and the saved version | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249j | Negative | Postmortem draft endpoint returns 503 | The panel's AI-unavailable message is shown; existing form values remain and manual editing/saving stays available | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249k | Role-based access | Viewer opens the postmortem page | Draft postmortem (AI) is hidden along with save controls; the form stays read-only | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249l | Negative | AI response has a null postmortem | An error is shown and the existing form values are preserved | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |

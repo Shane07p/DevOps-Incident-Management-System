@@ -23,6 +23,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
@@ -40,6 +41,8 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration(proxyBeanMethods = false)
 class SecurityConfig {
 
+	private static final String OAUTH_AUTHORIZATION_BASE = "/api/auth/oauth2/authorization";
+
 	@Bean
 	@Order(1)
 	SecurityFilterChain webhookSecurityFilterChain(HttpSecurity http) throws Exception {
@@ -50,8 +53,34 @@ class SecurityConfig {
 		return http.build();
 	}
 
+	/**
+	 * The round trip to Google or GitHub (D50). It needs a short session for the OAuth state between the redirect
+	 * and the callback, so it has its own chain; the handler throws the session away at the end. The paths sit under
+	 * /api so the frontend's /api proxy carries them, and the session cookie stays on the app's own domain.
+	 */
 	@Bean
 	@Order(2)
+	SecurityFilterChain oauthLoginFilterChain(HttpSecurity http, OAuthLoginHandler handler, ProviderUserService providerUserService,
+			ClientRegistrationRepository registrations)
+			throws Exception {
+		// CSRF protection stays on: this chain is the one with a session cookie. Its two endpoints are GETs, which CSRF
+		// checks leave alone, and the OAuth state parameter ties each callback to the sign-in that started it.
+		http.securityMatcher("/api/auth/oauth2/**")
+				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+				.authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
+				.oauth2Login(login -> login
+						.loginPage("/login")
+						.authorizationEndpoint(endpoint -> endpoint.baseUri(OAUTH_AUTHORIZATION_BASE)
+								.authorizationRequestResolver(new KnownProvidersOnly(registrations, OAUTH_AUTHORIZATION_BASE)))
+						.redirectionEndpoint(endpoint -> endpoint.baseUri("/api/auth/oauth2/callback/*"))
+						.userInfoEndpoint(userInfo -> userInfo.userService(providerUserService))
+						.successHandler(handler)
+						.failureHandler(handler));
+		return http.build();
+	}
+
+	@Bean
+	@Order(3)
 	SecurityFilterChain securityFilterChain(
 			HttpSecurity http,
 			JwtUserConverter jwtUserConverter,
@@ -63,6 +92,10 @@ class SecurityConfig {
 						.requestMatchers("/error", "/actuator/health/**", "/actuator/info", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
+						// Google and GitHub sign-in: the providers list, and redeeming a one-time code (D50).
+						.requestMatchers(HttpMethod.GET, "/api/auth/oauth/providers").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/auth/oauth/exchange", "/api/auth/oauth/signup", "/api/auth/oauth/signup/details")
+						.permitAll()
 						// The public status page is for customers, who have no account (D45).
 						.requestMatchers(HttpMethod.GET, "/api/public/status/*").permitAll()
 						// Public heartbeats ping needs no login (FR-22).
@@ -82,6 +115,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/heartbeats/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/triage-hint").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/acknowledge").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/transitions").hasAnyRole("ADMIN", "ENGINEER")
@@ -102,11 +136,15 @@ class SecurityConfig {
 						// Reading follow-ups is open to every role; adding and changing them is for responders (#240).
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/follow-ups").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/follow-ups/*").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/investigations").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/drafts").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/investigations/*/actions/*/decision").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer
 						.bearerTokenResolver(request -> {
-							// A logged-in browser may send an expired token to the public page; it needs none.
-							if (request.getRequestURI().startsWith("/api/public/")) {
+							// A logged-in browser may send an expired token to the public page; it needs none. The same goes for
+							// redeeming a Google or GitHub sign-in code: linking may just have revoked the token the tab still holds.
+							if (request.getRequestURI().startsWith("/api/public/") || request.getRequestURI().startsWith("/api/auth/oauth/")) {
 								return null;
 							}
 							String header = request.getHeader(HttpHeaders.AUTHORIZATION);

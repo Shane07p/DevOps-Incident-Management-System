@@ -20,6 +20,7 @@ import { IncidentActions } from './incident/IncidentActions'
 import { IncidentAlerts } from './incident/IncidentAlerts'
 import { IncidentDeploys } from './incident/IncidentDeploys'
 import { IncidentEvidence } from './incident/IncidentEvidence'
+import { IncidentAIPanel } from './incident/IncidentAIPanel'
 import { IncidentTelemetry } from './incident/IncidentTelemetry'
 import { IncidentTimeline } from './incident/IncidentTimeline'
 import { PublicUpdates } from './incident/PublicUpdateForm'
@@ -173,6 +174,9 @@ export function IncidentDetailPage() {
                 <span className="text-muted-foreground">No Lead yet</span>
               )}
             </div>
+            <Link to={`/incidents/${incident.data.id}/postmortem`} className="w-fit text-sm font-medium text-primary underline">
+              Open postmortem →
+            </Link>
           </header>
 
           <Lifecycle status={incident.data.status} />
@@ -202,7 +206,7 @@ export function IncidentDetailPage() {
               <IncidentDeploys incident={incident.data} />
 
               <IncidentEvidence incidentId={incident.data.id} timeline={incident.data.timeline} />
-
+              <IncidentAIPanel incidentId={incident.data.id} />
               <IncidentTelemetry serviceId={incident.data.service.id} createdAt={incident.data.createdAt} />
 
               {user && user.role !== 'VIEWER' && (

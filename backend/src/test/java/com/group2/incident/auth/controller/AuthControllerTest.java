@@ -217,6 +217,15 @@ class AuthControllerTest {
 		mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
 	}
 
+	// D50: with no client ids set, no sign-in provider is offered, and the app shows only the password form.
+	@Test
+	void noSignInProviderIsOfferedUntilOneIsSetUp() throws Exception {
+		mvc.perform(get("/api/auth/oauth/providers"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.providers").isEmpty());
+		mvc.perform(get("/api/auth/oauth2/authorization/google")).andExpect(status().isNotFound());
+	}
+
 	// The deploy check reads the running commit here; on Render it is RENDER_GIT_COMMIT, in tests "local".
 	@Test
 	void infoNamesTheRunningCommitWithoutAToken() throws Exception {

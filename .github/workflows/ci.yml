@@ -222,6 +222,17 @@ jobs:
         if: always()
         run: docker compose --profile app down -v
 
+  demo-warmup:
+    name: Demo warm-up checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check script syntax and exit-code regressions
+        run: |
+          bash -n scripts/demo-warmup.sh
+          bash -n scripts/test_demo_warmup.sh
+          bash scripts/test_demo_warmup.sh
+
   # A token, key, or password committed anywhere in the history fails the build (.gitleaks.toml lists what is allowed).
   secret-scan:
     name: Secret scan

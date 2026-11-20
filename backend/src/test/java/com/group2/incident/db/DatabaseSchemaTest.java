@@ -28,7 +28,9 @@ class DatabaseSchemaTest {
 			List.of("organization", "membership", "app_user", "audit_entry", "service", "service_sla_target", "incident", "timeline_entry",
 					"monitoring_tool", "escalation_policy", "escalation_step", "escalation_task", "escalation_task_step", "outbox",
 					"alert", "notification", "uptime_monitor", "monitor_check_result", "service_dependency", "personal_access_token",
-					"deployment", "incident_deployment", "public_update", "heartbeat", "telemetry_connection", "postmortem");
+					"deployment", "incident_deployment", "public_update", "heartbeat", "telemetry_connection", "postmortem",
+					"user_identity", "oauth_ticket",
+					"investigation", "investigation_hypothesis", "investigation_evidence", "investigation_action");
 
 	@Autowired
 	private JdbcTemplate jdbc;

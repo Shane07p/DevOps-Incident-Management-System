@@ -19,4 +19,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 	@Query("update AppUser u set u.tokenVersion = u.tokenVersion + 1 where u.id = :id")
 	int revokeTokens(@Param("id") long id);
 
+	// Linking a Google or GitHub account proves the email; a password set before that was never proved, so it goes,
+	// and every token issued so far stops working (D50).
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update AppUser u set u.passwordHash = null, u.tokenVersion = u.tokenVersion + 1 where u.id = :id")
+	int dropPasswordAndRevokeTokens(@Param("id") long id);
+
 }

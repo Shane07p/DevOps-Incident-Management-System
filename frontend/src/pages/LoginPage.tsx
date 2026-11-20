@@ -1,13 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { ApiRequestError } from '@/api/client'
 import { useAuth } from '@/auth/AuthProvider'
 import { AuthField } from './auth/AuthField'
 import { AuthLayout } from './auth/AuthLayout'
 import { nameFromEmail, orgFromEmail, settleDelay } from './auth/identity'
+import { OAuthButtons } from './auth/OAuthButtons'
 
 const loginSchema = z.object({
   email: z.email({ error: 'Write your work email, like name@company.com.' }),
@@ -16,13 +17,21 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>
 
+// Why a Google or GitHub sign-in came back here, from ?oauth= (D50).
+const OAUTH_FAILURES: Record<string, string> = {
+  failed: 'Signing in with Google or GitHub didn’t finish. Try again, or use your email and password.',
+  unverified: 'That Google or GitHub account has no verified email, so Settle can’t tell who you are. Verify it there, or use your password.',
+  disabled: 'Your account in this workspace is disabled. Ask one of its Admins to enable it.',
+}
+
 export function LoginPage() {
   const { status, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   // 'entering' holds the page while the wall turns, after a successful sign-in.
   const [phase, setPhase] = useState<'idle' | 'signing-in' | 'entering'>('idle')
-  const [failure, setFailure] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  const [failure, setFailure] = useState<string | null>(() => OAUTH_FAILURES[searchParams.get('oauth') ?? ''] ?? null)
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
@@ -63,6 +72,7 @@ export function LoginPage() {
     <AuthLayout wall={{ org: orgFromEmail(email), person: nameFromEmail(email), entering: phase === 'entering' }}>
       <h2>Sign in to Settle</h2>
       <p>Use your work email and password.</p>
+      <OAuthButtons />
       <form className="auth-form" noValidate onSubmit={onSubmit}>
         <AuthField form={form} name="email" label="Work email" type="email" autoComplete="email" placeholder="asha.patel@settle.example" />
         <AuthField form={form} name="password" label="Password" type="password" autoComplete="current-password" />

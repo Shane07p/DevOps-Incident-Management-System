@@ -15,7 +15,25 @@ inactivity constraints that can disrupt a live evaluation if not mitigated befor
 | **Supabase** | Free PostgreSQL projects auto-pause after 7 days of inactivity. | Database connection refused (`500 Internal Server Error`). Restoring takes 1–3 minutes via the dashboard. | Automated keep-alive workflow ([`.github/workflows/keep-alive.yml`](../.github/workflows/keep-alive.yml)) queries the database twice daily via `/actuator/health`. Manual dashboard confirmation 24 hours prior. |
 | **Render** | Free web instances spin down after 15 minutes of inactivity. | First HTTP request incurs a 50–90 second cold start delay, causing apparent frontend hanging or gateway timeouts. | The 12-hour cron keeps Supabase and Grafana alive, but does **not** keep Render awake for a live demo. The [`scripts/demo-warmup.sh`](../scripts/demo-warmup.sh) script retries until HTTP 200 is confirmed; run this manual warm-up right before the demo (T-15m). |
 | **Grafana Cloud** | Prometheus metrics and Loki logs have a strict 14-day retention limit. | Incident investigation and telemetry dashboards show "No data" if no traffic has occurred recently. | Keep-alive workflow and warmup script invoke Demo Shop traffic generator (`POST /traffic/start`) to emit fresh OTLP telemetry spanning checkout, payments, and search. |
-| **Vercel** | Edge functions and static assets may experience initial cache misses. | Minor initial asset loading delay on first browser page load. | Warm-up script curls root `/` and public status page routes before presentation. |
+| **Vercel** | Edge functions and static assets may experience initial cache misses. | Minor initial asset loading delay on first browser page load. | Warm-up script probes root `/`; check the public status page manually below. |
+
+The warm-up script requires backend `/actuator/health`, AI-service `/health`, and demo-shop `/health`
+to return HTTP 200 after retries. A failed required check or a non-2xx `/traffic/start` response exits 1;
+curl connection failures are recorded as HTTP 000. Frontend probing is informational and prints a warning
+if it fails. Only a 2xx traffic response enables the `FRESH DATA INGESTED` banner; use the Grafana queries
+below to verify the exported data itself.
+
+Configure these Actions repository variables before enabling the scheduled workflow:
+`RENDER_BACKEND_URL`, `AI_SERVICE_URL`, `VERCEL_FRONTEND_URL`, and `DEMO_SHOP_URL`.
+They must be reachable from the runner; the workflow rejects missing values.
+Store `DEMO_SHOP_CONTROL_TOKEN` as an Actions secret.
+
+The public `DEMO_SHOP_URL` is only the address used to call the control API. Traffic is generated
+inside the demo shop, so `DEMO_SHOP_TRAFFIC_TARGET_URL` defaults to `http://127.0.0.1:8001`, which
+the existing allowlist accepts at the default port. If the shop runs with another `PORT`, set the
+optional Actions variable `DEMO_SHOP_TRAFFIC_TARGET_URL` to that loopback port (for example
+`http://127.0.0.1:10000` for `PORT=10000`). Keep the allowlist restricted; no wildcard or public-origin
+exception is needed. `OTEL_METRIC_EXPORT_INTERVAL` is 60000 ms, matching the code default.
 
 ---
 
@@ -39,12 +57,14 @@ Follow these steps sequentially to prepare the environment for evaluation.
    - From the repository root, run the warm-up script targeting production:
      ```bash
      BACKEND_URL=https://incident-backend-f340.onrender.com \
+     AI_SERVICE_URL=${AI_SERVICE_URL:?Set the reachable AI-service URL} \
      FRONTEND_URL=https://dev-ops-incident-management-system.vercel.app \
      DEMO_SHOP_URL=${DEMO_SHOP_URL:-http://localhost:8001} \
+     DEMO_SHOP_TRAFFIC_TARGET_URL=${DEMO_SHOP_TRAFFIC_TARGET_URL:-http://127.0.0.1:8001} \
      DEMO_SHOP_CONTROL_TOKEN=$DEMO_SHOP_CONTROL_TOKEN \
      ./scripts/demo-warmup.sh
      ```
-   - Alternatively, trigger the **Demo Keep-Alive and Telemetry Warmup** workflow manually in GitHub Actions via `workflow_dispatch` (reads URLs from repository variables `vars.RENDER_BACKEND_URL`, `vars.VERCEL_FRONTEND_URL`, `vars.DEMO_SHOP_URL`).
+   - Alternatively, trigger the **Demo Keep-Alive and Telemetry Warmup** workflow manually in GitHub Actions via `workflow_dispatch` using the variables above. A failed check makes the workflow fail instead of reporting readiness.
 
 3. **Inspect Render Deployment Logs:**
    - Check Render dashboards for `incident-backend-f340` (and demo shop service if hosted).
@@ -63,17 +83,15 @@ Follow these steps sequentially to prepare the environment for evaluation.
      ```
    - Run a Prometheus query to verify metric ingestion:
      ```promql
-     sum(rate(http_requests_total[5m]))
+     sum(rate(demo_http_requests_total[5m]))
      ```
    - Verify that data timestamps are within the last 30 minutes.
 
 5. **Verify User Accounts and Seed Data:**
    - Open the production frontend ([`https://dev-ops-incident-management-system.vercel.app`](https://dev-ops-incident-management-system.vercel.app)).
-   - Test login credentials for the standard demo personas:
-     - Admin: `admin@settle.local` / `DevPassw0rd!`
-     - Engineer: `engineer@settle.local` / `DevPassw0rd!`
-     - Viewer: `viewer@settle.local` / `DevPassw0rd!`
-   - Verify that the Service Catalog displays the registered services (e.g., `checkout`, `payments`, `auth`).
+   - Sign in with the Admin, Engineer, and Viewer accounts created for this deployment. Production
+     does not load the optional development seed accounts (D27); keep real credentials outside the repository.
+   - Verify that the Service Catalog displays the registered services (e.g., `checkout`, `payments`, `search`).
 
 ---
 
@@ -140,11 +158,12 @@ All core services can run entirely locally without cloud dependencies:
    ```
 2. Start the backend, frontend, and demo shop containers:
    ```bash
-   docker compose --profile app --profile demo up -d
+   docker compose --profile app --profile ai --profile demo up -d
    ```
 3. Verify local endpoints:
    - Frontend: `http://localhost:8081`
    - Backend API: `http://localhost:8080/actuator/health`
+   - AI service: `http://localhost:8000/health`
    - Demo Shop: `http://localhost:8001/health`
 
 ### Fallback 2: Local AI Service and Mock Investigations
@@ -161,10 +180,18 @@ If Ollama or external AI inference is unavailable:
 | --- | --- | --- | --- |
 | Supabase Project Status | Supabase Dashboard | Status is "Active" | Team |
 | Backend Health Probe | `GET /actuator/health` on `https://incident-backend-f340.onrender.com` | HTTP 200, status "UP" | Warmup Script |
+| AI Service Health Probe | `GET /health` on `AI_SERVICE_URL` | HTTP 200 | Warmup Script |
 | Database Connectivity | Verified via `/actuator/health` | `db` component UP | Warmup Script |
 | Frontend Route Response | `GET /` on `https://dev-ops-incident-management-system.vercel.app` | HTTP 200 | Warmup Script |
 | Public Status Page | `GET /status/{org-slug}` | HTTP 200, public UI | Browser |
-| Grafana OTLP Ingestion | Grafana Cloud Loki Explorer | Logs timestamped < 1h | Warmup Script / UI |
+| Grafana OTLP Ingestion | Grafana Cloud Loki Explorer and `demo_http_requests_total` | Logs/metrics are recent after accepted traffic | Grafana UI |
 | Demo Shop Fault Switch | `POST /faults/error_spike` with `{"enabled": true}` | HTTP 200, alert triggered | Manual / Script |
 | Persona Authentication | `/login` with demo credentials | JWT issued, dashboard loads | Browser |
 | Local Compose Fallback | `docker compose --profile app up -d` | Images cached and operational | Local machine |
+
+## Script regression checks
+
+Run `bash scripts/test_demo_warmup.sh`. Its curl stub contacts no deployed services and verifies
+healthy exit 0, each required service returning 503, rejected traffic (401/422), connection failure,
+retry recovery, accepted 202 traffic, and default/custom internal targets. These checks also run
+in the CI **Demo warm-up checks** job.

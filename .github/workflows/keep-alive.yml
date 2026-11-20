@@ -37,25 +37,29 @@ jobs:
       - name: Validate repository variables
         env:
           RENDER_BACKEND_URL: ${{ vars.RENDER_BACKEND_URL }}
+          AI_SERVICE_URL: ${{ vars.AI_SERVICE_URL }}
           VERCEL_FRONTEND_URL: ${{ vars.VERCEL_FRONTEND_URL }}
           DEMO_SHOP_URL: ${{ vars.DEMO_SHOP_URL }}
         run: |
           missing=()
           [ -z "$RENDER_BACKEND_URL" ] && missing+=("vars.RENDER_BACKEND_URL")
+          [ -z "$AI_SERVICE_URL" ] && missing+=("vars.AI_SERVICE_URL")
           [ -z "$VERCEL_FRONTEND_URL" ] && missing+=("vars.VERCEL_FRONTEND_URL")
           [ -z "$DEMO_SHOP_URL" ] && missing+=("vars.DEMO_SHOP_URL")
 
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required repository variable(s): ${missing[*]}"
-            echo "Configure RENDER_BACKEND_URL, VERCEL_FRONTEND_URL, and DEMO_SHOP_URL in Settings -> Secrets and variables -> Actions -> Variables."
+            echo "Configure RENDER_BACKEND_URL, AI_SERVICE_URL, VERCEL_FRONTEND_URL, and DEMO_SHOP_URL in Settings -> Secrets and variables -> Actions -> Variables."
             exit 1
           fi
 
       - name: Run warmup script
         env:
           BACKEND_URL: ${{ vars.RENDER_BACKEND_URL }}
+          AI_SERVICE_URL: ${{ vars.AI_SERVICE_URL }}
           FRONTEND_URL: ${{ vars.VERCEL_FRONTEND_URL }}
           DEMO_SHOP_URL: ${{ vars.DEMO_SHOP_URL }}
+          DEMO_SHOP_TRAFFIC_TARGET_URL: ${{ vars.DEMO_SHOP_TRAFFIC_TARGET_URL }}
           DEMO_SHOP_CONTROL_TOKEN: ${{ secrets.DEMO_SHOP_CONTROL_TOKEN }}
           WARMUP_TRAFFIC_SECONDS: ${{ github.event.inputs.warmup_traffic_seconds || '30' }}
         run: |

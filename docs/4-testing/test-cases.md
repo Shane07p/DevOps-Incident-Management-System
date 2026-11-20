@@ -760,6 +760,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 ---
 
+## Cypress incident flow (Issue #57)
+
+One scenario runs against the Compose app with a fresh synthetic organisation. AI investigation is
+omitted under the issue's 15 November cutoff exception; the approved postmortem step uses the API.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-E2E-57a | End to end | Create users/service/tool, ingest a SEV2 alert, acknowledge, publish a public update, resolve, review a postmortem, add a follow-up, close, and inspect Insights | The incident completes the legal lifecycle, the public update is visible, and MTTA/MTTR include the incident | `cypress/e2e/incident-flow.cy.ts` | In review |
+| TC-E2E-57b | Regression | Add Engineer and Viewer consecutively | Each dialog disappears before the next step; each name is asserted in the members table, not a toast | `cypress/e2e/incident-flow.cy.ts` (setup) | In review |
+| TC-E2E-57c | Component integration | Enable the Radix status-page checkbox while creating the service | Clicking its labelled button changes aria-checked to true; the public service/update can be read | `cypress/e2e/incident-flow.cy.ts` (service setup) | In review |
+| TC-E2E-57d | Decision table | Viewer opens the OPEN incident, then Engineer opens the same incident | Viewer reads the incident/timeline without acknowledge, status, assignment, or evidence actions; Engineer can acknowledge and take Lead | `cypress/e2e/incident-flow.cy.ts` (active Viewer and Engineer) | In review |
+| TC-E2E-57e | Decision table | Engineer posts a comment after CLOSED; Viewer reads the closed incident | Comment is saved and visible; Viewer has no comment form/button and cannot open the declare route | `cypress/e2e/incident-flow.cy.ts` (closed incident) | In review |
+
+---
+
 ## White-box testing
 
 Two rule methods get basis path testing, done by their owners once the code exists:

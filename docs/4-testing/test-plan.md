@@ -32,7 +32,7 @@ Sprint 6.
 | Mutation | Whether the tests catch small bugs in the transition and SLA rules | PIT | Every build, after the backend tests; fails below 95% |
 | Secret scan | A token, key, or password anywhere in the history | Gitleaks (`.gitleaks.toml`); optional pre-commit hook | Every build |
 | Manual acceptance | The sprint demo, in Chrome and Firefox | People | End of each sprint |
-| End to end | One complete incident flow in a browser | Cypress | Sprint 6 |
+| End to end | One complete incident flow in a browser, including active-incident Viewer restrictions and comments after closure | Cypress against the Compose stack; `incident-flow.cy.ts` in the CI `e2e` job | Every build |
 | Performance | NFR-01 response times and NFR-03 capacity on the deployed setup | k6 | Sprint 6 |
 
 Each behaviour is tested at the one level that can verify it best; the same rule is not repeated

@@ -17,6 +17,7 @@ describe('Complete Incident Flow (Issue #57)', () => {
   const alertDescription = 'Elevated 500 error rates detected across checkout endpoints.'
   const publicUpdateMessage = `Investigating checkout payment degradation. Team is mitigating (${timestamp}).`
   const recoveryNote = 'Rolled back release v2.4.1 to v2.4.0. Error rate returned to 0%.'
+  const closedIncidentComment = 'Recovery verified; follow-up work is tracked after closure.'
 
   let orgSlug = ''
   let toolToken = ''
@@ -76,7 +77,8 @@ describe('Complete Incident Flow (Issue #57)', () => {
       engineerId = interception.response?.body.id
       expect(engineerId).to.be.a('number')
     })
-    cy.contains(engineerName).should('be.visible')
+    cy.get('[role="dialog"]').should('not.exist')
+    cy.findByRole('table').contains(engineerName).should('be.visible')
 
     // Add Viewer
     cy.findByRole('button', { name: 'Add member' }).click()
@@ -91,7 +93,8 @@ describe('Complete Incident Flow (Issue #57)', () => {
       cy.findByRole('button', { name: 'Add member' }).click()
     })
     cy.wait('@createUserReq')
-    cy.contains(viewerName).should('be.visible')
+    cy.get('[role="dialog"]').should('not.exist')
+    cy.findByRole('table').contains(viewerName).should('be.visible')
 
     // Admin registers a service with SLA targets on /services
     cy.intercept('GET', '/api/services').as('getServicesReq')
@@ -123,7 +126,7 @@ describe('Complete Incident Flow (Issue #57)', () => {
       cy.findByLabelText('SEV4 resolution target, in minutes').type('2880')
 
       // Public status page visibility
-      cy.findByLabelText('Show this service on the status page').check()
+      cy.findByLabelText('Show this service on the status page').click().should('have.attr', 'aria-checked', 'true')
       cy.findByLabelText('Public name').type(serviceName)
 
       cy.findByRole('button', { name: 'Add service' }).click()
@@ -174,6 +177,32 @@ describe('Complete Incident Flow (Issue #57)', () => {
     })
 
     // -------------------------------------------------------------------------
+    // Check Viewer permissions while the incident is OPEN, when responders have actions.
+    cy.clearAllSessionStorage()
+    cy.intercept('POST', '/api/auth/login').as('activeViewerLoginReq')
+    cy.visit('/login')
+    cy.findByLabelText('Work email').type(viewerEmail)
+    cy.findByLabelText('Password').type(password)
+    cy.findByRole('button', { name: 'Sign in' }).click()
+    cy.wait('@activeViewerLoginReq').its('response.statusCode').should('eq', 200)
+    cy.url().should('include', '/home')
+
+    cy.intercept('GET', '/api/incidents').as('activeViewerIncidentsReq')
+    cy.visit('/incidents')
+    cy.wait('@activeViewerIncidentsReq')
+    cy.findByRole('link', { name: alertTitle }).click()
+    cy.url().should('match', /\/incidents\/\d+/).then((url) => {
+      incidentId = Number(url.match(/\/incidents\/(\d+)/)![1])
+    })
+    cy.findByRole('heading', { name: alertTitle }).should('be.visible')
+    cy.findByRole('region', { name: 'Timeline' }).within(() => {
+      cy.findByRole('list').should('be.visible')
+    })
+    cy.findByRole('button', { name: 'Change status' }).should('not.exist')
+    cy.findByRole('button', { name: 'Acknowledge' }).should('not.exist')
+    cy.findByRole('button', { name: /^(Assign|Reassign|Give a role)$/ }).should('not.exist')
+    cy.findByRole('button', { name: 'Add evidence' }).should('not.exist')
+
     // STEP 3: Acknowledge - Login as Engineer, acknowledge, and become Lead
     // -------------------------------------------------------------------------
     cy.clearAllSessionStorage()
@@ -205,7 +234,7 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.url().then((url) => {
       const match = url.match(/\/incidents\/(\d+)/)
       assert.isNotNull(match)
-      incidentId = Number(match![1])
+      expect(Number(match![1])).to.eq(incidentId)
     })
 
     // Acknowledge the incident
@@ -299,8 +328,8 @@ describe('Complete Incident Flow (Issue #57)', () => {
 
     // -------------------------------------------------------------------------
     // STEP 6: Postmortem - Write postmortem, review, follow-up, and close
-    // Note: The postmortem editor (#245, PR #269) has not merged; writing and
-    // reviewing the postmortem is done via cy.request against the API.
+    // The API-based postmortem step is retained under #57's 15 Nov cutoff
+    // exception and the prior review on this PR.
     // -------------------------------------------------------------------------
     cy.then(() => {
       // Create and save postmortem draft
@@ -375,6 +404,13 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.wait('@changeStatusReq')
     cy.contains('Closed').should('be.visible')
 
+    // Engineers can still comment after closure; the Viewer check below must distinguish roles.
+    cy.intercept('POST', '**/api/incidents/*/comments').as('closedCommentReq')
+    cy.findByRole('textbox', { name: 'Add a comment' }).type(closedIncidentComment)
+    cy.findByRole('button', { name: 'Post comment' }).click()
+    cy.wait('@closedCommentReq').its('response.statusCode').should('eq', 201)
+    cy.findByRole('region', { name: 'Timeline' }).should('contain', closedIncidentComment)
+
     // -------------------------------------------------------------------------
     // STEP 7: Insights - Verify incident is counted in MTTA and MTTR metrics
     // -------------------------------------------------------------------------
@@ -396,7 +432,7 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.contains('Mean Time to Resolve (MTTR)').should('be.visible')
 
     // -------------------------------------------------------------------------
-    // STEP 8: RBAC (Viewer) - Verify read-only access and refused at /incidents/new
+    // STEP 8: Viewer still reads the closed incident but cannot comment or declare incidents.
     // -------------------------------------------------------------------------
     cy.clearAllSessionStorage()
     cy.intercept('POST', '/api/auth/login').as('viewerLoginReq')
@@ -414,12 +450,9 @@ describe('Complete Incident Flow (Issue #57)', () => {
     })
     cy.contains(alertTitle).should('be.visible')
 
-    // Verify Viewer has NO responder/action buttons
-    cy.findByRole('button', { name: 'Acknowledge' }).should('not.exist')
-    cy.findByRole('button', { name: 'Change status' }).should('not.exist')
-    cy.findByRole('button', { name: 'Change severity' }).should('not.exist')
-    cy.findByRole('button', { name: 'Reassign' }).should('not.exist')
-    cy.findByRole('button', { name: 'Give a role' }).should('not.exist')
+    cy.findByRole('region', { name: 'Timeline' }).should('contain', closedIncidentComment)
+    cy.findByRole('textbox', { name: 'Add a comment' }).should('not.exist')
+    cy.findByRole('button', { name: 'Post comment' }).should('not.exist')
 
     // Try to navigate to /incidents/new -> refused and redirected back home
     cy.visit('/incidents/new')

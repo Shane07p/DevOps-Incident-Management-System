@@ -137,3 +137,77 @@ Measured on 18 November 2026, commit `4f64481` (updated 20 November 2026 for rev
 | Manual Browser Contrast Audit | Evaluated in Chrome 155 with axe DevTools and Lighthouse across the 5 main pages in both light and dark themes (Home `/home`, Incidents `/incidents`, Incident detail `/incidents/7`, Services `/services`, and Public Status `/status/acme`). Normal body text meets the WCAG AA minimum contrast ratio of 4.5:1 (e.g. foreground text against light `#FFFFFF` background >= 12:1; foreground text against dark `#0B0F19` background >= 14:1). Large text and active UI control borders meet or exceed 3.0:1. 0 contrast violations found across both themes. |
 | Defects | 0 serious or critical violations found. |
 | Notes | Issue #251 acceptance criteria fully satisfied with automated Vitest + axe-core suite and manual browser contrast verification. |
+
+---
+
+## Sprint 6 — AI Evaluation Runs (Issue #252)
+
+Evaluated on 2026-11-20, commit `bfa61e4` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
+Configured model: `qwen2.5:0.5b` (configuration only; see each section's provider).
+No live Ollama result is recorded in this report.
+
+Live-run status: **No**. The configured Ollama endpoint was unreachable; no inference with `OllamaProvider` or `qwen2.5:0.5b` was performed. The AI-2 and AI-3 numbers below are scripted pipeline checks.
+
+### AI-2: AI SRE Scenario Investigation
+
+Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml` and their recorded fixtures in `ai-service/data/fixtures/scenarios/`.
+All results and timings in this section come from scripted ScenarioEvaluatorProvider.
+
+- **Scripted cause-match check:** 5/5 on 5 demo scenarios (100.0%)
+- **End-to-end investigation duration (scripted ScenarioEvaluatorProvider):** mean 0.5 ms (min: 0.3 ms, max: 0.6 ms). The timer wraps the complete agent loop, not a streaming first-hypothesis event.
+
+| Scenario | Service | Fault Switch | Cause Matches Scenario Label | Generated Top-1 Hypothesis | Time (ms) | Status |
+|---|---|---|---|---|---|---|
+| `SCN-01` | payments | `slow_gateway` | **Passed** | Payment gateway latency degradation. | 0.6 | `completed` |
+| `SCN-02` | checkout | `error_spike` | **Passed** | Database transaction deadlocks are causing checkout failures. | 0.3 | `completed` |
+| `SCN-03` | checkout | `bad_deploy` | **Passed** | A recent checkout deployment introduced a regression. | 0.5 | `completed` |
+| `SCN-04` | order-fulfillment | `queue_backlog` | **Passed** | The order fulfillment worker is stalled or paused. | 0.3 | `completed` |
+| `SCN-05` | payments | `expiring_certificate` | **Passed** | Payment gateway TLS certificate expiry. | 0.5 | `completed` |
+
+ScenarioEvaluatorProvider reads the expected hypotheses from scenarios.yaml. These are scripted pipeline regression checks, not measurements of model accuracy or inference latency.
+
+### AI-3: Drafting Verification Checklist
+
+Evaluation across all writing kinds (`SUMMARY`, `STATUS_UPDATE`, `POSTMORTEM`) using scripted DraftingAdversarialProvider with reference sanitization and schema verification. All results and timings below come from that provider.
+Input is a synthetic INC-42 incident with timeline entries 1 and 2, an unconfirmed hypothesis, a synthetic follow-up record, and an accepted AI suggestion.
+
+- **Checklist Pass Rate:** 3/3 (100.0%)
+- **Fabricated Reference Leakage Rate:** 0.0%
+- **Draft pipeline duration (scripted DraftingAdversarialProvider):** mean 0.2 ms (min: 0.1 ms, max: 0.4 ms)
+- Reference leakage is checked after production sanitization. It is not a measurement of raw model hallucinations or model accuracy.
+
+| Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Latency (ms) | Checklist Result |
+|---|---|---|---|---|---|
+| `SUMMARY` | Yes | Yes (0 leaked) | Yes | 0.4 | **Passed** |
+| `STATUS_UPDATE` | Yes | Yes (0 leaked) | Yes | 0.1 | **Passed** |
+| `POSTMORTEM` | Yes | Yes (0 leaked) | Yes | 0.1 | **Passed** |
+
+### AI-4: Triage Severity Classification
+
+Evaluated against the 25 hand-labelled cases in `ai-service/data/triage_eval_set.jsonl` using PR #283's `POST /triage` endpoint (called by `TriageHintService` in the backend).
+Every count and percentage below comes from the real rule-based _classify_severity code in main.py through that endpoint; no live model or scripted provider is involved.
+
+- **Overall Triage Accuracy:** 11/25 (44.0%)
+
+| Severity Level | Labelled Cases | Correctly Classified | Accuracy |
+|---|---|---|---|
+| **SEV1** | 6 | 3 | 50.0% |
+| **SEV2** | 7 | 2 | 28.6% |
+| **SEV3** | 6 | 5 | 83.3% |
+| **SEV4** | 6 | 1 | 16.7% |
+
+### Notes
+
+- Evaluation runner: `ai-service/ai_evaluation.py`
+- Automated unit tests: `ai-service/tests/test_ai_evaluation.py`
+- AI-4 scores PR #283's `POST /triage` endpoint (`TriageHintService` backend integration) against `ai-service/data/triage_eval_set.jsonl`.
+- Each AI-2/AI-3 section identifies its actual provider. Scripted checks exercise the pipeline and must not be presented as live model results.
+
+### Reproduction and verification
+
+- Evaluation code: [bfa61e4](https://github.com/Shane07p/DevOps-Incident-Management-System/commit/bfa61e4ed9aa33be4ef3e3a070e9977afc44c1cc).
+- Scripted run: `cd ai-service && python ai_evaluation.py --use-mock --model qwen2.5:0.5b --markdown`.
+- Recorded logs, baseline/fault metric values, and deploys are adapted into evidence bundles; incident/timeline context is synthetic. The metric values are repackaged into baseline/fault points.
+- The triage requests use empty similar-incident and service lists; this run measures severity classification, not service routing.
+- Full AI-service suite on `bfa61e4`: `258 passed, 1 warning in 20.15s`. The warning is a Starlette/httpx dependency deprecation.
+- `python scripts/check_docs.py`: `Docs check passed.`

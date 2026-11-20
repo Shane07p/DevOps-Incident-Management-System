@@ -146,7 +146,8 @@ describe('Acknowledge', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('INC-7 changed while you were looking at it, so nothing was saved.')
+    expect(await within(screen.getByRole('region', { name: 'Actions and roles' })).findByRole('alert'))
+      .toHaveTextContent('INC-7 changed while you were looking at it, so nothing was saved.')
     await waitFor(() => expect(actions()).toHaveTextContent('LeadDev Admin'))
     expect(reads).toBe(2)
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument()
@@ -206,7 +207,8 @@ describe('Change status', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Change status' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(screen.getByRole('alert')).toHaveTextContent('INC-7 changed while you were looking at it')
+    expect(within(screen.getByRole('region', { name: 'Actions and roles' })).getByRole('alert'))
+      .toHaveTextContent('INC-7 changed while you were looking at it')
   })
 })
 

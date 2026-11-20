@@ -137,6 +137,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/follow-ups").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.PUT, "/api/follow-ups/*").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/incidents/*/investigations").hasAnyRole("ADMIN", "ENGINEER")
+						.requestMatchers(HttpMethod.POST, "/api/incidents/*/drafts").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/investigations/*/actions/*/decision").hasAnyRole("ADMIN", "ENGINEER")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resourceServer -> resourceServer

@@ -576,6 +576,18 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-19.2b | Concurrency / conflict | An action that has already been decided is decided again | Refused with 409 Conflict | `InvestigationIntegrationTest.decideAlreadyDecidedActionReturnsConflict` | Automated |
 | TC-FR-19.3a | Negative | An action is accepted or rejected | Nothing is executed; incident status remains unchanged | `InvestigationIntegrationTest.acceptAndRejectActionsAreAttributedOnTimelineAndExecuteNothing` | Automated |
 
+### AI-3 drafting (Issue #246, FR-11.4)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-11.4a | Equivalence | Request SUMMARY, STATUS_UPDATE, and POSTMORTEM drafts | Each returns kind, text, generatedAt, and the six postmortem fields only for POSTMORTEM; drafting saves no timeline entries | `DraftIntegrationTest.eachDraftKindReturnsItsExpectedShapeWithoutSavingAnything`, `test_drafting.py` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4b | Negative | AI output invents an INC- reference or timeline entry reference | Fabricated references are removed from text and structured postmortem fields; real references remain | `DraftIntegrationTest.inventedIncidentAndEntryReferencesAreRemoved`, `test_drafting.py::test_draft_drops_invented_references` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4c | Negative | AI is unset, down, or slow | Existing incident gets 503 and remains usable; incident lookup runs first, so missing or other-org incidents get 404 | `DraftTransactionTest.disabledAiReturns503OnlyAfterIncidentLookup`, `DraftIntegrationTest.aiDownReturns503AndIncidentStillWorks`, `AiDraftClientTest`, `OrgIsolationTest` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4d | Role-based access | Viewer requests a draft | 403 Forbidden; Engineer/Admin requests follow the incident lookup and AI availability rules | `DraftIntegrationTest.viewerGets403`, `SecurityMatrixTest` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4e | Transaction boundary | A draft loads its evidence and calls AI | Evidence is copied into plain records in a short transaction; the AI call runs outside a transaction | `DraftTransactionTest.draftingCallsAiOutsideDatabaseTransaction` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4f | Prompt contract | Any draft kind includes AI hypotheses | Prompt marks hypotheses unconfirmed; a suspected cause is never a confirmed root cause unless the timeline confirms it | `test_drafting.py::test_prompt_marks_hypotheses_unconfirmed` | Passed (2026-11-20, 6f16ece) |
+| TC-FR-11.4g | Evidence contract | Incident has follow-ups and an investigation with accepted, rejected, and pending actions | Real follow-ups include title, kind, owner display name, due date, status; latest hypotheses retain rank/title/confidence; accepted AI suggestions are sent separately and are not treated as executed | `DraftIntegrationTest.sendsRealFollowUpsAndLatestHypothesesSeparatelyFromAcceptedActions`, `test_drafting.py::test_prompt_keeps_follow_ups_separate_from_accepted_ai_suggestions` | Passed (2026-11-20, 6f16ece) |
+
 ### AI-4 Triage hint on declare form (Issue #247)
 
 | ID | Technique | Input or condition | Expected | Test | Status |
@@ -689,6 +701,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-12.1j | Boundary value | Null metrics and empty breakdown lists vs genuine numeric zeros | Null metric, null rate, empty service list, and zero total incidents display "No data yet"; numeric 0 displays as 0 | `InsightsPage.test.tsx` (Missing values handling, Zero values handling), `format.test.ts` | Automated |
 | TC-FR-12.1k | Equivalence | Controlled fixture data rendered into dashboard tiles and breakdown bars | MTTA/MTTR formatted in hours and minutes (mean with median and P90), SLA breach percentages, follow-up metrics, out-of-hours pages, severity proportional bars, and service breakdown rows linking to `/services/{serviceId}` | `InsightsPage.test.tsx` (Successful response rendering) | Automated |
 
+### Live updates (FR-12.3, NFR-14, D46, #241)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-FR-12.3a | Transaction and org isolation | Commit an incident change in one org while both orgs are subscribed; then roll back another change | Only the matching org receives the committed incident ID; rollback sends nothing; HTTP streams use the authenticated org | `LiveUpdatesTest.committedChangeReachesSubscriberOfSameOrgAndNeverAnotherOrg`, `LiveUpdatesTest.rolledBackChangeSendsNothing`, `OrgIsolationTest.eventStreamsUseTheAuthenticatedOrganization` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3b | Equivalence | An `incident-changed` event arrives while the incident detail and incident list are cached | The incident and list refetch without manual reload; the event request sends its token in the Authorization header | `LiveUpdates.test.tsx` (event refetches incident and list) | Passed (2026-11-20, 0e73cb8) |
+| TC-NFR-14.2a | Recovery | A network query fails or the stream and its first retry fail with network/gateway errors, then recover | A genuine outage shows the banner; successful recovery clears it | `LiveUpdates.test.tsx`, `events.test.ts` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3c | Publication coverage | Escalation, follow-up creation, public update, and investigation action decision each append a timeline entry | Each committed change reaches the same-org subscriber exactly once and never another org | `TimelineChangePublicationTest.otherTimelineWritersReachOnlySameOrgSubscribers` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3d | Stream lifecycle | A scheduled heartbeat sends to a healthy and a dead emitter | A ping comment is sent every 25 seconds; failed sends remove and complete the dead emitter | `EventStreamServiceTest.heartbeatSendsPingAndRemovesADeadEmitter` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3e | Resource boundary | Six streams are opened for one org/user while other users/orgs subscribe | The sixth closes the oldest; other users/orgs remain; streams have a finite 30-minute timeout and completed streams are removed | `EventStreamServiceTest.sixthStreamCompletesOldestWithoutEvictingOtherUsersOrOrgs`, `streamTimeoutIsFiniteAndCompletionRemovesRegistration` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3f | Authentication | Stream responds 401, no token is present, or an old token receives a late 401 | Shared unauthorized handling signs out the current session and stops retries; no-token subscriptions stay idle; newer sessions survive late 401s | `events.test.ts`, `LiveUpdates.test.tsx` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3g | Reconnect | A connection opens after a disconnect without an incident event | Backoff resets to 1 second and the incident list refetches once on reconnect | `events.test.ts`, `useLiveUpdates.test.tsx` | Passed (2026-11-20, 0e73cb8) |
+| TC-FR-12.3h | Recovery | A dropped stream reconnects on the first retry | The backend-unreachable banner never flashes | `useLiveUpdates.test.tsx` | Passed (2026-11-20, 0e73cb8) |
+| TC-NFR-14.2b | Error classification | Incident list/detail query or stream returns 403/500 | Application errors are shown without an unreachable banner; only network failures or confirmed gateway outages qualify | `LiveUpdates.test.tsx`, `events.test.ts` | Passed (2026-11-20, 0e73cb8) |
+
 ### Postmortems (FR-11.1, DR-06, D17, #239)
 
 | ID | Technique | Input or condition | Expected | Test | Status | Owner |
@@ -768,3 +795,20 @@ Ten decisions: the two null checks, six branches of the seven-case `switch (from
 | TC-WB-09 | MONITORING, `to != INVESTIGATING` | `to == RESOLVED` | `path13_monitoringToResolvedReturnsTrue`, `path14_monitoringToOtherReturnsFalse` | Automated |
 | TC-WB-10 | RESOLVED | `to == CLOSED` | `path15_resolvedToClosedReturnsTrue`, `path16_resolvedToOtherReturnsFalse` | Automated |
 | TC-WB-11 | CLOSED | false | `path17_closedToAnyReturnsFalse` | Automated |
+
+### AI incident panel (#249)
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-AI-249a | Equivalence | Engineer opens an incident with investigation results | AI summary, ranked hypotheses, confidence and evidence are displayed | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249b | Equivalence | Engineer starts an investigation | Investigation request is sent and results are displayed | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249c | Decision table | Engineer accepts or rejects a suggested action | Decision is submitted; investigation results and the incident timeline query are refreshed | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249d | Decision table | Viewer opens an incident with investigation results | Viewer can read results but cannot investigate or accept/reject actions | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249e | Negative | AI investigation endpoint returns 503 | Panel displays an AI-unavailable message; incident page remains usable | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249f | Equivalence | Engineer selects Catch me up | AI summary draft appears in an editable text area | `IncidentAIPanel.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249g | Equivalence | Engineer selects Draft update | Generated text fills the public update form and remains editable; it is not automatically published | `PublicUpdateForm.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249h | Negative | AI draft endpoint returns 503 | Public update form displays an AI-unavailable message and remains usable | `PublicUpdateForm.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249i | Equivalence | Engineer or Admin selects Draft postmortem (AI) | POST sends kind POSTMORTEM; all six form fields fill from postmortem and stay editable; no save occurs until Save draft is clicked; explicit save includes edits and the saved version | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249j | Negative | Postmortem draft endpoint returns 503 | The panel's AI-unavailable message is shown; existing form values remain and manual editing/saving stays available | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249k | Role-based access | Viewer opens the postmortem page | Draft postmortem (AI) is hidden along with save controls; the form stays read-only | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+| TC-AI-249l | Negative | AI response has a null postmortem | An error is shown and the existing form values are preserved | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |

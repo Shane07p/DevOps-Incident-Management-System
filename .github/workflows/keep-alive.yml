@@ -1,8 +1,16 @@
 name: Demo Keep-Alive and Telemetry Warmup
 
+# A 12-hour cron keeps Supabase from auto-pausing (7-day inactivity limit) and keeps
+# Grafana Cloud telemetry fresh (14-day retention limit).
+#
+# Note on Render free-tier cold starts:
+# Render free-tier web services sleep after 15 minutes of inactivity, so this 12-hour cron
+# does NOT prevent Render cold starts during the viva. To eliminate cold starts before the
+# live evaluation, run scripts/demo-warmup.sh manually right before the demo (T-15 minutes).
+
 on:
   schedule:
-    # Runs every 12 hours (00:00 and 12:00 UTC) to keep Supabase active and refresh Grafana retention
+    # Runs every 12 hours (00:00 and 12:00 UTC) to keep Supabase awake and refresh Grafana retention
     - cron: '0 0,12 * * *'
   workflow_dispatch:
     inputs:
@@ -20,18 +28,35 @@ permissions:
 
 jobs:
   warmup:
-    name: Warm up Render, Supabase, and Grafana
+    name: Keep Supabase active and refresh Grafana telemetry
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Validate repository variables
+        env:
+          RENDER_BACKEND_URL: ${{ vars.RENDER_BACKEND_URL }}
+          VERCEL_FRONTEND_URL: ${{ vars.VERCEL_FRONTEND_URL }}
+          DEMO_SHOP_URL: ${{ vars.DEMO_SHOP_URL }}
+        run: |
+          missing=()
+          [ -z "$RENDER_BACKEND_URL" ] && missing+=("vars.RENDER_BACKEND_URL")
+          [ -z "$VERCEL_FRONTEND_URL" ] && missing+=("vars.VERCEL_FRONTEND_URL")
+          [ -z "$DEMO_SHOP_URL" ] && missing+=("vars.DEMO_SHOP_URL")
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required repository variable(s): ${missing[*]}"
+            echo "Configure RENDER_BACKEND_URL, VERCEL_FRONTEND_URL, and DEMO_SHOP_URL in Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+
       - name: Run warmup script
         env:
-          BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL || 'https://settle-backend.onrender.com' }}
-          FRONTEND_URL: ${{ secrets.VERCEL_FRONTEND_URL || 'https://settle-frontend.vercel.app' }}
-          DEMO_SHOP_URL: ${{ secrets.DEMO_SHOP_URL || 'https://settle-demo-shop.onrender.com' }}
-          DEMO_SHOP_CONTROL_TOKEN: ${{ secrets.DEMO_SHOP_CONTROL_TOKEN || '' }}
+          BACKEND_URL: ${{ vars.RENDER_BACKEND_URL }}
+          FRONTEND_URL: ${{ vars.VERCEL_FRONTEND_URL }}
+          DEMO_SHOP_URL: ${{ vars.DEMO_SHOP_URL }}
+          DEMO_SHOP_CONTROL_TOKEN: ${{ secrets.DEMO_SHOP_CONTROL_TOKEN }}
           WARMUP_TRAFFIC_SECONDS: ${{ github.event.inputs.warmup_traffic_seconds || '30' }}
         run: |
           chmod +x scripts/demo-warmup.sh

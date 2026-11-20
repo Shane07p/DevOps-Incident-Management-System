@@ -3,14 +3,19 @@
 # Settle Demo Warmup & Free-Tier Keep-Alive Script
 # ==============================================================================
 # Mitigations addressed:
-#   1. Render: Eliminates 50-90s cold start by warming up the container.
+#   1. Render: Eliminates 50-90s cold start by warming up the container before demo presentation.
 #   2. Supabase: Prevents 7-day auto-pause via Actuator DB probe (SELECT 1).
 #   3. Grafana Cloud: Generates fresh traffic to overcome the 14-day retention limit.
 #   4. Vercel: Warms up edge routes and API proxy rewrites.
 #
+# Note on free-tier limits:
+#   The 12-hour GitHub Actions keep-alive workflow keeps Supabase and Grafana active,
+#   but Render free instances sleep after 15 minutes of inactivity. Run this script manually
+#   right before the viva demo (T-15m) to ensure Render is awake and hot.
+#
 # Usage:
 #   ./scripts/demo-warmup.sh
-#   BACKEND_URL=https://settle-backend.onrender.com ./scripts/demo-warmup.sh
+#   BACKEND_URL=https://incident-backend-f340.onrender.com FRONTEND_URL=https://dev-ops-incident-management-system.vercel.app DEMO_SHOP_URL=... ./scripts/demo-warmup.sh
 # ==============================================================================
 
 set -euo pipefail
@@ -18,8 +23,8 @@ set -euo pipefail
 # ------------------------------------------------------------------------------
 # Configuration (Environment variables with sensible defaults)
 # ------------------------------------------------------------------------------
-BACKEND_URL="${BACKEND_URL:-${RENDER_BACKEND_URL:-http://localhost:8080}}"
-FRONTEND_URL="${FRONTEND_URL:-${VERCEL_FRONTEND_URL:-http://localhost:5173}}"
+BACKEND_URL="${BACKEND_URL:-${RENDER_BACKEND_URL:-https://incident-backend-f340.onrender.com}}"
+FRONTEND_URL="${FRONTEND_URL:-${VERCEL_FRONTEND_URL:-https://dev-ops-incident-management-system.vercel.app}}"
 DEMO_SHOP_URL="${DEMO_SHOP_URL:-http://localhost:8001}"
 CONTROL_TOKEN="${DEMO_SHOP_CONTROL_TOKEN:-}"
 WARMUP_TRAFFIC_SECONDS="${WARMUP_TRAFFIC_SECONDS:-30}"
@@ -124,7 +129,7 @@ if [ "$demo_shop_status" = "200" ]; then
 EOF
 )
 
-  traffic_response=$(curl -s -w "\n%{http_code}" "${AUTH_HEADER[@]}" \
+  traffic_response=$(curl -s -w "\n%{http_code}" ${AUTH_HEADER[@]+"${AUTH_HEADER[@]}"} \
     -H "Content-Type: application/json" \
     -d "$traffic_payload" \
     --max-time 10 \

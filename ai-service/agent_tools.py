@@ -39,6 +39,17 @@ if not DEFAULT_LOG_FIXTURE.exists():
 # Data Models
 # ---------------------------------------------------------------------------
 
+class EvidenceBundle(BaseModel):
+    """Live evidence bundle gathered by the backend for an incident investigation (#242)."""
+    model_config = ConfigDict(populate_by_name=True, alias_generator=alias_generators.to_camel)
+
+    incident: Optional[Dict[str, Any]] = None
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+    deploys: List[Dict[str, Any]] = Field(default_factory=list)
+    logs: List[Dict[str, Any]] = Field(default_factory=list)
+    metrics: List[Dict[str, Any]] = Field(default_factory=list)
+
+
 class EvidenceItem(BaseModel):
     """Structured evidence item captured during an investigation."""
     model_config = ConfigDict(populate_by_name=True, alias_generator=alias_generators.to_camel)
@@ -509,4 +520,258 @@ def build_default_tool_registry() -> ToolRegistry:
         )
     )
 
+    return registry
+
+
+def build_bundle_tool_registry(bundle: EvidenceBundle) -> ToolRegistry:
+    """Build a ToolRegistry whose tools read directly from a live backend EvidenceBundle (#242)."""
+    registry = ToolRegistry()
+
+    def bundle_query_log_patterns(
+        service: str,
+        incident_start: str = "",
+        incident_end: str = "",
+        query_base_url: str = "",
+        datasource_uid: str = "",
+    ) -> ToolResult:
+        counts: Dict[str, int] = {}
+        sample_levels: Dict[str, str] = {}
+        for entry in bundle.logs:
+            msg = str(entry.get("message") or "").strip()
+            if not msg:
+                continue
+            level = str(entry.get("level") or "INFO").upper()
+            counts[msg] = counts.get(msg, 0) + 1
+            sample_levels.setdefault(msg, level)
+
+        sorted_msgs = sorted(
+            counts.items(),
+            key=lambda kv: (0 if sample_levels.get(kv[0]) in ("ERROR", "WARN") else 1, -kv[1], kv[0]),
+        )
+        evidence_items: List[EvidenceItem] = []
+        patterns: List[Dict[str, Any]] = []
+        for idx, (msg, count) in enumerate(sorted_msgs[:15]):
+            level = sample_levels.get(msg, "INFO")
+            item_dict = {"pattern": msg, "level": level, "count": count}
+            patterns.append(item_dict)
+            evidence_items.append(
+                EvidenceItem(
+                    id=f"ev-log-{idx}",
+                    source_tool="query_log_patterns",
+                    evidence_type="log_pattern",
+                    content=f"[{level}] Log message '{msg}' on '{service}' occurred {count} time(s).",
+                    details=item_dict,
+                )
+            )
+        return ToolResult(
+            tool_name="query_log_patterns",
+            success=True,
+            data={"service": service, "patterns_found": len(patterns), "patterns": patterns},
+            evidence_items=evidence_items,
+        )
+
+    def bundle_query_deploy_events(
+        service: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        incident_start: Optional[str] = None,
+        incident_end: Optional[str] = None,
+        lookback_minutes: int = 120,
+        include_dependencies: Optional[bool] = None,
+    ) -> ToolResult:
+        matching: List[Dict[str, Any]] = []
+        for dep in bundle.deploys:
+            dep_service = str(dep.get("service") or "")
+            if service and dep_service and dep_service.lower() != service.lower():
+                # Keep deploys matching normalized hyphen/space name too
+                if dep_service.lower().replace(" ", "-") != service.lower().replace(" ", "-"):
+                    continue
+            matching.append(dep)
+
+        evidence_items: List[EvidenceItem] = []
+        for idx, dep in enumerate(matching):
+            commit = dep.get("commit", "unknown")
+            version = dep.get("version", "unknown")
+            deployed_at = dep.get("deployedAt") or dep.get("deployed_at") or ""
+            author = dep.get("author", "unknown")
+            svc = dep.get("service", service)
+            evidence_items.append(
+                EvidenceItem(
+                    id=f"ev-deploy-{idx}",
+                    source_tool="query_deploy_events",
+                    evidence_type="deploy_event",
+                    content=f"Deploy commit {commit} to '{svc}' deployed version {version} at {deployed_at} by {author}.",
+                    details=dep,
+                )
+            )
+        return ToolResult(
+            tool_name="query_deploy_events",
+            success=True,
+            data={"service": service, "deploys": matching},
+            evidence_items=evidence_items,
+        )
+
+    def bundle_query_metric_anomalies(
+        service: str,
+        metric_name: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+    ) -> ToolResult:
+        evidence_items: List[EvidenceItem] = []
+        anomalies: List[Dict[str, Any]] = []
+        for idx, series in enumerate(bundle.metrics):
+            m_name = str(series.get("metric") or "")
+            if metric_name and m_name != metric_name:
+                continue
+            points = series.get("points") or []
+            values = [float(p["value"]) for p in points if isinstance(p, dict) and p.get("value") is not None]
+            if values:
+                min_v, max_v, latest_v = min(values), max(values), values[-1]
+                avg_v = sum(values) / len(values)
+                summary = f"Metric '{m_name}' on '{service}': min={min_v:.4f}, avg={avg_v:.4f}, max={max_v:.4f}, latest={latest_v:.4f} ({len(values)} points)."
+            else:
+                summary = f"Metric '{m_name}' on '{service}': no data points in window."
+            record = {"metric": m_name, "point_count": len(values), "observation": summary}
+            anomalies.append(record)
+            evidence_items.append(
+                EvidenceItem(
+                    id=f"ev-metric-{idx}",
+                    source_tool="query_metric_anomalies",
+                    evidence_type="metric_anomaly",
+                    content=summary,
+                    details=record,
+                )
+            )
+        return ToolResult(
+            tool_name="query_metric_anomalies",
+            success=True,
+            data={"service": service, "anomalies": anomalies},
+            evidence_items=evidence_items,
+        )
+
+    def bundle_get_service_health(service: str) -> ToolResult:
+        inc = bundle.incident or {}
+        title = inc.get("title", "")
+        status_val = inc.get("status", "OPEN")
+        severity = inc.get("severity", "")
+        content = f"Incident '{inc.get('reference', '')}' on '{service}' ({severity}, status={status_val}): {title}"
+        evidence_items = [
+            EvidenceItem(
+                id="ev-health-0",
+                source_tool="get_service_health",
+                evidence_type="service_health",
+                content=content,
+                details=inc,
+            )
+        ]
+        return ToolResult(
+            tool_name="get_service_health",
+            success=True,
+            data={"service": service, "incident": inc},
+            evidence_items=evidence_items,
+        )
+
+    def bundle_query_timeline_entries() -> ToolResult:
+        evidence_items: List[EvidenceItem] = []
+        for idx, entry in enumerate(bundle.timeline):
+            ev_type = entry.get("eventType") or entry.get("event_type") or "EVENT"
+            actor = entry.get("actor") or "system"
+            details = entry.get("details") or ""
+            recorded = entry.get("recordedAt") or entry.get("recorded_at") or ""
+            evidence_items.append(
+                EvidenceItem(
+                    id=f"ev-timeline-{idx}",
+                    source_tool="query_timeline_entries",
+                    evidence_type="timeline_entry",
+                    content=f"[{recorded}] {ev_type} by {actor}: {details}",
+                    details=entry,
+                )
+            )
+        return ToolResult(
+            tool_name="query_timeline_entries",
+            success=True,
+            data={"entries": bundle.timeline},
+            evidence_items=evidence_items,
+        )
+
+    registry.register(
+        ToolDefinition(
+            name="query_log_patterns",
+            description="Searches incident log bundle for error/warning and frequent log patterns.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Service name"},
+                    "incident_start": {"type": "string", "description": "Optional ISO-8601 UTC start"},
+                    "incident_end": {"type": "string", "description": "Optional ISO-8601 UTC end"},
+                    "query_base_url": {"type": "string"},
+                    "datasource_uid": {"type": "string"},
+                },
+                "required": ["service"],
+            },
+            func=bundle_query_log_patterns,
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="query_deploy_events",
+            description="Queries recent deployments for the incident's service from the evidence bundle.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Service name"},
+                    "start_time": {"type": "string"},
+                    "end_time": {"type": "string"},
+                    "incident_start": {"type": "string"},
+                    "incident_end": {"type": "string"},
+                    "lookback_minutes": {"type": "integer"},
+                    "include_dependencies": {"type": "boolean"},
+                },
+                "required": ["service"],
+            },
+            func=bundle_query_deploy_events,
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="query_metric_anomalies",
+            description="Queries metric series from the incident's evidence bundle.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Service name"},
+                    "metric_name": {"type": "string"},
+                    "start_time": {"type": "string"},
+                    "end_time": {"type": "string"},
+                },
+                "required": ["service"],
+            },
+            func=bundle_query_metric_anomalies,
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="get_service_health",
+            description="Gets incident context and service status from the evidence bundle.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Service name"},
+                },
+                "required": ["service"],
+            },
+            func=bundle_get_service_health,
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="query_timeline_entries",
+            description="Reads the incident timeline entries from the evidence bundle.",
+            parameters_schema={
+                "type": "object",
+                "properties": {},
+            },
+            func=bundle_query_timeline_entries,
+        )
+    )
     return registry

@@ -22,7 +22,7 @@ import os
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, alias_generators
 
-from agent_tools import EvidenceItem, ToolRegistry, build_default_tool_registry
+from agent_tools import EvidenceBundle, EvidenceItem, ToolRegistry, build_default_tool_registry
 from providers import LlmProvider, ModelTurnResponse
 
 logger = logging.getLogger("ai-service.agent_loop")
@@ -113,6 +113,7 @@ class InvestigationResult(BaseModel):
     summary: str = Field(..., description="High-level investigation narrative summary")
     hypotheses: List[RankedHypothesis] = Field(default_factory=list, description="Ranked, verified hypotheses")
     evidence: List[EvidenceItem] = Field(default_factory=list, description="All verified evidence gathered during investigation")
+    suggested_actions: List[str] = Field(default_factory=list, description="Suggested remediation/investigation actions for human approval")
     steps_taken: int = Field(..., description="Number of tool calls executed")
     tokens_used: int = Field(..., description="Cumulative model tokens consumed")
     duration_ms: float = Field(..., description="Wall-clock elapsed time in milliseconds")
@@ -253,6 +254,7 @@ class InvestigationRequest(BaseModel):
     incident_start: str = Field(..., description="ISO-8601 UTC timestamp of incident start")
     incident_end: Optional[str] = Field(None, description="ISO-8601 UTC timestamp of incident end")
     description: Optional[str] = Field(None, max_length=5000, description="Reported incident symptoms or notes")
+    evidence_bundle: Optional[EvidenceBundle] = Field(None, description="Optional live evidence bundle gathered by backend")
 
 
 # ---------------------------------------------------------------------------
@@ -261,11 +263,18 @@ class InvestigationRequest(BaseModel):
 
 def _extract_hypotheses_from_text(content: str) -> tuple[str, List[Dict[str, Any]]]:
     """Parse JSON or structured hypotheses and summary from model output."""
+    summary, hypotheses_raw, _ = _extract_investigation_output(content)
+    return summary, hypotheses_raw
+
+
+def _extract_investigation_output(content: str) -> tuple[str, List[Dict[str, Any]], List[str]]:
+    """Parse JSON summary, hypotheses, and suggestedActions from model output."""
     summary = "Investigation completed."
     hypotheses_raw: List[Dict[str, Any]] = []
+    suggested_actions: List[str] = []
 
     if not content:
-        return summary, hypotheses_raw
+        return summary, hypotheses_raw, suggested_actions
 
     # Check for markdown fenced JSON block
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
@@ -287,13 +296,16 @@ def _extract_hypotheses_from_text(content: str) -> tuple[str, List[Dict[str, Any
                 hyps = data.get("hypotheses", [])
                 if isinstance(hyps, list):
                     hypotheses_raw = hyps
-                    return summary, hypotheses_raw
+                raw_actions = data.get("suggestedActions") if "suggestedActions" in data else data.get("suggested_actions", [])
+                if isinstance(raw_actions, list):
+                    suggested_actions = [a.strip() for a in raw_actions if isinstance(a, str) and a.strip()]
+                return summary, hypotheses_raw, suggested_actions
         except Exception:
             pass
 
     # Fallback: check if content has plain text summary
     summary = content.strip()
-    return summary, hypotheses_raw
+    return summary, hypotheses_raw, suggested_actions
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +346,9 @@ class AgentInvestigationLoop:
         # Build initial conversation context
         system_prompt = (
             "You are an AI Site Reliability Engineer investigating an incident on DevOps Incident Management System. "
-            "You have access to evidence tools to inspect recorded logs, metric anomalies, deploy events, and service health. "
+            "You have access to evidence tools to inspect logs, metric anomalies, deploy events, timeline entries, and service health. "
             "Call the necessary tools to gather facts. "
-            "When done, return a JSON object with 'summary' and 'hypotheses'. "
+            "When done, return a JSON object with 'summary', 'hypotheses', and 'suggestedActions' (a list of recommended human actions; never execute anything). "
             "Every hypothesis MUST include 'hypothesis', 'confidence' (0.0 to 1.0), and 'evidenceRefs' (listing exact evidence IDs like 'ev-log-0'). "
             "Do NOT fabricate evidence IDs. Any hypothesis without real evidence will be discarded."
         )
@@ -356,6 +368,7 @@ class AgentInvestigationLoop:
 
         final_summary = "Investigation stopped."
         candidate_hypotheses: List[Dict[str, Any]] = []
+        suggested_actions: List[str] = []
         loop_status = "completed"
 
         while True:
@@ -490,9 +503,10 @@ class AgentInvestigationLoop:
             else:
                 # 6. Model completed with final narrative answer
                 content = turn_response.content or ""
-                summary_extracted, candidate_hyps = _extract_hypotheses_from_text(content)
+                summary_extracted, candidate_hyps, actions_extracted = _extract_investigation_output(content)
                 final_summary = summary_extracted or "Investigation concluded."
                 candidate_hypotheses = candidate_hyps
+                suggested_actions = actions_extracted
                 loop_status = "completed"
                 break
 
@@ -515,6 +529,7 @@ class AgentInvestigationLoop:
             summary=final_summary,
             hypotheses=verified_hypotheses,
             evidence=vault.all_items(),
+            suggested_actions=suggested_actions,
             steps_taken=steps_taken,
             tokens_used=tokens_used,
             duration_ms=round(total_duration_ms, 2),

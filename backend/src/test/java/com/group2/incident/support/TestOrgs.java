@@ -22,7 +22,7 @@ public class TestOrgs {
 
 	// Every table with org_id; service_sla_target goes with its service, runbook_step with its runbook.
 	private static final List<String> ORG_TABLES = List.of("postmortem", "telemetry_connection", "public_update", "heartbeat", "incident_deployment", "deployment", "personal_access_token", "notification", "outbox", "monitor_check_result", "uptime_monitor", "alert", "timeline_entry", "audit_entry",
-			"escalation_task_step", "escalation_task", "escalation_step", "escalation_policy", "on_call_shift", "service_dependency", "incident",
+			"investigation_action", "investigation_evidence", "investigation_hypothesis", "investigation", "escalation_task_step", "escalation_task", "escalation_step", "escalation_policy", "on_call_shift", "service_dependency", "incident",
 			"monitoring_tool", "service", "runbook", "follow_up");
 
 	private final MockMvc mvc;

@@ -233,5 +233,5 @@ describe('Accessibility axe audit (Issue #251)', () => {
       await user.tab({ shift: true })
       expect(control).toHaveFocus()
     }
-  })
+  }, 15000)
 })

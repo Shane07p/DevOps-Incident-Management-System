@@ -2,7 +2,7 @@
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.cypress.tsbuildinfo",
-    "types": ["cypress"]
+    "types": ["cypress", "@testing-library/cypress"]
   },
   "include": ["cypress"]
 }

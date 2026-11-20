@@ -163,6 +163,65 @@ jobs:
         working-directory: demo-shop
         run: pytest
 
+  e2e:
+    name: Cypress E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the Compose stack
+        run: docker compose --profile app up -d --build
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+      - name: Wait for backend health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1 && curl -sf http://localhost:8081/ > /dev/null 2>&1; then
+              echo "Backend and frontend are ready"
+              exit 0
+            fi
+            echo "Waiting for app stack… ($i/30)"
+            sleep 5
+          done
+          echo "::error::Backend did not become healthy in time"
+          exit 1
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Cypress E2E tests
+        working-directory: frontend
+        run: npx cypress run --config baseUrl=http://localhost:8081
+
+      - name: Upload Cypress screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cypress-screenshots
+          path: frontend/cypress/screenshots/
+          if-no-files-found: ignore
+
+      - name: Upload Cypress videos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cypress-videos
+          path: frontend/cypress/videos/
+          if-no-files-found: ignore
+
+      - name: Tear down Compose stack
+        if: always()
+        run: docker compose --profile app down -v
+
   # A token, key, or password committed anywhere in the history fails the build (.gitleaks.toml lists what is allowed).
   secret-scan:
     name: Secret scan

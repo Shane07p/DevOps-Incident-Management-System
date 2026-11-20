@@ -402,7 +402,7 @@ async def evaluate_ai2_scenarios(
             ),
         )
 
-        t_start = time.monotonic()
+        t_start = time.perf_counter()
         inv_res: InvestigationResult = await loop.run(
             request=InvestigationRequest(
                 service=service,
@@ -411,7 +411,7 @@ async def evaluate_ai2_scenarios(
                 evidence_bundle=bundle,
             )
         )
-        duration_ms = (time.monotonic() - t_start) * 1000.0
+        duration_ms = (time.perf_counter() - t_start) * 1000.0
         latencies_ms.append(duration_ms)
 
         has_hyp = len(inv_res.hypotheses) > 0
@@ -579,7 +579,7 @@ async def evaluate_ai3_drafting(
             accepted_actions=["Inspect the gateway connection pool"],
         )
 
-        t_start = time.monotonic()
+        t_start = time.perf_counter()
         error_msg: Optional[str] = None
         try:
             res: Optional[DraftResponse] = await generate_draft(
@@ -588,7 +588,7 @@ async def evaluate_ai3_drafting(
         except Exception as exc:
             res = None
             error_msg = str(exc)
-        duration_ms = (time.monotonic() - t_start) * 1000.0
+        duration_ms = (time.perf_counter() - t_start) * 1000.0
         latencies_ms.append(duration_ms)
 
         if res is None:

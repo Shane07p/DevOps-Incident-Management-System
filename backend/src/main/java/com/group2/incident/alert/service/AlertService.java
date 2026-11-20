@@ -104,8 +104,6 @@ public class AlertService {
 				"Alert from " + request.source() + " attached to incident " + incident.getReference(),
 				now
 		));
-		if (match.isPresent()) {
-		}
 		return alert;
 	}
 

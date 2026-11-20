@@ -5,7 +5,7 @@ name: Demo Keep-Alive and Telemetry Warmup
 #
 # Note on Render free-tier cold starts:
 # Render free-tier web services sleep after 15 minutes of inactivity, so this 12-hour cron
-# does NOT prevent Render cold starts during the viva. To eliminate cold starts before the
+# does NOT prevent Render cold starts during a live demo. To eliminate cold starts before the
 # live evaluation, run scripts/demo-warmup.sh manually right before the demo (T-15 minutes).
 
 on:

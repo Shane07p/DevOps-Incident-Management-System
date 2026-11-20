@@ -1,7 +1,7 @@
-# Viva Demo Day-Before Checklist
+# Demo Day-Before Checklist
 
 This document details the operational verification and readiness procedures for the Settle
-(IT314 Group 2) viva demonstration. It addresses the realities and limitations of running on cloud
+(IT314 Group 2) live demonstration. It addresses the realities and limitations of running on cloud
 free tiers (Supabase, Render, and Grafana Cloud) and provides a step-by-step checklist to guarantee a
 seamless, zero-downtime evaluation.
 
@@ -95,7 +95,7 @@ Follow these steps sequentially to prepare the environment for evaluation.
 
 ---
 
-### T-2 Hours: Morning-of-Viva Check
+### T-2 Hours: Morning-of-Demo Check
 
 1. **Trigger Secondary Keep-Alive:**
    - Re-run `./scripts/demo-warmup.sh` or trigger the GitHub Actions workflow to refresh Grafana metrics.

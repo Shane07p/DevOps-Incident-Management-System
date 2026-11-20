@@ -36,6 +36,16 @@ describe('ToolsPage', () => {
     expect(screen.queryByRole('button', { name: 'Revoke Old Prometheus' })).not.toBeInTheDocument()
   })
 
+  it('shows how to connect a tool even before any is registered', async () => {
+    mockFetch({ 'GET /api/tools': { body: [] } })
+    renderTools()
+
+    expect(await screen.findByText(/No tools yet/)).toBeInTheDocument()
+    const connect = screen.getByRole('region', { name: 'Connect a tool' })
+    expect(connect).toHaveTextContent('POST /webhooks/alerts')
+    expect(connect).toHaveTextContent('Authorization: Bearer <tool token>')
+  })
+
   // TC-US-02a: the token is shown once, and closing the dialog drops it for good.
   it('shows the new token once, and drops it when the dialog closes', async () => {
     const user = userEvent.setup()

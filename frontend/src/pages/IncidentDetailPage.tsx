@@ -18,6 +18,7 @@ import { IncidentActions } from './incident/IncidentActions'
 import { IncidentAlerts } from './incident/IncidentAlerts'
 import { IncidentDeploys } from './incident/IncidentDeploys'
 import { IncidentEvidence } from './incident/IncidentEvidence'
+import { IncidentAIPanel } from './incident/IncidentAIPanel'
 import { IncidentTelemetry } from './incident/IncidentTelemetry'
 import { IncidentTimeline } from './incident/IncidentTimeline'
 import { PublicUpdates } from './incident/PublicUpdateForm'
@@ -193,7 +194,7 @@ export function IncidentDetailPage() {
               <IncidentDeploys incident={incident.data} />
 
               <IncidentEvidence incidentId={incident.data.id} timeline={incident.data.timeline} />
-
+              <IncidentAIPanel incidentId={incident.data.id} />
               <IncidentTelemetry serviceId={incident.data.service.id} createdAt={incident.data.createdAt} />
 
               {user && user.role !== 'VIEWER' && (

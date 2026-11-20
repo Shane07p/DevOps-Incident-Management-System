@@ -195,3 +195,8 @@ Run `bash scripts/test_demo_warmup.sh`. Its curl stub contacts no deployed servi
 healthy exit 0, each required service returning 503, rejected traffic (401/422), connection failure,
 retry recovery, accepted 202 traffic, and default/custom internal targets. These checks also run
 in the CI **Demo warm-up checks** job.
+
+Verified on 2026-11-20 at commit `55fbb07fad0e7a968e916ffe9fe48363f58208f8`: all 11 checks passed.
+Healthy/recovered health and accepted traffic exited 0; each required service's 503, traffic 401/422,
+and curl connection failure exited 1. These are deterministic stub-curl results, not a deployed
+readiness measurement.

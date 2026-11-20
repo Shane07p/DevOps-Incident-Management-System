@@ -38,7 +38,8 @@
   --card-foreground: #2d2d2f;
   --popover: #fffef8;
   --popover-foreground: #2d2d2f;
-  --primary: #a4532a;
+  /* Keep small active-nav labels above 4.5:1 on their primary-tinted sidebar background. */
+  --primary: #934823;
   --primary-foreground: #ffffff;
   --secondary: #eeeee4;
   --secondary-foreground: #2d2d2f;
@@ -50,7 +51,7 @@
   --destructive-foreground: #ffffff;
   --border: #d5d8c9;
   --input: color-mix(in oklab, #2d2d2f 24%, transparent);
-  --ring: #a4532a;
+  --ring: #934823;
   --sidebar: #e8e8dd;
   --sidebar-foreground: #666668;
   --sidebar-accent: color-mix(in oklab, #2d2d2f 6%, transparent);
@@ -73,8 +74,9 @@
   --status-investigating: #56604d; --status-investigating-bg: #eeeee4;
   --status-identified: #56604d;    --status-identified-bg: #eeeee4;
   --status-monitoring: #56604d;    --status-monitoring-bg: #eeeee4;
-  --status-resolved: #4e7946;      --status-resolved-bg: #4e794610;
-  --status-closed: #4e7946;        --status-closed-bg: #4e794610;
+  /* The public status banner also uses this foreground for normal-size subtitle text. */
+  --status-resolved: #426b3b;      --status-resolved-bg: #4e794610;
+  --status-closed: #426b3b;        --status-closed-bg: #4e794610;
 
   /* Service criticality is not a state, so it stays neutral; higher reads stronger. */
   --criticality-low: #56604d;      --criticality-low-bg: #eeeee4;

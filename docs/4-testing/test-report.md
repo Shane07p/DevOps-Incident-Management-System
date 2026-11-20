@@ -126,6 +126,21 @@ so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deploye
 
 ---
 
+## Sprint 6 – Accessibility Pass (Issue #251)
+
+Tests and browser audit run on 2026-11-20, source commit `b68579ce07c615c51c903cef41be16224515347b`.
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Full frontend suite: `npm test -- --coverage --maxWorkers=2`, 52 files passed, 460 tests passed, 312.80 s. Coverage: statements 90.96%, branches 83.47%, functions 87.87%, lines 92.22%; all thresholds passed. The Home focus check covers all 27 jsdom controls in forward and reverse order, including four main-page controls. |
+| Axe audit (jsdom) | The Vitest scans cover serious and critical structural violations. jsdom cannot check rendered colour contrast, so `color-contrast` is disabled here; contrast evidence must come from the Edge browser audit. |
+| Browser contrast audit | Edge 158.0.4370.33 with axe-core 4.14.1: Home `/home`, Incidents `/incidents`, Incident `/incidents/7`, Services `/services`, and Public status `/status/acme` each have 0 contrast violations in light and dark themes (10 scans; 0 incomplete checks). Contrast is measured in the browser, not jsdom. [Raw measurements and context](evidence/a11y/edge-axe-2026-11-20.json); [audit notes](evidence/a11y/README.md). |
+| Colours | Light primary/focus ring `#a4532a` → `#934823`: active sidebar labels 4.0:1 → 4.77:1. Light resolved/closed text `#4e7946` → `#426b3b`: public-status subtitle 4.21:1 → 5.14:1. Dark primary `#ee936b` and resolved text `#a5c79b` stay at 6.81:1 and 9.09:1 respectively. All four are above the normal-text minimum of 4.5:1. |
+| Browser keyboard checks | All 26 visible desktop Home controls (including four main-page controls) passed forward and reverse Tab order, visibility, focus, and rendered outline/box-shadow checks. jsdom has 27 stops because it does not apply the CSS hiding the mobile menu button on desktop. The phone navigation drawer passed all 17 stops, forward/reverse wraparound, and focus restoration. Change status trapped Tab and restored focus on Escape after both keyboard and mouse opening. |
+| Notes | These results use synthetic incident/service fixtures, included in the JSON; they are not production or recorded incident data. The browser audit measures the colour-contrast rule only; structural violations are covered by Vitest/axe. |
+
+---
+
 ## Sprint 6 — AI Evaluation Runs (Issue #252)
 
 Evaluated on 2026-11-20, commit `bfa61e4` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).

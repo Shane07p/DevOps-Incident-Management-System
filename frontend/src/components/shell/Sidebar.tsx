@@ -161,7 +161,7 @@ export function SidebarContent({ onSearch, onNavigate }: { onSearch: () => void;
         to="/home"
         onClick={onNavigate}
         aria-label="Settle home"
-        className="mb-6 self-start px-[11px] text-foreground no-underline hover:no-underline"
+        className="mb-6 self-start rounded-md px-[11px] text-foreground outline-none no-underline hover:no-underline focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Wordmark size={30} />
       </Link>

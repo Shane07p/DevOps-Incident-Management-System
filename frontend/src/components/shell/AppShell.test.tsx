@@ -79,6 +79,18 @@ describe('Theme', () => {
   })
 })
 
+describe('Accessibility', () => {
+  it('shows the skip link and a focus ring when reached by keyboard', async () => {
+    renderShell()
+    await sidebar()
+    await userEvent.tab()
+
+    const skipLink = screen.getByRole('link', { name: 'Skip to content' })
+    expect(skipLink).toHaveFocus()
+    expect(skipLink).toHaveClass('focus:not-sr-only')
+  })
+})
+
 describe('Keyboard shortcuts', () => {
   it('opens Incidents with G then I, and Services with G then S', async () => {
     const { router } = renderShell()

@@ -7,9 +7,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,7 +24,8 @@ import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestOrgs;
 import com.group2.incident.support.TestOrgs.SignedUp;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,6 @@ import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @IntegrationTest
@@ -61,9 +60,11 @@ class LiveUpdatesTest {
 
 	private SignedUp orgA;
 	private SignedUp orgB;
+	private final List<Runnable> completions = new ArrayList<>();
 
 	@AfterEach
 	void cleanUp() {
+		completions.forEach(Runnable::run);
 		if (orgA != null) {
 			orgs.delete(orgA.orgId());
 		}
@@ -81,28 +82,15 @@ class LiveUpdatesTest {
 		SseEmitter emitterA = mock(SseEmitter.class);
 		SseEmitter emitterB = mock(SseEmitter.class);
 
-		eventStreamService.subscribe(orgA.orgId(), emitterA);
-		eventStreamService.subscribe(orgB.orgId(), emitterB);
-
-		// Initial connection comments sent on subscribe
-		verify(emitterA, times(1)).send(any(SseEmitter.SseEventBuilder.class));
-		verify(emitterB, times(1)).send(any(SseEmitter.SseEventBuilder.class));
+		subscribe(orgA, emitterA);
+		subscribe(orgB, emitterB);
 
 		long serviceA = orgs.createService(orgA.adminToken(), "PaymentService", orgA.adminId());
 		String incidentJson = orgs.declareIncident(orgA.adminToken(), serviceA, "Payment Gateway Failure");
 		long incidentIdA = TestOrgs.id(incidentJson);
 
-		// Org A subscriber received the incident-changed event
-		ArgumentCaptor<SseEmitter.SseEventBuilder> captorA = ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
-		verify(emitterA, times(2)).send(captorA.capture());
-
-		Set<ResponseBodyEmitter.DataWithMediaType> sentData = captorA.getAllValues().get(1).build();
-		boolean containsIncident = sentData.stream()
-				.anyMatch(d -> d.getData() instanceof IncidentChangedNotification n && n.id().equals(incidentIdA));
-		assertThat(containsIncident).isTrue();
-
-		// Org B subscriber never received any event after the initial comment
-		verify(emitterB, times(1)).send(any(SseEmitter.SseEventBuilder.class));
+		assertThat(notifications(emitterA)).containsExactly(incidentIdA);
+		assertThat(notifications(emitterB)).isEmpty();
 	}
 
 	@Test
@@ -111,10 +99,7 @@ class LiveUpdatesTest {
 		orgA = orgs.signUp("live-rollback@test.local", "Org Rollback Live");
 
 		SseEmitter emitter = mock(SseEmitter.class);
-		eventStreamService.subscribe(orgA.orgId(), emitter);
-
-		// Initial connection comment
-		verify(emitter, times(1)).send(any(SseEmitter.SseEventBuilder.class));
+		subscribe(orgA, emitter);
 
 		long serviceId = orgs.createService(orgA.adminToken(), "FailingService", orgA.adminId());
 
@@ -129,8 +114,7 @@ class LiveUpdatesTest {
 				.isInstanceOf(RuntimeException.class)
 				.hasMessage("Audit failure forcing rollback");
 
-		// Nothing sent beyond the initial comment
-		verify(emitter, times(1)).send(any(SseEmitter.SseEventBuilder.class));
+		assertThat(notifications(emitter)).isEmpty();
 	}
 
 	@Test
@@ -144,8 +128,24 @@ class LiveUpdatesTest {
 	@DisplayName("GET /api/events allows authenticated subscriber")
 	void authenticatedUserCanSubscribe() throws Exception {
 		orgA = orgs.signUp("live-auth@test.local", "Org Auth Live");
-		mvc.perform(get("/api/events")
+		var result = mvc.perform(get("/api/events")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + orgA.adminToken()))
-				.andExpect(status().isOk());
+				.andExpect(status().isOk()).andReturn();
+		result.getRequest().getAsyncContext().complete();
+	}
+
+	private void subscribe(SignedUp org, SseEmitter emitter) {
+		eventStreamService.subscribe(org.orgId(), org.adminId(), emitter);
+		var callback = ArgumentCaptor.forClass(Runnable.class);
+		verify(emitter).onCompletion(callback.capture());
+		completions.add(callback.getValue());
+	}
+
+	private static List<Long> notifications(SseEmitter emitter) throws Exception {
+		var events = ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
+		verify(emitter, atLeastOnce()).send(events.capture());
+		return events.getAllValues().stream().flatMap(e -> e.build().stream())
+				.map(d -> d.getData()).filter(IncidentChangedNotification.class::isInstance)
+				.map(IncidentChangedNotification.class::cast).map(IncidentChangedNotification::id).toList();
 	}
 }

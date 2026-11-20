@@ -1,4 +1,5 @@
 import { readToken } from './token'
+import { handleUnauthorized } from './client'
 
 export type IncidentChangedEvent = {
   id: number
@@ -7,6 +8,7 @@ export type IncidentChangedEvent = {
 export type EventSubscriptionOptions = {
   onIncidentChanged: (event: IncidentChangedEvent) => void
   onConnectionChange?: (connected: boolean) => void
+  onReconnect?: () => void
 }
 
 /**
@@ -20,20 +22,16 @@ export function subscribeToEvents(options: EventSubscriptionOptions): () => void
   let retryDelay = 1000
   const maxDelay = 30000
   let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  let isRetry = false
 
   async function connect() {
     if (!active) return
 
     const token = readToken()
-    if (!token) {
-      options.onConnectionChange?.(false)
-      if (active) {
-        retryTimer = setTimeout(connect, retryDelay)
-        retryDelay = Math.min(retryDelay * 2, maxDelay)
-      }
-      return
-    }
+    if (!token) return
 
+    let unavailable = false
     try {
       controller = new AbortController()
       const response = await fetch('/api/events', {
@@ -44,36 +42,49 @@ export function subscribeToEvents(options: EventSubscriptionOptions): () => void
         signal: controller.signal,
       })
 
-      if (!response.ok || !response.body) {
-        throw new Error(`Failed to connect to /api/events: ${response.status}`)
+      if (response.status === 401) {
+        active = false
+        handleUnauthorized(token)
+        return
       }
 
-      options.onConnectionChange?.(true)
+      if (response.ok) {
+        retryDelay = 1000
+        options.onConnectionChange?.(true)
+        if (isRetry) options.onReconnect?.()
+        isRetry = false
+        if (response.body) {
+          reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+          while (active) {
+            const { value, done } = await reader.read()
+            if (done) break
 
-      while (active) {
-        const { value, done } = await reader.read()
-        if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const parts = buffer.split(/\r?\n\r?\n/)
+            buffer = parts.pop() ?? ''
 
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop() ?? ''
-
-        for (const block of parts) {
-          if (parseAndDispatchBlock(block, options.onIncidentChanged)) {
-            retryDelay = 1000
+            for (const block of parts) parseAndDispatchBlock(block, options.onIncidentChanged)
           }
         }
+      } else {
+        unavailable = [502, 503, 504].includes(response.status)
+        if (!unavailable) options.onConnectionChange?.(true)
       }
-    } catch {
-      // Fetch aborted or network failure
+    } catch (error) {
+      unavailable = error instanceof TypeError
+    } finally {
+      reader?.releaseLock()
+      reader = null
+      controller.abort()
     }
 
     if (active) {
-      options.onConnectionChange?.(false)
+      // A routine disconnect gets one retry before reporting a genuine outage.
+      if (unavailable && isRetry) options.onConnectionChange?.(false)
+      isRetry = true
       retryTimer = setTimeout(connect, retryDelay)
       retryDelay = Math.min(retryDelay * 2, maxDelay)
     }
@@ -113,5 +124,6 @@ export function subscribeToEvents(options: EventSubscriptionOptions): () => void
     active = false
     if (retryTimer) clearTimeout(retryTimer)
     controller.abort()
+    void reader?.cancel().catch(() => undefined)
   }
 }

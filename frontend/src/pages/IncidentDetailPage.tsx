@@ -10,12 +10,12 @@ import { BackendUnreachableBanner } from '@/components/app/BackendUnreachableBan
 import { LIFECYCLE, SeverityBadge, StatusBadge } from '@/components/app/badges'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
-import { useLiveUpdates } from '@/lib/useLiveUpdates'
 import { Panel } from '@/components/app/Panel'
 import { SimilarIncidentsPanel } from '@/components/app/SimilarIncidentsPanel'
 import type { IncidentStatus } from '@/api/schemas'
 import { cn } from '@/lib/utils'
 import { formatIst } from '@/lib/time'
+import { useLiveUpdates } from '@/lib/useLiveUpdates'
 import { IncidentActions } from './incident/IncidentActions'
 import { IncidentAlerts } from './incident/IncidentAlerts'
 import { IncidentDeploys } from './incident/IncidentDeploys'
@@ -126,7 +126,7 @@ export function IncidentDetailPage() {
     refetchOnWindowFocus: true,
   })
   const notFound = !valid || (incident.error instanceof ApiRequestError && incident.error.status === 404)
-  const showUnreachableBanner = (isBackendUnreachable || incident.isError) && !notFound
+  const showUnreachableBanner = (isBackendUnreachable || incident.error instanceof TypeError) && !notFound
 
   return (
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">

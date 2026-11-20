@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,11 +27,11 @@ public class EventController {
 
 	@GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "Stream server-sent events for the signed-in user's organization")
-	public SseEmitter streamEvents() {
+	public SseEmitter streamEvents(@AuthenticationPrincipal Jwt jwt) {
 		long orgId = OrgContext.current();
 		if (orgId <= 0) {
 			throw new UnauthorizedException("Authentication required");
 		}
-		return eventStreamService.subscribe(orgId);
+		return eventStreamService.subscribe(orgId, Long.parseLong(jwt.getSubject()));
 	}
 }

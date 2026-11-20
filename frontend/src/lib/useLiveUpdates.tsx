@@ -33,6 +33,9 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
       onConnectionChange: (connected) => {
         setIsBackendUnreachable(!connected)
       },
+      onReconnect: () => {
+        void queryClient.invalidateQueries({ queryKey: ['incidents'], refetchType: 'all' })
+      },
     })
 
     return unsubscribe

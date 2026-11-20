@@ -1,8 +1,10 @@
 package com.group2.incident.incident.entity;
 
 import com.group2.incident.auth.entity.AppUser;
+import com.group2.incident.event.service.TimelineEntryListener;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -19,6 +21,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.TenantId;
 
 @Entity
+@EntityListeners(TimelineEntryListener.class)
 @Table(name = "timeline_entry")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

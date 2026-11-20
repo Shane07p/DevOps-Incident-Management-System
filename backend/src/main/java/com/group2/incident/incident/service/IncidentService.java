@@ -17,7 +17,6 @@ import com.group2.incident.common.tenancy.OrgContext;
 import com.group2.incident.deploy.dto.DeployResponse;
 import com.group2.incident.deploy.entity.Deployment;
 import com.group2.incident.deploy.repository.DeploymentRepository;
-import com.group2.incident.event.model.IncidentChangeEvent;
 import com.group2.incident.incident.dto.AcknowledgeRequest;
 import com.group2.incident.incident.dto.AssignRoleRequest;
 import com.group2.incident.incident.dto.CreateIncidentRequest;
@@ -59,7 +58,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -89,7 +87,6 @@ public class IncidentService {
 	private final IncidentDeploymentRepository incidentDeploymentRepository;
 	private final TransitionPolicy transitionPolicy;
 	private final PostmortemService postmortemService;
-	private final ApplicationEventPublisher applicationEventPublisher;
 	private final Clock clock;
 
 	@Transactional
@@ -191,7 +188,6 @@ public class IncidentService {
 		);
 
 		escalationService.createTaskForIncident(incident, now);
-		publishIncidentChanged(incident);
 
 		return toResponse(incident, timeline);
 	}
@@ -418,7 +414,6 @@ public class IncidentService {
 				details,
 				clock.instant()
 		));
-		publishIncidentChanged(incident);
 		if (viaMcp) {
 			auditService.record(
 					actor,
@@ -459,7 +454,6 @@ public class IncidentService {
 		String details = label.trim() + ": " + normalizedUrl;
 		TimelineEntry entry = timelineEntryRepository.save(new TimelineEntry(
 				incident, actor, TimelineEventType.EVIDENCE_ADDED, details, clock.instant()));
-		publishIncidentChanged(incident);
 		return toTimelineEntryResponse(entry);
 	}
 
@@ -480,7 +474,6 @@ public class IncidentService {
 				clock.instant(),
 				original
 		));
-		publishIncidentChanged(incident);
 		return toTimelineEntryResponse(correction);
 	}
 
@@ -528,7 +521,6 @@ public class IncidentService {
 				details,
 				clock.instant()
 		));
-		publishIncidentChanged(incident);
 		return toTimelineEntryResponse(timelineEntry);
 	}
 
@@ -585,7 +577,6 @@ public class IncidentService {
 		}
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
-		publishIncidentChanged(incident);
 		return toResponse(incident, timeline);
 	}
 
@@ -662,7 +653,6 @@ public class IncidentService {
 		timelineEntryRepository.save(statusTimelineEntry);
 
 		List<TimelineEntry> updatedTimeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
-		publishIncidentChanged(incident);
 		return toResponse(incident, updatedTimeline);
 	}
 
@@ -692,7 +682,6 @@ public class IncidentService {
 		}
 		timelineEntryRepository.save(new TimelineEntry(incident, actor, TimelineEventType.SEVERITY_CHANGED,
 				"Severity changed from " + previous + " to " + request.severity() + ": " + request.reason().trim(), now));
-		publishIncidentChanged(incident);
 		return toResponse(incident, timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId));
 	}
 
@@ -755,7 +744,6 @@ public class IncidentService {
 		);
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
-		publishIncidentChanged(incident);
 		return toResponse(incident, timeline);
 	}
 
@@ -826,7 +814,6 @@ public class IncidentService {
 		);
 
 		List<TimelineEntry> timeline = timelineEntryRepository.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
-		publishIncidentChanged(incident);
 		return toResponse(incident, timeline);
 	}
 
@@ -867,8 +854,4 @@ public class IncidentService {
 		);
 	}
 
-	private void publishIncidentChanged(Incident incident) {
-		long orgId = incident.getOrgId() != null && incident.getOrgId() > 0 ? incident.getOrgId() : OrgContext.current();
-		applicationEventPublisher.publishEvent(new IncidentChangeEvent(orgId, incident.getId()));
-	}
 }

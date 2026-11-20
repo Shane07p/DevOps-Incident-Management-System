@@ -257,7 +257,7 @@ export function IncidentsPage() {
         description="Active and past incidents, with the SLA clock that still runs. Times are IST. Declare from the top bar or with C."
       />
 
-      {(isBackendUnreachable || incidents.isError) && <BackendUnreachableBanner />}
+      {(isBackendUnreachable || incidents.error instanceof TypeError) && <BackendUnreachableBanner />}
 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b">
         <div role="group" aria-label="Show" className="-mb-px flex gap-1 overflow-x-auto">

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { clearToken, writeToken } from '@/api/token'
+import { clearToken, readToken, writeToken } from '@/api/token'
 import { listIncidents } from '@/api/incidents'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
@@ -58,6 +58,17 @@ const incidentSummaries = [
 function IncidentListQueryProbe() {
   useQuery({ queryKey: ['incidents'], queryFn: listIncidents })
   return null
+}
+
+function renderLivePage(path: string) {
+  const router = createMemoryRouter(routes, { initialEntries: [path] })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <ThemeProvider><QueryClientProvider client={queryClient}><AuthProvider><TooltipProvider>
+      <RouterProvider router={router} />
+    </TooltipProvider></AuthProvider></QueryClientProvider></ThemeProvider>,
+  )
+  return { router, queryClient }
 }
 
 describe('Live updates pushed by the backend (FR-12.3, NFR-14, D46)', () => {
@@ -146,7 +157,7 @@ describe('Live updates pushed by the backend (FR-12.3, NFR-14, D46)', () => {
       'GET /api/auth/me': { body: { user: engineerUser, org: devOrg } },
       'GET /api/incidents': () => {
         if (isBackendDown) {
-          return { status: 503, body: { message: 'Backend unreachable' } }
+          throw new TypeError('Failed to fetch')
         }
         return {
           status: 200,
@@ -154,7 +165,6 @@ describe('Live updates pushed by the backend (FR-12.3, NFR-14, D46)', () => {
         }
       },
       'GET /api/events': () => {
-        if (isBackendDown) return { status: 503, body: { message: 'Backend unreachable' } }
         return new Response(new ReadableStream<Uint8Array>({ start: () => undefined }), {
           status: 200,
           headers: { 'Content-Type': 'text/event-stream' },
@@ -192,5 +202,37 @@ describe('Live updates pushed by the backend (FR-12.3, NFR-14, D46)', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('backend-unreachable-banner')).not.toBeInTheDocument()
     }, { timeout: 5000 })
+  })
+
+  it.each([
+    ['/incidents', 403], ['/incidents/7', 403],
+    ['/incidents', 500], ['/incidents/7', 500],
+  ] as const)('%s does not show an outage banner for a query HTTP %s', async (path, status) => {
+    writeToken('test-token')
+    mockFetch({
+      'GET /api/auth/me': { body: { user: engineerUser, org: devOrg } },
+      'GET /api/incidents': { status, body: { message: 'Query refused' } },
+      'GET /api/incidents/7': { status, body: { message: 'Query refused' } },
+      'GET /api/services': { body: [payments] },
+      'GET /api/events': () => new Response(new ReadableStream<Uint8Array>()),
+    })
+    renderLivePage(path)
+    expect(await screen.findByText('Query refused')).toBeInTheDocument()
+    expect(screen.queryByTestId('backend-unreachable-banner')).not.toBeInTheDocument()
+  })
+
+  it('a stream 401 signs the user out through the app auth provider', async () => {
+    writeToken('test-token')
+    const fetch = mockFetch({
+      'GET /api/auth/me': { body: { user: engineerUser, org: devOrg } },
+      'GET /api/incidents': { body: incidentSummaries },
+      'GET /api/services': { body: [payments] },
+      'GET /api/events': { status: 401, body: { message: 'Token revoked' } },
+    })
+    const { router } = renderLivePage('/incidents')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+    expect(readToken()).toBeNull()
+    expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/api/events'))).toHaveLength(1)
+    expect(screen.queryByTestId('backend-unreachable-banner')).not.toBeInTheDocument()
   })
 })

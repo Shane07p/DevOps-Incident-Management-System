@@ -74,8 +74,6 @@ class IncidentServiceTransitionTest {
 	@Mock
 	private com.group2.incident.postmortem.service.PostmortemService postmortemService;
 
-	@Mock
-	private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
 	@Captor
 	private ArgumentCaptor<TimelineEntry> timelineCaptor;
@@ -104,7 +102,6 @@ class IncidentServiceTransitionTest {
 				null,
 				transitionPolicy,
 				postmortemService,
-				applicationEventPublisher,
 				FIXED_CLOCK
 		);
 

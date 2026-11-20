@@ -2,7 +2,7 @@
 drafting.py - AI-3 Drafting for summaries, status updates, and postmortems (Issue #246).
 ---------------------------------------------------------------------------------------
 Generates human-editable drafts grounded strictly in the provided incident, timeline,
-accepted hypotheses, and follow-ups. Strips any fabricated incident or entry references.
+unconfirmed AI hypotheses, follow-ups, and accepted AI suggestions. Strips fabricated references.
 """
 
 from __future__ import annotations
@@ -32,8 +32,9 @@ class DraftRequest(BaseModel):
     kind: Literal["SUMMARY", "STATUS_UPDATE", "POSTMORTEM"]
     incident: Dict[str, Any]
     timeline: List[Dict[str, Any]] = Field(default_factory=list)
-    accepted_hypotheses: List[Dict[str, Any]] = Field(default_factory=list)
-    follow_ups: List[str] = Field(default_factory=list)
+    hypotheses: List[Dict[str, Any]] = Field(default_factory=list)
+    follow_ups: List[Dict[str, Any]] = Field(default_factory=list)
+    accepted_actions: List[str] = Field(default_factory=list)
 
 
 class PostmortemDraft(BaseModel):
@@ -164,6 +165,10 @@ def _build_messages(request: DraftRequest) -> List[Dict[str, Any]]:
         "You are an AI incident scribe drafting text for a human engineer to review and edit before saving. "
         "Cite ONLY the incident reference and timeline entry IDs provided in the input. "
         "NEVER invent or guess any incident IDs (such as INC-999) or entry IDs. "
+        "The hypotheses are unconfirmed AI hypotheses. You may describe one as the suspected cause, "
+        "but never the confirmed root cause unless the timeline confirms it. "
+        "The followUps are the incident's recorded follow-ups, including their owners, due dates, and status. "
+        "The acceptedActions are accepted AI suggestions; accepting them does not mean they were executed. "
         + format_instruction
     )
 
@@ -171,8 +176,9 @@ def _build_messages(request: DraftRequest) -> List[Dict[str, Any]]:
         "kind": kind,
         "incident": request.incident,
         "timeline": request.timeline,
-        "acceptedHypotheses": request.accepted_hypotheses,
+        "hypotheses": request.hypotheses,
         "followUps": request.follow_ups,
+        "acceptedActions": request.accepted_actions,
     }
     return [
         {"role": "system", "content": system_prompt},

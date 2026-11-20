@@ -7,15 +7,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.entity.Role;
-import com.group2.incident.catalog.entity.Criticality;
-import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.entity.Severity;
-import com.group2.incident.catalog.repository.ServiceRepository;
+import com.group2.incident.common.tenancy.OrgContext;
+import com.group2.incident.incident.repository.IncidentRepository;
 import com.group2.incident.incident.repository.TimelineEntryRepository;
+import com.group2.incident.investigation.entity.ActionDecision;
+import com.group2.incident.investigation.entity.Investigation;
+import com.group2.incident.investigation.entity.InvestigationAction;
+import com.group2.incident.investigation.entity.InvestigationHypothesis;
+import com.group2.incident.investigation.repository.InvestigationRepository;
+import com.group2.incident.org.service.OrgMembers;
 import com.group2.incident.support.IntegrationTest;
 import com.group2.incident.support.TestAccounts;
+import com.group2.incident.support.TestOrgs;
 import com.jayway.jsonpath.JsonPath;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -24,9 +27,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,8 +43,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @IntegrationTest
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 class DraftIntegrationTest {
 
 	private static HttpServer aiStubServer;
@@ -76,10 +87,15 @@ class DraftIntegrationTest {
 
 	@Autowired private MockMvc mvc;
 	@Autowired private TestAccounts accounts;
-	@Autowired private ServiceRepository services;
+	@Autowired private TestOrgs testOrgs;
+	@Autowired private IncidentRepository incidents;
+	@Autowired private InvestigationRepository investigations;
+	@Autowired private OrgMembers members;
 	@Autowired private TimelineEntryRepository timelineEntries;
+	@Autowired private TransactionTemplate transactionTemplate;
 	@Autowired private Clock clock;
 
+	private TestOrgs.SignedUp org;
 	private String engineerToken;
 	private String viewerToken;
 	private Long incidentId;
@@ -91,20 +107,28 @@ class DraftIntegrationTest {
 		aiStatus.set(200);
 		lastAiRequest.set(null);
 
-		AppUser engineer = accounts.create("draft-engineer@test.local", Role.ENGINEER);
-		accounts.create("draft-viewer@test.local", Role.VIEWER);
-		engineerToken = accounts.token("draft-engineer@test.local");
-		viewerToken = accounts.token("draft-viewer@test.local");
-
-		ServiceEntity payments = new ServiceEntity("Payments", "Payments service", engineer, Criticality.HIGH, clock.instant());
-		payments.putTarget(Severity.SEV2, 30, 240);
-		payments = services.saveAndFlush(payments);
+		String suffix = UUID.randomUUID().toString().replace("-", "");
+		org = testOrgs.signUp("draft-admin-" + suffix + "@test.local", "Draft " + suffix);
+		String engineerEmail = "draft-engineer-" + suffix + "@test.local";
+		String viewerEmail = "draft-viewer-" + suffix + "@test.local";
+		for (var user : List.of(Map.entry(engineerEmail, "ENGINEER"), Map.entry(viewerEmail, "VIEWER"))) {
+			mvc.perform(post("/api/users")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + org.adminToken())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"%s","displayName":"Draft user","password":"%s","role":"%s"}
+								""".formatted(user.getKey(), TestOrgs.PASSWORD, user.getValue())))
+					.andExpect(status().isCreated());
+		}
+		engineerToken = accounts.token(engineerEmail, TestOrgs.PASSWORD);
+		viewerToken = accounts.token(viewerEmail, TestOrgs.PASSWORD);
+		long serviceId = testOrgs.createService(org.adminToken(), "Payments", org.adminId());
 
 		String created = mvc.perform(post("/api/incidents")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"title\":\"Payment timeout\",\"description\":\"Gateway latency spike\",\"serviceId\":"
-								+ payments.getId() + ",\"severity\":\"SEV2\"}"))
+								+ serviceId + ",\"severity\":\"SEV2\"}"))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		incidentId = JsonPath.<Number>read(created, "$.id").longValue();
@@ -112,9 +136,22 @@ class DraftIntegrationTest {
 		timelineEntryId = JsonPath.<Number>read(created, "$.timeline[0].id").longValue();
 	}
 
+	@AfterEach
+	void cleanUp() {
+		if (org != null) {
+			testOrgs.delete(org.orgId());
+			org = null;
+		}
+	}
+
+	private int timelineCount() {
+		return OrgContext.runAs(org.orgId(), () -> transactionTemplate.execute(status ->
+				timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId).size()));
+	}
+
 	@Test
 	void eachDraftKindReturnsItsExpectedShapeWithoutSavingAnything() throws Exception {
-		int timelineCountBefore = timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId).size();
+		int timelineCountBefore = timelineCount();
 
 		// 1. SUMMARY
 		aiResponseBody.set("""
@@ -179,8 +216,57 @@ class DraftIntegrationTest {
 				.andExpect(jsonPath("$.generatedAt").isNotEmpty());
 
 		// Nothing is saved to the incident timeline.
-		assertThat(timelineEntries.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId))
-				.hasSize(timelineCountBefore);
+		assertThat(timelineCount()).isEqualTo(timelineCountBefore);
+		assertThat(JsonPath.<List<?>>read(lastAiRequest.get(), "$.hypotheses")).isEmpty();
+		assertThat(JsonPath.<List<?>>read(lastAiRequest.get(), "$.followUps")).isEmpty();
+		assertThat(JsonPath.<List<?>>read(lastAiRequest.get(), "$.acceptedActions")).isEmpty();
+	}
+
+	@Test
+	void sendsRealFollowUpsAndLatestHypothesesSeparatelyFromAcceptedActions() throws Exception {
+		mvc.perform(post("/api/incidents/{id}/follow-ups", incidentId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"title":"Add smoke check","kind":"PREVENTIVE","ownerId":%d,"dueDate":"2099-12-01"}
+								""".formatted(org.adminId())))
+				.andExpect(status().isCreated());
+		OrgContext.runAs(org.orgId(), () -> transactionTemplate.execute(status -> {
+			var incident = incidents.findById(incidentId).orElseThrow();
+			var owner = members.find(org.adminId()).orElseThrow().getUser();
+			var older = new Investigation(incident, "Older", "completed", 1, 10, 1, clock.instant().minusSeconds(1));
+			older.addHypothesis(new InvestigationHypothesis(older, 1, "Outdated guess", 0.5, "Earlier evidence"));
+			investigations.saveAndFlush(older);
+			var latest = new Investigation(incident, "Latest", "completed", 1, 10, 1, clock.instant());
+			latest.addHypothesis(new InvestigationHypothesis(latest, 1, "Gateway pool exhaustion", 0.9, "Latency spike"));
+			var accepted = new InvestigationAction(latest, "Inspect gateway pool");
+			accepted.decide(ActionDecision.ACCEPTED, owner, clock.instant());
+			latest.addAction(accepted);
+			var rejected = new InvestigationAction(latest, "Restart every service");
+			rejected.decide(ActionDecision.REJECTED, owner, clock.instant());
+			latest.addAction(rejected);
+			latest.addAction(new InvestigationAction(latest, "Pending suggestion"));
+			investigations.saveAndFlush(latest);
+			return null;
+		}));
+		aiResponseBody.set("""
+				{"aiGenerated":true,"kind":"SUMMARY","text":"Draft summary","postmortem":null}
+				""");
+
+		mvc.perform(post("/api/incidents/{id}/drafts", incidentId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"kind\":\"SUMMARY\"}"))
+				.andExpect(status().isOk());
+
+		assertThat(JsonPath.<List<Map<String, Object>>>read(lastAiRequest.get(), "$.hypotheses"))
+				.containsExactly(Map.of("rank", 1, "title", "Gateway pool exhaustion", "confidence", 0.9));
+		assertThat(JsonPath.<List<Map<String, Object>>>read(lastAiRequest.get(), "$.followUps"))
+				.containsExactly(Map.of("title", "Add smoke check", "kind", "PREVENTIVE", "owner", "Admin",
+						"dueDate", "2099-12-01", "status", "OPEN"));
+		assertThat(JsonPath.<List<String>>read(lastAiRequest.get(), "$.acceptedActions"))
+				.containsExactly("Inspect gateway pool");
+		assertThat(lastAiRequest.get()).doesNotContain("acceptedHypotheses");
 	}
 
 	@Test
@@ -191,7 +277,7 @@ class DraftIntegrationTest {
 					"kind": "POSTMORTEM",
 					"text": "%s mirrors INC-99999 and entry #88888, while entry #%d is real.",
 					"postmortem": {
-						"summary": "Real %s, fake INC-99999.",
+						"summary": "Real %s, incident #%d, fake INC-99999 and incident #99999.",
 						"impact": "See entry #88888.",
 						"rootCause": "Timeout.",
 						"resolution": "Mitigated.",
@@ -199,7 +285,7 @@ class DraftIntegrationTest {
 						"wentBadly": "Lacked alert."
 					}
 				}
-				""".formatted(incidentRef, timelineEntryId, incidentRef));
+				""".formatted(incidentRef, timelineEntryId, incidentRef, incidentId));
 
 		String response = mvc.perform(post("/api/incidents/{id}/drafts", incidentId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
@@ -214,8 +300,29 @@ class DraftIntegrationTest {
 
 		assertThat(text).contains(incidentRef, "entry #" + timelineEntryId);
 		assertThat(text).doesNotContain("INC-99999", "88888");
-		assertThat(pmSummary).contains(incidentRef).doesNotContain("INC-99999");
+		assertThat(pmSummary).contains(incidentRef, "incident #" + incidentId).doesNotContain("99999");
 		assertThat(pmImpact).doesNotContain("88888");
+	}
+
+	@Test
+	void missingPostmortemUsesSanitizedOverviewAndKeepsAllSixFields() throws Exception {
+		for (String textJson : List.of("null", "\"\"", "\"  \"", "\"Overview for " + incidentRef + ", fake INC-99999.\"")) {
+			aiResponseBody.set("""
+					{"aiGenerated":true,"kind":"POSTMORTEM","text":%s,"postmortem":null}
+					""".formatted(textJson));
+			String response = mvc.perform(post("/api/incidents/{id}/drafts", incidentId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + engineerToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"kind\":\"POSTMORTEM\"}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.generatedAt").isNotEmpty())
+					.andReturn().getResponse().getContentAsString();
+			String expected = textJson.contains("Overview") ? "Overview for " + incidentRef + ", fake." : "";
+			assertThat(JsonPath.<String>read(response, "$.text")).isEqualTo(expected);
+			assertThat(JsonPath.<Map<String, String>>read(response, "$.postmortem"))
+					.isEqualTo(Map.of("summary", expected, "impact", "", "rootCause", "",
+							"resolution", "", "wentWell", "", "wentBadly", ""));
+		}
 	}
 
 	@Test

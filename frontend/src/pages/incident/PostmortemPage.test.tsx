@@ -133,6 +133,108 @@ afterEach(() => {
 })
 
 describe('Postmortem editor and follow-ups (#245)', () => {
+  it.each(['ENGINEER', 'ADMIN'] as const)('lets an %s fill all six fields with an editable AI draft and save explicitly', async (role) => {
+    const user = userEvent.setup()
+    const sections = {
+      summary: 'AI checkout summary',
+      impact: 'AI customer impact',
+      rootCause: 'Suspected gateway failure',
+      resolution: 'AI resolution notes',
+      wentWell: 'AI detection notes',
+      wentBadly: 'AI escalation notes',
+    }
+    const { fetchMock } = renderPostmortem(role, {
+      'GET /api/incidents/7/postmortem': { body: draft },
+      'POST /api/incidents/7/drafts': {
+        body: {
+          kind: 'POSTMORTEM',
+          text: 'AI overview',
+          postmortem: sections,
+          generatedAt: '2026-11-20T08:00:00Z',
+        },
+      },
+      'PUT /api/incidents/7/postmortem': {
+        body: { ...draft, ...sections, summary: 'Reviewed summary', version: 2 },
+      },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Draft postmortem (AI)' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue(sections.summary))
+    for (const [label, value] of Object.entries({
+      Summary: sections.summary,
+      Impact: sections.impact,
+      'Root cause': sections.rootCause,
+      Resolution: sections.resolution,
+      'What went well': sections.wentWell,
+      'What went badly': sections.wentBadly,
+    })) {
+      expect(screen.getByLabelText(label)).toHaveValue(value)
+      expect(screen.getByLabelText(label)).toBeEnabled()
+    }
+    const request = fetchMock.mock.calls.find(([url, init]) =>
+      String(url).endsWith('/api/incidents/7/drafts') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ kind: 'POSTMORTEM' })
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).endsWith('/api/incidents/7/postmortem') && init?.method === 'PUT',
+    )).toBe(false)
+
+    fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Reviewed summary' } })
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => {
+      const save = fetchMock.mock.calls.find(([url, init]) =>
+        String(url).endsWith('/api/incidents/7/postmortem') && init?.method === 'PUT',
+      )
+      expect(JSON.parse(String(save?.[1]?.body))).toEqual({
+        ...sections,
+        summary: 'Reviewed summary',
+        expectedVersion: 1,
+      })
+    })
+  })
+
+  it('shows the panel AI-unavailable message on 503 and preserves the postmortem form', async () => {
+    const user = userEvent.setup()
+    const { fetchMock } = renderPostmortem('ENGINEER', {
+      'GET /api/incidents/7/postmortem': { body: draft },
+      'POST /api/incidents/7/drafts': {
+        status: 503,
+        body: { status: 503, message: 'AI service unavailable' },
+      },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Draft postmortem (AI)' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'AI is currently unavailable. You can still use the rest of the incident page.',
+    )
+    expect(screen.getByLabelText('Summary')).toHaveValue(draft.summary)
+    expect(screen.getByLabelText('Summary')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled()
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
+  })
+
+  it('preserves the form when the AI response has no postmortem fields', async () => {
+    const user = userEvent.setup()
+    renderPostmortem('ENGINEER', {
+      'GET /api/incidents/7/postmortem': { body: draft },
+      'POST /api/incidents/7/drafts': {
+        body: {
+          kind: 'POSTMORTEM',
+          text: 'Overview only',
+          postmortem: null,
+          generatedAt: '2026-11-20T08:00:00Z',
+        },
+      },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Draft postmortem (AI)' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not generate the postmortem draft. Please try again.')
+    expect(screen.getByLabelText('Summary')).toHaveValue(draft.summary)
+  })
+
   it('sends all six postmortem fields when saving a draft', async () => {
     const user = userEvent.setup()
 
@@ -188,6 +290,10 @@ describe('Postmortem editor and follow-ups (#245)', () => {
 
     expect(
       screen.queryByRole('button', { name: 'Save draft' }),
+    ).not.toBeInTheDocument()
+
+    expect(
+      screen.queryByRole('button', { name: 'Draft postmortem (AI)' }),
     ).not.toBeInTheDocument()
 
     expect(

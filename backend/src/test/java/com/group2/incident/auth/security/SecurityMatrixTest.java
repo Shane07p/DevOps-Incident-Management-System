@@ -727,13 +727,6 @@ public class SecurityMatrixTest {
 						null,
 						400, 400, 400, 401
 				),
-				new MatrixRow(
-						"POST /api/incidents/{id}/drafts",
-						HttpMethod.POST,
-						"/api/incidents/{id}/drafts",
-						"{\"kind\":\"SUMMARY\"}",
-						503, 503, 403, 401
-				),
 				// The org's own Grafana connection (#260): Admin only. The Admin's PUT has no URL (400), and
 				// the test call finds no connection (503).
 				new MatrixRow(
@@ -764,13 +757,20 @@ public class SecurityMatrixTest {
 						null,
 						503, 403, 403, 401
 				),
-				// AI service URL is unset in IntegrationTest; investigate() uses NOT_SUPPORTED so the
+				// AI service URL is unset; investigate() and generateDraft() use NOT_SUPPORTED so the
 				// incident created in the test transaction is not visible → 404 instead of 503.
 				new MatrixRow(
 						"POST /api/incidents/{id}/investigations",
 						HttpMethod.POST,
 						"/api/incidents/{id}/investigations",
 						null,
+						404, 404, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/drafts",
+						HttpMethod.POST,
+						"/api/incidents/{id}/drafts",
+						"{\"kind\":\"SUMMARY\"}",
 						404, 404, 403, 401
 				),
 				new MatrixRow(

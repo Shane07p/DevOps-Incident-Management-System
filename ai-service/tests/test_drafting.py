@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import pytest
 from fastapi.testclient import TestClient
 
+from drafting import DraftRequest, _build_messages
 from main import app
 from providers import MockProvider, ModelTurnResponse
 
@@ -36,10 +38,17 @@ def _sample_payload(kind: str) -> dict:
                 "recordedAt": "2026-11-10T10:00:00Z",
             }
         ],
-        "acceptedHypotheses": [
-            {"title": "Bad deploy v1.0.1-broken", "confidence": 0.9}
+        "hypotheses": [
+            {"rank": 1, "title": "Bad deploy v1.0.1-broken", "confidence": 0.9}
         ],
-        "followUps": ["Add pre-deploy smoke check"],
+        "followUps": [{
+            "title": "Add pre-deploy smoke check",
+            "kind": "PREVENTIVE",
+            "owner": "Alice",
+            "dueDate": "2026-12-01",
+            "status": "OPEN",
+        }],
+        "acceptedActions": ["Roll back checkout"],
     }
 
 
@@ -143,3 +152,36 @@ def test_draft_returns_503_when_provider_fails():
         _cleanup_provider()
 
     assert resp.status_code == 503
+
+
+@pytest.mark.parametrize("kind", ["SUMMARY", "STATUS_UPDATE", "POSTMORTEM"])
+def test_prompt_marks_hypotheses_unconfirmed(kind):
+    messages = _build_messages(DraftRequest.model_validate(_sample_payload(kind)))
+    prompt = messages[0]["content"]
+
+    assert "unconfirmed AI hypotheses" in prompt
+    assert "suspected cause" in prompt
+    assert "never" in prompt.lower()
+    assert "confirmed root cause unless the timeline confirms it" in prompt
+
+
+def test_prompt_keeps_follow_ups_separate_from_accepted_ai_suggestions():
+    payload = _sample_payload("POSTMORTEM")
+    payload["hypotheses"] = [{"rank": 1, "title": "Bad deploy", "confidence": 0.9}]
+    payload["followUps"] = [{
+        "title": "Add a smoke test",
+        "kind": "PREVENTIVE",
+        "owner": "Alice",
+        "dueDate": "2026-12-01",
+        "status": "OPEN",
+    }]
+    payload["acceptedActions"] = ["Roll back checkout"]
+
+    messages = _build_messages(DraftRequest.model_validate(payload))
+    sent = json.loads(messages[1]["content"])
+
+    assert sent["hypotheses"] == payload["hypotheses"]
+    assert "acceptedHypotheses" not in sent
+    assert sent["followUps"] == payload["followUps"]
+    assert sent["acceptedActions"] == payload["acceptedActions"]
+    assert "accepted AI suggestions" in messages[0]["content"]

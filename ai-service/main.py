@@ -731,6 +731,3 @@ async def draft(request: DraftRequest) -> DraftResponse:
     provider = get_investigation_provider()
     timeout = get_agent_timeout()
     return await generate_draft(request=request, provider=provider, timeout=timeout)
-
-
-

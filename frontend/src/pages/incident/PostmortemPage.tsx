@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 
 import { ApiRequestError } from '@/api/client'
+import { generateIncidentDraft } from '@/api/ai'
 import { getIncident } from '@/api/incidents'
 import {
   getPostmortem,
@@ -170,6 +171,26 @@ export function PostmortemPage() {
     },
   })
 
+  const aiDraft = useMutation({
+    mutationFn: () => generateIncidentDraft(id, 'POSTMORTEM'),
+    onSuccess: (result) => {
+      if (!result.postmortem) {
+        showMessage('Could not generate the postmortem draft. Please try again.', 'error')
+        return
+      }
+      setForm(result.postmortem)
+      showMessage('AI draft added. Review and edit it before saving.', 'info')
+    },
+    onError: (error) => {
+      showMessage(
+        error instanceof ApiRequestError && error.status === 503
+          ? 'AI is currently unavailable. You can still use the rest of the incident page.'
+          : 'Could not generate the postmortem draft. Please try again.',
+        'error',
+      )
+    },
+  })
+
   if (!valid) {
     return (
       <ErrorState
@@ -201,7 +222,7 @@ export function PostmortemPage() {
     )
   }
 
-  const busy = save.isPending || review.isPending
+  const busy = save.isPending || review.isPending || aiDraft.isPending
 
   return (
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
@@ -297,6 +318,15 @@ export function PostmortemPage() {
                   onClick={() => save.mutate()}
                 >
                   {save.isPending ? 'Saving...' : 'Save draft'}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => aiDraft.mutate()}
+                >
+                  {aiDraft.isPending ? 'Drafting postmortem...' : 'Draft postmortem (AI)'}
                 </Button>
 
                 {canReview && (

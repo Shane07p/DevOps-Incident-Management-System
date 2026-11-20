@@ -2,6 +2,7 @@ package com.group2.incident.investigation.service;
 
 import com.group2.incident.common.error.NotFoundException;
 import com.group2.incident.common.error.ServiceUnavailableException;
+import com.group2.incident.followup.repository.FollowUpRepository;
 import com.group2.incident.incident.entity.Incident;
 import com.group2.incident.incident.entity.TimelineEntry;
 import com.group2.incident.incident.repository.IncidentRepository;
@@ -13,9 +14,10 @@ import com.group2.incident.investigation.entity.ActionDecision;
 import com.group2.incident.investigation.entity.Investigation;
 import com.group2.incident.investigation.entity.InvestigationAction;
 import com.group2.incident.investigation.repository.InvestigationRepository;
-import com.group2.incident.investigation.service.AiDraftClient.AcceptedHypothesisInput;
 import com.group2.incident.investigation.service.AiDraftClient.AiDraftRequest;
 import com.group2.incident.investigation.service.AiDraftClient.AiDraftResult;
+import com.group2.incident.investigation.service.AiDraftClient.FollowUpInput;
+import com.group2.incident.investigation.service.AiDraftClient.HypothesisInput;
 import com.group2.incident.investigation.service.AiInvestigationClient.IncidentEvidenceContext;
 import com.group2.incident.investigation.service.AiInvestigationClient.TimelineBundleItem;
 import java.time.Clock;
@@ -28,7 +30,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -44,21 +48,36 @@ public class DraftService {
 	private final IncidentRepository incidentRepository;
 	private final TimelineEntryRepository timelineEntryRepository;
 	private final InvestigationRepository investigationRepository;
+	private final FollowUpRepository followUpRepository;
 	private final AiDraftClient aiDraftClient;
+	private final TransactionTemplate transactionTemplate;
 	private final Clock clock;
 
 	/**
 	 * Generates an AI draft for an incident without saving anything to the database (AI-3, FR-11.4).
 	 * Any incident or timeline entry references not present in the input are dropped from the response.
 	 */
-	@Transactional(readOnly = true)
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public DraftResponse generateDraft(Long incidentId, DraftKind kind) {
-		Incident incident = incidentRepository.findWithDetailsById(incidentId)
-				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
+		DraftSnapshot snapshot = transactionTemplate.execute(status -> loadSnapshot(incidentId, kind));
 
 		if (!aiDraftClient.isEnabled()) {
 			throw new ServiceUnavailableException("AI drafting service is not set up on this server");
 		}
+
+		AiDraftResult result = aiDraftClient.generateDraft(snapshot.request());
+		AllowedReferences allowed = snapshot.allowed();
+		String sanitizedText = sanitize(result.text(), allowed);
+		PostmortemDraftDto sanitizedPostmortem = kind == DraftKind.POSTMORTEM
+				? sanitizePostmortem(result.postmortem(), sanitizedText, allowed)
+				: null;
+
+		return new DraftResponse(kind, sanitizedText, sanitizedPostmortem, clock.instant());
+	}
+
+	private DraftSnapshot loadSnapshot(Long incidentId, DraftKind kind) {
+		Incident incident = incidentRepository.findWithDetailsById(incidentId)
+				.orElseThrow(() -> new NotFoundException("Incident " + incidentId + " not found"));
 
 		List<TimelineEntry> timeline = timelineEntryRepository
 				.findAllByIncidentIdOrderByRecordedAtAscIdAsc(incidentId);
@@ -66,18 +85,24 @@ public class DraftService {
 		Optional<Investigation> latestInv = investigationRepository
 				.findTopByIncidentIdOrderByCreatedAtDescIdDesc(incidentId);
 
-		List<AcceptedHypothesisInput> hypotheses = latestInv
+		List<HypothesisInput> hypotheses = latestInv
 				.map(inv -> inv.getHypotheses().stream()
-						.map(h -> new AcceptedHypothesisInput(h.getRank(), h.getTitle(), h.getConfidence()))
+						.map(h -> new HypothesisInput(h.getRank(), h.getTitle(), h.getConfidence()))
 						.toList())
 				.orElse(List.of());
 
-		List<String> followUps = latestInv
+		List<String> acceptedActions = latestInv
 				.map(inv -> inv.getSuggestedActions().stream()
 						.filter(a -> a.getDecision() == ActionDecision.ACCEPTED)
 						.map(InvestigationAction::getText)
 						.toList())
 				.orElse(List.of());
+
+		List<FollowUpInput> followUps = followUpRepository
+				.findAllByIncidentIdOrderByCreatedAtAscIdAsc(incidentId).stream()
+				.map(f -> new FollowUpInput(f.getTitle(), f.getKind().name(),
+						f.getOwner().getDisplayName(), f.getDueDate(), f.getStatus().name()))
+				.toList();
 
 		IncidentEvidenceContext incidentCtx = new IncidentEvidenceContext(
 				incident.getId(),
@@ -100,16 +125,9 @@ public class DraftService {
 				))
 				.toList();
 
-		AiDraftResult result = aiDraftClient.generateDraft(
-				new AiDraftRequest(kind, incidentCtx, timelineItems, hypotheses, followUps));
-
-		AllowedReferences allowed = collectAllowedReferences(incident, timeline);
-		String sanitizedText = sanitize(result.text(), allowed);
-		PostmortemDraftDto sanitizedPostmortem = kind == DraftKind.POSTMORTEM
-				? sanitizePostmortem(result.postmortem(), sanitizedText, allowed)
-				: null;
-
-		return new DraftResponse(kind, sanitizedText, sanitizedPostmortem, clock.instant());
+		return new DraftSnapshot(
+				new AiDraftRequest(kind, incidentCtx, timelineItems, hypotheses, followUps, acceptedActions),
+				collectAllowedReferences(incident, timeline));
 	}
 
 	private static AllowedReferences collectAllowedReferences(Incident incident, List<TimelineEntry> timeline) {
@@ -192,6 +210,9 @@ public class DraftService {
 		}
 		matcher.appendTail(sb);
 		return sb.toString();
+	}
+
+	private record DraftSnapshot(AiDraftRequest request, AllowedReferences allowed) {
 	}
 
 	record AllowedReferences(Set<String> incidentRefs, Set<String> incidentNumbers, Set<String> entryIds) {

@@ -283,22 +283,26 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.findByRole('dialog').within(() => {
       cy.findByRole('combobox').click()
     })
-    cy.findByRole('option', { name: 'INVESTIGATING' }).click()
+    cy.findByRole('option', { name: 'INVESTIGATING' }).focus().type('{enter}')
+    cy.get('[role="listbox"]').should('not.exist')
     cy.findByRole('dialog').within(() => {
       cy.findByRole('button', { name: 'Change status' }).click()
     })
-    cy.wait('@changeStatusReq')
+    cy.wait('@changeStatusReq').its('response.statusCode').should('eq', 200)
+    cy.get('[role="dialog"]').should('not.exist')
 
     // Move to IDENTIFIED
     cy.findByRole('button', { name: 'Change status' }).click()
     cy.findByRole('dialog').within(() => {
       cy.findByRole('combobox').click()
     })
-    cy.findByRole('option', { name: 'IDENTIFIED' }).click()
+    cy.findByRole('option', { name: 'IDENTIFIED' }).focus().type('{enter}')
+    cy.get('[role="listbox"]').should('not.exist')
     cy.findByRole('dialog').within(() => {
       cy.findByRole('button', { name: 'Change status' }).click()
     })
-    cy.wait('@changeStatusReq')
+    cy.wait('@changeStatusReq').its('response.statusCode').should('eq', 200)
+    cy.get('[role="dialog"]').should('not.exist')
     cy.contains('Identified').should('be.visible')
 
     // Move to MONITORING
@@ -306,11 +310,13 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.findByRole('dialog').within(() => {
       cy.findByRole('combobox').click()
     })
-    cy.findByRole('option', { name: 'MONITORING' }).click()
+    cy.findByRole('option', { name: 'MONITORING' }).focus().type('{enter}')
+    cy.get('[role="listbox"]').should('not.exist')
     cy.findByRole('dialog').within(() => {
       cy.findByRole('button', { name: 'Change status' }).click()
     })
-    cy.wait('@changeStatusReq')
+    cy.wait('@changeStatusReq').its('response.statusCode').should('eq', 200)
+    cy.get('[role="dialog"]').should('not.exist')
     cy.contains('Monitoring').should('be.visible')
 
     // Move to RESOLVED with a recovery note
@@ -318,12 +324,14 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.findByRole('dialog').within(() => {
       cy.findByRole('combobox').click()
     })
-    cy.findByRole('option', { name: 'RESOLVED' }).click()
+    cy.findByRole('option', { name: 'RESOLVED' }).focus().type('{enter}')
+    cy.get('[role="listbox"]').should('not.exist')
     cy.findByRole('dialog').within(() => {
       cy.findByLabelText('Recovery note').type(recoveryNote)
       cy.findByRole('button', { name: 'Change status' }).click()
     })
-    cy.wait('@changeStatusReq')
+    cy.wait('@changeStatusReq').its('response.statusCode').should('eq', 200)
+    cy.get('[role="dialog"]').should('not.exist')
     cy.contains('Resolved').should('be.visible')
 
     // -------------------------------------------------------------------------
@@ -397,11 +405,13 @@ describe('Complete Incident Flow (Issue #57)', () => {
     cy.findByRole('dialog').within(() => {
       cy.findByRole('combobox').click()
     })
-    cy.findByRole('option', { name: 'CLOSED' }).click()
+    cy.findByRole('option', { name: 'CLOSED' }).focus().type('{enter}')
+    cy.get('[role="listbox"]').should('not.exist')
     cy.findByRole('dialog').within(() => {
       cy.findByRole('button', { name: 'Change status' }).click()
     })
-    cy.wait('@changeStatusReq')
+    cy.wait('@changeStatusReq').its('response.statusCode').should('eq', 200)
+    cy.get('[role="dialog"]').should('not.exist')
     cy.contains('Closed').should('be.visible')
 
     // Engineers can still comment after closure; the Viewer check below must distinguish roles.

@@ -38,10 +38,10 @@ const incident = {
   description: 'Card payments fail at the last step.',
   service: { id: 1, name: 'Payments' },
   severity: 'SEV2',
-  status: 'OPEN',
+  status: 'INVESTIGATING',
   version: 3,
   reporter: { id: 2, displayName: 'Dev Engineer' },
-  assignee: null,
+  assignee: { id: 2, displayName: 'Dev Engineer' },
   createdAt: '2026-10-20T08:30:00Z',
   responseTargetMinutes: 60,
   resolutionTargetMinutes: 480,
@@ -104,12 +104,19 @@ afterEach(() => {
 })
 
 describe('Accessibility axe audit (Issue #251)', () => {
-  it.each(['light', 'dark'] as const)('home and app shell have no serious or critical violations in %s theme', async (theme) => {
-    renderAccessibilityPage('/home', theme)
-    await screen.findByRole('region', { name: /Waiting for acknowledgement/ })
+  // Note: color-contrast rule is turned off in jsdom (see expectNoSeriousAxeViolations) because
+  // jsdom does not calculate layout geometry or rendered CSS styles. Contrast compliance across
+  // light and dark themes is verified separately via browser audits (axe DevTools / Lighthouse).
+  it.each(['light', 'dark'] as const)(
+    'home and app shell have no serious or critical violations in %s theme (excluding contrast)',
+    async (theme) => {
+      renderAccessibilityPage('/home', theme)
+      await screen.findByRole('region', { name: /Waiting for acknowledgement/ })
 
-    await expectNoSeriousAxeViolations()
-  }, 15000)
+      await expectNoSeriousAxeViolations()
+    },
+    15000,
+  )
 
   it('incident list has no serious or critical violations', async () => {
     renderAccessibilityPage('/incidents')
@@ -139,7 +146,7 @@ describe('Accessibility axe audit (Issue #251)', () => {
     await expectNoSeriousAxeViolations()
   }, 15000)
 
-  it('dialogs trap focus and restore focus on dismiss', async () => {
+  it('navigation drawer traps focus on tab and restores focus on Escape', async () => {
     renderAccessibilityPage('/home')
     await screen.findByRole('region', { name: /Waiting for acknowledgement/ })
 
@@ -150,15 +157,57 @@ describe('Accessibility axe audit (Issue #251)', () => {
     const drawer = await screen.findByRole('dialog', { name: 'Navigation' })
     expect(drawer).toContainElement(document.activeElement as HTMLElement)
 
+    // Tab through controls inside the drawer; focus must remain inside
+    for (let i = 0; i < 8; i++) {
+      await userEvent.tab()
+      expect(drawer).toContainElement(document.activeElement as HTMLElement)
+    }
+
     await userEvent.keyboard('{Escape}')
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument())
     expect(menuButton).toHaveFocus()
   })
 
-  it('every interactive element has visible focus ring styles', async () => {
+  it('app dialogs (Change status on incident page) trap focus and restore focus on Escape', async () => {
+    renderAccessibilityPage('/incidents/7')
+    await screen.findByRole('heading', { name: 'Checkout failing' })
+
+    const changeStatusButton = await screen.findByRole('button', { name: 'Change status' })
+    changeStatusButton.focus()
+    await userEvent.keyboard('{Enter}')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Change status' })
+    expect(dialog).toContainElement(document.activeElement as HTMLElement)
+
+    // Tab through and past the last control; focus must stay trapped inside dialog
+    for (let i = 0; i < 8; i++) {
+      await userEvent.tab()
+      expect(dialog).toContainElement(document.activeElement as HTMLElement)
+    }
+
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Change status' })).not.toBeInTheDocument())
+    expect(changeStatusButton).toHaveFocus()
+  })
+
+  it('interactive elements on home have visible focus ring styles when tabbed', async () => {
     renderAccessibilityPage('/home')
-    const skipLink = await screen.findByRole('link', { name: 'Skip to content' })
-    expect(skipLink).toHaveClass('focus:not-sr-only')
+    await screen.findByRole('region', { name: /Waiting for acknowledgement/ })
+
+    // Tab through interactive elements and verify each focused element carries visible focus styles
+    for (let i = 0; i < 6; i++) {
+      await userEvent.tab()
+      const el = document.activeElement as HTMLElement
+      expect(el).not.toBe(document.body)
+      const className = el.className || ''
+      const hasFocusRing =
+        className.includes('focus:') ||
+        className.includes('focus-visible:') ||
+        className.includes('ring') ||
+        className.includes('outline')
+      expect(hasFocusRing).toBe(true)
+    }
   })
 })

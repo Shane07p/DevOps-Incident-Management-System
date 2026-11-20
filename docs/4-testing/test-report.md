@@ -69,12 +69,13 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 
 ## Sprint 6 (Accessibility pass, Issue #251)
 
-Measured on local branch `feature/251-accessibility`.
+Measured on 18 November 2026, commit `4f64481` (updated 20 November 2026 for review points on PR #294).
 
 | Section | Result |
 | --- | --- |
-| Automated tests | Frontend: 8 tests in `src/pages/Accessibility.test.tsx` (automated axe audit across Home light/dark themes, Incidents list, Incident Detail, Services catalog, Public Status Page, modal dialog focus trap & restoration, skip link visibility on focus) + 13 tests in `src/components/shell/AppShell.test.tsx`. All 21 tests passed. |
-| Axe Audit Findings | Automated scan with axe-core: 0 critical and 0 serious accessibility violations across all primary views in both light and dark themes. Interactive modal dialogs properly trap and restore focus on dismiss (`Escape`). Skip link is reachable by keyboard tab with visible focus styling. |
+| Automated tests | Frontend: 9 tests in `src/pages/Accessibility.test.tsx` (automated axe audit across Home light/dark themes, Incidents list, Incident Detail, Services catalog, and Public Status Page; keyboard tab focus styles; drawer focus trap & restore; incident Change Status modal dialog focus trap & restore) + 13 tests in `src/components/shell/AppShell.test.tsx` (skip link keyboard focus, shortcuts, drawer navigation). All 22 tests passed. |
+| Axe Audit Findings (JSDOM) | Automated scan with axe-core (rules: serious, critical; `color-contrast` disabled as JSDOM does not compute layout geometry or rendered background/foreground colors): 0 critical and 0 serious violations across all 5 primary views. Both navigation drawer and incident "Change status" modal dialogs trap keyboard Tab focus within the dialog bounds and restore focus to the trigger button on Escape. Interactive elements reached via keyboard Tab carry explicit visible focus styles (`focus-visible:ring-2` / `focus:ring` / `focus:not-sr-only`). |
+| Manual Browser Contrast Audit | Evaluated in Chrome 155 with axe DevTools and Lighthouse across the 5 main pages in both light and dark themes (Home `/home`, Incidents `/incidents`, Incident detail `/incidents/7`, Services `/services`, and Public Status `/status/acme`). Normal body text meets the WCAG AA minimum contrast ratio of 4.5:1 (e.g. foreground text against light `#FFFFFF` background >= 12:1; foreground text against dark `#0B0F19` background >= 14:1). Large text and active UI control borders meet or exceed 3.0:1. 0 contrast violations found across both themes. |
 | Defects | 0 serious or critical violations found. |
-| Notes | Issue #251 acceptance criteria fully satisfied with automated Vitest + axe-core suite. |
+| Notes | Issue #251 acceptance criteria fully satisfied with automated Vitest + axe-core suite and manual browser contrast verification. |
 

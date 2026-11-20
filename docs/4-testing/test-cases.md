@@ -662,6 +662,21 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-DR-06c | Concurrency | An edit has written a reviewed postmortem back to DRAFT and not committed when a close of the SEV2 incident reads it (PostgreSQL) | The close waits for the edit, then gets 409; the incident stays RESOLVED and the postmortem is DRAFT | `PostmortemConcurrencyTest.aClosureOverlappingAnEditWaitsForItAndThenRefuses` | Automated | Shane |
 | TC-DR-06d | State transition | A SEV1 incident is lowered to SEV3, then closed without, then with, a reviewed postmortem | 409 until the postmortem is REVIEWED (judged by the highest severity reached, DR-06.3); then 200 and CLOSED | `PostmortemTest.aDowngradedIncidentStillNeedsAReviewedPostmortemToClose` | Automated | Shane |
 
+### Accessibility pass (Issue #251)
+
+| ID | Technique | Input or condition | Expected | Test | Status | Owner |
+| --- | --- | --- | --- | --- | --- | --- |
+| TC-A11Y-01a | Automated scan | Axe audit on Home page and App Shell in light and dark themes (JSDOM) | 0 critical or serious violations (`color-contrast` disabled in JSDOM) | `Accessibility.test.tsx` (home and app shell have no serious or critical violations) | In review | Manan |
+| TC-A11Y-01b | Automated scan | Axe audit on Incidents list page (JSDOM) | 0 critical or serious violations | `Accessibility.test.tsx` (incident list has no serious or critical violations) | In review | Manan |
+| TC-A11Y-01c | Automated scan | Axe audit on Incident detail page (JSDOM) | 0 critical or serious violations | `Accessibility.test.tsx` (incident detail has no serious or critical violations) | In review | Manan |
+| TC-A11Y-01d | Automated scan | Axe audit on Services catalog page (JSDOM) | 0 critical or serious violations | `Accessibility.test.tsx` (services has no serious or critical violations) | In review | Manan |
+| TC-A11Y-01e | Automated scan | Axe audit on Public status page `/status/acme` (JSDOM) | 0 critical or serious violations | `Accessibility.test.tsx` (public status page has no serious or critical violations) | In review | Manan |
+| TC-A11Y-02a | Keyboard navigation | Tab through interactive elements on Home page | Each focused interactive element has visible focus ring styles | `Accessibility.test.tsx` (interactive elements on home have visible focus ring styles when tabbed) | In review | Manan |
+| TC-A11Y-02b | Keyboard navigation | Tab to skip link from page top | Skip link becomes visible and receives focus ring | `AppShell.test.tsx` (shows the skip link and a focus ring when reached by keyboard) | In review | Manan |
+| TC-A11Y-03a | Focus management | Open navigation drawer, Tab through controls, dismiss with Escape | Focus trapped inside drawer; wraps on Tab; restored to trigger button on Escape | `Accessibility.test.tsx` (navigation drawer traps focus on tab and restores focus on Escape) | In review | Manan |
+| TC-A11Y-03b | Focus management | Open "Change status" modal dialog on incident page, Tab past last control, dismiss with Escape | Focus trapped inside modal; wraps past last control; restored to trigger button on Escape | `Accessibility.test.tsx` (app dialogs (Change status on incident page) trap focus and restore focus on Escape) | In review | Manan |
+| TC-A11Y-04 | Manual acceptance | Browser contrast audit with axe DevTools / Lighthouse on 5 main pages in light and dark themes | WCAG AA contrast compliance (>= 4.5:1 normal text, >= 3:1 large/graphical) | Manual browser audit | In review | Manan |
+
 ---
 
 ## White-box testing

@@ -26,6 +26,7 @@ Sprint 6.
 | Integration | Saving and reading data, transactions and rollback, concurrency, migrations, append-only tables | Spring Boot tests with Testcontainers PostgreSQL 16 (`@IntegrationTest`) | Every build |
 | API and security | Status codes, validation errors, and permissions for every endpoint and role | MockMvc, `SecurityMatrixTest` | Every build |
 | Frontend component | Forms, field errors, role-based screens, the API client | Vitest, Testing Library, jsdom | Every build |
+| Accessibility | WCAG AA axe rules (no serious/critical violations), keyboard navigation, focus trap/restore | axe-core in Vitest, Testing Library, jsdom; manual browser contrast audits | Every build (automated checks); manual audits at sprint end |
 | AI service | Endpoints, contracts, and failure handling with fixed sample responses | pytest | Every build |
 | Property-based | Rules that must hold for every input: the SLA breach rule, the lifecycle, on-call coverage | jqwik (backend), fast-check (frontend) | Every build |
 | Mutation | Whether the tests catch small bugs in the transition and SLA rules | PIT | Every build, after the backend tests; fails below 95% |

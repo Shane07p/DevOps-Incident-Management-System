@@ -94,6 +94,30 @@ class OrgIsolationTest {
 	// B's monitoring-tool token: alerts sent with it belong to B.
 	private String toolTokenOfB;
 
+	@Test
+	void eventStreamsUseTheAuthenticatedOrganization() throws Exception {
+		var streamA = mvc.perform(get("/api/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + a.adminToken()))
+				.andExpect(status().isOk()).andReturn();
+		var streamB = mvc.perform(get("/api/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + b.adminToken()))
+				.andExpect(status().isOk()).andReturn();
+		try {
+			mvc.perform(post("/api/incidents/{id}/comments", sourceIncidentOfA)
+					.header(HttpHeaders.AUTHORIZATION, "Bearer " + a.adminToken())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"comment\":\"Organization-scoped live update\"}"))
+					.andExpect(status().isCreated());
+			String incidentId = "\\\"id\\\"\\s*:\\s*" + sourceIncidentOfA + "\\b";
+			assertThat(streamA.getResponse().getContentAsString()).containsPattern(incidentId);
+			assertThat(streamB.getResponse().getContentAsString()).doesNotContainPattern(incidentId);
+		}
+		finally {
+			streamA.getRequest().getAsyncContext().complete();
+			streamB.getRequest().getAsyncContext().complete();
+		}
+	}
+
 	@BeforeEach
 	void resetAiClient() {
 		reset(aiEmbeddingClient);

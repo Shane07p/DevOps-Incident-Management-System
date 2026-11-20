@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleAlert, FileText, RefreshCw, Search, X } from 'lucide-react'
+import { CircleAlert, FileText, RefreshCw, Search, Terminal, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
 import { listServiceChoices } from '@/api/incidents'
 import { fetchLogs, LOG_LEVELS, type LogEntry, type LogLevel, type LogsQuery } from '@/api/telemetry'
 import { LoadingState } from '@/components/app/LoadingState'
-import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/app/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,11 +35,10 @@ const TIME_RANGES = [
 /** Minimum polling interval for live tail (ms). Must not hammer Loki on free tier. */
 const LIVE_TAIL_INTERVAL_MS = 5000
 
+// Colour by meaning: red is over a limit, amber is at risk; everything else stays neutral.
 const LEVEL_STYLE: Record<string, string> = {
-  DEBUG: 'bg-muted text-muted-foreground',
-  INFO: 'bg-status-open-bg text-status-open',
-  WARN: 'bg-status-investigating-bg text-status-investigating',
-  ERROR: 'bg-sev-1-bg text-sev-1-fg',
+  ERROR: 'text-health-down-fg',
+  WARN: 'text-health-degraded-fg',
 }
 
 /** A chosen range's `from` is the moment of the request, minus the range; an explicit `from` stays. */
@@ -58,18 +57,10 @@ function matchesField(log: LogEntry, filter: { key: string; value: string } | nu
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function LevelBadge({ level }: { level: string }) {
+function LevelLabel({ level }: { level: string }) {
   const normalized = level.toUpperCase()
-  const style = LEVEL_STYLE[normalized] ?? 'bg-muted text-muted-foreground'
   return (
-    <span
-      className={cn(
-        'inline-flex h-[20px] items-center rounded px-1.5 font-mono text-[10.5px] leading-none font-semibold',
-        style,
-      )}
-    >
-      {normalized}
-    </span>
+    <span className={cn('w-[52px] shrink-0 font-semibold', LEVEL_STYLE[normalized] ?? 'text-muted-foreground')}>{normalized}</span>
   )
 }
 
@@ -233,59 +224,53 @@ export function LogsPage() {
 
   const shown = logsQuery.data?.filter((log) => matchesField(log, fieldFilter)) ?? []
 
-  return (
-    <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-[44px] leading-[0.9] font-[750]" style={{ fontStretch: '62%' }}>
-            Logs Explorer
-          </h1>
-          <p className="text-muted-foreground">
-            Search and live tail a service&apos;s logs. Times are IST.
-          </p>
-        </div>
+  const serviceName = services.data?.find((service) => String(service.id) === serviceId)?.name
+  const rangeLabel = TIME_RANGES.find((range) => range.minutes === rangeMinutes)?.label
 
-        {/* Live tail toggle */}
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant={liveTail ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setLiveTail((prev) => !prev)}
-            aria-pressed={liveTail}
-            aria-label="Live tail"
-            className="gap-2 font-medium"
-          >
-            <span
-              className={cn(
-                'size-2 rounded-full transition-colors',
-                liveTail ? 'bg-health-operational motion-safe:animate-pulse' : 'bg-muted-foreground',
-              )}
-              aria-hidden="true"
-            />
-            {liveTail ? 'Live tail on' : 'Live tail'}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => logsQuery.refetch()}
-            disabled={logsQuery.isFetching}
-            aria-label="Refresh logs"
-            title="Refresh logs"
-          >
-            <RefreshCw className={cn('size-4', logsQuery.isFetching && 'animate-spin')} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+  return (
+    <div className="mx-auto flex max-w-[1240px] flex-col">
+      <PageHeader
+        title="Logs"
+        description="Search a service's logs by level, text, and time, or follow them live. Times in IST."
+        actions={
+          <>
+            <Button
+              type="button"
+              variant={liveTail ? 'default' : 'outline'}
+              onClick={() => setLiveTail((prev) => !prev)}
+              aria-pressed={liveTail}
+              aria-label="Live tail"
+              className="gap-2"
+            >
+              <span
+                className={cn(
+                  'size-2 rounded-full transition-colors',
+                  liveTail ? 'bg-health-operational motion-safe:animate-pulse' : 'bg-muted-foreground',
+                )}
+                aria-hidden="true"
+              />
+              {liveTail ? 'Live tail on' : 'Live tail'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => logsQuery.refetch()}
+              disabled={logsQuery.isFetching}
+              aria-label="Refresh logs"
+              title="Refresh logs"
+            >
+              <RefreshCw className={cn('size-4', logsQuery.isFetching && 'animate-spin')} aria-hidden="true" />
+            </Button>
+          </>
+        }
+      />
 
       {/* Filter controls */}
-      <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Service filter */}
+      <div className="mb-6 flex flex-col gap-3 rounded-lg border bg-card p-[19px] shadow-elev-1">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_2fr]">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor={serviceIdAttr} className="text-sm font-medium">
+            <Label htmlFor={serviceIdAttr} className="text-[12px] text-muted-foreground">
               Service
             </Label>
             <Select value={serviceId} onValueChange={(val) => setFilters({ serviceId: val })}>
@@ -302,15 +287,11 @@ export function LogsPage() {
             </Select>
           </div>
 
-          {/* Level filter */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor={levelIdAttr} className="text-sm font-medium">
+            <Label htmlFor={levelIdAttr} className="text-[12px] text-muted-foreground">
               Level
             </Label>
-            <Select
-              value={level}
-              onValueChange={(val) => setFilters({ level: val === '_all' ? '' : val })}
-            >
+            <Select value={level} onValueChange={(val) => setFilters({ level: val === '_all' ? '' : val })}>
               <SelectTrigger id={levelIdAttr} aria-label="Level" className="w-full">
                 <SelectValue placeholder="All levels" />
               </SelectTrigger>
@@ -325,15 +306,11 @@ export function LogsPage() {
             </Select>
           </div>
 
-          {/* Time range filter */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor={timeRangeIdAttr} className="text-sm font-medium">
+            <Label htmlFor={timeRangeIdAttr} className="text-[12px] text-muted-foreground">
               Time range
             </Label>
-            <Select
-              value={timeRangeParam}
-              onValueChange={(val) => setFilters({ timeRange: val, from: '', to: '' })}
-            >
+            <Select value={timeRangeParam} onValueChange={(val) => setFilters({ timeRange: val, from: '', to: '' })}>
               <SelectTrigger id={timeRangeIdAttr} aria-label="Time range" className="w-full">
                 <SelectValue placeholder="Last 1 hour" />
               </SelectTrigger>
@@ -347,9 +324,8 @@ export function LogsPage() {
             </Select>
           </div>
 
-          {/* Text search */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor={textIdAttr} className="text-sm font-medium">
+            <Label htmlFor={textIdAttr} className="text-[12px] text-muted-foreground">
               Search text
             </Label>
             <div className="relative">
@@ -360,7 +336,7 @@ export function LogsPage() {
               <Input
                 id={textIdAttr}
                 type="search"
-                placeholder="Search text or pattern…"
+                placeholder="Search messages, like timeout or a trace id"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 className="pl-9"
@@ -375,9 +351,9 @@ export function LogsPage() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
             <div className="flex flex-wrap items-center gap-2">
               {fieldFilter && (
-                <Badge variant="secondary" className="gap-1.5 px-2 py-0.5 text-xs font-normal">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs">
                   <span>
-                    Field: <strong className="font-mono">{fieldFilter.key}</strong> ={' '}
+                    Field: <strong className="font-mono font-medium">{fieldFilter.key}</strong> ={' '}
                     <span className="font-mono">{fieldFilter.value}</span>
                     <span className="text-muted-foreground"> (in the lines loaded)</span>
                   </span>
@@ -389,7 +365,7 @@ export function LogsPage() {
                   >
                     <X className="size-3" aria-hidden="true" />
                   </button>
-                </Badge>
+                </span>
               )}
             </div>
 
@@ -407,10 +383,10 @@ export function LogsPage() {
         )}
       </div>
 
-      {/* Main Results / States */}
+      {/* Results and their states */}
       {services.isSuccess && services.data.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border bg-card py-16 text-center">
-          <p className="font-semibold">No services yet</p>
+          <p className="font-medium">No services yet</p>
           <p className="text-sm text-muted-foreground">Logs are read per service. An Admin adds services on the Services page.</p>
         </div>
       ) : services.isError ? (
@@ -420,43 +396,34 @@ export function LogsPage() {
       ) : logsQuery.isPending ? (
         <LoadingState message="Loading logs…" />
       ) : is503 ? (
-        /* Grafana 503 Unavailable State */
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border bg-sev-1-bg p-8 text-center text-sev-1-fg"
-        >
-          <CircleAlert className="size-8" aria-hidden="true" />
+        <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border bg-card p-8 text-center">
+          <CircleAlert className="size-7 text-health-degraded-fg" aria-hidden="true" />
           <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold">Logs unavailable</p>
-            <p className="text-sm">{logsQuery.error.message}. The rest of Settle keeps working.</p>
+            <p className="font-medium">Logs unavailable</p>
+            <p className="text-sm text-muted-foreground">{logsQuery.error.message}. The rest of Settle keeps working.</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => logsQuery.refetch()}>
             Try again
           </Button>
         </div>
       ) : logsQuery.isError ? (
-        /* Generic Error State */
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border bg-sev-1-bg p-8 text-center text-sev-1-fg"
-        >
-          <CircleAlert className="size-8" aria-hidden="true" />
+        <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border bg-card p-8 text-center">
+          <CircleAlert className="size-7 text-health-down-fg" aria-hidden="true" />
           <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold">Failed to load logs</p>
-            <p className="text-sm">{logsQuery.error.message}</p>
+            <p className="font-medium">Failed to load logs</p>
+            <p className="text-sm text-muted-foreground">{logsQuery.error.message}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => logsQuery.refetch()}>
             Try again
           </Button>
         </div>
       ) : shown.length === 0 ? (
-        /* Empty State */
         <div className="flex flex-col items-center gap-4 rounded-lg border bg-card py-20 text-center">
           <span className="grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
             <FileText className="size-5" aria-hidden="true" />
           </span>
           <div className="flex flex-col gap-1">
-            <p className="font-semibold">No logs found</p>
+            <p className="font-medium">No logs found</p>
             <p className="text-sm text-muted-foreground">
               {fieldFilter ? 'No line loaded has this field value.' : 'No logs match the current filters and time range.'}
             </p>
@@ -468,63 +435,56 @@ export function LogsPage() {
           )}
         </div>
       ) : (
-        /* Log List */
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{fieldFilter ? `${shown.length} of ${logsQuery.data.length} log entries` : `${shown.length} log entries`}</span>
-            {liveTail && <span className="font-medium text-health-operational-fg">● Polling active</span>}
+        <section aria-label="Log lines" className="overflow-hidden rounded-lg border bg-card shadow-elev-1">
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 font-mono text-[12px] font-medium text-muted-foreground">
+            <Terminal className="size-[15px]" aria-hidden="true" />
+            <span className="text-foreground">{serviceName}</span>
+            <span>· {explicitFrom ? 'Chosen window' : rangeLabel} · IST</span>
+            <span className="ml-auto flex items-center gap-3">
+              {liveTail && <span className="text-health-operational-fg">● Polling active</span>}
+              <span className="tnum">
+                {fieldFilter ? `${shown.length} of ${logsQuery.data.length} log entries` : `${shown.length} log entries`}
+              </span>
+            </span>
           </div>
-
-          <div className="overflow-hidden rounded-lg border bg-card font-mono text-xs">
-            <div className="divide-y divide-border">
-              {shown.map((log) => {
-                const fields = Object.keys(log.attributes).length > 0 ? log.attributes : null
-                return (
-                  <div
-                    key={log.id}
-                    data-testid="log-entry"
-                    className="group flex flex-col gap-1.5 p-3 hover:bg-muted/40 transition-colors"
-                  >
-                    {/* Header line: Timestamp, Level, Service */}
-                    <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                      <span className="text-[11px] tnum">{formatIst(log.timestamp)}</span>
-                      <LevelBadge level={log.level} />
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10.5px] font-sans font-medium text-foreground">
-                        {log.serviceName}
-                      </span>
-                    </div>
-
-                    {/* Log message */}
-                    <div className="font-mono text-xs text-foreground/90 break-all select-text">
-                      {log.message}
-                    </div>
-
-                    {/* Clickable structured JSON fields */}
-                    {fields && (
-                      <div className="mt-1 flex flex-wrap gap-1.5 pt-0.5">
-                        {Object.entries(fields).map(([k, v]) => {
-                          const valStr = asText(v)
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              aria-label={`Filter by ${k}: ${valStr}`}
-                              onClick={() => handleJsonFieldClick(k, valStr)}
-                              className="inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            >
-                              <span className="font-semibold text-foreground/75">{k}:</span>
-                              <span>{valStr}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
+          <div className="divide-y divide-border">
+            {shown.map((log) => {
+              const fields = Object.keys(log.attributes).length > 0 ? log.attributes : null
+              return (
+                <div key={log.id} data-testid="log-entry" className="flex flex-col gap-1.5 px-4 py-1.5 transition-colors hover:bg-muted/40">
+                  <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-1 font-mono text-[12px] leading-normal md:flex-nowrap">
+                    <time dateTime={log.timestamp} className="shrink-0 text-muted-foreground tnum">
+                      {formatIst(log.timestamp)}
+                    </time>
+                    <LevelLabel level={log.level} />
+                    <span className="basis-full break-all text-foreground select-text md:basis-auto">{log.message}</span>
                   </div>
-                )
-              })}
-            </div>
+
+                  {/* Clickable structured fields */}
+                  {fields && (
+                    <div className="flex flex-wrap gap-1.5 pb-1">
+                      {Object.entries(fields).map(([k, v]) => {
+                        const valStr = asText(v)
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            aria-label={`Filter by ${k}: ${valStr}`}
+                            onClick={() => handleJsonFieldClick(k, valStr)}
+                            className="inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <span className="font-medium text-foreground/75">{k}:</span>
+                            <span>{valStr}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
-        </div>
+        </section>
       )}
     </div>
   )

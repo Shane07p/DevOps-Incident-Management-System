@@ -134,7 +134,7 @@ describe('LogsPage — rendering', () => {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
-    expect(await screen.findByRole('heading', { name: 'Logs Explorer' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Logs' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Service' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Level' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Time range' })).toBeInTheDocument()
@@ -172,7 +172,7 @@ describe('LogsPage — rendering', () => {
 
   it('does not show "All time" option in the time range selector', async () => {
     renderLogs('/logs')
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Time range' }))
     expect(screen.queryByRole('option', { name: 'All time' })).not.toBeInTheDocument()
@@ -209,7 +209,7 @@ describe('LogsPage — level filter', () => {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Level' }))
     await userEvent.click(await screen.findByRole('option', { name: 'ERROR' }))
@@ -229,7 +229,7 @@ describe('LogsPage — text search filter', () => {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     const input = screen.getByRole('searchbox', { name: 'Search logs' })
     await userEvent.type(input, 'timeout')
@@ -252,7 +252,7 @@ describe('LogsPage — time-range filter', () => {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Time range' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Last 15 minutes' }))
@@ -280,7 +280,7 @@ describe('LogsPage — combined filters', () => {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Service' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Checkout' }))
@@ -324,7 +324,7 @@ describe('LogsPage — clearing filters', () => {
       'GET /api/telemetry/logs': { body: sampleLogsResponse },
     })
 
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     const orderBtn = await screen.findByRole('button', { name: 'Filter by order_id: ord-123' })
     await userEvent.click(orderBtn)
@@ -475,7 +475,7 @@ describe('LogsPage — malformed JSON & plain-text handling', () => {
 describe('LogsPage — debounce and time window', () => {
   it('keeps a level the URL gained while the typed text was still waiting', async () => {
     const { router } = renderLogs('/logs')
-    await screen.findByRole('heading', { name: 'Logs Explorer' })
+    await screen.findByRole('heading', { name: 'Logs' })
 
     fireEvent.change(screen.getByLabelText('Search text'), { target: { value: 'timeout' } })
     // Within the text's 400 ms wait, the level filter is set (as the Level select does).

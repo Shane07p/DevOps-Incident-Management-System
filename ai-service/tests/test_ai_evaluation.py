@@ -10,6 +10,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import ai_evaluation
 from ai_evaluation import (
     DraftingAdversarialProvider,
     ScenarioEvaluatorProvider,
@@ -235,6 +236,26 @@ def test_ai3_evaluation_pipeline_with_scripted_provider():
     assert result["mean_latency_ms"] >= 0.0
 
 
+def test_ai3_evaluation_uses_current_drafting_context():
+    payloads = []
+
+    class RecordingProvider(DraftingAdversarialProvider):
+        async def generate(self, messages, tools, **kwargs):
+            assert "unconfirmed AI hypotheses" in messages[0]["content"]
+            payloads.append(json.loads(messages[1]["content"]))
+            return await super().generate(messages, tools, **kwargs)
+
+    result = asyncio.run(evaluate_ai3_drafting(provider_factory=RecordingProvider))
+
+    assert result["provider"] == "custom"
+    assert [payload["kind"] for payload in payloads] == ["SUMMARY", "STATUS_UPDATE", "POSTMORTEM"]
+    for payload in payloads:
+        assert "acceptedHypotheses" not in payload
+        assert set(payload["hypotheses"][0]) == {"rank", "title", "confidence"}
+        assert set(payload["followUps"][0]) == {"title", "kind", "owner", "dueDate", "status"}
+        assert payload["acceptedActions"]
+
+
 def test_draft_postmortem_structure():
     """Generate a POSTMORTEM draft and verify all six sections are populated."""
     provider = MockProvider(responses=[
@@ -326,3 +347,37 @@ def test_format_markdown_report_handles_partial_results():
     assert "AI-4: Triage Severity Classification" in md
     assert "11/25" in md
     assert "abc1234" in md
+    assert "No live Ollama result is recorded" in md
+    assert "Model evaluated:" not in md
+
+
+def test_scripted_ai2_report_does_not_claim_live_model_accuracy():
+    ai2 = asyncio.run(evaluate_ai2_scenarios(use_mock=True, timeout_seconds=10.0))
+    md = format_markdown_report({"ai2": ai2}, "qwen2.5:0.5b", "abc1234", "2026-11-20")
+
+    assert "ScenarioEvaluatorProvider" in md
+    assert "Scripted cause-match check" in md
+    assert "5/5" in md
+    assert "No live Ollama result is recorded" in md
+    assert "Top-1 Cause Accuracy" not in md
+    assert "were run against live" not in md
+
+
+def test_scripted_ai3_report_identifies_the_adversarial_provider():
+    ai3 = asyncio.run(evaluate_ai3_drafting(use_mock=True))
+    md = format_markdown_report({"ai3": ai3}, "qwen2.5:0.5b", "abc1234", "2026-11-20")
+
+    assert "scripted DraftingAdversarialProvider" in md
+    assert "3/3" in md
+    assert "No live Ollama result is recorded" in md
+    assert "against `OllamaProvider`" not in md
+
+
+def test_scripted_cli_does_not_call_cause_matching_model_accuracy(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["ai_evaluation.py", "--eval", "ai2", "--use-mock"])
+    ai_evaluation.main()
+    output = capsys.readouterr().out
+
+    assert "ScenarioEvaluatorProvider" in output
+    assert "5/5" in output
+    assert "accuracy" not in output.lower()

@@ -4,14 +4,14 @@ ai_evaluation.py - Evaluation Suite for AI Features (Issue #252, Sprint 6).
 Implements evaluation runners for:
   1. AI-2 (AI SRE on demo scenarios SCN-01 to SCN-05):
      - Top-1 cause identification accuracy
-     - Time to first hypothesis (latency in ms)
+     - End-to-end investigation duration (latency in ms)
      - Evidence citation grounding
   2. AI-3 (AI Drafting):
      - Checklist evaluation across SUMMARY, STATUS_UPDATE, POSTMORTEM
      - Real incident reference retention
      - Zero hallucinated/fabricated ID leakage (regex-verified against allowed refs)
      - Valid structural schema adherence
-     - Real generation latency (ms)
+     - Draft pipeline duration (ms)
   3. AI-4 (Triage hint):
      - Severity classification accuracy of PR #283's POST /triage endpoint
        against the 25 labelled test cases in data/triage_eval_set.jsonl
@@ -22,7 +22,7 @@ Usage:
   python ai_evaluation.py --eval ai2                       # Run AI-2 evaluation only
   python ai_evaluation.py --eval ai3                       # Run AI-3 evaluation only
   python ai_evaluation.py --eval ai4                       # Run AI-4 evaluation only
-  python ai_evaluation.py --use-mock                       # Hermetic scripted run (unit tests only)
+  python ai_evaluation.py --use-mock                       # Scripted pipeline checks; no live model
   python ai_evaluation.py --markdown --save-json out.json  # Output Markdown and save raw JSON
 """
 
@@ -137,7 +137,7 @@ def _format_log_message(item: Dict[str, Any]) -> str:
 class ScenarioEvaluatorProvider(LlmProvider):
     """
     Deterministic scripted provider for hermetic unit tests ONLY.
-    Never use for reported evaluation metrics; live runs use OllamaProvider.
+    Never present these scripted checks as live model metrics; live runs use OllamaProvider.
     """
 
     def __init__(self, scenario: Dict[str, Any]):
@@ -358,7 +358,7 @@ async def evaluate_ai2_scenarios(
 ) -> Dict[str, Any]:
     """
     Evaluate AI-2 AI SRE on demo scenarios (SCN-01 to SCN-05).
-    Computes top-1 cause accuracy and time to first hypothesis.
+    Computes cause matches and end-to-end investigation duration.
     Uses real OllamaProvider by default; ScenarioEvaluatorProvider is for unit tests only.
     """
     path = scenarios_path or SCENARIOS_FILE
@@ -447,7 +447,7 @@ async def evaluate_ai2_scenarios(
     return {
         "feature": "AI-2",
         "model": eval_model,
-        "provider": "mock" if use_mock else "ollama",
+        "provider": "custom" if provider_override is not None else "mock" if use_mock else "ollama",
         "timeout_seconds": effective_timeout,
         "total_scenarios": total_scenarios,
         "top_1_matches": top_1_matches,
@@ -568,8 +568,15 @@ async def evaluate_ai3_drafting(
             kind=kind,  # type: ignore[arg-type]
             incident=sample_incident,
             timeline=sample_timeline,
-            accepted_hypotheses=[{"hypothesis": "Gateway timeout"}],
-            follow_ups=["Upgrade HTTP client pool"],
+            hypotheses=[{"rank": 1, "title": "Gateway timeout", "confidence": 0.7}],
+            follow_ups=[{
+                "title": "Upgrade HTTP client pool",
+                "kind": "PREVENTIVE",
+                "owner": "Evaluation engineer",
+                "dueDate": "2026-12-01",
+                "status": "OPEN",
+            }],
+            accepted_actions=["Inspect the gateway connection pool"],
         )
 
         t_start = time.monotonic()
@@ -646,7 +653,7 @@ async def evaluate_ai3_drafting(
     return {
         "feature": "AI-3",
         "model": eval_model,
-        "provider": "mock" if use_mock else "ollama",
+        "provider": "custom" if provider_factory is not None else "mock" if use_mock else "ollama",
         "total_draft_evaluations": total,
         "checklist_passed_count": passed_count,
         "checklist_pass_rate": round(passed_count / total, 4) if total else 0.0,
@@ -782,6 +789,14 @@ async def run_all_evaluations(
     }
 
 
+def _provider_description(result: Dict[str, Any], scripted_provider: str) -> str:
+    if result.get("provider") == "ollama":
+        return "live OllamaProvider"
+    if result.get("provider") == "mock":
+        return f"scripted {scripted_provider}"
+    return "custom provider (not classified as a live model run)"
+
+
 def format_markdown_report(
     results: Dict[str, Any],
     model_name: str,
@@ -789,24 +804,40 @@ def format_markdown_report(
     date_str: str,
 ) -> str:
     lines = [
-        "## Sprint 6 - AI Evaluation Runs (Issue #252)",
+        "## Sprint 6 — AI Evaluation Runs (Issue #252)",
         "",
         f"Evaluated on {date_str}, commit `{commit_sha}` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).",
-        f"Model evaluated: `{model_name}` via `OllamaProvider` (the model configured in `.env.example` and `compose.yaml`).",
     ]
+    has_live_result = any(
+        results.get(feature, {}).get("provider") == "ollama" for feature in ("ai2", "ai3")
+    )
+    if has_live_result:
+        lines.append(f"Live model for sections marked live: `{model_name}` via `OllamaProvider`.")
+    else:
+        lines.extend([
+            f"Configured model: `{model_name}` (configuration only; see each section's provider).",
+            "No live Ollama result is recorded in this report.",
+        ])
 
     if "ai2" in results:
         ai2 = results["ai2"]
+        source = _provider_description(ai2, "ScenarioEvaluatorProvider")
+        cause_metric = (
+            "Top-1 Cause Accuracy" if ai2.get("provider") == "ollama"
+            else "Scripted cause-match check" if ai2.get("provider") == "mock"
+            else "Cause-match check"
+        )
         lines.extend([
             "",
             "### AI-2: AI SRE Scenario Investigation",
             "",
             "Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml` and their recorded fixtures in `ai-service/data/fixtures/scenarios/`.",
+            f"All results and timings in this section come from {source}.",
             "",
-            f"- **Top-1 Cause Accuracy:** {ai2['top_1_matches']}/{ai2['total_scenarios']} on {ai2['total_scenarios']} demo scenarios ({ai2['top_1_accuracy']:.1%})",
-            f"- **Time to First Hypothesis (`{model_name}` via `OllamaProvider`):** mean {ai2['mean_time_to_first_hypothesis_ms']:.1f} ms (min: {ai2['min_time_ms']:.1f} ms, max: {ai2['max_time_ms']:.1f} ms)",
+            f"- **{cause_metric}:** {ai2['top_1_matches']}/{ai2['total_scenarios']} on {ai2['total_scenarios']} demo scenarios ({ai2['top_1_accuracy']:.1%})",
+            f"- **End-to-end investigation duration ({source}):** mean {ai2['mean_time_to_first_hypothesis_ms']:.1f} ms (min: {ai2['min_time_ms']:.1f} ms, max: {ai2['max_time_ms']:.1f} ms). The timer wraps the complete agent loop, not a streaming first-hypothesis event.",
             "",
-            "| Scenario | Service | Fault Switch | Top-1 Hypothesis Matches Real Cause | Generated Top-1 Hypothesis | Time (ms) | Status |",
+            "| Scenario | Service | Fault Switch | Cause Matches Scenario Label | Generated Top-1 Hypothesis | Time (ms) | Status |",
             "|---|---|---|---|---|---|---|",
         ])
         for s in ai2["scenarios"]:
@@ -815,22 +846,28 @@ def format_markdown_report(
             lines.append(
                 f"| `{s['scenario_id']}` | {s['service']} | `{s['switch']}` | **{match_str}** | {hyp_clean} | {s['duration_ms']:.1f} | `{s['status']}` |"
             )
-        lines.extend([
-            "",
-            f"Demo data is cleaner than real production; report results as \"{ai2['top_1_matches']}/{ai2['total_scenarios']} on {ai2['total_scenarios']} demo scenarios\".",
-        ])
+        if ai2.get("provider") == "mock":
+            lines.extend([
+                "",
+                "ScenarioEvaluatorProvider reads the expected hypotheses from scenarios.yaml. These are scripted pipeline regression checks, not measurements of model accuracy or inference latency.",
+            ])
+        else:
+            lines.extend(["", "Demo fixtures are a small sample and do not establish production accuracy."])
 
     if "ai3" in results:
         ai3 = results["ai3"]
+        source = _provider_description(ai3, "DraftingAdversarialProvider")
         lines.extend([
             "",
             "### AI-3: Drafting Verification Checklist",
             "",
-            "Evaluation across all writing kinds (`SUMMARY`, `STATUS_UPDATE`, `POSTMORTEM`) against `OllamaProvider` with reference sanitization and schema verification.",
+            f"Evaluation across all writing kinds (`SUMMARY`, `STATUS_UPDATE`, `POSTMORTEM`) using {source} with reference sanitization and schema verification. All results and timings below come from that provider.",
+            "Input is a synthetic INC-42 incident with timeline entries 1 and 2, an unconfirmed hypothesis, a synthetic follow-up record, and an accepted AI suggestion.",
             "",
             f"- **Checklist Pass Rate:** {ai3['checklist_passed_count']}/{ai3['total_draft_evaluations']} ({ai3['checklist_pass_rate']:.1%})",
             f"- **Fabricated Reference Leakage Rate:** {ai3['fabricated_id_leak_rate']:.1%}",
-            f"- **Generation Latency (`{model_name}` via `OllamaProvider`):** mean {ai3['mean_latency_ms']:.1f} ms (min: {ai3['min_latency_ms']:.1f} ms, max: {ai3['max_latency_ms']:.1f} ms)",
+            f"- **Draft pipeline duration ({source}):** mean {ai3['mean_latency_ms']:.1f} ms (min: {ai3['min_latency_ms']:.1f} ms, max: {ai3['max_latency_ms']:.1f} ms)",
+            "- Reference leakage is checked after production sanitization. It is not a measurement of raw model hallucinations or model accuracy.",
             "",
             "| Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Latency (ms) | Checklist Result |",
             "|---|---|---|---|---|---|",
@@ -851,6 +888,7 @@ def format_markdown_report(
             "### AI-4: Triage Severity Classification",
             "",
             f"Evaluated against the {ai4['total_cases']} hand-labelled cases in `ai-service/data/triage_eval_set.jsonl` using PR #283's `POST /triage` endpoint (called by `TriageHintService` in the backend).",
+            "Every count and percentage below comes from the real rule-based _classify_severity code in main.py through that endpoint; no live model or scripted provider is involved.",
             "",
             f"- **Overall Triage Accuracy:** {ai4['exact_matches']}/{ai4['total_cases']} ({ai4['accuracy']:.1%})",
             "",
@@ -867,7 +905,7 @@ def format_markdown_report(
         "- Evaluation runner: `ai-service/ai_evaluation.py`",
         "- Automated unit tests: `ai-service/tests/test_ai_evaluation.py`",
         "- AI-4 scores PR #283's `POST /triage` endpoint (`TriageHintService` backend integration) against `ai-service/data/triage_eval_set.jsonl`.",
-        f"- AI-2 and AI-3 were run against live `OllamaProvider` with `{model_name}`; scripted providers (`ScenarioEvaluatorProvider` and `DraftingAdversarialProvider`) are kept strictly for hermetic unit tests.",
+        "- Each AI-2/AI-3 section identifies its actual provider. Scripted checks exercise the pipeline and must not be presented as live model results.",
     ])
 
     return "\n".join(lines)
@@ -884,7 +922,7 @@ def main() -> None:
     parser.add_argument("--markdown", action="store_true", help="Output results as Markdown")
     parser.add_argument("--save-json", type=str, default=None, help="Optional path to save raw JSON results")
     parser.add_argument("--save-markdown", type=str, default=None, help="Optional path to save Markdown report (UTF-8, no BOM)")
-    parser.add_argument("--use-mock", "--mock", action="store_true", help="Run hermetic scripted/mock provider runs (unit tests only)")
+    parser.add_argument("--use-mock", "--mock", action="store_true", help="Run hermetic scripted pipeline checks (no live model)")
     parser.add_argument("--model", default=get_agent_model(), help="Model name for OllamaProvider and report")
     parser.add_argument("--timeout", type=float, default=None, help="Per-scenario / per-draft timeout in seconds")
     parser.add_argument("--commit", default=None, help="Commit SHA identifier for report (defaults to git HEAD)")
@@ -930,11 +968,12 @@ def main() -> None:
             print("=================================================================")
             if "ai2" in res:
                 ai2 = res["ai2"]
-                print(f"[AI-2 AI SRE Scenarios] Top-1 Accuracy: {ai2['top_1_matches']}/{ai2['total_scenarios']} ({ai2['top_1_accuracy']:.1%})")
+                metric = "Top-1 Accuracy" if ai2["provider"] == "ollama" else "Cause-match check"
+                print(f"[AI-2 {_provider_description(ai2, 'ScenarioEvaluatorProvider')}] {metric}: {ai2['top_1_matches']}/{ai2['total_scenarios']} ({ai2['top_1_accuracy']:.1%})")
                 print(f"                        Mean Latency:   {ai2['mean_time_to_first_hypothesis_ms']:.1f} ms")
             if "ai3" in res:
                 ai3 = res["ai3"]
-                print(f"[AI-3 Drafting]         Checklist Pass: {ai3['checklist_passed_count']}/{ai3['total_draft_evaluations']} ({ai3['checklist_pass_rate']:.1%})")
+                print(f"[AI-3 {_provider_description(ai3, 'DraftingAdversarialProvider')}] Checklist Pass: {ai3['checklist_passed_count']}/{ai3['total_draft_evaluations']} ({ai3['checklist_pass_rate']:.1%})")
                 print(f"                        Fabricated Leak: {ai3['fabricated_id_leak_rate']:.1%}")
                 print(f"                        Mean Latency:   {ai3['mean_latency_ms']:.1f} ms")
             if "ai4" in res:

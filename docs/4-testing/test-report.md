@@ -212,3 +212,39 @@ Every count and percentage below comes from the real rule-based _classify_severi
 - The triage requests use empty similar-incident and service lists; this run measures severity classification, not service routing.
 - Full AI-service suite on `bfa61e4`: `258 passed, 1 warning in 20.15s`. The warning is a Starlette/httpx dependency deprecation.
 - `python scripts/check_docs.py`: `Docs check passed.`
+
+---
+
+## Sprint 6 — Cypress incident flow (Issue #57)
+
+Run on 2026-11-20, source commit `07a877c91522100530954f0d59e830211574f4d2`.
+The test used a fresh synthetic organisation against the Compose `app` profile, with a real
+PostgreSQL database, backend, and nginx frontend. The isolated local project used ports 18080/18081;
+CI uses the same stack and Cypress command on 8080/8081.
+
+```text
+npx cypress run --config baseUrl=http://127.0.0.1:18081
+
+Spec: incident-flow.cy.ts
+Specs: 1 passed / 1 total
+Tests: 1
+Passing: 1
+Failing: 0
+Pending: 0
+Skipped: 0
+Duration: 48 seconds
+All specs passed!
+```
+
+The scenario waits for each member dialog to disappear and asserts names in the members table.
+It clicks the Radix checkbox and verifies `aria-checked`, checks Viewer restrictions while the
+incident is OPEN, and then verifies that the Engineer can acknowledge the same incident.
+Status options are selected by keyboard; request and dialog completion are awaited without fixed sleeps.
+After closure, an Engineer posts a comment and the Viewer reads it without a comment form/button.
+The public update, postmortem review, follow-up, Insights values, and declare-form validation also pass.
+AI investigation is omitted under #57's 15 November cutoff exception; the API-based postmortem step
+is retained from the approved earlier review.
+
+Other checks: 460 frontend unit tests passed in 52 files (224.78 s, commit `892e5f3`);
+Cypress TypeScript checking and frontend lint passed. The Compose frontend build passed.
+The UI image skips downloading an unused Cypress binary; the separate local/CI runner executes Cypress.

@@ -123,7 +123,12 @@ export function ToolsPage() {
             <code className="font-mono text-xs">eventId</code> is ignored, and alerts with the same{' '}
             <code className="font-mono text-xs">correlationKey</code> join one open incident.
           </p>
-          <pre className="overflow-x-auto rounded-md border bg-muted px-3.5 py-3 font-mono text-xs leading-relaxed">
+          <pre
+            tabIndex={0}
+            role="region"
+            aria-label="Webhook payload example"
+            className="overflow-x-auto rounded-md border bg-muted px-3.5 py-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
             {CONNECT_EXAMPLE}
           </pre>
         </div>

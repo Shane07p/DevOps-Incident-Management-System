@@ -46,6 +46,19 @@ describe('ToolsPage', () => {
     expect(connect).toHaveTextContent('Authorization: Bearer <tool token>')
   })
 
+  it('lets keyboard users focus the labelled webhook payload example', async () => {
+    const user = userEvent.setup()
+    mockFetch({ 'GET /api/tools': { body: [] } })
+    renderTools()
+
+    const example = await screen.findByRole('region', { name: 'Webhook payload example' })
+    expect(example).toHaveAttribute('tabindex', '0')
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Register tool' })).toHaveFocus()
+    await user.tab()
+    expect(example).toHaveFocus()
+  })
+
   // TC-US-02a: the token is shown once, and closing the dialog drops it for good.
   it('shows the new token once, and drops it when the dialog closes', async () => {
     const user = userEvent.setup()

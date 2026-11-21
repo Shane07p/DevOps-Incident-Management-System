@@ -864,16 +864,16 @@ Vercel has deployed the frontend before Render deploys the backend; backend vers
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-SERVICE-SKEWa | Compatibility | Old backend lists services without version | Services, Escalation and Status pages render the service rather than failing response validation | `ServicesPage.test.tsx`, `EscalationPage.test.tsx`, `StatusPagesPage.test.tsx` | Automated |
-| TC-SERVICE-SKEWb | Boundary | Save a service form or publication toggle with no loaded version, zero, or seven | Absent version is omitted; zero and seven are sent unchanged; PATCH contains only publication settings and the optional version | `ServicesPage.test.tsx`, `StatusPagesPage.test.tsx` | Automated |
-| TC-FOLLOW-UIa | Equivalence | Org-wide follow-ups arrive out of due-date order | Table sorts soonest first and shows title, incident link, kind, avatar/name, due date and status | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UIb | Decision table | API marks an unfinished item overdue or an item is done | Only overdue, unfinished work receives the Overdue badge; the server's UTC-based overdue flag is used | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UIc | State | Select Mine/Everyone, a status, or Overdue only; open a URL with all filters or an owner id | Correct query parameters are sent, URL restores the controls, and other filters remain when one changes | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UId | Roles | Viewer, Engineer and Admin open the page | Viewer reads without status controls; Engineer/Admin can change status through the existing API | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UIe | State | Engineer/Admin changes status, or the update fails | Only status is sent; success refetches the list; failure retains the list and previous status and displays the error | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UIf | Equivalence | Empty org or filters match nothing | Distinct empty messages; Clear filters removes the query and reloads the unfiltered list | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UIg | Negative | List endpoint fails, then recovers | Error state includes a retry action; retry renders the recovered list | `FollowUpsPage.test.tsx` | Automated |
-| TC-FOLLOW-UIh | Browser | Synthetic follow-ups at 1440 and 375 px, light and dark | Table scrolls within its panel; page has no horizontal overflow; filters and status editing remain usable | Edge browser, synthetic API fixtures; screenshots outside repository | Not run |
+| TC-SERVICE-SKEWa | Compatibility | Old backend lists services without version | Services, Escalation and Status pages render the service rather than failing response validation | `ServicesPage.test.tsx`, `EscalationPage.test.tsx`, `StatusPagesPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-SERVICE-SKEWb | Boundary | Save a service form or publication toggle with no loaded version, zero, or seven | Absent version is omitted; zero and seven are sent unchanged; PATCH contains only publication settings and the optional version | `ServicesPage.test.tsx`, `StatusPagesPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIa | Equivalence | Org-wide follow-ups arrive out of due-date order | Table sorts soonest first and shows title, incident link, kind, avatar/name, due date and status | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIb | Decision table | API marks an unfinished item overdue or an item is done | Only overdue, unfinished work receives the Overdue badge; the server's UTC-based overdue flag is used | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIc | State | Select Mine/Everyone, a status, or Overdue only; open a URL with all filters or an owner id | Correct query parameters are sent, URL restores the controls, and other filters remain when one changes | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UId | Roles | Viewer, Engineer and Admin open the page | Viewer reads without status controls; Engineer/Admin can change status through the existing API | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIe | State | Engineer/Admin changes status, or the update fails | Only status is sent; success refetches the list; failure retains the list and previous status and displays the error | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIf | Equivalence | Empty org or filters match nothing | Distinct empty messages; Clear filters removes the query and reloads the unfiltered list | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIg | Negative | List endpoint fails, then recovers | Error state includes a retry action; retry renders the recovered list | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIh | Browser | Synthetic follow-ups at 1440 and 375 px, light and dark | Table scrolls within its panel; page has no horizontal overflow; filters and status editing remain usable | Edge browser, synthetic API fixtures; screenshots outside repository | Passed (2026-11-21, 703efa3) |
 
 ### Service update conflicts and scoped publication (PR #300, FR-14, FR-21)
 

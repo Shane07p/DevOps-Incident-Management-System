@@ -248,3 +248,31 @@ is retained from the approved earlier review.
 Other checks: 460 frontend unit tests passed in 52 files (224.78 s, commit `892e5f3`);
 Cypress TypeScript checking and frontend lint passed. The Compose frontend build passed.
 The UI image skips downloading an unused Cypress binary; the separate local/CI runner executes Cypress.
+
+---
+
+## PR #295 — service deploy compatibility and org follow-ups
+
+On 2026-11-21, source commit `968f092` passed all 62 tests in the five affected page suites:
+`FollowUpsPage`, `ServicesPage`, `EscalationPage`, `StatusPagesPage`, and `NotBuiltYetPage`.
+Command: `npm test -- FollowUpsPage.test.tsx ServicesPage.test.tsx EscalationPage.test.tsx StatusPagesPage.test.tsx NotBuiltYetPage.test.tsx --maxWorkers=2` (32.42 s).
+The three missing-version read regressions failed before the compatibility fix; they pass with it.
+These tests use synthetic responses from the existing API contracts, not production recordings.
+
+The follow-ups checks cover due-date order, incident links, kinds, owners, server-reported overdue
+state, URL-backed owner/status/overdue filters, numeric owner deep links, read-only Viewers, Admin
+and Engineer status-only updates with refetch, failed updates, both empty states, and retry after
+a list failure. Service saves omit an absent version but retain zero and a nonzero loaded version.
+Backend validation of missing or stale versions is unchanged.
+
+Edge 158 browser checks ran on `703efa3`, whose production frontend is unchanged in `968f092`.
+All twelve combinations passed: light/dark at 1440/375 px, for Admin and Viewer with ordinary
+fixtures, plus Admin with long synthetic titles and owner names. Document widths exactly matched
+the viewports (1440 or 375 px); phone tables scrolled inside their panels (341 px viewport,
+900 px normal content or 1027 px long content). Fonts loaded, no page exceptions occurred, and
+axe found zero WCAG A/AA violations within the main content in every checked view. A phone
+interaction check verified Mine/Overdue URL filters, a status-only save, list refetch, filtered
+empty state, and Clear filters. Screenshots and the JSON audit are local under
+`codex-work/reviews/d47-followups-browser/`, outside this worktree; no screenshots are committed.
+
+`python scripts/check_docs.py`: `Docs check passed.`

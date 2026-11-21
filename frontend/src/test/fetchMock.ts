@@ -27,6 +27,7 @@ export function mockFetch(routes: Record<string, Handler>) {
 
 export const payments = {
   id: 1,
+  version: 0,
   name: 'Payments',
   description: 'Card and wallet payments',
   owner: { id: 1, displayName: 'Dev Admin' },

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiRequestError } from '@/api/client'
 import { getPublicStatus, type PublicStatus } from '@/api/publicStatus'
-import { listServices, updateService, type Service } from '@/api/services'
+import { getService, listServices, updateServiceStatusPage, type Service } from '@/api/services'
 import { useAuth } from '@/auth/AuthProvider'
 import { can } from '@/auth/roles'
 import { ErrorState } from '@/components/app/ErrorState'
@@ -14,13 +14,13 @@ import { LoadingState } from '@/components/app/LoadingState'
 import { PageHeader } from '@/components/app/PageHeader'
 import { Panel } from '@/components/app/Panel'
 import { PublicUpdateBadge } from '@/components/app/PublicUpdateBadge'
+import { ServiceConflictNotice } from '@/components/app/ServiceConflictNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { publicStatusSummary } from '@/lib/publicStatus'
 import { formatIst } from '@/lib/time'
-import { toRequest, valuesFrom } from './services/serviceForm'
 
 function LiveSummary({ data }: { data: PublicStatus }) {
   const summary = publicStatusSummary(data)
@@ -64,14 +64,19 @@ function LiveSummary({ data }: { data: PublicStatus }) {
 function ServicePublication({ service, slug }: { service: Service; slug: string }) {
   const client = useQueryClient()
   const [name, setName] = useState(service.publicName || service.name)
+  const [loadedVersion, setLoadedVersion] = useState(service.version)
+  const [reloading, setReloading] = useState(false)
+  const [reloadError, setReloadError] = useState<string | null>(null)
   const publicName = name.trim() || service.name
   const save = useMutation({
-    mutationFn: (visible: boolean) => updateService(service.id, {
-      ...toRequest(valuesFrom(service)),
+    mutationFn: (visible: boolean) => updateServiceStatusPage(service.id, {
       publicVisible: visible,
       publicName,
+      version: loadedVersion,
     }),
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
+      setLoadedVersion(saved.version)
+      setName(saved.publicName || saved.name)
       await Promise.all([
         client.invalidateQueries({ queryKey: ['services'] }),
         client.invalidateQueries({ queryKey: ['public-status', slug] }),
@@ -79,6 +84,23 @@ function ServicePublication({ service, slug }: { service: Service; slug: string 
       toast.success(`${service.name}'s status page settings are saved.`)
     },
   })
+  const conflict = save.error instanceof ApiRequestError && save.error.status === 409
+  const reload = async () => {
+    setReloading(true)
+    setReloadError(null)
+    try {
+      const fresh = await getService(service.id)
+      setLoadedVersion(fresh.version)
+      setName(fresh.publicName || fresh.name)
+      client.setQueryData<Service[]>(['services'], (current) => current?.map((item) => item.id === fresh.id ? fresh : item))
+      save.reset()
+      await client.invalidateQueries({ queryKey: ['public-status', slug] })
+    } catch (error) {
+      setReloadError(error instanceof Error ? error.message : 'The service could not be reloaded.')
+    } finally {
+      setReloading(false)
+    }
+  }
   const error = save.error instanceof ApiRequestError ? save.error.errors.publicName ?? save.error.message : save.error?.message
   const errorId = `publication-error-${service.id}`
   return (
@@ -92,7 +114,7 @@ function ServicePublication({ service, slug }: { service: Service; slug: string 
           id={`publicVisible-${service.id}`}
           checked={service.publicVisible ?? false}
           onCheckedChange={(visible) => save.mutate(visible)}
-          disabled={save.isPending}
+          disabled={save.isPending || conflict || reloading}
           aria-label={`Shown: ${service.name}`}
           aria-describedby={error ? errorId : undefined}
         />
@@ -107,15 +129,17 @@ function ServicePublication({ service, slug }: { service: Service; slug: string 
           value={name}
           maxLength={100}
           onChange={(event) => setName(event.target.value)}
-          disabled={save.isPending}
+          disabled={save.isPending || reloading}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
         />
       </div>
-      <Button type="submit" variant="outline" disabled={save.isPending || publicName === (service.publicName || service.name)} aria-label={`Save public name for ${service.name}`}>
+      <Button type="submit" variant="outline" disabled={save.isPending || conflict || reloading || publicName === (service.publicName || service.name)} aria-label={`Save public name for ${service.name}`}>
         {save.isPending ? 'Saving…' : 'Save'}
       </Button>
-      {error && <p id={errorId} role="alert" className="text-sm text-destructive sm:col-span-3">{error}</p>}
+      {conflict && <div id={errorId} className="sm:col-span-3"><ServiceConflictNotice onReload={reload} loading={reloading} /></div>}
+      {error && !conflict && <p id={errorId} role="alert" className="text-sm text-destructive sm:col-span-3">{error}</p>}
+      {reloadError && <p role="alert" className="text-sm text-destructive sm:col-span-3">{reloadError}</p>}
     </form>
   )
 }
@@ -182,7 +206,7 @@ export function StatusPagesPage() {
                   <li key={service.id} className="flex min-w-0 flex-col gap-3 border-t px-[19px] py-4">
                     <h3 className="text-[14px] font-medium break-words [overflow-wrap:anywhere]">{service.name}</h3>
                     {canConfigure ? (
-                      <ServicePublication key={`${service.id}:${service.publicVisible}:${service.publicName}`} service={service} slug={org.slug} />
+                      <ServicePublication service={service} slug={org.slug} />
                     ) : (
                       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-[13px]">
                         <span className="min-w-0 break-words [overflow-wrap:anywhere]">Public name: {service.publicName || service.name}</span>

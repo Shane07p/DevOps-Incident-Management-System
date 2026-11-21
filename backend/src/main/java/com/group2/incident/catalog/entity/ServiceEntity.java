@@ -16,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.MapKeyEnumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
@@ -33,6 +34,10 @@ public class ServiceEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    @Column(nullable = false)
+    private long version;
 
     // Filled and filtered by Hibernate from OrgContext (D48); never set by hand.
     @TenantId

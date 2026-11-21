@@ -85,47 +85,48 @@ describe('Status pages screen (#164)', () => {
     expect(within(incidents).queryByText('An older update.')).not.toBeInTheDocument()
   })
 
-  it('lets an Admin show a service, preserves the full payload, and refetches both queries', async () => {
+  it('lets an Admin show a service with a versioned PATCH and refetches both queries', async () => {
     const user = userEvent.setup()
     let saved = false
     const fetchMock = renderPage('ADMIN', {
-      'GET /api/services': () => ({ body: [published, { ...hidden, publicVisible: saved, publicName: saved ? 'Checkout' : null }] }),
+      'GET /api/services': () => ({ body: [published, { ...hidden, version: saved ? 1 : 0, publicVisible: saved, publicName: saved ? 'Checkout' : null }] }),
       [statusRoute]: () => ({ body: { ...publicStatus, services: saved ? [...publicStatus.services, { ...publicStatus.services[0], id: 2, name: 'Checkout' }] : publicStatus.services } }),
-      'PUT /api/services/2': () => { saved = true; return { body: { ...hidden, publicVisible: true, publicName: 'Checkout' } } },
+      'PATCH /api/services/2/status-page': () => { saved = true; return { body: { ...hidden, version: 1, publicVisible: true, publicName: 'Checkout' } } },
     })
     await user.click(await screen.findByRole('switch', { name: 'Shown: Checkout' }))
-    await waitFor(() => expect(callsTo(fetchMock, 'PUT', '/api/services/2')).toHaveLength(1))
-    const body = JSON.parse(String(callsTo(fetchMock, 'PUT', '/api/services/2')[0][1]?.body))
-    expect(body).toEqual({ name: hidden.name, description: '', ownerId: hidden.owner.id, criticality: hidden.criticality, targets: hidden.targets, telemetryLabel: '', publicVisible: true, publicName: 'Checkout' })
+    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/services/2/status-page')).toHaveLength(1))
+    const body = JSON.parse(String(callsTo(fetchMock, 'PATCH', '/api/services/2/status-page')[0][1]?.body))
+    expect(body).toEqual({ publicVisible: true, publicName: 'Checkout', version: 0 })
+    expect(callsTo(fetchMock, 'PUT', '/api/services/2')).toHaveLength(0)
     expect(await screen.findByText('2 services shown')).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'Shown: Checkout' })).toBeChecked()
     expect(callsTo(fetchMock, 'GET', '/api/services').length).toBeGreaterThanOrEqual(2)
     expect(callsTo(fetchMock, 'GET', `/api/public/status/${devOrg.slug}`).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('saves an inline public name without changing the internal name, telemetry label or SLA targets', async () => {
+  it('saves only the inline public name, visibility and loaded version', async () => {
     const user = userEvent.setup()
     let saved = false
     const fetchMock = renderPage('ADMIN', {
       'GET /api/services': () => ({ body: [{ ...published, publicName: saved ? 'Customer payments' : published.publicName }] }),
-      'PUT /api/services/1': () => { saved = true; return { body: { ...published, publicName: 'Customer payments' } } },
+      'PATCH /api/services/1/status-page': () => { saved = true; return { body: { ...published, publicName: 'Customer payments' } } },
     })
     const input = await screen.findByRole('textbox', { name: 'Public name for Payments' })
     await user.clear(input)
     await user.type(input, 'Customer payments')
     await user.click(screen.getByRole('button', { name: 'Save public name for Payments' }))
-    await waitFor(() => expect(callsTo(fetchMock, 'PUT', '/api/services/1')).toHaveLength(1))
-    expect(JSON.parse(String(callsTo(fetchMock, 'PUT', '/api/services/1')[0][1]?.body))).toMatchObject({ name: 'Payments', publicName: 'Customer payments', publicVisible: true, telemetryLabel: 'cards', targets: published.targets, ownerId: published.owner.id })
+    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')).toHaveLength(1))
+    expect(JSON.parse(String(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')[0][1]?.body))).toEqual({ publicName: 'Customer payments', publicVisible: true, version: 0 })
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Public name for Payments' })).toHaveValue('Customer payments'))
   })
 
   it('uses the service name when an Admin clears the public name', async () => {
     const user = userEvent.setup()
-    const fetchMock = renderPage('ADMIN', { 'PUT /api/services/1': { body: { ...published, publicName: 'Payments' } } })
+    const fetchMock = renderPage('ADMIN', { 'PATCH /api/services/1/status-page': { body: { ...published, publicName: 'Payments' } } })
     await user.clear(await screen.findByRole('textbox', { name: 'Public name for Payments' }))
     await user.click(screen.getByRole('button', { name: 'Save public name for Payments' }))
-    await waitFor(() => expect(callsTo(fetchMock, 'PUT', '/api/services/1')).toHaveLength(1))
-    expect(JSON.parse(String(callsTo(fetchMock, 'PUT', '/api/services/1')[0][1]?.body)).publicName).toBe('Payments')
+    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')).toHaveLength(1))
+    expect(JSON.parse(String(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')[0][1]?.body)).publicName).toBe('Payments')
   })
 
   it.each(['ENGINEER', 'VIEWER'] as const)('gives %s a read-only list with public-name fallback', async (role) => {
@@ -167,11 +168,43 @@ describe('Status pages screen (#164)', () => {
 
   it('keeps the saved visibility and shows the server error if an update fails', async () => {
     const user = userEvent.setup()
-    renderPage('ADMIN', { 'PUT /api/services/2': { status: 403, body: { message: 'Admin access is required' } } })
+    renderPage('ADMIN', { 'PATCH /api/services/2/status-page': { status: 403, body: { message: 'Admin access is required' } } })
     await user.click(await screen.findByRole('switch', { name: 'Shown: Checkout' }))
     expect(await screen.findByText('Admin access is required')).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'Shown: Checkout' })).not.toBeChecked()
     expect(screen.getByRole('switch', { name: 'Shown: Checkout' })).toBeEnabled()
+  })
+
+  it('keeps a conflicting name edit until Reload, then PATCHes with the freshly loaded version', async () => {
+    const user = userEvent.setup()
+    let reloaded = false
+    let saved = false
+    const fresh = { ...published, publicName: 'Latest public name', version: 7 }
+    const fetchMock = renderPage('ADMIN', {
+      'GET /api/services': () => ({ body: [reloaded ? { ...fresh, version: saved ? 8 : 7, publicName: saved ? 'My final name' : fresh.publicName } : published] }),
+      'GET /api/services/1': () => { reloaded = true; return { body: fresh } },
+      'PATCH /api/services/1/status-page': () => {
+        if (!reloaded) return { status: 409, body: { message: 'Stale service version' } }
+        saved = true
+        return { body: { ...fresh, publicName: 'My final name', version: 8 } }
+      },
+    })
+    const name = await screen.findByRole('textbox', { name: 'Public name for Payments' })
+    await user.clear(name)
+    await user.type(name, 'My unsaved name')
+    await user.click(screen.getByRole('button', { name: 'Save public name for Payments' }))
+    expect(await screen.findByText('This service was changed by someone else. Reload to see the latest.')).toBeInTheDocument()
+    expect(name).toHaveValue('My unsaved name')
+    expect(callsTo(fetchMock, 'GET', '/api/services/1')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Reload' }))
+    await waitFor(() => expect(name).toHaveValue('Latest public name'))
+    expect(callsTo(fetchMock, 'GET', '/api/services/1')).toHaveLength(1)
+    await user.clear(name)
+    await user.type(name, 'My final name')
+    await user.click(screen.getByRole('button', { name: 'Save public name for Payments' }))
+    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')).toHaveLength(2))
+    expect(JSON.parse(String(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')[1][1]?.body)))
+      .toEqual({ publicVisible: true, publicName: 'My final name', version: 7 })
   })
 
   it('shows a useful message if clipboard access fails', async () => {
@@ -200,11 +233,11 @@ describe('Status pages screen (#164)', () => {
     let visible = true
     const fetchMock = renderPage('ADMIN', {
       'GET /api/services': () => ({ body: [{ ...published, publicVisible: visible }] }),
-      'PUT /api/services/1': () => { visible = false; return { body: { ...published, publicVisible: false } } },
+      'PATCH /api/services/1/status-page': () => { visible = false; return { body: { ...published, publicVisible: false } } },
     })
     await user.click(await screen.findByRole('switch', { name: 'Shown: Payments' }))
-    await waitFor(() => expect(callsTo(fetchMock, 'PUT', '/api/services/1')).toHaveLength(1))
-    expect(JSON.parse(String(callsTo(fetchMock, 'PUT', '/api/services/1')[0][1]?.body)).publicVisible).toBe(false)
+    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')).toHaveLength(1))
+    expect(JSON.parse(String(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')[0][1]?.body)).publicVisible).toBe(false)
     expect(await screen.findByText('Your status page lists no services')).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'Shown: Payments' })).not.toBeChecked()
   })

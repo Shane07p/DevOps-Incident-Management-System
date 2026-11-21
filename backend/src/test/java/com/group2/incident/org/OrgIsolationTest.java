@@ -210,6 +210,8 @@ class OrgIsolationTest {
 		return Stream.of(
 				Arguments.of("GET /api/services/{id}", HttpMethod.GET, "/api/services/{serviceId}", null),
 				Arguments.of("PUT /api/services/{id}", HttpMethod.PUT, "/api/services/{serviceId}", serviceBody),
+				Arguments.of("PATCH /api/services/{id}/status-page", HttpMethod.PATCH, "/api/services/{serviceId}/status-page",
+						"{\"publicVisible\":true,\"publicName\":\"Stolen\",\"version\":0}"),
 				Arguments.of("GET /api/services/{id}/on-call", HttpMethod.GET, "/api/services/{serviceId}/on-call", null),
 				Arguments.of("PUT /api/services/{id}/on-call", HttpMethod.PUT, "/api/services/{serviceId}/on-call",
 						"{\"fallbackContactId\": {userId}, \"shifts\": []}"),

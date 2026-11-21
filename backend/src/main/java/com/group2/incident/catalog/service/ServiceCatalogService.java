@@ -8,6 +8,7 @@ import com.group2.incident.auth.repository.AppUserRepository;
 import com.group2.incident.catalog.dto.CreateServiceRequest;
 import com.group2.incident.catalog.dto.ServiceResponse;
 import com.group2.incident.catalog.dto.SlaTargetDto;
+import com.group2.incident.catalog.dto.UpdateServiceStatusPageRequest;
 import com.group2.incident.catalog.entity.Criticality;
 import com.group2.incident.catalog.entity.ServiceEntity;
 import com.group2.incident.catalog.entity.Severity;
@@ -102,6 +103,7 @@ public class ServiceCatalogService {
     @Transactional
     public ServiceResponse update(Long id, CreateServiceRequest request, Long actorId) {
         ServiceEntity service = load(id);
+        requireVersion(service, request.version());
         Map<Severity, SlaTargetDto> resolvedTargets = validateAndResolveTargets(request.targets());
 
         AppUser owner = service.getOwner().getId().equals(request.ownerId())
@@ -144,6 +146,31 @@ public class ServiceCatalogService {
         auditService.record(actor, AuditAction.SERVICE_UPDATED, AuditItemType.SERVICE, id, String.join("; ", changes));
 
         return ServiceResponse.from(saved);
+    }
+
+    @Transactional
+    public ServiceResponse updateStatusPage(Long id, UpdateServiceStatusPageRequest request, Long actorId) {
+        ServiceEntity service = load(id);
+        requireVersion(service, request.version());
+        String publicName = publicName(request.publicVisible(), clean(request.publicName()));
+        List<String> changes = publicationChanges(service, request.publicVisible(), publicName);
+        if (changes.isEmpty()) {
+            return ServiceResponse.from(service);
+        }
+        service.publishAs(request.publicVisible(), publicName, clock.instant());
+        ServiceEntity saved = saveService(service, service.getName());
+        AppUser actor = actorId != null ? appUserRepository.findById(actorId).orElse(null) : null;
+        auditService.record(actor, AuditAction.SERVICE_UPDATED, AuditItemType.SERVICE, id, String.join("; ", changes));
+        return ServiceResponse.from(saved);
+    }
+
+    private static void requireVersion(ServiceEntity service, Long version) {
+        if (version == null) {
+            throw new FieldValidationException("version", "Version is required");
+        }
+        if (service.getVersion() != version) {
+            throw new ConflictException("This service was changed by someone else. Reload to see the latest.");
+        }
     }
 
     private ServiceEntity saveService(ServiceEntity service, String name) {

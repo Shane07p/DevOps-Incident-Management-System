@@ -5,6 +5,8 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -24,6 +26,9 @@ import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.http.HttpMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -82,6 +87,8 @@ public class ServiceControllerTest {
         mvc.perform(get("/api/services").header(HttpHeaders.AUTHORIZATION, "Bearer " + viewerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Auth"))
+                .andExpect(jsonPath("$[0].version").value(0))
+                .andExpect(jsonPath("$[1].version").value(0))
                 .andExpect(jsonPath("$[1].name").value("Payments"));
     }
 
@@ -237,7 +244,7 @@ public class ServiceControllerTest {
         mvc.perform(put("/api/services/" + id)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("billing-api", admin.getId(), "MEDIUM", targets(15, 240))))
+                        .content(withVersion(body("billing-api", admin.getId(), "MEDIUM", targets(15, 240)), 1)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.publicVisible").value(true))
                 .andExpect(jsonPath("$.publicName").value("Billing"));
@@ -310,6 +317,102 @@ public class ServiceControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void publicationPatchPreservesOtherFieldsAndAuditsTheChange() throws Exception {
+        long id = createService("Billing", admin.getId(), "MEDIUM", targets(15, 240));
+        mvc.perform(patch("/api/services/{id}/status-page", id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"publicVisible\":true,\"publicName\":\" Card payments \",\"version\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicVisible").value(true))
+                .andExpect(jsonPath("$.publicName").value("Card payments"))
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.name").value("Billing"))
+                .andExpect(jsonPath("$.description").value("Test service"))
+                .andExpect(jsonPath("$.owner.id").value(admin.getId()))
+                .andExpect(jsonPath("$.criticality").value("MEDIUM"))
+                .andExpect(jsonPath("$.targets.SEV1.responseMinutes").value(15))
+                .andExpect(jsonPath("$.targets.SEV4.resolutionMinutes").value(240));
+        assertThat(auditEntries.findAll().stream()
+                .filter(entry -> entry.getItemId() == id && entry.getItemType() == AuditItemType.SERVICE
+                        && entry.getAction() == AuditAction.SERVICE_UPDATED))
+                .singleElement().satisfies(entry -> {
+                    assertThat(entry.getActor().getId()).isEqualTo(admin.getId());
+                    assertThat(entry.getDetails()).contains("shown on the status page", "public name: none → Card payments");
+                });
+        mvc.perform(patch("/api/services/{id}/status-page", id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"publicVisible\":false,\"publicName\":null,\"version\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicName").value(nullValue()))
+                .andExpect(jsonPath("$.publicVisible").value(false))
+                .andExpect(jsonPath("$.version").value(2));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PUT,PUT", "PATCH,PATCH", "PUT,PATCH", "PATCH,PUT"})
+    void staleVersionsCannotOverwriteEitherUpdatePath(String first, String second) throws Exception {
+        long id = createService("Billing", admin.getId(), "MEDIUM", targets(15, 240));
+        String putBody = body("First edit", admin.getId(), "MEDIUM", targets(15, 240));
+        String patchBody = "{\"publicVisible\":true,\"publicName\":\"First public name\",\"version\":0}";
+        String firstPath = "/api/services/" + id + (first.equals("PATCH") ? "/status-page" : "");
+        String secondPath = "/api/services/" + id + (second.equals("PATCH") ? "/status-page" : "");
+        mvc.perform(request(HttpMethod.valueOf(first), firstPath)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(first.equals("PUT") ? putBody : patchBody))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(1));
+        mvc.perform(request(HttpMethod.valueOf(second), secondPath)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(second.equals("PUT") ? putBody.replace("First edit", "Lost edit") : patchBody.replace("First public name", "Lost edit")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.errors").isMap())
+                .andExpect(jsonPath("$.message").value("This service was changed by someone else. Reload to see the latest."));
+        mvc.perform(get("/api/services/{id}", id).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.name").value(first.equals("PUT") ? "First edit" : "Billing"))
+                .andExpect(jsonPath("$.publicName").value(first.equals("PATCH") ? "First public name" : null));
+        assertThat(auditEntries.findAll().stream().filter(entry -> entry.getItemId() == id
+                && entry.getItemType() == AuditItemType.SERVICE && entry.getAction() == AuditAction.SERVICE_UPDATED)).hasSize(1);
+    }
+
+    @Test
+    void updateRequiresAVersionAndPublicationValidatesItsInputs() throws Exception {
+        long id = createService("Billing", admin.getId(), "MEDIUM", targets(15, 240));
+        mvc.perform(put("/api/services/{id}", id).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Billing", admin.getId(), "MEDIUM", targets(15, 240)).replace(", \"version\":0", "")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.version").value("Version is required"));
+        String[][] invalid = {
+                {"{\"publicVisible\":true,\"publicName\":null,\"version\":0}", "publicName"},
+                {"{\"publicVisible\":true,\"publicName\":\"  \",\"version\":0}", "publicName"},
+                {"{\"publicVisible\":false,\"publicName\":null}", "version"},
+                {"{\"publicVisible\":false,\"version\":-1}", "version"},
+                {"{\"publicName\":\"Billing\",\"version\":0}", "publicVisible"},
+                {"{\"publicVisible\":true,\"publicName\":\"" + "x".repeat(101) + "\",\"version\":0}", "publicName"}
+        };
+        for (String[] invalidRequest : invalid) {
+            mvc.perform(patch("/api/services/{id}/status-page", id).header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON).content(invalidRequest[0]))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors." + invalidRequest[1]).isNotEmpty());
+        }
+    }
+
+    @Test
+    void publicationOfUnknownServiceIsNotFound() throws Exception {
+        mvc.perform(patch("/api/services/999999/status-page").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"publicVisible\":false,\"publicName\":null,\"version\":0}"))
+                .andExpect(status().isNotFound());
+    }
+
+    private static String withVersion(String body, long version) {
+        return body.replace("\"version\":0", "\"version\":" + version);
+    }
+
     private long createService(String name, Long ownerId, String criticality, String targets) throws Exception {
         String response = mvc.perform(post("/api/services")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
@@ -340,7 +443,7 @@ public class ServiceControllerTest {
 
     private static String body(String name, long ownerId, String criticality, String targets) {
         return """
-                {"name": "%s", "description": "Test service", "ownerId": %d, "criticality": "%s", "targets": %s}
+                {"name": "%s", "description": "Test service", "ownerId": %d, "criticality": "%s", "targets": %s, "version":0}
                 """.formatted(name, ownerId, criticality, targets);
     }
 

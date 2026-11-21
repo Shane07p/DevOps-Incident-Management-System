@@ -59,13 +59,4 @@ public class Outbox {
 		this.status = OutboxStatus.PENDING;
 		this.createdAt = createdAt;
 	}
-
-	public void markSent(Instant processedAt) {
-		this.status = OutboxStatus.SENT;
-		this.processedAt = processedAt;
-	}
-
-	public void markFailed() {
-		this.status = OutboxStatus.FAILED;
-	}
 }

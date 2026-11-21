@@ -33,6 +33,7 @@ import { MonitorsPage } from '@/pages/MonitorsPage'
 import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
 import { InsightsPage } from '@/pages/InsightsPage'
 import { StatusPagesPage } from '@/pages/StatusPagesPage'
+import { FollowUpsPage } from '@/pages/FollowUpsPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
@@ -62,6 +63,7 @@ const ADMIN_SCREENS: Record<string, ReactNode> = {
 // Response screens: incidents and alerts. Open to every role; they rank above the /incidents/* and /alerts/*
 // placeholders below. Declaring is for responders (the roles `can(role, 'respond')` allows); others are sent home.
 const RESPONSE_SCREENS: Record<string, ReactNode> = {
+  '/follow-ups': <FollowUpsPage />,
   '/alerts': <AlertsPage />,
   '/history': <HistorySearchPage />,
   '/incidents': <IncidentsPage />,

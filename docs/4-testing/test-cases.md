@@ -560,6 +560,7 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-18.1b | Equivalence | Similarity query on a title with open and resolved candidates | The closest open candidate is a warning; no incident is merged or created | `IncidentSimilarityTest.duplicateCheckReturnsOnlyOpenMatches` (Testcontainers with pgvector) | Automated |
 | TC-FR-18.1c | Org isolation | An equally similar incident exists in another organization | Neither similar-incidents nor duplicate-check returns the other org's incident | `OrgIsolationTest.similarSearchNeverReturnsAnEquallySimilarIncidentFromAnotherOrg`, `OrgIsolationTest.duplicateCheckDoesNotReturnAMoreSimilarIncidentFromAnotherOrg` | Automated |
 | TC-FR-18.2a | Equivalence | Incident page and declare form | Similar incidents are labelled as AI; the duplicate warning never blocks declaring; with AI off nothing shows | `SimilarIncidents.test.tsx` | Automated |
+| TC-FR-18.2b | Negative | The AI returns hypotheses with no references, empty references, or a reference to evidence it was not given | Only hypotheses whose every reference is real evidence are stored, ranked in order with confidence kept within 0 to 1 | `InvestigationServiceTest.investigateKeepsOnlyHypothesesWithRealEvidenceAndFillsBlankModelOutput` | Automated |
 | TC-FR-18.4a | Negative | The AI service is down, slow, or `AI_SERVICE_URL` is unset during incident creation | The incident is created; failed embeddings remain retryable and the client respects its timeout | `AiEmbeddingClientTest`, `IncidentEmbeddingTest` (Testcontainers) | Automated |
 | TC-FR-18.4b | Negative | The AI service is unavailable or unset for AI-1 lookups | Similar results are `[]`; duplicate check is false/null; semantic search is empty, all with 200 | `IncidentSimilarityTest.aiOffReturnsEmptySimilarSearchAndDuplicateResults` | Automated |
 | TC-FR-18.4c | Transaction boundary | Duplicate-check and semantic-search requests embed a query before database access | The AI embedding request runs without an open database transaction | `IncidentSimilarityTransactionTest` | Automated |
@@ -855,6 +856,24 @@ Ten decisions: the two null checks, six branches of the seven-case `switch (from
 | TC-AI-249j | Negative | Postmortem draft endpoint returns 503 | The panel's AI-unavailable message is shown; existing form values remain and manual editing/saving stays available | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
 | TC-AI-249k | Role-based access | Viewer opens the postmortem page | Draft postmortem (AI) is hidden along with save controls; the form stays read-only | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
 | TC-AI-249l | Negative | AI response has a null postmortem | An error is shown and the existing form values are preserved | `PostmortemPage.test.tsx` | Passed (2026-11-20, fc9eb15) |
+
+### Service deploy compatibility and org follow-ups (PR #295)
+
+These UI tests use synthetic API responses. Missing service versions model the short window when
+Vercel has deployed the frontend before Render deploys the backend; backend version validation is unchanged.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-SERVICE-SKEWa | Compatibility | Old backend lists services without version | Services, Escalation and Status pages render the service rather than failing response validation | `ServicesPage.test.tsx`, `EscalationPage.test.tsx`, `StatusPagesPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-SERVICE-SKEWb | Boundary | Save a service form or publication toggle with no loaded version, zero, or seven | Absent version is omitted; zero and seven are sent unchanged; PATCH contains only publication settings and the optional version | `ServicesPage.test.tsx`, `StatusPagesPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIa | Equivalence | Org-wide follow-ups arrive out of due-date order | Table sorts soonest first and shows title, incident link, kind, avatar/name, due date and status | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIb | Decision table | API marks an unfinished item overdue or an item is done | Only overdue, unfinished work receives the Overdue badge; the server's UTC-based overdue flag is used | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIc | State | Select Mine/Everyone, a status, or Overdue only; open a URL with all filters or an owner id | Correct query parameters are sent, URL restores the controls, and other filters remain when one changes | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UId | Roles | Viewer, Engineer and Admin open the page | Viewer reads without status controls; Engineer/Admin can change status through the existing API | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIe | State | Engineer/Admin changes status, or the update fails | Only status is sent; success refetches the list; failure retains the list and previous status and displays the error | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIf | Equivalence | Empty org or filters match nothing | Distinct empty messages; Clear filters removes the query and reloads the unfiltered list | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIg | Negative | List endpoint fails, then recovers | Error state includes a retry action; retry renders the recovered list | `FollowUpsPage.test.tsx` | Passed (2026-11-21, 968f092) |
+| TC-FOLLOW-UIh | Browser | Synthetic follow-ups at 1440 and 375 px, light and dark | Table scrolls within its panel; page has no horizontal overflow; filters and status editing remain usable | Edge browser, synthetic API fixtures; screenshots outside repository | Passed (2026-11-21, 703efa3) |
 
 ### Service update conflicts and scoped publication (PR #300, FR-14, FR-21)
 

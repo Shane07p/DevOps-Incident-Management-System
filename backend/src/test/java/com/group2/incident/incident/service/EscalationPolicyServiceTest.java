@@ -184,4 +184,32 @@ class EscalationPolicyServiceTest {
 				.isInstanceOf(FieldValidationException.class)
 				.hasMessageContaining("Wait minutes must be greater than zero");
 	}
+
+	@Test
+	@DisplayName("updatePolicy needs at least one level, whether the list is left out or empty")
+	void updatePolicyNeedsAtLeastOneStep() {
+		when(serviceRepository.findById(1L)).thenReturn(Optional.of(serviceEntity));
+
+		assertThatThrownBy(() -> service.updatePolicy(1L, new UpdateEscalationPolicyRequest(null), 1L))
+				.isInstanceOf(FieldValidationException.class)
+				.hasMessageContaining("at least one step");
+		assertThatThrownBy(() -> service.updatePolicy(1L, new UpdateEscalationPolicyRequest(List.of()), 1L))
+				.isInstanceOf(FieldValidationException.class)
+				.hasMessageContaining("at least one step");
+	}
+
+	@Test
+	@DisplayName("updatePolicy refuses a level with no wait, and a duplicate level number")
+	void updatePolicyRefusesMissingWaitAndDuplicateNumbers() {
+		when(serviceRepository.findById(1L)).thenReturn(Optional.of(serviceEntity));
+
+		assertThatThrownBy(() -> service.updatePolicy(1L, new UpdateEscalationPolicyRequest(List.of(
+				new EscalationStepRequest(1, 10L, null))), 1L))
+				.isInstanceOf(FieldValidationException.class)
+				.hasMessageContaining("Wait minutes must be greater than zero");
+		assertThatThrownBy(() -> service.updatePolicy(1L, new UpdateEscalationPolicyRequest(List.of(
+				new EscalationStepRequest(1, 10L, 15), new EscalationStepRequest(1, 20L, 30))), null))
+				.isInstanceOf(FieldValidationException.class)
+				.hasMessageContaining("expected 2 but got 1");
+	}
 }

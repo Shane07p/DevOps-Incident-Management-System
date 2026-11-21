@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -129,5 +129,67 @@ describe('AuditLogPage', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/home'))
     expect(screen.queryByRole('heading', { name: 'Audit log' })).not.toBeInTheDocument()
     expect(auditUrls).toEqual([])
+  })
+
+  it('goes back a page, and Clear filters empties every filter', async () => {
+    const { auditUrls, router } = renderAudit('/audit?itemType=SERVICE&page=2', admin, { content: [entry(1)], page: 1, size: 50, totalElements: 120 })
+    await screen.findByText('Page 2 of 3 (120 changes)')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Previous' }))
+    await waitFor(() => expect(auditUrls.at(-1)).toBe('/api/audit?page=0&itemType=SERVICE'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+  })
+
+  it('reads a page number that is not a number as the first page', async () => {
+    const { auditUrls } = renderAudit('/audit?page=abc')
+
+    await waitFor(() => expect(auditUrls.at(-1)).toBe('/api/audit?page=0'))
+  })
+
+  it('names an item type it has no label for, and a change nobody made as System', async () => {
+    renderAudit('/audit', admin, {
+      content: [entry(4, { actorDisplayName: null, action: 'TELEMETRY_CONNECTED', itemType: 'TELEMETRY_CONNECTION', itemId: 3 })],
+      page: 0, size: 50, totalElements: 1,
+    })
+
+    const row = (await screen.findByText('Telemetry connection #3')).closest('tr')!
+    expect(row).toHaveTextContent('System')
+    expect(row).toHaveTextContent('Telemetry connected')
+  })
+
+  it('says when there are no changes yet, or none match the filters', async () => {
+    renderAudit('/audit', admin, { content: [], page: 0, size: 50, totalElements: 0 })
+    expect(await screen.findByText('No changes yet.')).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderAudit('/audit?itemType=TOOL', admin, { content: [], page: 0, size: 50, totalElements: 0 })
+    expect(await screen.findByText('No changes match these filters.')).toBeInTheDocument()
+  })
+
+  it('shows a failed load with a retry', async () => {
+    writeToken('test-token')
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/auth/me') return new Response(JSON.stringify({ user: admin, org: devOrg }), { status: 200 })
+      if (url === '/api/users') return new Response(JSON.stringify(users), { status: 200 })
+      return new Response(JSON.stringify({ status: 500, message: 'The audit log is unavailable' }), { status: 500 })
+    }))
+    render(
+      <ThemeProvider>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <AuthProvider>
+            <TooltipProvider>
+              <RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/audit'] })} />
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ThemeProvider>,
+    )
+
+    expect(await screen.findByText('The audit log is unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 })

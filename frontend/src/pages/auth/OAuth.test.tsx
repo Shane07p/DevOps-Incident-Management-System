@@ -142,4 +142,49 @@ describe('OAuthSignupPage', () => {
     expect(await screen.findByRole('heading', { name: 'This sign-up link has expired' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to sign up' })).toHaveAttribute('href', '/signup')
   })
+
+  it('says the link is incomplete when it has no code, and asks the server nothing', async () => {
+    const fetchMock = mockFetch({})
+    renderAt('/signup/finish')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The link is incomplete. Start again from the sign-up page.')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/auth/oauth'))).toBe(false)
+  })
+
+  it('says Settle could not be reached when the details do not load', async () => {
+    mockFetch({ 'POST /api/auth/oauth/signup/details': { status: 503, body: { status: 503, message: 'Service unavailable' } } })
+    renderAt('/signup/finish', '#code=signup-code')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Settle could not be reached. Try again in a moment.')
+  })
+
+  it("names an unknown provider plainly, and shows each kind of failure where it belongs", async () => {
+    let attempts = 0
+    mockFetch({
+      'POST /api/auth/oauth/signup/details': { body: { email: 'nina@example.test', displayName: 'Nina Person', provider: 'gitlab' } },
+      'POST /api/auth/oauth/signup': () => {
+        attempts += 1
+        if (attempts === 1) return { status: 409, body: { status: 409, message: 'An account with this email already exists' } }
+        if (attempts === 2) {
+          return { status: 400, body: { status: 400, message: 'Validation failed', errors: { orgName: 'Use at most 100 characters' } } }
+        }
+        return { status: 500, body: { status: 500, message: 'Internal error' } }
+      },
+    })
+    renderAt('/signup/finish', '#code=signup-code')
+
+    expect(await screen.findByText(/Your provider confirmed nina@example.test/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Organisation'), 'Acme Payments')
+    const submit = screen.getByRole('button', { name: 'Create a workspace' })
+
+    await userEvent.click(submit)
+    expect(await screen.findByRole('alert')).toHaveTextContent('An account with this email already exists')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create a workspace' }))
+    expect(await screen.findByText('Use at most 100 characters')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create a workspace' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Settle could not be reached. Try again in a moment.')
+    expect(screen.queryByText('Home page')).not.toBeInTheDocument()
+  })
 })

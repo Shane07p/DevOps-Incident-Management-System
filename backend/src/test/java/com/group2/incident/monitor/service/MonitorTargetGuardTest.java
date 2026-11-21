@@ -38,7 +38,7 @@ class MonitorTargetGuardTest {
 	}
 
 	@ParameterizedTest(name = "{0}")
-	@ValueSource(strings = { "ftp://203.0.113.10/file", "javascript:alert(1)", "not a url", "https://", "http://user:secret@203.0.113.10/" })
+	@ValueSource(strings = { "ftp://203.0.113.10/file", "javascript:alert(1)", "not a url", "https://", "http://user:secret@203.0.113.10/", "//203.0.113.10/health" })
 	@DisplayName("Only plain http and https URLs with a host are accepted")
 	void refusesOtherUrls(String url) {
 		assertThatThrownBy(() -> guard.check(url))
@@ -56,5 +56,22 @@ class MonitorTargetGuardTest {
 	@DisplayName("A local run may allow private targets")
 	void privateTargetsCanBeAllowedForLocalRuns() {
 		assertThat(new MonitorTargetGuard(true).check("http://localhost:8080/health").getHost()).isEqualTo("localhost");
+	}
+
+	@Test
+	@DisplayName("The scheme may be in capitals")
+	void schemeInCapitalsIsAccepted() {
+		assertThat(guard.check("HTTPS://203.0.113.10/health").getScheme()).isEqualTo("HTTPS");
+	}
+
+	// .invalid never resolves (RFC 6761), so this asks DNS and gets nothing back.
+	@Test
+	@DisplayName("A host that does not resolve is refused on the url field, naming the host")
+	void unknownHostIsRefused() {
+		assertThatThrownBy(() -> guard.check("https://no-such-host.invalid/health"))
+				.isInstanceOfSatisfying(FieldValidationException.class, e -> {
+					assertThat(e.getField()).isEqualTo("url");
+					assertThat(e.getMessage()).contains("no-such-host.invalid could not be found");
+				});
 	}
 }

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mockFetch } from '@/test/fetchMock'
 import { AccessTokensPage } from './AccessTokensPage'
@@ -58,6 +59,7 @@ const callsWith = (fetchMock: ReturnType<typeof mockFetch>, method: string) =>
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('AccessTokensPage', () => {
@@ -184,6 +186,58 @@ describe('AccessTokensPage', () => {
     await user.click(within(formDialog).getByRole('button', { name: 'Create token' }))
 
     expect(await within(formDialog).findByText("Token with name 'Claude Desktop' already exists")).toBeInTheDocument()
+  })
+
+  it("puts the server's reason on the name field, and a failed request above the buttons", async () => {
+    const user = userEvent.setup()
+    let attempts = 0
+    mockFetch({
+      'GET /api/me/tokens': { body: [] },
+      'POST /api/me/tokens': () => {
+        attempts += 1
+        if (attempts === 1) return { status: 400, body: { status: 400, message: 'Validation failed', errors: { name: 'Use at most 100 characters' } } }
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    renderAccessTokens()
+
+    await user.click(await screen.findByRole('button', { name: 'Create token' }))
+    const formDialog = await screen.findByRole('dialog', { name: 'Create personal access token' })
+    await user.type(within(formDialog).getByLabelText('Name'), 'Claude Desktop')
+    await user.click(within(formDialog).getByRole('button', { name: 'Create token' }))
+    expect(await within(formDialog).findByText('Use at most 100 characters')).toBeInTheDocument()
+
+    await user.click(within(formDialog).getByRole('button', { name: 'Create token' }))
+    expect(await within(formDialog).findByRole('alert')).toHaveTextContent('Failed to fetch')
+  })
+
+  it('says so when the browser blocks the clipboard, and Escape drops the token', async () => {
+    const user = userEvent.setup()
+    const blocked = vi.spyOn(toast, 'error')
+    mockFetch({
+      'GET /api/me/tokens': { body: [] },
+      'POST /api/me/tokens': {
+        status: 201,
+        body: { id: 10, name: 'Claude Desktop', token: RAW_TOKEN, createdAt: '2026-11-11T05:00:00Z', expiresAt: '2027-02-09T05:00:00Z' },
+      },
+    })
+    renderAccessTokens()
+
+    await user.click(await screen.findByRole('button', { name: 'Create token' }))
+    const formDialog = await screen.findByRole('dialog', { name: 'Create personal access token' })
+    await user.type(within(formDialog).getByLabelText('Name'), 'Claude Desktop')
+    await user.click(within(formDialog).getByRole('button', { name: 'Create token' }))
+    const tokenDialog = await screen.findByRole('dialog', { name: 'Copy the token for Claude Desktop' })
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('denied'))
+
+    await user.click(within(tokenDialog).getByLabelText('Token'))
+    await user.click(within(tokenDialog).getByRole('button', { name: 'Copy' }))
+    await waitFor(() => expect(blocked).toHaveBeenCalledWith(expect.stringContaining('blocked the clipboard')))
+    expect(within(tokenDialog).getByRole('button', { name: 'Copy' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByDisplayValue(RAW_TOKEN)).not.toBeInTheDocument()
   })
 
   // TC-FR-23.1b: revoking requires confirmation; cancelling sends zero DELETE requests

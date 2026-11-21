@@ -100,7 +100,10 @@ export function ServiceFormDialog({
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const saved = service ? await updateService(service.id, { ...toRequest(values), version: values.version! }) : await createService(toRequest(values))
+      const saved = service ? await updateService(service.id, {
+        ...toRequest(values),
+        ...(values.version !== undefined ? { version: values.version } : {}),
+      }) : await createService(toRequest(values))
       form.setValue('version', saved.version)
       if (service && editedDependsOn && savedDependsOn && editedDependsOn.join() !== savedDependsOn.join()) {
         try {

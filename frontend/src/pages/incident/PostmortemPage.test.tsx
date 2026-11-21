@@ -1,6 +1,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -85,6 +85,7 @@ function renderPostmortem(
       body: unknown
     })
   > = {},
+  path = '/incidents/7/postmortem',
 ) {
   writeToken('test-token')
 
@@ -102,7 +103,7 @@ function renderPostmortem(
   })
 
   const router = createMemoryRouter(routes, {
-    initialEntries: ['/incidents/7/postmortem'],
+    initialEntries: [path],
   })
 
   const queryClient = new QueryClient({
@@ -569,5 +570,56 @@ describe('Postmortem editor and follow-ups (#245)', () => {
         ownerId: 2,
       })
     })
+  })
+
+  it('says an address with no valid incident id is invalid', async () => {
+    renderPostmortem('ENGINEER', {}, '/incidents/abc/postmortem')
+
+    expect(await screen.findByText('The incident ID is invalid.')).toBeInTheDocument()
+  })
+
+  it('shows a failed load of the incident or of its postmortem, with a retry', async () => {
+    renderPostmortem('ENGINEER', { 'GET /api/incidents/7': { status: 500, body: { status: 500, message: 'Incidents are unavailable' } } })
+    expect(await screen.findByText('Incidents are unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderPostmortem('ENGINEER', { 'GET /api/incidents/7/postmortem': { status: 500, body: { status: 500, message: 'Postmortems are unavailable' } } })
+    expect(await screen.findByText('Postmortems are unavailable')).toBeInTheDocument()
+  })
+
+  it('shows why a save failed when it is not a conflict', async () => {
+    const user = userEvent.setup()
+    renderPostmortem('ENGINEER', {
+      'GET /api/incidents/7/postmortem': { body: draft },
+      'PUT /api/incidents/7/postmortem': { status: 403, body: { status: 403, message: 'You do not have permission to do that' } },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Save draft' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('You do not have permission to do that')
+  })
+
+  it('reloads the postmortem after a review conflict, and shows any other review failure', async () => {
+    const user = userEvent.setup()
+    let attempts = 0
+    const { fetchMock } = renderPostmortem('ADMIN', {
+      'GET /api/incidents/7/postmortem': { body: draft },
+      'POST /api/incidents/7/postmortem/review': () => {
+        attempts += 1
+        return attempts === 1
+          ? { status: 409, body: { status: 409, message: 'This record was changed by another request' } }
+          : { status: 500, body: { status: 500, message: 'The review was not saved' } }
+      },
+    })
+    const reads = () => fetchMock.mock.calls.filter(([url, init]) => String(url) === '/api/incidents/7/postmortem' && (init?.method ?? 'GET') === 'GET').length
+
+    await user.click(await screen.findByRole('button', { name: 'Mark reviewed' }))
+    expect(await screen.findByText(/The latest saved version has been reloaded/)).toBeInTheDocument()
+    expect(reads()).toBeGreaterThanOrEqual(2)
+
+    await user.click(screen.getByRole('button', { name: 'Mark reviewed' }))
+    expect(await screen.findByText('The review was not saved')).toHaveAttribute('role', 'alert')
   })
 })

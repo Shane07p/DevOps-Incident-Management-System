@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mockFetch } from '@/test/fetchMock'
 import { ToolsPage } from './ToolsPage'
@@ -23,6 +24,7 @@ const callsWith = (fetchMock: ReturnType<typeof mockFetch>, method: string) =>
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('ToolsPage', () => {
@@ -108,6 +110,54 @@ describe('ToolsPage', () => {
   })
 
   // TC-US-02b: revoking needs a confirmation; cancelling sends nothing.
+  it("puts the server's reason on the name field, and a failed request above the buttons", async () => {
+    const user = userEvent.setup()
+    let attempts = 0
+    mockFetch({
+      'GET /api/tools': { body: [] },
+      'POST /api/tools': () => {
+        attempts += 1
+        if (attempts === 1) return { status: 400, body: { status: 400, message: 'Validation failed', errors: { name: 'Use at most 100 characters' } } }
+        throw new TypeError('Failed to fetch')
+      },
+    })
+    renderTools()
+
+    await user.click(await screen.findByRole('button', { name: 'Register tool' }))
+    const form = await screen.findByRole('dialog', { name: 'Register a tool' })
+    await user.type(within(form).getByLabelText('Name'), 'Grafana')
+    await user.click(within(form).getByRole('button', { name: 'Register tool' }))
+    expect(await within(form).findByText('Use at most 100 characters')).toBeInTheDocument()
+
+    await user.click(within(form).getByRole('button', { name: 'Register tool' }))
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Failed to fetch')
+  })
+
+  it('says so when the browser blocks the clipboard, and Escape drops the token', async () => {
+    const user = userEvent.setup()
+    const blocked = vi.spyOn(toast, 'error')
+    mockFetch({
+      'GET /api/tools': { body: [] },
+      'POST /api/tools': { status: 201, body: { id: 3, name: 'Grafana', token: TOKEN, createdAt: '2026-10-29T04:30:00Z' } },
+    })
+    renderTools()
+
+    await user.click(await screen.findByRole('button', { name: 'Register tool' }))
+    const form = await screen.findByRole('dialog', { name: 'Register a tool' })
+    await user.type(within(form).getByLabelText('Name'), 'Grafana')
+    await user.click(within(form).getByRole('button', { name: 'Register tool' }))
+    const tokenDialog = await screen.findByRole('dialog', { name: 'Copy the token for Grafana' })
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('denied'))
+
+    await user.click(within(tokenDialog).getByLabelText('Token'))
+    await user.click(within(tokenDialog).getByRole('button', { name: 'Copy' }))
+    await waitFor(() => expect(blocked).toHaveBeenCalledWith(expect.stringContaining('blocked the clipboard')))
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByDisplayValue(TOKEN)).not.toBeInTheDocument()
+  })
+
   it('revokes a token only after confirmation', async () => {
     const user = userEvent.setup()
     const fetchMock = mockFetch({

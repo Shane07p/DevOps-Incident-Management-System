@@ -1,6 +1,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -395,5 +395,76 @@ describe('RunbooksPage', () => {
 
     await waitFor(() => expect(callsWith(fetchMock, 'POST')).toHaveLength(1))
     expect(callsWith(fetchMock, 'POST')[0][0]).toBe('/api/services/2/runbooks')
+  })
+
+  it('moves a step down, and Cancel closes the form without saving', async () => {
+    const fetchMock = renderRunbooks('ENGINEER')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Down' })[0])
+    expect(screen.getByLabelText('Step 1')).toHaveValue('Restart the service')
+    expect(screen.getByLabelText('Step 2')).toHaveValue('Check the service logs')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByLabelText('Step 1')).not.toBeInTheDocument()
+    expect(callsWith(fetchMock, 'PUT')).toHaveLength(0)
+  })
+
+  it("shows a rejected save's message when it names no field", async () => {
+    renderRunbooks('ENGINEER', {
+      'PUT /api/runbooks/10': { status: 409, body: { status: 409, message: 'This runbook was changed by someone else' } },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save runbook' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This runbook was changed by someone else')
+  })
+
+  it("links to the open incident of the chosen runbook's service", async () => {
+    renderRunbooks('VIEWER', {
+      'GET /api/incidents': {
+        body: [
+          {
+            id: 7, reference: 'INC-7', title: 'Checkout failing', serviceName: 'Payments', severity: 'SEV2', status: 'INVESTIGATING',
+            createdAt: '2026-11-19T08:00:00Z', responseDueAt: '2026-11-19T09:00:00Z', resolutionDueAt: '2026-11-19T16:00:00Z', version: 2,
+          },
+        ],
+      },
+    })
+
+    expect(await screen.findByRole('link', { name: /Open INC-7/ })).toHaveAttribute('href', '/incidents/7')
+  })
+
+  it('says when there are no services, or no runbooks yet', async () => {
+    renderRunbooks('ADMIN', { 'GET /api/services': { body: [] } })
+    expect(await screen.findByText('No services yet, so no runbooks.')).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderRunbooks('ADMIN', { 'GET /api/services/1/runbooks': { body: [] } })
+    expect(await screen.findByText('No runbooks yet. Write the first one with New runbook.')).toBeInTheDocument()
+  })
+
+  it('shows a failed load of the services or of their runbooks', async () => {
+    renderRunbooks('VIEWER', { 'GET /api/services': { status: 500, body: { status: 500, message: 'Services are unavailable' } } })
+    expect(await screen.findByText('Services are unavailable')).toBeInTheDocument()
+    cleanup()
+    clearToken()
+
+    renderRunbooks('VIEWER', { 'GET /api/services/1/runbooks': { status: 500, body: { status: 500, message: 'Runbooks are unavailable' } } })
+    expect(await screen.findByText('Runbooks are unavailable')).toBeInTheDocument()
+  })
+
+  it('keeps the delete dialog open with the reason when deleting fails, and Escape closes it', async () => {
+    renderRunbooks('ADMIN', {
+      'DELETE /api/runbooks/10': { status: 403, body: { status: 403, message: 'You do not have permission to do that' } },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = screen.getByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete runbook' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('You do not have permission to do that')
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 })

@@ -60,6 +60,11 @@ function renderEscalation(role: Role, extraRoutes: Routes = {}) {
 }
 
 const puts = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
+
+it('renders escalation with a missing service version', async () => {
+  renderEscalation('VIEWER', { 'GET /api/services': { body: [{ ...payments, version: undefined }] } })
+  expect(await screen.findByRole('list', { name: 'Paging order' })).toBeInTheDocument()
+})
 const sentSteps = (fetchMock: ReturnType<typeof mockFetch>) => JSON.parse(String(puts(fetchMock)[0][1]?.body)).steps
 
 const level = (n: number) => screen.getByRole('group', { name: `Level ${n}` })

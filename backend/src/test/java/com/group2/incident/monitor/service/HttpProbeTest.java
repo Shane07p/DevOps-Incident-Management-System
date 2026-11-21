@@ -126,6 +126,32 @@ class HttpProbeTest {
 		assertThat(requests).hasValue(0);
 	}
 
+	@Test
+	@DisplayName("An interrupted check stops waiting, says so, and keeps the interrupt")
+	void interruptedCheckStops() {
+		server.createContext("/slow", exchange -> {
+			try {
+				Thread.sleep(3000);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			answer(exchange, 200);
+		});
+		Thread.currentThread().interrupt();
+		try {
+			ProbeOutcome outcome = probe(true).probe(base + "/slow", 200);
+
+			assertThat(outcome.success()).isFalse();
+			assertThat(outcome.statusCode()).isNull();
+			assertThat(outcome.error()).isEqualTo("The check was interrupted");
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		}
+		finally {
+			Thread.interrupted();
+		}
+	}
+
 	private HttpProbe probe(boolean allowPrivateTargets) {
 		return new HttpProbe(new MonitorTargetGuard(allowPrivateTargets), CLOCK);
 	}

@@ -62,4 +62,29 @@ class TokenCipherTest {
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("32 bytes");
 	}
+
+	@Test
+	void aValueThatWasNeverSealedReadsAsNotSetUp() {
+		assertThatThrownBy(() -> cipher.decrypt(1L, null)).isInstanceOf(ServiceUnavailableException.class);
+		assertThatThrownBy(() -> cipher.decrypt(1L, "glc_plain_token")).isInstanceOf(ServiceUnavailableException.class);
+	}
+
+	@Test
+	void aKeyThatIsNotBase64StopsTheServerAtStartup() {
+		assertThatThrownBy(() -> new TokenCipher(new TelemetryProperties("not base64!", false, 5)))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("must be base64");
+	}
+
+	// No key set: Grafana can't be connected, and nothing pretends otherwise.
+	@Test
+	void aMissingOrBlankKeyMeansTelemetryIsNotSetUp() {
+		TelemetryProperties unset = new TelemetryProperties(null, false, 0);
+
+		assertThat(unset.secretKey()).isEmpty();
+		assertThat(unset.timeoutSeconds()).isEqualTo(5);
+		assertThatThrownBy(() -> new TokenCipher(unset).encrypt(1L, "glc_token")).isInstanceOf(ServiceUnavailableException.class);
+		assertThatThrownBy(() -> new TokenCipher(new TelemetryProperties("  ", false, 5)).decrypt(1L, "x"))
+				.isInstanceOf(ServiceUnavailableException.class);
+	}
 }

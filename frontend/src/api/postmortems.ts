@@ -71,6 +71,21 @@ export const followUpSchema = z.object({
 
 export type FollowUp = z.infer<typeof followUpSchema>
 
+export interface FollowUpsQuery {
+  owner?: 'me' | number
+  status?: FollowUp['status']
+  overdue?: boolean
+}
+
+/** Org-wide follow-ups, using the same response contract as the incident's postmortem. */
+export function listFollowUps(filters: FollowUpsQuery = {}) {
+  const params = new URLSearchParams()
+  if (filters.owner !== undefined) params.set('owner', String(filters.owner))
+  if (filters.status !== undefined) params.set('status', filters.status)
+  if (filters.overdue !== undefined) params.set('overdue', String(filters.overdue))
+  return apiFetch(`/follow-ups${params.size ? `?${params}` : ''}`, z.array(followUpSchema))
+}
+
 export function getFollowUps(incidentId: number) {
   return apiFetch(`/incidents/${incidentId}/follow-ups`, z.array(followUpSchema))
 }
@@ -87,13 +102,14 @@ export function createFollowUp(
 
 export function updateFollowUp(
   id: number,
-  body: {
+  // The backend leaves omitted fields unchanged (UpdateFollowUpRequest).
+  body: Partial<{
     title: string
     kind: 'CORRECTIVE' | 'PREVENTIVE'
     ownerId: number
     dueDate: string
     status: 'OPEN' | 'IN_PROGRESS' | 'DONE'
-  },
+  }>,
 ) {
   return apiFetch(`/follow-ups/${id}`, followUpSchema, {
     method: 'PUT',

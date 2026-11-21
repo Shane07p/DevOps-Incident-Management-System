@@ -18,6 +18,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.TenantId;
 
+/**
+ * An action the AI suggests. A decision is recorded only through {@code InvestigationActionRepository.recordDecision},
+ * whose {@code decision is null} guard lets the first Accept or Reject win.
+ */
 @Entity
 @Table(name = "investigation_action")
 @Getter
@@ -53,11 +57,5 @@ public class InvestigationAction {
 	public InvestigationAction(Investigation investigation, String text) {
 		this.investigation = investigation;
 		this.text = text;
-	}
-
-	public void decide(ActionDecision decision, AppUser actor, Instant decidedAt) {
-		this.decision = decision;
-		this.decidedBy = actor;
-		this.decidedAt = decidedAt;
 	}
 }

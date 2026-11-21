@@ -7,6 +7,9 @@ import com.group2.incident.common.error.ServiceUnavailableException;
 import com.group2.incident.investigation.service.AiInvestigationClient.AiInvestigationRequest;
 import com.group2.incident.investigation.service.AiInvestigationClient.EvidenceBundle;
 import com.group2.incident.investigation.service.AiInvestigationClient.IncidentEvidenceContext;
+import com.group2.incident.investigation.service.AiInvestigationClient.LogBundleItem;
+import com.group2.incident.investigation.service.AiInvestigationClient.MetricBundlePoint;
+import com.group2.incident.investigation.service.AiInvestigationClient.MetricBundleSeries;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -17,11 +20,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class AiInvestigationClientTest {
@@ -129,6 +135,105 @@ class AiInvestigationClientTest {
 		assertThatThrownBy(() -> client("http://127.0.0.1:" + closedPort, Duration.ofSeconds(2))
 				.investigate(sampleRequest()))
 				.isInstanceOf(ServiceUnavailableException.class);
+	}
+
+	@Test
+	void sendsLogLinesAndMetricPointsInTheBundle() {
+		Instant at = Instant.parse("2026-11-10T10:05:00Z");
+		AiInvestigationRequest request = new AiInvestigationRequest(
+				"payments",
+				"2026-11-10T10:00:00Z",
+				null,
+				"Gateway timeout",
+				new EvidenceBundle(
+						sampleRequest().evidenceBundle().incident(),
+						List.of(),
+						List.of(),
+						List.of(new LogBundleItem("log-1", at, "ERROR", "upstream timeout", Map.of("route", "/pay"))),
+						List.of(new MetricBundleSeries("errorRate", "Payments", List.of(new MetricBundlePoint(at, 0.42))))
+				)
+		);
+
+		client(baseUrl, Duration.ofSeconds(2)).investigate(request);
+
+		assertThat(requestBody.get()).contains(
+				"\"logs\":[{\"id\":\"log-1\"", "\"level\":\"ERROR\"", "\"message\":\"upstream timeout\"",
+				"\"attributes\":{\"route\":\"/pay\"}", "\"metrics\":[{\"metric\":\"errorRate\"", "\"value\":0.42");
+	}
+
+	@Test
+	void timeoutStatusThrowsServiceUnavailable() {
+		responseBody.set("""
+				{"aiGenerated":true,"status":"timeout","summary":"Stopped","hypotheses":[],"evidence":[],"suggestedActions":[],"stepsTaken":3,"tokensUsed":900,"durationMs":20000.0}
+				""");
+
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(2)).investigate(sampleRequest()))
+				.isInstanceOf(ServiceUnavailableException.class)
+				.hasMessageContaining("timed out");
+	}
+
+	@Test
+	void nullBodyThrowsServiceUnavailable() {
+		responseBody.set("null");
+
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(2)).investigate(sampleRequest()))
+				.isInstanceOf(ServiceUnavailableException.class);
+	}
+
+	@Test
+	void unreadableBodyThrowsServiceUnavailable() {
+		responseBody.set("<html>Bad gateway</html>");
+
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(2)).investigate(sampleRequest()))
+				.isInstanceOf(ServiceUnavailableException.class)
+				.hasMessageContaining("unreadable");
+	}
+
+	// The stub answers late, so the call is still waiting when it sees the interrupt.
+	@Test
+	void interruptedCallThrowsServiceUnavailableAndKeepsTheInterrupt() {
+		delayMillis.set(1000);
+		Thread.currentThread().interrupt();
+		try {
+			assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(5)).investigate(sampleRequest()))
+					.isInstanceOf(ServiceUnavailableException.class)
+					.hasMessageContaining("interrupted");
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		}
+		finally {
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	void nullUrlLeavesTheClientOff() {
+		assertThat(client(null, Duration.ofSeconds(2)).isEnabled()).isFalse();
+	}
+
+	@Test
+	void acceptsAnHttpsBaseUrlWithATrailingSlash() {
+		assertThat(client("https://ai.example.test/", Duration.ofSeconds(2)).isEnabled()).isTrue();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"ftp://127.0.0.1",
+			"http:/no-host",
+			"http://user:secret@127.0.0.1",
+			"http://127.0.0.1?key=1",
+			"http://127.0.0.1#part"
+	})
+	void refusesAUrlThatIsNotAPlainHttpBaseUrl(String url) {
+		assertThatThrownBy(() -> client(url, Duration.ofSeconds(2)))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageNotContaining("secret");
+	}
+
+	@ParameterizedTest
+	@ValueSource(longs = {0, -1})
+	void refusesATimeoutThatIsNotPositive(long seconds) {
+		assertThatThrownBy(() -> client(baseUrl, Duration.ofSeconds(seconds)))
+				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private AiInvestigationClient client(String url, Duration timeout) {

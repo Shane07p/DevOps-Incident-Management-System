@@ -58,14 +58,6 @@ public class ServiceCatalogService {
         return ServiceResponse.from(load(id));
     }
 
-    public Map<Severity, SlaTargetDto> defaultTargets() {
-        Map<Severity, SlaTargetDto> defaults = new EnumMap<>(Severity.class);
-        for (Severity severity : Severity.values()) {
-            defaults.put(severity, new SlaTargetDto(DEFAULT_RESPONSE_MINUTES.get(severity), null));
-        }
-        return defaults;
-    }
-
     public ServiceEntity requireForIncident(Long serviceId) {
         if (serviceId == null) {
             throw new FieldValidationException("serviceId", "Service is required");

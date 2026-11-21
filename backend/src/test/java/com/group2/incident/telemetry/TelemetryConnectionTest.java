@@ -194,7 +194,7 @@ class TelemetryConnectionTest {
 		long billing = orgs.createService(a.adminToken(), "Billing", a.adminId());
 		String target = "{\"responseMinutes\": 15, \"resolutionMinutes\": 240}";
 		send(a, put("/api/services/{id}", billing), """
-				{"name": "Billing", "ownerId": %d, "criticality": "HIGH", "telemetryLabel": "billing-api",
+				{"name": "Billing", "ownerId": %d, "criticality": "HIGH", "telemetryLabel": "billing-api", "version": 0,
 				 "targets": {"SEV1": %s, "SEV2": %s, "SEV3": %s, "SEV4": %s}}"""
 				.formatted(a.adminId(), target, target, target, target))
 				.andExpect(status().isOk())

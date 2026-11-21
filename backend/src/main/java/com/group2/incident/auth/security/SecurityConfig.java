@@ -111,6 +111,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.DELETE, "/api/runbooks/*").hasAnyRole("ADMIN", "ENGINEER")
 						.requestMatchers(HttpMethod.POST, "/api/services/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/services/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.PATCH, "/api/services/*/status-page").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.PUT, "/api/monitors/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.POST, "/api/heartbeats/**").hasRole("ADMIN")

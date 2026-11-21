@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -91,6 +92,15 @@ class ApiExceptionHandlerTest {
 	}
 
 	@Test
+	void objectOptimisticLockingFailureUsesTheConflictErrorShape() throws Exception {
+		mvc.perform(get("/probe/object-optimistic-lock"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.status").value(409))
+				.andExpect(jsonPath("$.message").value("This record was changed by another request; reload and try again"))
+				.andExpect(jsonPath("$.errors").isEmpty());
+	}
+
+	@Test
 	void failedLoginReturns401WithoutSayingWhichPartWasWrong() throws Exception {
 		mvc.perform(get("/probe/login"))
 				.andExpect(status().isUnauthorized())
@@ -138,6 +148,11 @@ class ApiExceptionHandlerTest {
 		@GetMapping("/duplicate")
 		void duplicate() {
 			throw new ConflictException("Username already taken");
+		}
+
+		@GetMapping("/object-optimistic-lock")
+		void objectOptimisticLock() {
+			throw new ObjectOptimisticLockingFailureException(com.group2.incident.catalog.entity.ServiceEntity.class, 1L);
 		}
 
 		@GetMapping("/optimistic-lock")

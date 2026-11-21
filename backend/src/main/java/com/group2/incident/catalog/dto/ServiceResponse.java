@@ -9,6 +9,7 @@ import java.util.Map;
 
 public record ServiceResponse(
         Long id,
+        long version,
         String name,
         String description,
         OwnerDto owner,
@@ -34,6 +35,7 @@ public record ServiceResponse(
                 : null;
         return new ServiceResponse(
                 service.getId(),
+                service.getVersion(),
                 service.getName(),
                 service.getDescription(),
                 ownerDto,

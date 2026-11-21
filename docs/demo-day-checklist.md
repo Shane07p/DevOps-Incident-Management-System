@@ -12,9 +12,9 @@ inactivity constraints that can disrupt a live evaluation if not mitigated befor
 
 | Service | Free-Tier Constraint | Failure Mode During Demo | Mitigation Strategy |
 | --- | --- | --- | --- |
-| **Supabase** | Free PostgreSQL projects auto-pause after 7 days of inactivity. | Database connection refused (`500 Internal Server Error`). Restoring takes 1–3 minutes via the dashboard. | Automated keep-alive workflow ([`.github/workflows/keep-alive.yml`](../.github/workflows/keep-alive.yml)) queries the database twice daily via `/actuator/health`. Manual dashboard confirmation 24 hours prior. |
-| **Render** | Free web instances spin down after 15 minutes of inactivity. | First HTTP request incurs a 50–90 second cold start delay, causing apparent frontend hanging or gateway timeouts. | The 12-hour cron keeps Supabase and Grafana alive, but does **not** keep Render awake for a live demo. The [`scripts/demo-warmup.sh`](../scripts/demo-warmup.sh) script retries until HTTP 200 is confirmed; run this manual warm-up right before the demo (T-15m). |
-| **Grafana Cloud** | Prometheus metrics and Loki logs have a strict 14-day retention limit. | Incident investigation and telemetry dashboards show "No data" if no traffic has occurred recently. | Keep-alive workflow and warmup script invoke Demo Shop traffic generator (`POST /traffic/start`) to emit fresh OTLP telemetry spanning checkout, payments, and search. |
+| **Supabase** | Free PostgreSQL projects auto-pause after 7 days of inactivity. | Database connection refused (`500 Internal Server Error`). Restoring takes 1–3 minutes via the dashboard. | An external uptime monitor pings the backend health check, which queries the database, so the project never sits idle for 7 days. |
+| **Render** | Free web instances spin down after 15 minutes of inactivity. | First HTTP request incurs a 50–90 second cold start delay, causing apparent frontend hanging or gateway timeouts. | The external uptime monitor keeps the backend awake. demo-warmup.sh confirms HTTP 200 before a demo. |
+| **Grafana Cloud** | Prometheus metrics and Loki logs have a strict 14-day retention limit. | Incident investigation and telemetry dashboards show "No data" if no traffic has occurred recently. | Fresh telemetry comes from `demo-warmup.sh` (`POST /traffic/start`), which generates Demo Shop traffic spanning checkout, payments, and search. |
 | **Vercel** | Edge functions and static assets may experience initial cache misses. | Minor initial asset loading delay on first browser page load. | Warm-up script probes root `/`; check the public status page manually below. |
 
 The warm-up script requires backend `/actuator/health`, AI-service `/health`, and demo-shop `/health`
@@ -23,15 +23,10 @@ curl connection failures are recorded as HTTP 000. Frontend probing is informati
 if it fails. Only a 2xx traffic response enables the `FRESH DATA INGESTED` banner; use the Grafana queries
 below to verify the exported data itself.
 
-Configure these Actions repository variables before enabling the scheduled workflow:
-`RENDER_BACKEND_URL`, `AI_SERVICE_URL`, `VERCEL_FRONTEND_URL`, and `DEMO_SHOP_URL`.
-They must be reachable from the runner; the workflow rejects missing values.
-Store `DEMO_SHOP_CONTROL_TOKEN` as an Actions secret.
-
 The public `DEMO_SHOP_URL` is only the address used to call the control API. Traffic is generated
 inside the demo shop, so `DEMO_SHOP_TRAFFIC_TARGET_URL` defaults to `http://127.0.0.1:8001`, which
 the existing allowlist accepts at the default port. If the shop runs with another `PORT`, set the
-optional Actions variable `DEMO_SHOP_TRAFFIC_TARGET_URL` to that loopback port (for example
+optional environment variable `DEMO_SHOP_TRAFFIC_TARGET_URL` to that loopback port (for example
 `http://127.0.0.1:10000` for `PORT=10000`). Keep the allowlist restricted; no wildcard or public-origin
 exception is needed. `OTEL_METRIC_EXPORT_INTERVAL` is 60000 ms, matching the code default.
 
@@ -64,7 +59,6 @@ Follow these steps sequentially to prepare the environment for evaluation.
      DEMO_SHOP_CONTROL_TOKEN=$DEMO_SHOP_CONTROL_TOKEN \
      ./scripts/demo-warmup.sh
      ```
-   - Alternatively, trigger the **Demo Keep-Alive and Telemetry Warmup** workflow manually in GitHub Actions via `workflow_dispatch` using the variables above. A failed check makes the workflow fail instead of reporting readiness.
 
 3. **Inspect Render Deployment Logs:**
    - Check Render dashboards for `incident-backend-f340` (and demo shop service if hosted).
@@ -97,8 +91,8 @@ Follow these steps sequentially to prepare the environment for evaluation.
 
 ### T-2 Hours: Morning-of-Demo Check
 
-1. **Trigger Secondary Keep-Alive:**
-   - Re-run `./scripts/demo-warmup.sh` or trigger the GitHub Actions workflow to refresh Grafana metrics.
+1. **Re-run the warm-up:**
+   - Re-run `./scripts/demo-warmup.sh` to refresh Grafana metrics.
    - Ensure the backend responds with HTTP 200 on `/actuator/health` within 5 seconds (confirming the container is already hot).
 
 2. **Verify Public Status Page:**

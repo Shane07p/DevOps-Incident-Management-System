@@ -5,42 +5,27 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '@/api/client'
 import {
   getPublicStatus,
-  PUBLIC_UPDATE_LABEL,
-  type PublicHealth,
   type PublicStatus,
-  type PublicUpdateStatus,
   type PublishedIncident,
   type PublishedService,
 } from '@/api/publicStatus'
 import { useAuth } from '@/auth/AuthProvider'
-import { Health, type HealthTone } from '@/components/app/Health'
+import { Health } from '@/components/app/Health'
 import { Panel } from '@/components/app/Panel'
+import { PublicUpdateBadge } from '@/components/app/PublicUpdateBadge'
 import { UptimeBars, type MeasuredDay } from '@/components/app/UptimeBars'
 import { ThemeToggle } from '@/components/shell/ThemeToggle'
 import { Wordmark } from '@/components/shell/Wordmark'
 import type { DayState } from '@/lib/statusTypes'
+import { PUBLIC_HEALTH, publicStatusSummary } from '@/lib/publicStatus'
 import { formatIst } from '@/lib/time'
 import { cn } from '@/lib/utils'
-
-const HEALTH: Record<PublicHealth, { tone: HealthTone; label: string }> = {
-  OPERATIONAL: { tone: 'ok', label: 'Operational' },
-  DEGRADED: { tone: 'warn', label: 'Degraded' },
-  DOWN: { tone: 'fail', label: 'Major outage' },
-  UNKNOWN: { tone: 'neutral', label: 'No data yet' },
-}
 
 // The banner is a card like the rest; only its border and icon take the colour of the state.
 const BANNER: Record<'ok' | 'warn' | 'fail', { border: string; icon: string }> = {
   ok: { border: '', icon: 'text-health-operational-fg' },
   warn: { border: 'border-health-degraded/45', icon: 'text-health-degraded-fg' },
   fail: { border: 'border-health-down/45', icon: 'text-health-down-fg' },
-}
-
-const UPDATE_COLOR: Record<PublicUpdateStatus, string> = {
-  INVESTIGATING: 'text-status-investigating',
-  IDENTIFIED: 'text-status-identified',
-  MONITORING: 'text-status-monitoring',
-  RESOLVED: 'text-status-resolved',
 }
 
 const pageTitle = 'text-[28px] leading-[1.1] font-medium tracking-[-0.035em] nav:text-[34px]'
@@ -65,23 +50,6 @@ function measuredDays(service: PublishedService): MeasuredDay[] {
   }))
 }
 
-/** The banner: the worst service decides it, and an open incident means something is affected. */
-function summary(data: PublicStatus) {
-  const affected = new Set(data.activeIncidents.map((incident) => incident.serviceName))
-  for (const service of data.services) {
-    if (service.health === 'DOWN' || service.health === 'DEGRADED') affected.add(service.name)
-  }
-  const names = [...affected]
-  const text = names.length === 0 ? `${data.orgName} service status` : `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} affected.`
-  if (data.services.some((service) => service.health === 'DOWN')) {
-    return { title: 'Major outage', text, tone: 'fail' as const }
-  }
-  if (names.length > 0) {
-    return { title: 'Partial outage', text, tone: 'warn' as const }
-  }
-  return { title: 'All systems operational', text, tone: 'ok' as const }
-}
-
 function ActiveIncident({ incident }: { incident: PublishedIncident }) {
   // Updates come newest first, so the first one posted is last.
   const first = incident.updates.at(-1)
@@ -90,7 +58,7 @@ function ActiveIncident({ incident }: { incident: PublishedIncident }) {
       <div className="flex flex-col gap-1.5 border-b px-5 py-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-[15px] font-medium">{incident.serviceName}</span>
-          <span className={cn('text-[13px] font-medium', UPDATE_COLOR[incident.status])}>{PUBLIC_UPDATE_LABEL[incident.status]}</span>
+          <PublicUpdateBadge status={incident.status} />
         </div>
         {first && <span className="font-mono text-xs font-medium text-muted-foreground">Started {formatIst(first.createdAt)}</span>}
       </div>
@@ -98,7 +66,7 @@ function ActiveIncident({ incident }: { incident: PublishedIncident }) {
         {incident.updates.map((update, index) => (
           <li key={update.id} className={cn('grid gap-1 py-3 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-4', index > 0 && 'border-t')}>
             <div className="flex flex-col gap-0.5">
-              <span className={cn('text-[13px] font-medium', UPDATE_COLOR[update.status])}>{PUBLIC_UPDATE_LABEL[update.status]}</span>
+              <PublicUpdateBadge status={update.status} />
               <time dateTime={update.createdAt} className="font-mono text-[11.5px] font-medium text-muted-foreground">
                 {formatIst(update.createdAt)}
               </time>
@@ -112,7 +80,7 @@ function ActiveIncident({ incident }: { incident: PublishedIncident }) {
 }
 
 function StatusContent({ data }: { data: PublicStatus }) {
-  const banner = summary(data)
+  const banner = publicStatusSummary(data)
   const Icon = banner.tone === 'ok' ? CircleCheck : TriangleAlert
   return (
     <>
@@ -143,7 +111,7 @@ function StatusContent({ data }: { data: PublicStatus }) {
           <p className="border-t px-5 py-4 text-muted-foreground">No services are on this page yet.</p>
         ) : (
           data.services.map((service) => {
-            const health = HEALTH[service.health]
+            const health = PUBLIC_HEALTH[service.health]
             const uptime = service.uptimePercent === null ? undefined : percent(service.uptimePercent)
             return (
               <div key={service.id} className="flex flex-col gap-2.5 border-t px-5 py-3.5">

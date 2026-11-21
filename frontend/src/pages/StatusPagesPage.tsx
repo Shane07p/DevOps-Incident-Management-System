@@ -72,7 +72,7 @@ function ServicePublication({ service, slug }: { service: Service; slug: string 
     mutationFn: (visible: boolean) => updateServiceStatusPage(service.id, {
       publicVisible: visible,
       publicName,
-      version: loadedVersion,
+      ...(loadedVersion !== undefined ? { version: loadedVersion } : {}),
     }),
     onSuccess: async (saved) => {
       setLoadedVersion(saved.version)

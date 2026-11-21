@@ -180,7 +180,7 @@ public class ServiceCatalogServiceTest {
     void createWithoutAnActorStillAuditsAndDescribesTheStatusPageName() {
         Map<Severity, SlaTargetDto> targets = validTargets();
         targets.put(Severity.SEV2, new SlaTargetDto(null, 480));
-        CreateServiceRequest request = new CreateServiceRequest("Payments", "  ", 1L, Criticality.HIGH, targets, true, " Card payments ", null);
+        CreateServiceRequest request = new CreateServiceRequest("Payments", "  ", 1L, Criticality.HIGH, targets, true, " Card payments ", null, 0L);
 
         ServiceResponse response = service.create(request, null);
 
@@ -210,7 +210,7 @@ public class ServiceCatalogServiceTest {
 
     @Test
     void showingAServiceOnTheStatusPageNeedsAPublicName() {
-        CreateServiceRequest request = new CreateServiceRequest("Payments", null, 1L, Criticality.HIGH, validTargets(), true, "  ", null);
+        CreateServiceRequest request = new CreateServiceRequest("Payments", null, 1L, Criticality.HIGH, validTargets(), true, "  ", null, 0L);
 
         assertThatThrownBy(() -> service.create(request, 1L))
                 .isInstanceOf(FieldValidationException.class)
@@ -235,7 +235,7 @@ public class ServiceCatalogServiceTest {
     @Test
     void anUpdateThatChangesNothingSavesAndAuditsNothing() {
         ServiceEntity existing = existing();
-        CreateServiceRequest same = new CreateServiceRequest("Payments", "Handles charges", 1L, Criticality.HIGH, validTargets(), null, null, null);
+        CreateServiceRequest same = new CreateServiceRequest("Payments", "Handles charges", 1L, Criticality.HIGH, validTargets(), null, null, null, 0L);
 
         ServiceResponse response = service.update(42L, same, 1L);
 
@@ -249,7 +249,7 @@ public class ServiceCatalogServiceTest {
     void anUpdateCannotTakeAnotherServicesName() {
         existing();
         when(serviceRepository.existsByNameIgnoreCaseAndIdNot("Search", 42L)).thenReturn(true);
-        CreateServiceRequest rename = new CreateServiceRequest("Search", "Handles charges", 1L, Criticality.HIGH, validTargets(), null, null, null);
+        CreateServiceRequest rename = new CreateServiceRequest("Search", "Handles charges", 1L, Criticality.HIGH, validTargets(), null, null, null, 0L);
 
         assertThatThrownBy(() -> service.update(42L, rename, 1L))
                 .isInstanceOf(ConflictException.class)
@@ -265,7 +265,7 @@ public class ServiceCatalogServiceTest {
         Map<Severity, SlaTargetDto> targets = validTargets();
         targets.put(Severity.SEV1, new SlaTargetDto(10, 120));
         CreateServiceRequest request = new CreateServiceRequest("Card payments", "Charges and refunds", 2L, Criticality.CRITICAL,
-                targets, true, "Payments", "payments-api");
+                targets, true, "Payments", "payments-api", 0L);
 
         service.update(42L, request, null);
 
@@ -284,7 +284,7 @@ public class ServiceCatalogServiceTest {
         existing.publishAs(true, "Payments", FIXED_NOW);
         existing.labelTelemetryAs("payments-api");
         CreateServiceRequest request = new CreateServiceRequest("Payments", "Handles charges", 1L, Criticality.HIGH,
-                validTargets(), false, "", "  ");
+                validTargets(), false, "", "  ", 0L);
 
         service.update(42L, request, 1L);
 
@@ -306,7 +306,7 @@ public class ServiceCatalogServiceTest {
     }
 
     private static CreateServiceRequest request(String name, Map<Severity, SlaTargetDto> targets) {
-        return new CreateServiceRequest(name, null, 1L, Criticality.LOW, targets, null, null, null);
+        return new CreateServiceRequest(name, null, 1L, Criticality.LOW, targets, null, null, null, 0L);
     }
 
     private Map<Severity, SlaTargetDto> validTargets() {

@@ -15,7 +15,6 @@ const PLANNED_SPRINT: Record<string, number> = {
   '/service-map': 4,
   '/logs': 4,
   '/metrics': 4,
-  '/follow-ups': 5,
 }
 
 /** Stands in for a screen that hasn't been built yet, and says when it will be. */

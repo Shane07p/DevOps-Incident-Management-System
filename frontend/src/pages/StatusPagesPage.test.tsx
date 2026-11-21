@@ -52,6 +52,29 @@ function renderPage(role: Role = 'ADMIN', overrides: MockRoutes = {}) {
 const callsTo = (fetchMock: ReturnType<typeof mockFetch>, method: string, path: string) =>
   fetchMock.mock.calls.filter(([input, init]) => (init?.method ?? 'GET') === method && String(input) === path)
 
+describe('Status-page deploy skew', () => {
+  it('renders status pages with a missing service version', async () => {
+    renderPage('VIEWER', { 'GET /api/services': { body: [{ ...published, version: undefined }] } })
+    expect(await screen.findByText('Public name: Card payments')).toBeInTheDocument()
+  })
+
+  it.each([undefined, 0, 7])('PATCHes with loaded service version %s only when present', async (version) => {
+    const user = userEvent.setup()
+    const service = { ...published, version }
+    const fetchMock = renderPage('ADMIN', {
+      'GET /api/services': { body: [service] },
+      'PATCH /api/services/1/status-page': { body: service },
+    })
+    await user.click(await screen.findByRole('switch', { name: 'Shown: Payments' }))
+    await waitFor(() => expect(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')).toHaveLength(1))
+    const body = JSON.parse(String(callsTo(fetchMock, 'PATCH', '/api/services/1/status-page')[0][1]?.body))
+    expect(body.publicVisible).toBe(false)
+    if (version === undefined) expect(body).not.toHaveProperty('version')
+    else expect(body.version).toBe(version)
+    expect(Object.keys(body).sort()).toEqual(version === undefined ? ['publicName', 'publicVisible'] : ['publicName', 'publicVisible', 'version'])
+  })
+})
+
 afterEach(() => {
   clearToken()
   vi.unstubAllGlobals()

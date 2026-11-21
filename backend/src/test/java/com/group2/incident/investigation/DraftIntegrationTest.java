@@ -14,6 +14,7 @@ import com.group2.incident.investigation.entity.ActionDecision;
 import com.group2.incident.investigation.entity.Investigation;
 import com.group2.incident.investigation.entity.InvestigationAction;
 import com.group2.incident.investigation.entity.InvestigationHypothesis;
+import com.group2.incident.investigation.repository.InvestigationActionRepository;
 import com.group2.incident.investigation.repository.InvestigationRepository;
 import com.group2.incident.org.service.OrgMembers;
 import com.group2.incident.support.IntegrationTest;
@@ -50,6 +51,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @IntegrationTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class DraftIntegrationTest {
+
+	@Autowired
+	private InvestigationActionRepository investigationActions;
 
 	private static HttpServer aiStubServer;
 	private static final AtomicInteger aiStatus = new AtomicInteger(200);
@@ -240,13 +244,13 @@ class DraftIntegrationTest {
 			var latest = new Investigation(incident, "Latest", "completed", 1, 10, 1, clock.instant());
 			latest.addHypothesis(new InvestigationHypothesis(latest, 1, "Gateway pool exhaustion", 0.9, "Latency spike"));
 			var accepted = new InvestigationAction(latest, "Inspect gateway pool");
-			accepted.decide(ActionDecision.ACCEPTED, owner, clock.instant());
 			latest.addAction(accepted);
 			var rejected = new InvestigationAction(latest, "Restart every service");
-			rejected.decide(ActionDecision.REJECTED, owner, clock.instant());
 			latest.addAction(rejected);
 			latest.addAction(new InvestigationAction(latest, "Pending suggestion"));
 			investigations.saveAndFlush(latest);
+			assertThat(investigationActions.recordDecision(accepted.getId(), latest.getId(), ActionDecision.ACCEPTED, owner, clock.instant())).isEqualTo(1);
+			assertThat(investigationActions.recordDecision(rejected.getId(), latest.getId(), ActionDecision.REJECTED, owner, clock.instant())).isEqualTo(1);
 			return null;
 		}));
 		aiResponseBody.set("""

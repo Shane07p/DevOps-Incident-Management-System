@@ -47,6 +47,30 @@ function renderServices(role: Role, routes: Routes = {}) {
 const callsWith = (fetchMock: ReturnType<typeof mockFetch>, method: string) =>
   fetchMock.mock.calls.filter(([, init]) => init?.method === method)
 
+describe('Service deploy skew', () => {
+  it('renders the services list with a missing service version', async () => {
+    renderServices('VIEWER', { 'GET /api/services': { body: [{ ...payments, version: undefined }] } })
+    expect(await screen.findByRole('heading', { name: 'Payments' })).toBeInTheDocument()
+  })
+
+  it.each([undefined, 0, 7])('saves with loaded service version %s only when present', async (version) => {
+    const user = userEvent.setup()
+    const service = { ...payments, version }
+    const fetchMock = renderServices('ADMIN', {
+      'GET /api/services': { body: [service] },
+      'PUT /api/services/1': { body: service },
+    })
+    await user.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Payments' })
+    await user.type(within(dialog).getByLabelText('Description'), ' updated')
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(callsWith(fetchMock, 'PUT')).toHaveLength(1))
+    const body = JSON.parse(String(callsWith(fetchMock, 'PUT')[0][1]?.body))
+    if (version === undefined) expect(body).not.toHaveProperty('version')
+    else expect(body.version).toBe(version)
+  })
+})
+
 async function openNewServiceDialog() {
   await userEvent.click(await screen.findByRole('button', { name: 'New service' }))
   return screen.findByRole('dialog', { name: 'New service' })

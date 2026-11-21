@@ -52,7 +52,6 @@ export function ServiceFormDialog({
   const [conflict, setConflict] = useState(false)
   const [reloading, setReloading] = useState(false)
   const initializedFor = useRef<number | 'new' | null>(null)
-  const loadedVersion = useRef<number | undefined>(undefined)
   const dependsOn = editedDependsOn ?? savedDependsOn
 
   const close = (next: boolean) => {
@@ -78,7 +77,6 @@ export function ServiceFormDialog({
     const id = service?.id ?? 'new'
     if (initializedFor.current !== id) {
       initializedFor.current = id
-      loadedVersion.current = service?.version
       form.reset(service ? valuesFrom(service) : emptyValues())
     }
   }, [open, service, form])
@@ -88,7 +86,6 @@ export function ServiceFormDialog({
     setReloading(true)
     try {
       const fresh = await getService(service.id)
-      loadedVersion.current = fresh.version
       form.reset(valuesFrom(fresh))
       setEditedDependsOn(null)
       setConflict(false)
@@ -103,8 +100,8 @@ export function ServiceFormDialog({
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const saved = service ? await updateService(service.id, { ...toRequest(values), version: loadedVersion.current! }) : await createService(toRequest(values))
-      loadedVersion.current = saved.version
+      const saved = service ? await updateService(service.id, { ...toRequest(values), version: values.version! }) : await createService(toRequest(values))
+      form.setValue('version', saved.version)
       if (service && editedDependsOn && savedDependsOn && editedDependsOn.join() !== savedDependsOn.join()) {
         try {
           await updateDependencies(service.id, editedDependsOn)

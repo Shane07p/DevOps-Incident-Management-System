@@ -24,6 +24,8 @@ const targetSchema = z
 
 // The server checks every rule again; these only save a round trip.
 export const serviceFormSchema = z.object({
+  // Loaded edit metadata: reset with the fields, never advanced by a background refetch.
+  version: z.number().int().nonnegative().optional(),
   name: z.string().trim().min(1, { error: 'Enter a name' }).max(100, { error: 'Use at most 100 characters' }),
   description: z.string().trim().max(1000, { error: 'Use at most 1000 characters' }),
   ownerId: z.string().min(1, { error: 'Choose an owner' }),
@@ -62,6 +64,7 @@ export function emptyValues(): ServiceFormValues {
 
 export function valuesFrom(service: Service): ServiceFormValues {
   return {
+    version: service.version,
     name: service.name,
     description: service.description ?? '',
     ownerId: String(service.owner.id),

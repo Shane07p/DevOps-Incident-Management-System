@@ -13,10 +13,10 @@ function renderAt(path: string) {
 
 describe('NotBuiltYetPage', () => {
   it('names a planned screen and the sprint it lands in', () => {
-    renderAt('/status-pages/edit')
+    renderAt('/metrics/edit')
 
-    expect(screen.getByRole('heading', { name: 'Status pages' })).toBeInTheDocument()
-    expect(screen.getByText('What customers see during an incident.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Metrics' })).toBeInTheDocument()
+    expect(screen.getByText('Traffic, errors, latency, and resources.')).toBeInTheDocument()
     expect(screen.getByText('This screen is planned for Sprint 4.')).toBeInTheDocument()
   })
 

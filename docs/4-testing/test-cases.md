@@ -613,15 +613,15 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-21.1f | Scenario | Open `/status-pages`, copy the org's public URL, and choose Open | URL uses the current origin and org slug; clipboard contains it; Open uses a new tab; posting hint links to incidents | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1g | Equivalence | Public API returns a degraded service and an active incident with two updates | Shared health summary, shown-service count, public status badge, newest update only, and its IST time | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1h | State | Admin switches a hidden service on and a published service off | Existing service PUT sends visibility and a public name, preserves other service fields, then refetches services and public status | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1i | Decision table | Engineer and Viewer open the screen | Public name and Shown/Hidden state are read only; no toggles, editing inputs or Save buttons | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1j | Equivalence | No org services, or services exist but all are hidden | "No services yet" with catalog link, or "Your status page lists no services" with a hint; an empty public page is not called operational | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1k | Negative | Public API fails, or catalog fails then retries | Public error does not hide service controls; catalog can retry without losing the public summary | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1l | State | Admin edits or clears a public name inline | Name is saved; blank falls back to the service name; internal name, owner, telemetry label and SLA targets remain unchanged | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1m | Negative | Clipboard access denied or service update denied | Action error is shown; failed visibility change keeps the saved state and controls remain usable | `StatusPagesPage.test.tsx` | Automated |
-| TC-FR-21.1n | Boundary | Screen at 1440 px and 375 px, light and dark; synthetic API data including long names and updates | No page-level horizontal overflow; controls and public URL fit; screenshots remain outside version control | Edge browser check | Planned |
+| TC-FR-21.1f | Scenario | Open `/status-pages`, copy the org's public URL, and choose Open | URL uses the current origin and org slug; clipboard contains it; Open uses a new tab; posting hint links to incidents | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1g | Equivalence | Public API returns a degraded service and an active incident with two updates | Shared health summary, shown-service count, public status badge, newest update only, and its IST time | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1h | State | Admin switches a hidden service on and a published service off | Existing service PUT sends visibility and a public name, preserves other service fields, then refetches services and public status | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1i | Decision table | Engineer and Viewer open the screen | Public name and Shown/Hidden state are read only; no toggles, editing inputs or Save buttons | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1j | Equivalence | No org services, or services exist but all are hidden | "No services yet" with catalog link, or "Your status page lists no services" with a hint; an empty public page is not called operational | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1k | Negative | Public API fails, or catalog fails then retries | Public error does not hide service controls; catalog can retry without losing the public summary | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1l | State | Admin edits or clears a public name inline | Name is saved; blank falls back to the service name; internal name, owner, telemetry label and SLA targets remain unchanged | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1m | Negative | Clipboard access denied or service update denied | Action error is shown; failed visibility change keeps the saved state and controls remain usable | `StatusPagesPage.test.tsx` | Passed (2026-11-21, ced9c7f) |
+| TC-FR-21.1n | Boundary | Screen at 1440 px and 375 px, light and dark; synthetic API data including long names and updates | No page-level horizontal overflow; controls and public URL fit; screenshots remain outside version control | Edge browser check | Passed (2026-11-21, ced9c7f) |
 
 ### MCP server (FR-28, D38)
 

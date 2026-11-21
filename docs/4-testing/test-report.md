@@ -123,3 +123,128 @@ so the org had incidents for the board and detail run (`WORKLOAD_PROFILE=deploye
 > - To rerun: sign up a throwaway org on the deployed app, add a service named `Payments`, then
 >   `k6 run perf/nfr-01-2-alerts.js -e BASE_URL=… -e WORKLOAD_PROFILE=deployed -e ADMIN_EMAIL=… -e ADMIN_PASSWORD=…`
 >   and the same for `perf/nfr-01-1-incidents.js`. Credentials come from the environment, never from the repository.
+
+---
+
+## Sprint 6 – Accessibility Pass (Issue #251)
+
+Tests and browser audit run on 2026-11-20, source commit `b68579ce07c615c51c903cef41be16224515347b`.
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Full frontend suite: `npm test -- --coverage --maxWorkers=2`, 52 files passed, 460 tests passed, 312.80 s. Coverage: statements 90.96%, branches 83.47%, functions 87.87%, lines 92.22%; all thresholds passed. The Home focus check covers all 27 jsdom controls in forward and reverse order, including four main-page controls. |
+| Axe audit (jsdom) | The Vitest scans cover serious and critical structural violations. jsdom cannot check rendered colour contrast, so `color-contrast` is disabled here; contrast evidence must come from the Edge browser audit. |
+| Browser contrast audit | Edge 158.0.4370.33 with axe-core 4.14.1: Home `/home`, Incidents `/incidents`, Incident `/incidents/7`, Services `/services`, and Public status `/status/acme` each have 0 contrast violations in light and dark themes (10 scans; 0 incomplete checks). Contrast is measured in the browser, not jsdom. [Raw measurements and context](evidence/a11y/edge-axe-2026-11-20.json); [audit notes](evidence/a11y/README.md). |
+| Colours | Light primary/focus ring `#a4532a` → `#934823`: active sidebar labels 4.0:1 → 4.77:1. Light resolved/closed text `#4e7946` → `#426b3b`: public-status subtitle 4.21:1 → 5.14:1. Dark primary `#ee936b` and resolved text `#a5c79b` stay at 6.81:1 and 9.09:1 respectively. All four are above the normal-text minimum of 4.5:1. |
+| Browser keyboard checks | All 26 visible desktop Home controls (including four main-page controls) passed forward and reverse Tab order, visibility, focus, and rendered outline/box-shadow checks. jsdom has 27 stops because it does not apply the CSS hiding the mobile menu button on desktop. The phone navigation drawer passed all 17 stops, forward/reverse wraparound, and focus restoration. Change status trapped Tab and restored focus on Escape after both keyboard and mouse opening. |
+| Notes | These results use synthetic incident/service fixtures, included in the JSON; they are not production or recorded incident data. The browser audit measures the colour-contrast rule only; structural violations are covered by Vitest/axe. |
+
+---
+
+## Sprint 6 — AI Evaluation Runs (Issue #252)
+
+Evaluated on 2026-11-20, commit `bfa61e4` (branch `feat/ai-evaluation-runs`), across features AI-2 (SRE scenario investigation), AI-3 (drafting verification), and AI-4 (severity triage hint).
+Configured model: `qwen2.5:0.5b` (configuration only; see each section's provider).
+No live Ollama result is recorded in this report.
+
+Live-run status: **No**. The configured Ollama endpoint was unreachable; no inference with `OllamaProvider` or `qwen2.5:0.5b` was performed. The AI-2 and AI-3 numbers below are scripted pipeline checks.
+
+### AI-2: AI SRE Scenario Investigation
+
+Evaluation across the 5 demo fault scenarios (`SCN-01` to `SCN-05`) from `ai-service/data/scenarios.yaml` and their recorded fixtures in `ai-service/data/fixtures/scenarios/`.
+All results and timings in this section come from scripted ScenarioEvaluatorProvider.
+
+- **Scripted cause-match check:** 5/5 on 5 demo scenarios (100.0%)
+- **End-to-end investigation duration (scripted ScenarioEvaluatorProvider):** mean 0.5 ms (min: 0.3 ms, max: 0.6 ms). The timer wraps the complete agent loop, not a streaming first-hypothesis event.
+
+| Scenario | Service | Fault Switch | Cause Matches Scenario Label | Generated Top-1 Hypothesis | Time (ms) | Status |
+|---|---|---|---|---|---|---|
+| `SCN-01` | payments | `slow_gateway` | **Passed** | Payment gateway latency degradation. | 0.6 | `completed` |
+| `SCN-02` | checkout | `error_spike` | **Passed** | Database transaction deadlocks are causing checkout failures. | 0.3 | `completed` |
+| `SCN-03` | checkout | `bad_deploy` | **Passed** | A recent checkout deployment introduced a regression. | 0.5 | `completed` |
+| `SCN-04` | order-fulfillment | `queue_backlog` | **Passed** | The order fulfillment worker is stalled or paused. | 0.3 | `completed` |
+| `SCN-05` | payments | `expiring_certificate` | **Passed** | Payment gateway TLS certificate expiry. | 0.5 | `completed` |
+
+ScenarioEvaluatorProvider reads the expected hypotheses from scenarios.yaml. These are scripted pipeline regression checks, not measurements of model accuracy or inference latency.
+
+### AI-3: Drafting Verification Checklist
+
+Evaluation across all writing kinds (`SUMMARY`, `STATUS_UPDATE`, `POSTMORTEM`) using scripted DraftingAdversarialProvider with reference sanitization and schema verification. All results and timings below come from that provider.
+Input is a synthetic INC-42 incident with timeline entries 1 and 2, an unconfirmed hypothesis, a synthetic follow-up record, and an accepted AI suggestion.
+
+- **Checklist Pass Rate:** 3/3 (100.0%)
+- **Fabricated Reference Leakage Rate:** 0.0%
+- **Draft pipeline duration (scripted DraftingAdversarialProvider):** mean 0.2 ms (min: 0.1 ms, max: 0.4 ms)
+- Reference leakage is checked after production sanitization. It is not a measurement of raw model hallucinations or model accuracy.
+
+| Draft Kind | Cites Real Incidents/Entries | Invents No IDs | Valid Structure | Latency (ms) | Checklist Result |
+|---|---|---|---|---|---|
+| `SUMMARY` | Yes | Yes (0 leaked) | Yes | 0.4 | **Passed** |
+| `STATUS_UPDATE` | Yes | Yes (0 leaked) | Yes | 0.1 | **Passed** |
+| `POSTMORTEM` | Yes | Yes (0 leaked) | Yes | 0.1 | **Passed** |
+
+### AI-4: Triage Severity Classification
+
+Evaluated against the 25 hand-labelled cases in `ai-service/data/triage_eval_set.jsonl` using PR #283's `POST /triage` endpoint (called by `TriageHintService` in the backend).
+Every count and percentage below comes from the real rule-based _classify_severity code in main.py through that endpoint; no live model or scripted provider is involved.
+
+- **Overall Triage Accuracy:** 11/25 (44.0%)
+
+| Severity Level | Labelled Cases | Correctly Classified | Accuracy |
+|---|---|---|---|
+| **SEV1** | 6 | 3 | 50.0% |
+| **SEV2** | 7 | 2 | 28.6% |
+| **SEV3** | 6 | 5 | 83.3% |
+| **SEV4** | 6 | 1 | 16.7% |
+
+### Notes
+
+- Evaluation runner: `ai-service/ai_evaluation.py`
+- Automated unit tests: `ai-service/tests/test_ai_evaluation.py`
+- AI-4 scores PR #283's `POST /triage` endpoint (`TriageHintService` backend integration) against `ai-service/data/triage_eval_set.jsonl`.
+- Each AI-2/AI-3 section identifies its actual provider. Scripted checks exercise the pipeline and must not be presented as live model results.
+
+### Reproduction and verification
+
+- Evaluation code: [bfa61e4](https://github.com/Shane07p/DevOps-Incident-Management-System/commit/bfa61e4ed9aa33be4ef3e3a070e9977afc44c1cc).
+- Scripted run: `cd ai-service && python ai_evaluation.py --use-mock --model qwen2.5:0.5b --markdown`.
+- Recorded logs, baseline/fault metric values, and deploys are adapted into evidence bundles; incident/timeline context is synthetic. The metric values are repackaged into baseline/fault points.
+- The triage requests use empty similar-incident and service lists; this run measures severity classification, not service routing.
+- Full AI-service suite on `bfa61e4`: `258 passed, 1 warning in 20.15s`. The warning is a Starlette/httpx dependency deprecation.
+- `python scripts/check_docs.py`: `Docs check passed.`
+
+---
+
+## Sprint 6 — Cypress incident flow (Issue #57)
+
+Run on 2026-11-20, source commit `07a877c91522100530954f0d59e830211574f4d2`.
+The test used a fresh synthetic organisation against the Compose `app` profile, with a real
+PostgreSQL database, backend, and nginx frontend. The isolated local project used ports 18080/18081;
+CI uses the same stack and Cypress command on 8080/8081.
+
+```text
+npx cypress run --config baseUrl=http://127.0.0.1:18081
+
+Spec: incident-flow.cy.ts
+Specs: 1 passed / 1 total
+Tests: 1
+Passing: 1
+Failing: 0
+Pending: 0
+Skipped: 0
+Duration: 48 seconds
+All specs passed!
+```
+
+The scenario waits for each member dialog to disappear and asserts names in the members table.
+It clicks the Radix checkbox and verifies `aria-checked`, checks Viewer restrictions while the
+incident is OPEN, and then verifies that the Engineer can acknowledge the same incident.
+Status options are selected by keyboard; request and dialog completion are awaited without fixed sleeps.
+After closure, an Engineer posts a comment and the Viewer reads it without a comment form/button.
+The public update, postmortem review, follow-up, Insights values, and declare-form validation also pass.
+AI investigation is omitted under #57's 15 November cutoff exception; the API-based postmortem step
+is retained from the approved earlier review.
+
+Other checks: 460 frontend unit tests passed in 52 files (224.78 s, commit `892e5f3`);
+Cypress TypeScript checking and frontend lint passed. The Compose frontend build passed.
+The UI image skips downloading an unused Cypress binary; the separate local/CI runner executes Cypress.

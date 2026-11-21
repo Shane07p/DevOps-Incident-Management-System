@@ -5,6 +5,7 @@ import com.group2.incident.catalog.entity.Severity;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 
@@ -34,5 +35,9 @@ public record CreateServiceRequest(
         // Optional (D49): the value of the org's service label for this service in its own telemetry.
         // Left out on create: the default; left out on update: unchanged; blank: back to the default.
         @Size(max = 100, message = "Telemetry label must be at most 100 characters")
-        String telemetryLabel
+        String telemetryLabel,
+
+        // Required by update(), not by create(): a new service has no loaded version yet.
+        @PositiveOrZero(message = "Version must not be negative")
+        Long version
 ) {}

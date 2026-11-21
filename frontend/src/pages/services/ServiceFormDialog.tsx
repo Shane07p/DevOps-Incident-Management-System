@@ -1,15 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiRequestError } from '@/api/client'
 import type { Criticality } from '@/api/schemas'
 import { getServiceMap, updateDependencies } from '@/api/serviceMap'
-import { createService, updateService, type Service } from '@/api/services'
+import { createService, getService, updateService, type Service } from '@/api/services'
 import { listUsers } from '@/api/users'
 import { useAuth } from '@/auth/AuthProvider'
+import { ServiceConflictNotice } from '@/components/app/ServiceConflictNotice'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -48,10 +49,16 @@ export function ServiceFormDialog({
     : null
   // Null until the Admin changes something; cleared whenever the dialog closes.
   const [editedDependsOn, setEditedDependsOn] = useState<number[] | null>(null)
+  const [conflict, setConflict] = useState(false)
+  const [reloading, setReloading] = useState(false)
+  const initializedFor = useRef<number | 'new' | null>(null)
   const dependsOn = editedDependsOn ?? savedDependsOn
 
   const close = (next: boolean) => {
-    if (!next) setEditedDependsOn(null)
+    if (!next) {
+      setEditedDependsOn(null)
+      setConflict(false)
+    }
     onOpenChange(next)
   }
 
@@ -60,14 +67,41 @@ export function ServiceFormDialog({
     setEditedDependsOn(checked ? [...current, id].toSorted((a, b) => a - b) : current.filter((other) => other !== id))
   }
 
-  // Start from the chosen service, or from the defaults, each time the dialog opens.
+  // Freeze the form and its version together. Background refetches must not replace typed values
+  // or attach a newer version to an older edit; only an explicit Reload refreshes an open editor.
   useEffect(() => {
-    if (open) form.reset(service ? valuesFrom(service) : emptyValues())
+    if (!open) {
+      initializedFor.current = null
+      return
+    }
+    const id = service?.id ?? 'new'
+    if (initializedFor.current !== id) {
+      initializedFor.current = id
+      form.reset(service ? valuesFrom(service) : emptyValues())
+    }
   }, [open, service, form])
+
+  const reload = async () => {
+    if (!service) return
+    setReloading(true)
+    try {
+      const fresh = await getService(service.id)
+      form.reset(valuesFrom(fresh))
+      setEditedDependsOn(null)
+      setConflict(false)
+      queryClient.setQueryData<Service[]>(['services'], (current) => current?.map((item) => item.id === fresh.id ? fresh : item))
+      await queryClient.invalidateQueries({ queryKey: ['service-map'] })
+    } catch (error) {
+      form.setError('root', { message: error instanceof Error ? error.message : 'The service could not be reloaded.' })
+    } finally {
+      setReloading(false)
+    }
+  }
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const saved = service ? await updateService(service.id, toRequest(values)) : await createService(toRequest(values))
+      const saved = service ? await updateService(service.id, { ...toRequest(values), version: values.version! }) : await createService(toRequest(values))
+      form.setValue('version', saved.version)
       if (service && editedDependsOn && savedDependsOn && editedDependsOn.join() !== savedDependsOn.join()) {
         try {
           await updateDependencies(service.id, editedDependsOn)
@@ -83,6 +117,7 @@ export function ServiceFormDialog({
       }
       toast.success(service ? `${saved.name} is updated.` : `${saved.name} is in the catalog.`)
       await queryClient.invalidateQueries({ queryKey: ['services'] })
+      await queryClient.invalidateQueries({ queryKey: ['public-status', org?.slug] })
       close(false)
     } catch (error) {
       if (!(error instanceof ApiRequestError)) {
@@ -90,7 +125,8 @@ export function ServiceFormDialog({
         return
       }
       if (error.status === 409) {
-        form.setError('name', { message: error.message })
+        if (service) setConflict(true)
+        if (!service || error.message.startsWith('A service named')) form.setError('name', { message: error.message })
         return
       }
       showRequestErrors(form, error, FIELD_NAMES)
@@ -276,6 +312,7 @@ export function ServiceFormDialog({
                 )}
               </fieldset>
             )}
+            {conflict && <ServiceConflictNotice onReload={reload} loading={reloading} />}
             {form.formState.errors.root && (
               <p role="alert" className="text-sm font-medium text-destructive">
                 {form.formState.errors.root.message}
@@ -285,7 +322,7 @@ export function ServiceFormDialog({
               <Button type="button" variant="outline" onClick={() => close(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting || conflict || reloading}>
                 {service ? 'Save changes' : 'Add service'}
               </Button>
             </DialogFooter>

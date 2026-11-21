@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 
 type Route = { status?: number; body: unknown }
-type Handler = Route | ((init: RequestInit | undefined) => Route)
+type Handler = Route | Response | ((init: RequestInit | undefined) => Route | Response)
 
 /**
  * Stubs fetch with responses keyed by "METHOD /api/path"; returns the mock so tests can inspect calls. A key
@@ -13,6 +13,7 @@ export function mockFetch(routes: Record<string, Handler>) {
     const handler = routes[key] ?? routes[key.split('?')[0]]
     if (!handler) return new Response(JSON.stringify({ status: 404, message: `No mock for ${key}` }), { status: 404 })
     const route = typeof handler === 'function' ? handler(init) : handler
+    if (route instanceof Response) return route
     // A 204 must have no body, or the Response constructor throws.
     if (route.status === 204) return new Response(null, { status: 204 })
     return new Response(JSON.stringify(route.body), {
@@ -26,6 +27,7 @@ export function mockFetch(routes: Record<string, Handler>) {
 
 export const payments = {
   id: 1,
+  version: 0,
   name: 'Payments',
   description: 'Card and wallet payments',
   owner: { id: 1, displayName: 'Dev Admin' },

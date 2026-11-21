@@ -268,6 +268,44 @@ describe('ServicesPage', () => {
     expect(within(dialog).getByLabelText('Owner')).toHaveAccessibleDescription('Owner not found')
   })
 
+  it('preserves a rejected edit until Reload, then saves with the latest version', async () => {
+    const user = userEvent.setup()
+    let reloaded = false
+    let current = payments
+    const fetchMock = renderServices('ADMIN', {
+      'GET /api/services': () => ({ body: [current] }),
+      'GET /api/services/1': () => {
+        current = { ...payments, description: 'Another admin changed this', version: 5 }
+        reloaded = true
+        return { body: current }
+      },
+      'PUT /api/services/1': (init) => {
+        if (!reloaded) return { status: 409, body: { message: 'Stale service version' } }
+        const body = JSON.parse(String(init?.body))
+        current = { ...current, description: body.description, version: 6 }
+        return { body: current }
+      },
+    })
+    await user.click(await screen.findByRole('button', { name: 'Edit Payments' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Payments' })
+    const description = within(dialog).getByLabelText('Description')
+    await user.clear(description)
+    await user.type(description, 'My unsaved description')
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+    expect(await within(dialog).findByText('This service was changed by someone else. Reload to see the latest.')).toBeInTheDocument()
+    expect(description).toHaveValue('My unsaved description')
+    expect(JSON.parse(String(callsWith(fetchMock, 'PUT')[0][1]?.body)).version).toBe(0)
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/services/1' && (init?.method ?? 'GET') === 'GET')).toHaveLength(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Reload' }))
+    await waitFor(() => expect(description).toHaveValue('Another admin changed this'))
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/services/1' && (init?.method ?? 'GET') === 'GET')).toHaveLength(1)
+    await user.clear(description)
+    await user.type(description, 'My retry after reload')
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(callsWith(fetchMock, 'PUT')).toHaveLength(2))
+    expect(JSON.parse(String(callsWith(fetchMock, 'PUT')[1][1]?.body))).toMatchObject({ version: 5, description: 'My retry after reload' })
+  })
+
   it('shows a duplicate name under the name field', async () => {
     renderServices('ADMIN', {
       'PUT /api/services/1': { status: 409, body: { status: 409, message: 'A service named Payments already exists' } },

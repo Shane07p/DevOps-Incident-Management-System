@@ -1,11 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { ApiRequestError } from '@/api/client'
+import { generateIncidentDraft } from '@/api/ai'
 import { PUBLIC_UPDATE_LABEL, PUBLIC_UPDATE_STATUSES, postPublicUpdate, publicUpdateStatusSchema } from '@/api/publicStatus'
+import { Panel } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -28,23 +30,20 @@ type PublicUpdateFormValues = z.infer<typeof publicUpdateFormSchema>
  */
 export function PublicUpdates({ incidentId, orgSlug, mayPublish }: { incidentId: number; orgSlug?: string; mayPublish: boolean }) {
   return (
-    <section aria-labelledby="public-updates-heading" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="public-updates-heading" className="text-lg font-semibold">
-          Public updates
-        </h2>
-        {orgSlug && (
-          <Link to={`/status/${orgSlug}`} className="text-sm font-medium text-primary hover:underline">
-            View the public status page
-          </Link>
-        )}
-      </div>
+    <Panel
+      title="Public updates"
+      action={orgSlug && (
+        <Link to={`/status/${orgSlug}`} className="text-sm font-medium text-primary hover:underline">
+          View the public status page
+        </Link>
+      )}
+    >
       {mayPublish ? (
         <PublicUpdateForm incidentId={incidentId} />
       ) : (
-        <p className="text-sm text-muted-foreground">The incident&apos;s Lead or Comms, or an Admin, posts what customers see.</p>
+        <p className="px-4 pb-4 text-sm text-muted-foreground">The incident&apos;s Lead or Comms, or an Admin, posts what customers see.</p>
       )}
-    </section>
+    </Panel>
   )
 }
 
@@ -55,6 +54,16 @@ function PublicUpdateForm({ incidentId }: { incidentId: number }) {
     defaultValues: { status: 'INVESTIGATING', message: '' },
   })
 
+  const draft = useMutation({
+    mutationFn: () => generateIncidentDraft(incidentId, 'STATUS_UPDATE'),
+    onSuccess: (result) => {
+      form.setValue('message', result.text, {
+        shouldValidate: true,
+        shouldDirty: true,
+      })
+      toast.success('AI draft added. Review and edit it before publishing.')
+    },
+  })
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       await postPublicUpdate(incidentId, values)
@@ -70,7 +79,7 @@ function PublicUpdateForm({ incidentId }: { incidentId: number }) {
 
   return (
     <Form {...form}>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3 p-4">
         <FormField
           control={form.control}
           name="status"
@@ -114,9 +123,27 @@ function PublicUpdateForm({ incidentId }: { incidentId: number }) {
             {form.formState.errors.root.message}
           </p>
         )}
-        <Button type="submit" disabled={form.formState.isSubmitting} className="w-fit">
-          {form.formState.isSubmitting ? 'Posting…' : 'Post public update'}
-        </Button>
+        {draft.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {draft.error instanceof ApiRequestError && draft.error.status === 503
+              ? 'AI is currently unavailable. You can still write the update yourself.'
+              : 'Could not generate the AI draft. Please try again.'}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-fit"
+            disabled={draft.isPending}
+            onClick={() => draft.mutate()}
+          >
+            {draft.isPending ? 'Drafting...' : 'Draft update (AI)'}
+          </Button>
+          <Button type="submit" disabled={form.formState.isSubmitting} className="w-fit">
+            {form.formState.isSubmitting ? 'Posting…' : 'Post public update'}
+          </Button>
+        </div>
       </form>
     </Form>
   )

@@ -74,6 +74,7 @@ class IncidentServiceTransitionTest {
 	@Mock
 	private com.group2.incident.postmortem.service.PostmortemService postmortemService;
 
+
 	@Captor
 	private ArgumentCaptor<TimelineEntry> timelineCaptor;
 

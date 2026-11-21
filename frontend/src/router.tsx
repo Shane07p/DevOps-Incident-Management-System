@@ -32,6 +32,7 @@ import { UsersPage } from '@/pages/UsersPage'
 import { MonitorsPage } from '@/pages/MonitorsPage'
 import { HeartbeatsPage } from '@/pages/HeartbeatsPage'
 import { InsightsPage } from '@/pages/InsightsPage'
+import { StatusPagesPage } from '@/pages/StatusPagesPage'
 
 // Dock screens that exist so far, open to every role; each page hides what a role can't use.
 const SCREENS: Record<string, ReactNode> = {
@@ -47,6 +48,7 @@ const SCREENS: Record<string, ReactNode> = {
   '/monitors': <MonitorsPage />,
   '/heartbeats': <HeartbeatsPage />,
   '/insights': <InsightsPage />,
+  '/status-pages': <StatusPagesPage />,
 }
 
 // Admin screens that exist so far; the rest of ADMIN_PAGES show when they are planned.

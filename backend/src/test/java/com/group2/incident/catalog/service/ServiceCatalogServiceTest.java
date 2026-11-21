@@ -90,7 +90,7 @@ public class ServiceCatalogServiceTest {
     @Test
     void createServiceSuccessWithAudit() {
         Map<Severity, SlaTargetDto> targets = validTargets();
-        CreateServiceRequest request = new CreateServiceRequest("Payments", "Handles charges", 1L, Criticality.HIGH, targets, null, null, null);
+        CreateServiceRequest request = new CreateServiceRequest("Payments", "Handles charges", 1L, Criticality.HIGH, targets, null, null, null, null);
 
         when(serviceRepository.existsByNameIgnoreCase("Payments")).thenReturn(false);
 
@@ -108,7 +108,7 @@ public class ServiceCatalogServiceTest {
         Map<Severity, SlaTargetDto> targets = validTargets();
         targets.remove(Severity.SEV4);
 
-        CreateServiceRequest request = new CreateServiceRequest("Search", "Desc", 1L, Criticality.LOW, targets, null, null, null);
+        CreateServiceRequest request = new CreateServiceRequest("Search", "Desc", 1L, Criticality.LOW, targets, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(request, 1L))
                 .isInstanceOf(FieldValidationException.class)
@@ -120,7 +120,7 @@ public class ServiceCatalogServiceTest {
         Map<Severity, SlaTargetDto> targets = validTargets();
         targets.put(Severity.SEV1, new SlaTargetDto(60, 30));
 
-        CreateServiceRequest request = new CreateServiceRequest("Search", "Desc", 1L, Criticality.LOW, targets, null, null, null);
+        CreateServiceRequest request = new CreateServiceRequest("Search", "Desc", 1L, Criticality.LOW, targets, null, null, null, null);
 
         assertThatThrownBy(() -> service.create(request, 1L))
                 .isInstanceOf(FieldValidationException.class)
@@ -130,7 +130,7 @@ public class ServiceCatalogServiceTest {
     @Test
     void createServiceThrowsOnDuplicateName() {
         Map<Severity, SlaTargetDto> targets = validTargets();
-        CreateServiceRequest request = new CreateServiceRequest("Payments", "Desc", 1L, Criticality.LOW, targets, null, null, null);
+        CreateServiceRequest request = new CreateServiceRequest("Payments", "Desc", 1L, Criticality.LOW, targets, null, null, null, null);
 
         when(serviceRepository.existsByNameIgnoreCase("Payments")).thenReturn(true);
 
@@ -142,7 +142,7 @@ public class ServiceCatalogServiceTest {
     @Test
     void createServiceThrowsWhenOwnerNotFound() {
         Map<Severity, SlaTargetDto> targets = validTargets();
-        CreateServiceRequest request = new CreateServiceRequest("NewService", "Desc", 999L, Criticality.LOW, targets, null, null, null);
+        CreateServiceRequest request = new CreateServiceRequest("NewService", "Desc", 999L, Criticality.LOW, targets, null, null, null, null);
 
         when(orgMembers.find(999L)).thenReturn(Optional.empty());
 

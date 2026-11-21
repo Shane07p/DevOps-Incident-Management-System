@@ -16,6 +16,7 @@ export type SlaTarget = z.infer<typeof slaTargetSchema>
 
 export const serviceSchema = z.object({
   id: z.number(),
+  version: z.number().int().nonnegative(),
   name: z.string(),
   description: z.string().nullable(),
   owner: z.object({ id: z.number(), displayName: z.string() }),
@@ -30,7 +31,7 @@ export const serviceSchema = z.object({
 
 export type Service = z.infer<typeof serviceSchema>
 
-/** The body of POST /api/services and PUT /api/services/{id}. */
+/** Shared fields of POST /api/services and PUT /api/services/{id}; PUT also requires a loaded version. */
 export interface ServiceRequest {
   name: string
   description: string
@@ -54,6 +55,15 @@ export function createService(service: ServiceRequest) {
 }
 
 /** Admins only. Incidents already open keep the targets they copied at creation. */
-export function updateService(id: number, service: ServiceRequest) {
+export function updateService(id: number, service: ServiceRequest & { version: number }) {
   return apiFetch(`/services/${id}`, serviceSchema, { method: 'PUT', body: service })
+}
+
+export function getService(id: number) {
+  return apiFetch(`/services/${id}`, serviceSchema)
+}
+
+/** Changes publication settings without sending unrelated service fields. */
+export function updateServiceStatusPage(id: number, settings: { publicVisible: boolean; publicName: string | null; version: number }) {
+  return apiFetch(`/services/${id}/status-page`, serviceSchema, { method: 'PATCH', body: settings })
 }

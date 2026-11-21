@@ -3,8 +3,11 @@ import { useCallback, useId } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AUDIT_ITEM_TYPES, listAuditEntries } from '@/api/audit'
 import { listUsers } from '@/api/users'
+import { Avatar } from '@/components/app/Avatar'
 import { ErrorState } from '@/components/app/ErrorState'
 import { LoadingState } from '@/components/app/LoadingState'
+import { PageHeader } from '@/components/app/PageHeader'
+import { Panel, PanelFooter } from '@/components/app/Panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -89,17 +92,13 @@ export function AuditLogPage() {
   const totalPages = entries.data ? Math.max(1, Math.ceil(entries.data.totalElements / entries.data.size)) : 1
 
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="text-[44px] leading-[0.9] font-[750]" style={{ fontStretch: '62%' }}>
-          Audit log
-        </h1>
-        <p className="text-muted-foreground">
-          Every configuration change in your org, newest first. Entries can't be edited or deleted. Times are IST.
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-[1180px] flex-col">
+      <PageHeader
+        title="Audit log"
+        description="Every configuration change in your org, newest first. Entries can't be edited or deleted. Times in IST."
+      />
 
-      <div className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
+      <div className="mb-6 grid gap-4 rounded-lg border bg-card p-[19px] shadow-elev-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={ids.itemType}>Item</Label>
           <Select value={itemType || ANY} onValueChange={(value) => setFilters({ itemType: value })}>
@@ -166,34 +165,45 @@ export function AuditLogPage() {
           {hasFilters ? 'No changes match these filters.' : 'No changes yet.'}
         </p>
       ) : (
-        <>
-          <div className="rounded-lg border bg-card">
+        <Panel>
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[150px]">When</TableHead>
+                  <TableHead className="w-[150px] pl-[19px]">When</TableHead>
                   <TableHead>Changed by</TableHead>
                   <TableHead>Change</TableHead>
                   <TableHead>Item</TableHead>
-                  <TableHead>Details</TableHead>
+                  <TableHead className="pr-[19px]">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {entries.data.content.map((entry) => (
                   <TableRow key={entry.id}>
-                    <TableCell className="font-mono text-xs text-muted-foreground tnum">{formatIst(entry.recordedAt)}</TableCell>
-                    <TableCell className="font-semibold">{entry.actorDisplayName ?? 'System'}</TableCell>
+                    <TableCell className="pl-[19px] font-mono text-xs whitespace-nowrap text-muted-foreground tnum">
+                      {formatIst(entry.recordedAt)}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {entry.actorDisplayName ? (
+                        <span className="flex items-center gap-2.5">
+                          <Avatar name={entry.actorDisplayName} size="sm" />
+                          {entry.actorDisplayName}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">System</span>
+                      )}
+                    </TableCell>
                     <TableCell>{actionLabel(entry.action)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {ITEM_LABEL[entry.itemType] ?? actionLabel(entry.itemType)} #{entry.itemId}
                     </TableCell>
-                    <TableCell className="max-w-[420px] text-sm break-words whitespace-normal">{entry.details}</TableCell>
+                    <TableCell className="max-w-[420px] pr-[19px] text-sm break-words whitespace-normal">{entry.details}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+          <PanelFooter>
             <span>
               Page {page} of {totalPages} ({entries.data.totalElements} changes)
             </span>
@@ -210,8 +220,8 @@ export function AuditLogPage() {
                 Next
               </Button>
             </div>
-          </div>
-        </>
+          </PanelFooter>
+        </Panel>
       )}
     </div>
   )

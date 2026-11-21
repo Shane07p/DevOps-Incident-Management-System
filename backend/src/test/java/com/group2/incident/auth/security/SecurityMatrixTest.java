@@ -300,7 +300,14 @@ public class SecurityMatrixTest {
 						"PUT /api/services/{id}",
 						HttpMethod.PUT,
 						"/api/services/{id}",
-						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						"{\"name\":\"SecSvc_${RANDOM}\",\"description\":\"Sec Svc Updated\",\"version\":${SERVICE_VERSION},\"ownerId\":${OWNER_ID},\"criticality\":\"HIGH\",\"targets\":{\"SEV1\":{\"responseMinutes\":15,\"resolutionMinutes\":240},\"SEV2\":{\"responseMinutes\":60,\"resolutionMinutes\":480},\"SEV3\":{\"responseMinutes\":240,\"resolutionMinutes\":2880},\"SEV4\":{\"responseMinutes\":1440,\"resolutionMinutes\":10080}}}",
+						200, 403, 403, 401
+				),
+				new MatrixRow(
+						"PATCH /api/services/{id}/status-page",
+						HttpMethod.PATCH,
+						"/api/services/{id}/status-page",
+						"{\"publicVisible\":true,\"publicName\":\"Public service\",\"version\":${SERVICE_VERSION}}",
 						200, 403, 403, 401
 				),
 				new MatrixRow(
@@ -503,6 +510,13 @@ public class SecurityMatrixTest {
 						"GET /api/alerts",
 						HttpMethod.GET,
 						"/api/alerts",
+						null,
+						200, 200, 200, 401
+				),
+				new MatrixRow(
+						"GET /api/events",
+						HttpMethod.GET,
+						"/api/events",
 						null,
 						200, 200, 200, 401
 				),
@@ -757,13 +771,20 @@ public class SecurityMatrixTest {
 						null,
 						503, 403, 403, 401
 				),
-				// AI service URL is unset in IntegrationTest; investigate() uses NOT_SUPPORTED so the
+				// AI service URL is unset; investigate() and generateDraft() use NOT_SUPPORTED so the
 				// incident created in the test transaction is not visible → 404 instead of 503.
 				new MatrixRow(
 						"POST /api/incidents/{id}/investigations",
 						HttpMethod.POST,
 						"/api/incidents/{id}/investigations",
 						null,
+						404, 404, 403, 401
+				),
+				new MatrixRow(
+						"POST /api/incidents/{id}/drafts",
+						HttpMethod.POST,
+						"/api/incidents/{id}/drafts",
+						"{\"kind\":\"SUMMARY\"}",
 						404, 404, 403, 401
 				),
 				new MatrixRow(
@@ -975,6 +996,8 @@ public class SecurityMatrixTest {
 					.replace("${OWNER_ID}", adminUserId.toString())
 					.replace("${ASSIGNEE_ID}", assigneeId != null ? assigneeId.toString() : "")
 					.replace("${SERVICE_ID}", targetServiceId.toString())
+					.replace("${SERVICE_VERSION}", String.valueOf(jdbc.queryForObject(
+							"SELECT version FROM service WHERE id = ?", Long.class, targetServiceId)))
 					// The version the incident has now, as a screen that just loaded it would send.
 					.replace("${INCIDENT_VERSION}", String.valueOf(jdbc.queryForObject(
 							"SELECT version FROM incident WHERE id = ?", Long.class, targetIncidentId)))

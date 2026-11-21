@@ -296,12 +296,13 @@ class PublicStatusTest {
 	}
 
 	private void publish(SignedUp org, long serviceId, String name, String publicName) throws Exception {
+		long version = jdbc.queryForObject("select version from service where id = ? and org_id = ?", Long.class, serviceId, org.orgId());
 		String target = "{\"responseMinutes\": 15, \"resolutionMinutes\": 240}";
 		send(org.adminToken(), put("/api/services/{id}", serviceId), """
 				{"name": "%s", "description": "Test service", "ownerId": %d, "criticality": "HIGH",
 				 "targets": {"SEV1": %s, "SEV2": %s, "SEV3": %s, "SEV4": %s},
-				 "publicVisible": true, "publicName": "%s"}"""
-				.formatted(name, org.adminId(), target, target, target, target, publicName), 200);
+				 "publicVisible": true, "publicName": "%s", "version": %d}"""
+				.formatted(name, org.adminId(), target, target, target, target, publicName, version), 200);
 	}
 
 	private void check(SignedUp org, long monitorId, Instant at, boolean success) {

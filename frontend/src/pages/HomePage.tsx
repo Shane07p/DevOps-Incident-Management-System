@@ -92,7 +92,7 @@ function Waiting({ incidents, now, responder }: { incidents: IncidentSummary[]; 
             <li key={incident.id} className="flex flex-col gap-3 px-[19px] py-4 sm:flex-row sm:items-center sm:gap-5">
               <SeverityBadge severity={incident.severity} className="w-fit sm:w-[72px]" />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <Link to={`/incidents/${incident.id}`} className="text-[14px] font-medium hover:underline">
+                <Link to={`/incidents/${incident.id}`} className="rounded-sm text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2">
                   {incident.title}
                 </Link>
                 <span className="font-mono text-[12px] text-muted-foreground">
@@ -115,7 +115,7 @@ function InProgress({ incidents, now }: { incidents: IncidentSummary[]; now: num
     <Panel
       title="In progress"
       action={
-        <Link to="/incidents?scope=active" className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
+        <Link to="/incidents?scope=active" className="flex items-center gap-1.5 rounded-sm text-[12px] text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2">
           All incidents
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
@@ -140,7 +140,7 @@ function InProgress({ incidents, now }: { incidents: IncidentSummary[]; now: num
                 <TableRow key={incident.id}>
                   <TableCell className="pl-[19px]">
                     <span className="flex flex-col gap-0.5">
-                      <Link to={`/incidents/${incident.id}`} className="font-medium hover:underline">
+                      <Link to={`/incidents/${incident.id}`} className="rounded-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2">
                         {incident.title}
                       </Link>
                       <span className="font-mono text-[12px] text-muted-foreground">

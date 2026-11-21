@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useForm, useWatch, type FieldValues, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 import { ApiRequestError } from '@/api/client'
@@ -79,9 +79,24 @@ function ActionDialog({
   onClose: () => void
   children: ReactNode
 }) {
+  const triggerRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      triggerRef.current = (document.activeElement as HTMLElement) ?? null
+    }
+  }, [open])
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(e) => {
+          if (triggerRef.current && document.contains(triggerRef.current)) {
+            e.preventDefault()
+            triggerRef.current.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

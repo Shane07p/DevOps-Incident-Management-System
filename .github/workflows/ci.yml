@@ -138,9 +138,17 @@ jobs:
         working-directory: ai-service
         run: pip install -r requirements-dev.txt
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: ai-service
         run: pytest
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-service-coverage
+          path: ai-service/htmlcov/
+          if-no-files-found: ignore
 
   demo-shop:
     name: Demo shop build and test
@@ -159,9 +167,17 @@ jobs:
         working-directory: demo-shop
         run: pip install -r requirements-dev.txt
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: demo-shop
         run: pytest
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-shop-coverage
+          path: demo-shop/htmlcov/
+          if-no-files-found: ignore
 
   e2e:
     name: Cypress E2E

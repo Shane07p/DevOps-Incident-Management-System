@@ -100,17 +100,23 @@ issue lists the test case IDs it must automate.
   the `backend-coverage` artifact, and each PR gets a comment with overall and changed-file coverage.
 - **Frontend:** Vitest measures coverage over every source file, including files no test imports.
   The report is saved as the `frontend-coverage` artifact.
+- **AI service:** pytest-cov measures line and branch coverage over application source (`ai-service/*.py`),
+  excluding tests. The HTML report is saved as the `ai-service-coverage` artifact.
+- **Demo shop:** pytest-cov measures line and branch coverage over the demo shop source (`demo_shop/`),
+  excluding tests. The HTML report is saved as the `demo-shop-coverage` artifact.
 - **Mutation:** PIT runs in CI after the backend tests, on the transition and SLA classes with the STRONGER
   mutators, and fails below a 95% mutation score. On 17 Nov 2026 it made 28 mutants and killed 27 (96%). The
   survivor drops the `to == null` check in `TransitionPolicy`: every case then compares `to` with `==` and returns
   false, so nothing changes (an equivalent mutant). The report is the `backend-mutation` artifact.
-- **Targets:** the build fails below these floors, set a point or two under `main` on 17 Nov 2026. Raise them as
-  coverage grows; never lower them to make a pull request pass.
+- **Targets:** the build fails below these floors, set a point or two under `main` on 17 Nov 2026 (Java and frontend)
+  and 22 Nov 2026 (Python services). Raise them as coverage grows; never lower them to make a pull request pass.
 
   | Part | Floor | `main`, 17 Nov 2026 |
   | --- | --- | --- |
   | Backend (JaCoCo, `pom.xml`) | lines 93%, branches 80% | lines 94.78%, branches 81.56% |
   | Frontend (Vitest, `vite.config.ts`) | statements 89%, branches 82%, functions 86%, lines 91% | statements 90.51%, branches 83.48%, functions 87.14%, lines 91.97% |
+  | AI service (`pytest.ini`, `.coveragerc`) | lines 81%, branches 68% (total 78%) | lines 83.07%, branches 69.81% (total 79.65%) [22 Nov 2026] |
+  | Demo shop (`pytest.ini`, `.coveragerc`) | lines 91%, branches 80% (total 90%) | lines 93.81%, branches 81.69% (total 91.96%) [22 Nov 2026] |
   | Mutation (PIT, `pom.xml`) | 95% | 96% (27 of 28) |
 
 ## 8. Defects

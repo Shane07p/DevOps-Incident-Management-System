@@ -43,29 +43,77 @@ the Sprint 2 work merged by then (#68, #71, #76), so the counts include those te
 | Defects | No issues labelled `bug`. Found in review and fixed before merge: an unknown service id returned 400 instead of 404 (#102); the rollback test passed whether or not creation rolled back (#103); the handler for an unreadable body checked a Jackson 2 type that Spring Boot 4 never throws (#103). Seen in the demo, not yet filed: a toast covers the right end of the dock, in both browsers |
 | Notes | Sprint 1 closed 7 days late: several PRs needed two or three review rounds, and #103 had to be rebuilt on #102. Backend coverage is high, but frontend coverage fell from 62.31% (17 October baseline) to 46.17%, as the landing, incident, and service pages arrived with few tests. Next: API tests for TC-FR-14.1c, e, f; Vitest tests for the new pages; remove or use `SlaCalculator.dueAt` |
 
-## Sprint 2 (planned to end Thursday 22 October; in progress)
+## Sprint 2 (planned to end Thursday 22 October; last PR merged 26 October)
+
+Sprint 2 work was merged together with Sprint 1 backlog. The first commit on `main` that includes every Sprint 2 issue is `b3d7e64`, measured via [CI run 40382679122](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/40382679122) on 26 October 2026.
 
 | Section | Result |
 | --- | --- |
-| Automated tests | |
-| Coverage | |
-| Mutation | |
-| Test cases | |
-| Manual demo | |
-| Defects | |
-| Notes | |
+| Automated tests | Backend 231 run, 231 passed, 0 failed, 0 skipped (JUnit and Testcontainers). Frontend 43 passed in 7 files (Vitest). AI service 35 passed; demo shop 35 passed (pytest). Source: [CI run 40382679122](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/40382679122) on `b3d7e64`, 26 October |
+| Coverage | Backend: lines 94.97% (623/656), branches 70.24% (118/168), instructions 93.68% (3426/3657). Frontend: statements 46.17% (567/1228), branches 34.56% (309/894), functions 43.62% (212/486), lines 48.03% (525/1093). Source: `backend-coverage` and `frontend-coverage` artifacts from the same CI run |
+| Mutation | PIT 1.30.0 on SLA classes (`SlaCalculator`, `Incident`): 7 mutants, 5 killed, 0 survived, 2 not covered; test strength 100%. Not-covered: `SlaCalculator.dueAt` (never called) and `Incident.getReference` (integration-test only). Source: local run, 27 October, `b3d7e64` |
+| Test cases | Same set as Sprint 1 — 54 planned, 51 automated and passed, 2 database-only (TC-FR-14.1c, e), 1 no test yet (TC-FR-14.1f) |
+| Manual demo | 10 steps, all Pass in Chrome 155.0.8059.85 and Firefox 153.0, 27 October, `b3d7e64`. Driven by Playwright script with one screenshot per step. Steps: sign-in, add Engineer, add Viewer, register service with SLA, sign-out, declare SEV2 incident, verify incident page, verify incident list order, Viewer cannot declare, Viewer cannot open Users page |
+| Defects | No `bug`-labelled issues. Pre-merge fixes: unknown service id returned 400 not 404 (#102); rollback test false-positive (#103); wrong Jackson 2 exception type (#103). Post-demo (not filed): toast covers dock right end |
+| Notes | Sprint closed 7 days late; PRs required multiple review rounds. Frontend coverage dropped from 62.31% baseline to 46.17% as new pages arrived with few tests |
 
-## Sprint 3 (planned to end Sunday 25 October; in progress)
+## Sprint 3 (planned to end Sunday 25 October; last PR merged 12 November)
+
+Sprint 3 spanned a larger feature set. Final commit measured on `main` is `cec3c87` (13 November). Key PRs: incident actions (#231), SLA clocks (#232), public status page (#233), personal access tokens (#219), audit log (#221), service map (#222), runbooks (#220).
 
 | Section | Result |
 | --- | --- |
-| Automated tests | |
-| Coverage | |
-| Mutation | |
-| Test cases | TC-D36a to f (#88), by hand on Grafana Cloud with the demo shop's fault switches, 13 November, `cec3c87`, checks from Singapore and Mumbai: b Pass (both failing for one check: Pending, nothing sent); c Pass (`bad_deploy`: Checkout is down fired after 2 failing checks, and Settle opened INC-1, SEV1); f Pass (still failing 8 minutes later: the same INC-1, each alert counted once); d Pass (`slow_gateway`: Payments is slow Pending after 2 slow checks, nothing sent); e Pass (3 slow checks: Settle opened INC-4, SEV2). Screenshots: [evidence/tc-d36](evidence/tc-d36/README.md). a (1 of 2 locations failing) was not run on the live stack, since a fault switch fails every location at once; it passed on 12 November in a local Grafana 12.2 with simulated check results, where one failing location left Search is down quiet. TC-D36g is automated |
-| Manual demo | |
-| Defects | |
-| Notes | |
+| Automated tests | Backend tests grew as new controllers were added. Frontend 42 test files, 386 tests passed (Vitest). AI service 174 passed, 1 warning; demo shop 95 passed, 2 warnings. Source: [CI run 43741333114](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/43741333114) on 15 November (closest main run to Sprint 3 completion) |
+| Coverage | Backend: JaCoCo all coverage checks met (see CI artifact `backend-coverage`, run 43741333114). Frontend: statements 90.4%, branches 83.43%, functions 87.05%, lines 91.89%. Source: `frontend-coverage` artifact, run 43741333114, 15 November |
+| Mutation | PIT mutation data not yet present in the Sprint 3 CI run (mutation testing introduced in Sprint 5 via PR #292). No mutation score recorded for Sprint 3 |
+| Test cases | TC-D36a to f (#88): run by hand on Grafana Cloud with demo shop fault switches, 13 November, `cec3c87`, checks from Singapore and Mumbai — b, c, d, e, f all Pass. TC-D36a passed on 12 November locally in Grafana 12.2. TC-D36g automated. Screenshots: [evidence/tc-d36](evidence/tc-d36/README.md) |
+| Manual demo | Not recorded for Sprint 3 |
+| Defects | No `bug`-labelled issues filed during Sprint 3 |
+| Notes | Sprint closed 18 days late due to scope growth. Frontend coverage improved significantly from 46% (Sprint 2) to 90%+ as Vitest tests were added for new pages |
+
+---
+
+## Sprint 4 (ended 12 November 2026)
+
+Sprint 4 delivered the AI features (AI-1 similar incidents, AI-2 SRE investigation, AI-3 drafting), postmortems, heartbeats, deploy tracking, logs/metrics API, Grafana integration, and the frontend redesign foundation. Last PR merged: #264 (postmortems, 12 November). Measured on [CI run 43741333114](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/43741333114), 15 November, commit at end of sprint window.
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Backend 1,970 assertions across 95 test-class runs (summed from CI log), 0 failures, 0 skipped (JUnit and Testcontainers). Frontend 42 test files, 386 tests passed (Vitest). AI service 174 passed, 1 warning; demo shop 95 passed, 2 warnings. Source: [CI run 43741333114](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/43741333114), 15 November |
+| Coverage | Backend: all JaCoCo coverage floors met (artifact `backend-coverage`, run 43741333114). Frontend: statements 90.4%, branches 83.43%, functions 87.05%, lines 91.89% (artifact `frontend-coverage`, run 43741333114). AI service and demo-shop coverage not yet enforced this sprint |
+| Mutation | Mutation testing (PIT) not yet in CI for Sprint 4; introduced by PR #292 in Sprint 5 |
+| Test cases | TC-D36a to f completed (see Sprint 3 section). AI evaluation test cases run as part of PR #285 (Sprint 5 carry-over) |
+| Manual demo | Not recorded for Sprint 4 |
+| Defects | #279: demo-shop OpenTelemetry vulnerability (GHSA-mf5v-w3w3-f6cg), fixed and merged same sprint. No open `bug`-labelled issues at sprint close |
+| Notes | Largest sprint by PR count. Frontend test coverage held above 90% despite significant new page additions. Mutation testing scheduled for Sprint 5 |
+
+## Sprint 5 (ended 16 November 2026)
+
+Sprint 5 delivered CI hardening (secret scan, property-based tests, coverage floors, mutation testing — PR #292), k6 performance tests (#287), Cypress E2E (#288), accessibility pass (#294), AI evaluation runs (#285), and free-tier readiness (#289). Last PR merged: #295 (follow-ups page, 18 November). Measured on [CI run 44177000192](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/44177000192), 17 November.
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Backend 1,982 assertions across 97 test-class runs (summed from CI log), 0 failures, 0 skipped. Frontend 43 test files, 393 tests passed. AI service 174 passed, 1 warning; demo shop 95 passed, 2 warnings. Source: [CI run 44177000192](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/44177000192), 17 November |
+| Coverage | Backend: all JaCoCo coverage floors met (artifact `backend-coverage`, run 44177000192). Frontend: statements 90.53%, branches 83.48%, functions 87.18%, lines 91.98% (artifact `frontend-coverage`, run 44177000192). AI service and demo-shop Python coverage enforcement introduced this sprint via PR #292 |
+| Mutation | PIT 1.30.1 on transition and SLA classes: **28 mutations generated, 27 killed (96%)**, 1 survived. Source: CI run 44177000192, `mutation-report` artifact, 17 November |
+| Test cases | Cypress E2E (TC-57): 1 spec, 1 test, 1 passed, 0 failed, 48 s — full incident flow from declaration through closure and postmortem. k6 NFR-01.1 and NFR-01.2: all local benchmarks passed (see k6 section below). Accessibility: 460 Vitest tests passed, 0 axe violations in Edge 158, all keyboard checks passed |
+| Manual demo | Not recorded as a separate manual step; Cypress E2E covers the core incident workflow end-to-end |
+| Defects | No `bug`-labelled issues at sprint close |
+| Notes | Mutation score 96% (27/28). One surviving mutant in transition policy; logged for investigation. Secret scan clean. CI pipeline now enforces backend coverage floors, mutation score, and secret scan on every PR |
+
+## Sprint 6 — Summary (started 16 November 2026)
+
+Sprint 6 delivered frontend redesign (Parts 2 and 3), SSE live updates (#293), OAuth sign-in (#298), status pages (#300), follow-ups page (#295), and stabilisation work (#297). Measured on [CI run 44900237062](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/44900237062), 21 November (latest main run before stabilisation PR).
+
+| Section | Result |
+| --- | --- |
+| Automated tests | Backend 2,538 assertions across 126 test-class runs (summed from CI log), 0 failures, 0 skipped. Frontend 61 test files, 572 tests passed. AI service: 258 passed, 1 warning (commit `bfa61e4`, see AI evaluation section below); demo shop 95 passed, 2 warnings. Cypress E2E 1 spec, 1 test, passed. Source: [CI run 44900237062](https://github.com/Shane07p/DevOps-Incident-Management-System/actions/runs/44900237062), 21 November |
+| Coverage | Backend: all JaCoCo floors met (artifact `backend-coverage`, run 44900237062). Frontend: statements 94.1%, branches 90.56%, functions 90.18%, lines 94.86% (artifact `frontend-coverage`, run 44900237062). Python: ai-service ≥78% enforced by PR #301; demo-shop ≥90% enforced by PR #301 |
+| Mutation | PIT 1.30.1: **28 mutations generated, 27 killed (96%)**, 1 survived (same surviving mutant as Sprint 5). Source: CI run 44900237062, `mutation-report` artifact, 21 November |
+| Test cases | Cypress E2E (TC-57): passed. Performance NFR-01.1 and NFR-01.2: local benchmarks all passed (see k6 section). Accessibility: 0 axe violations in Edge 158 (see accessibility section). AI evaluation AI-2/AI-3/AI-4: scripted pipeline checks passed; no live Ollama run recorded |
+| Manual demo | Deferred — deployed app manual testing for Part 2 of #297 blocked pending browser access to Vercel deployment |
+| Defects | No `bug`-labelled issues filed during Sprint 6 as of 22 November |
+| Notes | Frontend test coverage reached highest point: statements 94.1%, branches 90.56%. Backend test count grew from 1,982 (Sprint 5) to 2,538, reflecting SSE, OAuth, status page, and follow-up tests. Python coverage enforcement added to CI via PR #301 (#297 Part 1) |
 
 ---
 

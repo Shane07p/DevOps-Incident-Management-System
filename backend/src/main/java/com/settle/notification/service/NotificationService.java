@@ -1,0 +1,78 @@
+package com.settle.notification.service;
+
+import com.settle.auth.entity.AppUser;
+import com.settle.common.error.NotFoundException;
+import com.settle.incident.entity.Incident;
+import com.settle.notification.dto.NotificationListResponse;
+import com.settle.notification.dto.NotificationResponse;
+import com.settle.notification.entity.Notification;
+import com.settle.notification.entity.NotificationKind;
+import com.settle.notification.repository.NotificationRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class NotificationService {
+
+	private final NotificationRepository notificationRepository;
+	private final Clock clock;
+
+	/**
+	 * Creates a notification inside the caller's transaction, defaulting to SYSTEM kind so it does
+	 * not accidentally classify informational notifications as genuine pages (FR-07.8, D33).
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public Notification createNotification(AppUser recipient, Incident incident, String message) {
+		return createNotification(recipient, incident, NotificationKind.SYSTEM, message);
+	}
+
+	@Transactional(propagation = Propagation.MANDATORY)
+	public Notification createNotification(AppUser recipient, Incident incident, NotificationKind kind, String message) {
+		Instant now = clock.instant();
+		Notification notification = new Notification(recipient, incident, kind, message, now);
+		return notificationRepository.save(notification);
+	}
+
+	@Transactional(readOnly = true)
+	public NotificationListResponse getNotificationsForUser(Long userId) {
+		List<Notification> notifications = notificationRepository
+				.findAllByRecipientIdOrderByCreatedAtDescIdDesc(userId);
+		long unreadCount = notificationRepository.countUnreadByRecipientId(userId);
+
+		List<NotificationResponse> responses = notifications.stream()
+				.map(this::toResponse)
+				.toList();
+		return new NotificationListResponse(responses, unreadCount);
+	}
+
+	@Transactional
+	public NotificationResponse markAsRead(Long notificationId, Long userId) {
+		Notification notification = notificationRepository.findById(notificationId)
+				.orElseThrow(() -> new NotFoundException("Notification " + notificationId + " not found"));
+
+		if (!notification.getRecipient().getId().equals(userId)) {
+			// Return 404 so the caller cannot discover that the notification exists (user isolation).
+			throw new NotFoundException("Notification " + notificationId + " not found");
+		}
+
+		notification.markRead(clock.instant());
+		return toResponse(notification);
+	}
+
+	private NotificationResponse toResponse(Notification notification) {
+		Long incidentId = notification.getIncident() != null ? notification.getIncident().getId() : null;
+		return new NotificationResponse(
+				notification.getId(),
+				incidentId,
+				notification.getMessage(),
+				notification.getCreatedAt(),
+				notification.getReadAt()
+		);
+	}
+}

@@ -107,11 +107,11 @@ issue lists the test case IDs it must automate.
 - **Targets:** the build fails below these floors, set a point or two under `main` on 17 Nov 2026. Raise them as
   coverage grows; never lower them to make a pull request pass.
 
-  | Part | Floor | `main`, 17 Nov 2026 |
-  | --- | --- | --- |
-  | Backend (JaCoCo, `pom.xml`) | lines 93%, branches 80% | lines 94.78%, branches 81.56% |
-  | Frontend (Vitest, `vite.config.ts`) | statements 89%, branches 82%, functions 86%, lines 91% | statements 90.51%, branches 83.48%, functions 87.14%, lines 91.97% |
-  | Mutation (PIT, `pom.xml`) | 95% | 96% (27 of 28) |
+  | Part | Floor | `main`, 17 Nov 2026 | `main`, 21 Nov 2026 (`30fa1d7`) |
+  | --- | --- | --- | --- |
+  | Backend (JaCoCo, `pom.xml`) | lines 93%, branches 80% | lines 94.78%, branches 81.56% | lines 97.93%, branches 90.82% |
+  | Frontend (Vitest, `vite.config.ts`) | statements 89%, branches 82%, functions 86%, lines 91% | statements 90.51%, branches 83.48%, functions 87.14%, lines 91.97% | statements 94.11%, branches 90.56%, functions 90.19%, lines 94.87% |
+  | Mutation (PIT, `pom.xml`) | 95% | 96% (27 of 28) | 96% (27 of 28) |
 
 ## 8. Defects
 

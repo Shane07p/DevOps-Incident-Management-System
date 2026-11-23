@@ -1,6 +1,6 @@
 # Test Cases
 
-Designed test cases for Sprints 1 to 3. The [test plan](test-plan.md) explains the levels and
+Designed test cases for every sprint. The [test plan](test-plan.md) explains the levels and
 techniques; results go in [test-report.md](test-report.md).
 
 **IDs** extend the planned checks in [traceability.csv](traceability.csv): `TC-FR-16.3b` is the
@@ -10,6 +10,7 @@ second designed case for check `TC-FR-16.3`. Features with no FR yet use their d
 **Status** is one of:
 - **Automated:** the test is on `main`.
 - **In review:** the test is in an open PR.
+- **Manual:** run by hand; the result, with its date and commit, is in [test-report.md](test-report.md).
 - **Planned:** not written yet; the owner and issue are given.
 
 A case is marked Passed or Failed only in [test-report.md](test-report.md), after a recorded run.
@@ -150,9 +151,9 @@ shrink a failure to the smallest case. They add to the hand-picked boundaries ab
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-FR-16.3e | Property-based (boundary) | 1,000 generated starts, targets (1 to 100,000 min), and elapsed times, negative ones included | Breached exactly when elapsed is over the target; at the due time itself, not breached; 1 ns later, breached | `SlaPropertyTest` | In review |
-| TC-FR-06.3b | Property-based (state transition) | All 49 (from, to) pairs, generated exhaustively | Legal exactly for the 8 pairs in AGENTS.md; nothing returns to OPEN or leaves CLOSED; every status can still reach CLOSED, and only RESOLVED goes straight to it | `TransitionPolicyPropertyTest` | In review |
-| TC-FR-15.2f | Property-based (equivalence) | 200 generated sets of non-overlapping shifts and windows, and a moment in each window | The coverage bar tiles the window with no hole, overlap, or two gaps in a row; at any moment it agrees with who gets a new incident (the shift, else the fallback) | `schedule.property.test.ts` | In review |
+| TC-FR-16.3e | Property-based (boundary) | 1,000 generated starts, targets (1 to 100,000 min), and elapsed times, negative ones included | Breached exactly when elapsed is over the target; at the due time itself, not breached; 1 ns later, breached | `SlaPropertyTest` | Automated |
+| TC-FR-06.3b | Property-based (state transition) | All 49 (from, to) pairs, generated exhaustively | Legal exactly for the 8 pairs in AGENTS.md; nothing returns to OPEN or leaves CLOSED; every status can still reach CLOSED, and only RESOLVED goes straight to it | `TransitionPolicyPropertyTest` | Automated |
+| TC-FR-15.2f | Property-based (equivalence) | 200 generated sets of non-overlapping shifts and windows, and a moment in each window | The coverage bar tiles the window with no hole, overlap, or two gaps in a row; at any moment it agrees with who gets a new incident (the shift, else the fallback) | `schedule.property.test.ts` | Automated |
 
 ### Append-only records (FR-08, FR-13)
 
@@ -360,12 +361,12 @@ The rules are Grafana alert rules, so a to f are checked by hand with the demo s
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
-| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | In review |
-| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | In review |
-| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | In review |
-| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | In review |
-| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | In review |
+| TC-D36a | Boundary value | 1 of 2 locations failing, for 3 checks | Operational; nothing raised | Grafana alert rule, by hand | Manual |
+| TC-D36b | Boundary value | 2 of 2 failing, for 1 check | Operational; nothing raised | Grafana alert rule, by hand | Manual |
+| TC-D36c | Boundary value | 2 of 2 failing, for 2 checks in a row | Down; one critical alert | Grafana alert rule, by hand | Manual |
+| TC-D36d | Boundary value | 2 of 2 slower than the limit, for 2 checks | Operational; nothing raised | Grafana alert rule, by hand | Manual |
+| TC-D36e | Boundary value | 2 of 2 slower than the limit, for 3 checks in a row | Degraded; one warning alert | Grafana alert rule, by hand | Manual |
+| TC-D36f | Boundary value | 2 of 2 failing, still failing at the next evaluation | Still Down; no second alert | Grafana alert rule, by hand | Manual |
 | TC-D36g | Equivalence | Grafana posts the same firing alert again | Counted once; one incident | `GrafanaAlertIntakeTest.sameFiringAlertPostedTwiceIsCountedOnce` (Testcontainers) | Automated |
 
 ### Demo-shop scenario table (Issue #64)
@@ -494,8 +495,8 @@ The service map API (#154) brings its own cases in its pull request (#180).
 | TC-FR-27.2a | Equivalence | Incident page with no deploys, logs, or evidence | Each section shows its empty state; a Viewer sees no Link or add actions | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.2b | Negative | Incident page while logs and metrics answer 503 (not connected) | One message per section with the server's reason; deploys, evidence, and the rest of the page work | `IncidentEvidence.test.tsx` | Automated |
 | TC-FR-27.3a | Negative | Metrics page while the API answers 503 | A clear message; the rest of the page works | `MetricsPage.test.tsx` | Automated (Himanshu) |
-| TC-FR-27.3b | Equivalence (invalid) | Metrics page opened with `?serviceId=999&timeRange=2d`, or with `?from=abc&to=xyz` | The first service and the last hour; `from` and `to` are ignored and the page still renders | `MetricsPage.test.tsx` (URL values that are not options) | In review |
-| TC-FR-27.3c | Equivalence | Refresh clicked once on the Metrics page | Each of the four metrics is requested once more, not twice | `MetricsPage.test.tsx` (refresh) | In review |
+| TC-FR-27.3b | Equivalence (invalid) | Metrics page opened with `?serviceId=999&timeRange=2d`, or with `?from=abc&to=xyz` | The first service and the last hour; `from` and `to` are ignored and the page still renders | `MetricsPage.test.tsx` (URL values that are not options) | Automated |
+| TC-FR-27.3c | Equivalence | Refresh clicked once on the Metrics page | Each of the four metrics is requested once more, not twice | `MetricsPage.test.tsx` (refresh) | Automated |
 
 ### Each org's own Grafana (D49, #260)
 
@@ -514,19 +515,19 @@ The service map API (#154) brings its own cases in its pull request (#180).
 
 | ID | Technique | Input or condition | Expected | Test | Status |
 | --- | --- | --- | --- | --- | --- |
-| TC-D50a | Equivalence | A verified Google account with no Settle account signs in, then names an org | A sign-up code; its details show the email; finishing creates the person with no password, the provider link, and an Admin membership; the code works once | `OAuthSignInServiceTest.aNewVerifiedAccountNamesItsOrgThenSignsUpWithNoPassword` (Testcontainers) | In review |
-| TC-D50b | Equivalence | A linked account signs in again | A login code that becomes a token once; a second exchange gets 401 | `OAuthSignInServiceTest.aLinkedAccountSignsInWithACodeThatWorksOnce` | In review |
-| TC-D50c | State transition | A verified GitHub account whose email matches a password account | Linked; the password is dropped; the old session token and a personal access token made before get 401; `ACCOUNT_LINKED` is audited; the code signs in to the same org | `OAuthSignInServiceTest.theFirstSignInLinksTheAccountWithThatEmailDropsItsPasswordAndEndsItsSessionsAndAccessTokens` | In review |
-| TC-D50d | Negative | An unverified email, and no email at all | Sent to `/login?oauth=unverified`; no code and no person created | `OAuthSignInServiceTest.anUnverifiedOrMissingEmailIsRefusedAndCreatesNothing` | In review |
-| TC-D50e | Negative | A disabled member signs in with Google | Sent to `/login?oauth=disabled`; nothing is linked and the password stays | `OAuthSignInServiceTest.aDisabledMemberIsRefusedAndTheirAccountIsLeftAsItWas` | In review |
-| TC-D50f | Negative | A sign-up code exchanged as a login code, a login code read as a sign-up code, an expired code, a made-up code | 401 each time | `OAuthSignInServiceTest.aCodeOfTheWrongKindOrPastItsLifetimeIsRefused` | In review |
-| TC-D50g | Equivalence | Start Google and GitHub sign-in, with a forged Host header; a provider that isn't set up; a callback with no sign-in behind it | 302 to the provider with the registered callback on `APP_PUBLIC_URL` and the right scopes; 404; back to `/login?oauth=failed` | `OAuthControllerTest` | In review |
-| TC-D50h | Equivalence | Sign-up details, sign-up, then a login code, over HTTP | 200 with the email; 201 with the new org and an Admin token; 200, then 401 for the reused code | `OAuthControllerTest.aSignUpCodeShowsItsDetailsThenCreatesTheOrgAndALoginCodeWorksOnce` | In review |
-| TC-D50l | Negative | Redeem a login code while the browser still sends a revoked or expired bearer token | 200: the code endpoints ignore the old token | `OAuthControllerTest.aCodeIsRedeemedEvenWhenTheBrowserStillSendsAnOldToken` | In review |
-| TC-D50m | Equivalence | Load a GitHub user from a server that answers like api.github.com; another provider; a primary email GitHub hasn't verified | The primary verified email is added from `/user/emails` with the user's token; no email lookup for another provider; none added when unverified | `ProviderUserServiceTest` | In review |
-| TC-D50i | Equivalence | Sign-in and sign-up pages with two, then no, providers set up; a return with `?oauth=unverified` | A button per provider linking to its sign-in; none when the server has none; the reason shown | `OAuth.test.tsx` | In review |
-| TC-D50j | Concurrency | The callback page with a code, rendered under React's StrictMode | The code is sent once, leaves the address bar, and the person lands on Home; a used code shows the server's message | `OAuth.test.tsx` | In review |
-| TC-D50k | Equivalence | The finish-sign-up page with a code, then with an expired one | The provider's email shown and the name filled in; it sends the org name and lands on Home; an expired code shows a way back | `OAuth.test.tsx` | In review |
+| TC-D50a | Equivalence | A verified Google account with no Settle account signs in, then names an org | A sign-up code; its details show the email; finishing creates the person with no password, the provider link, and an Admin membership; the code works once | `OAuthSignInServiceTest.aNewVerifiedAccountNamesItsOrgThenSignsUpWithNoPassword` (Testcontainers) | Automated |
+| TC-D50b | Equivalence | A linked account signs in again | A login code that becomes a token once; a second exchange gets 401 | `OAuthSignInServiceTest.aLinkedAccountSignsInWithACodeThatWorksOnce` | Automated |
+| TC-D50c | State transition | A verified GitHub account whose email matches a password account | Linked; the password is dropped; the old session token and a personal access token made before get 401; `ACCOUNT_LINKED` is audited; the code signs in to the same org | `OAuthSignInServiceTest.theFirstSignInLinksTheAccountWithThatEmailDropsItsPasswordAndEndsItsSessionsAndAccessTokens` | Automated |
+| TC-D50d | Negative | An unverified email, and no email at all | Sent to `/login?oauth=unverified`; no code and no person created | `OAuthSignInServiceTest.anUnverifiedOrMissingEmailIsRefusedAndCreatesNothing` | Automated |
+| TC-D50e | Negative | A disabled member signs in with Google | Sent to `/login?oauth=disabled`; nothing is linked and the password stays | `OAuthSignInServiceTest.aDisabledMemberIsRefusedAndTheirAccountIsLeftAsItWas` | Automated |
+| TC-D50f | Negative | A sign-up code exchanged as a login code, a login code read as a sign-up code, an expired code, a made-up code | 401 each time | `OAuthSignInServiceTest.aCodeOfTheWrongKindOrPastItsLifetimeIsRefused` | Automated |
+| TC-D50g | Equivalence | Start Google and GitHub sign-in, with a forged Host header; a provider that isn't set up; a callback with no sign-in behind it | 302 to the provider with the registered callback on `APP_PUBLIC_URL` and the right scopes; 404; back to `/login?oauth=failed` | `OAuthControllerTest` | Automated |
+| TC-D50h | Equivalence | Sign-up details, sign-up, then a login code, over HTTP | 200 with the email; 201 with the new org and an Admin token; 200, then 401 for the reused code | `OAuthControllerTest.aSignUpCodeShowsItsDetailsThenCreatesTheOrgAndALoginCodeWorksOnce` | Automated |
+| TC-D50l | Negative | Redeem a login code while the browser still sends a revoked or expired bearer token | 200: the code endpoints ignore the old token | `OAuthControllerTest.aCodeIsRedeemedEvenWhenTheBrowserStillSendsAnOldToken` | Automated |
+| TC-D50m | Equivalence | Load a GitHub user from a server that answers like api.github.com; another provider; a primary email GitHub hasn't verified | The primary verified email is added from `/user/emails` with the user's token; no email lookup for another provider; none added when unverified | `ProviderUserServiceTest` | Automated |
+| TC-D50i | Equivalence | Sign-in and sign-up pages with two, then no, providers set up; a return with `?oauth=unverified` | A button per provider linking to its sign-in; none when the server has none; the reason shown | `OAuth.test.tsx` | Automated |
+| TC-D50j | Concurrency | The callback page with a code, rendered under React's StrictMode | The code is sent once, leaves the address bar, and the person lands on Home; a used code shows the server's message | `OAuth.test.tsx` | Automated |
+| TC-D50k | Equivalence | The finish-sign-up page with a code, then with an expired one | The provider's email shown and the name filled in; it sends the org name and lands on Home; an expired code shows a way back | `OAuth.test.tsx` | Automated |
 
 ### Evidence links (FR-09.3)
 
@@ -801,6 +802,20 @@ These shell regression checks use synthetic HTTP responses from a curl stub, wit
 | TC-OPS-253c | Negative | Traffic is rejected with 401 or 422 | Exit 1, the failing status is printed, no fresh-data banner | `scripts/test_demo_warmup.sh` (traffic-401, traffic-422) | Passed (2026-11-20, 55fbb07) |
 | TC-OPS-253d | Resilience | curl connection fails, or a health probe recovers on retry | Connection failure records HTTP 000 and exits 1; recovered health reaches exit 0 | `scripts/test_demo_warmup.sh` (connection-failed, retry-recovers) | Passed (2026-11-20, 55fbb07) |
 | TC-OPS-253e | Configuration | Public shop control URL, default loopback target, or a custom internal port | Payload targets the configured allowed internal origin, independently of the public control URL | `scripts/test_demo_warmup.sh` (public-shop-internal-target, custom-internal-port) | Passed (2026-11-20, 55fbb07) |
+
+## Database backup and restore
+
+`scripts/test_db_backup.sh` builds a database from the real Flyway migrations and the dev seed in a throwaway PostgreSQL + pgvector container, then backs it up with `scripts/db-backup.sh` and restores it with `scripts/db-restore.sh`. It runs in the CI **Database backup checks** job.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-OPS-DBa | Positive | Back up the `incident` schema | A custom-format dump that lists every table; no `.partial` file left | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBb | Negative | Restore without `--confirm`, or with `--confirm` naming another database | Refused before connecting; nothing changes | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBc | Negative | Restore to a host that is not this machine without `--production` | Refused before connecting | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBd | Positive | Restore into an empty database | Every table has the source's row count; vector values and `incident.embedding vector(768)` survive | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBe | State | Restore again over changed data and an extra table | The backup's exact state; the extra table is gone; `public` untouched | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBf | Negative | A truncated backup file | Refused; the database is unchanged | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBg | Resilience | The restore fails after the schema was dropped (pgvector already in another schema) | Failure reported; the drop is rolled back and the old schema and data remain | `scripts/test_db_backup.sh` | Automated |
 
 ---
 

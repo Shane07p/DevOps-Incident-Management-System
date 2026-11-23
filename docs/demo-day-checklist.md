@@ -48,7 +48,14 @@ Follow these steps sequentially to prepare the environment for evaluation.
      ```
      Ensure the query returns the expected registered services without errors.
 
-2. **Run the Automated Warm-Up Script:**
+2. **Back Up the Database:**
+   - Before the demo, and before loading demo data or running a migration, take a backup of the
+     production schema (see [Database backup and restore](#database-backup-and-restore)):
+     ```bash
+     DB_URL=<Render's DB_URL> DB_USERNAME=<...> DB_PASSWORD=<...> scripts/db-backup.sh
+     ```
+
+3. **Run the Automated Warm-Up Script:**
    - From the repository root, run the warm-up script targeting production:
      ```bash
      BACKEND_URL=https://incident-backend-f340.onrender.com \
@@ -60,13 +67,13 @@ Follow these steps sequentially to prepare the environment for evaluation.
      ./scripts/demo-warmup.sh
      ```
 
-3. **Inspect Render Deployment Logs:**
+4. **Inspect Render Deployment Logs:**
    - Check Render dashboards for `incident-backend-f340` (and demo shop service if hosted).
    - Confirm the Spring Boot application initialized without HikariCP pool exhaustion or Flyway validation errors:
      ```text
      HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection
      Flyway Community Edition ... Schema "incident" is up to date. No migration necessary.
-     Started IncidentApplication in ... seconds
+     Started IncidentManagementApplication in ... seconds
      ```
 
 4. **Verify Grafana Cloud Ingestion:**
@@ -122,7 +129,7 @@ Follow these steps sequentially to prepare the environment for evaluation.
 ### T-15 Minutes: Pre-Presentation Readiness
 
 1. **Execute Final Warmup Ping:**
-   - Render free containers idle out after 15 minutes of inactivity. While the 12-hour cron keeps Supabase and Grafana awake, only a ping right before the demo eliminates the 50–90s Render cold start:
+   - Render free containers idle out after 15 minutes of inactivity. The external uptime monitor keeps the backend awake; a ping right before the demo confirms it is warm and the database answers:
      ```bash
      curl -s https://incident-backend-f340.onrender.com/actuator/health
      ```
@@ -181,14 +188,30 @@ If Ollama or external AI inference is unavailable:
 | Grafana OTLP Ingestion | Grafana Cloud Loki Explorer and `demo_http_requests_total` | Logs/metrics are recent after accepted traffic | Grafana UI |
 | Demo Shop Fault Switch | `POST /faults/error_spike` with `{"enabled": true}` | HTTP 200, alert triggered | Manual / Script |
 | Persona Authentication | `/login` with demo credentials | JWT issued, dashboard loads | Browser |
+| Database Backup | `scripts/db-backup.sh` | A fresh dump in `backups/` before the demo | Team |
 | Local Compose Fallback | `docker compose --profile app up -d` | Images cached and operational | Local machine |
+
+## Database backup and restore
+
+`scripts/db-backup.sh` saves the application schema (`incident`) and the pgvector extension it uses
+to `backups/settle-incident-<where>-<UTC time>.dump`. Supabase's own schemas and `public` are not
+included. It reads the backend's `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` (or `DATABASE_URL`),
+runs `pg_dump` in a Docker image that matches the server's version, and never prints a credential.
+Use the direct connection or Supabase's session pooler (port 5432), not the transaction pooler (6543).
+Dumps hold users' emails and password hashes: `backups/` is ignored by git; keep them off shared drives.
+
+`scripts/db-restore.sh <file> --confirm <database-name>` drops the `incident` schema and rebuilds it
+from the backup in one transaction, so a failed restore leaves the database as it was. A target that
+is not on this machine (Supabase) also needs `--production`. Stop the backend while it runs; Flyway
+validates the restored history on the next start.
 
 ## Script regression checks
 
 Run `bash scripts/test_demo_warmup.sh`. Its curl stub contacts no deployed services and verifies
 healthy exit 0, each required service returning 503, rejected traffic (401/422), connection failure,
 retry recovery, accepted 202 traffic, and default/custom internal targets. These checks also run
-in the CI **Demo warm-up checks** job.
+in the CI **Demo warm-up checks** job. `bash scripts/test_db_backup.sh` checks the backup and
+restore scripts against a throwaway database (CI job **Database backup checks**).
 
 Verified on 2026-11-20 at commit `55fbb07fad0e7a968e916ffe9fe48363f58208f8`: all 11 checks passed.
 Healthy/recovered health and accepted traffic exited 0; each required service's 503, traffic 401/422,

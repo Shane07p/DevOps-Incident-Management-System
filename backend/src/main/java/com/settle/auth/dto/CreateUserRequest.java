@@ -1,0 +1,28 @@
+package com.settle.auth.dto;
+
+import com.settle.auth.entity.Role;
+import com.settle.common.validation.MaxBytes;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+public record CreateUserRequest(
+		@NotBlank(message = "Email is required")
+		@Email(message = "Enter a valid email")
+		@Size(max = 254, message = "Email is at most 254 characters")
+		String email,
+
+		@NotBlank(message = "Display name is required")
+		@Size(max = 100, message = "Display name must not exceed 100 characters")
+		String displayName,
+
+		@NotBlank(message = "Password is required")
+		@Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
+		@MaxBytes(value = 72, message = "Password must be at most 72 bytes; letters such as é count as two")
+		String password,
+
+		@NotNull(message = "Role is required")
+		Role role
+) {
+}

@@ -5,8 +5,8 @@ what each person builds, in what order, and how to check it. Find your name in
 [Who does what](#who-does-what), then open your issue.
 
 Sprint 1 finished on 26 October, 7 days late (its record is in the
-[sprint plan](sprint-plan.md#sprint-1-complete)). Sprints 2 to 4 are still in progress: each
-work item below shows its issue and status, and GitHub's Sprint 2, 3, and 4 milestones are live.
+[sprint plan](sprint-plan.md#sprint-1-complete)). Sprints 2 and 3 finished on 13 November and
+Sprint 4 on 15 November; each work item below shows its issue and the PR that finished it.
 
 | Sprint | Planned end | What the demo shows | Stories |
 | --- | --- | --- | --- |
@@ -138,13 +138,13 @@ blocks starts.
 | On-call schedules per service in the project time zone; a new incident is assigned to whoever is on call, or the fallback contact; the assignment goes on the timeline | Utsav B | US-06, FR-15, FR-05.1 | JUnit with a controlled `Clock` at shift boundaries; creation picks the right person or the fallback | #71: Done (PR #112) |
 | Notifications: in-app rows written in the same transaction; list, unread count, mark as read | Utsav D | FR-07.1, D33 | A notification is saved with the change and rolls back with it; a user only sees their own | #70: Done (PR #148) |
 | Monitors from one region (HTTP status) and heartbeats; a configured number of failures raises an alert; recovery updates the alert and adds a timeline entry, but never resolves the incident | Manush | FR-22, D29 | Controlled `Clock`: consecutive failures, a late heartbeat, recovery | #73: Done (PR #174). #74: Done (PR #235) |
-| On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: inbox merged (PR #125); open for the count and "routed to me", whose fields arrived with #123 |
-| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79: moved to Manush on 2 Nov; waits on #73 and #74 |
+| On-call page; alert inbox | Shlok | | Vitest | #80: Done (PR #124). #81: Done (PRs #125 and #201) |
+| Tools page (token shown once); notification bell; monitors and heartbeats pages | Shane | | Vitest | #77: Done (PR #138). #78: Done (PR #176). #79: Done by Manush (PR #270) |
 | Grafana Cloud account; its settings on Render | Shane | D34 | | #75: Done |
 | Ollama embeddings | Himanshu | #62 | pytest | Done (PR #99) |
 | Demo shop v1: payments, checkout, and search, sending logs and metrics | Himanshu | D34, D40 | | #76: Done (PR #111) |
 | Postmortem dataset | Bhakti | #63 | pytest | Done (PR #110) |
-| Demo-shop scenario table | Dhruva | #64 | pytest | Open |
+| Demo-shop scenario table | Dhruva | #64 | pytest | Done (PR #204) |
 
 **Cut first if late:** keyword and SSL monitor types.
 
@@ -158,7 +158,7 @@ blocks starts.
 | Reassign, and incident roles; reassigning never restarts a clock | Het | US-09, D39 | Every change is on the timeline; roles are checked on the server | #86: Done (PR #203; Lead made the assignee in the fixes PR) |
 | Comments and corrections: separate timeline inserts with no incident version; allowed on CLOSED incidents; a correction links to the original, which stays | Manan | US-11, §7 | Two people comment at once and both are saved; an entry cannot be edited or deleted | #87: Done (PR #195) |
 | Grafana Cloud checks from 2 to 3 locations; alert rules for Down and Degraded, and on the demo shop's error rate, post into intake | Manush | D35, D36 | One failing location raises nothing; two in a row do; two slow ones raise Degraded | #88: Done (PR #256) |
-| Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: timeline with comments and corrections done (PR #230); the actions in review as PR #231 |
+| Incident actions (acknowledge, status, severity, assign, roles); timeline with comments | Shlok | | Vitest | #89: Done (PRs #230 and #231) |
 | Escalation policies page; RabbitMQ hosting | Shane | | Vitest | #90: Done (PR #144). #82: Done (PR #177) |
 | Agent tool loop on demo data | Himanshu | [AI/ML roadmap](../2-design/ai-ml-roadmap.md) | pytest | #91: Done (PR #181) |
 | Log-pattern evidence | Bhakti | AI/ML roadmap | pytest | #92: Done (PR #122) |
@@ -199,7 +199,7 @@ FR-28 in [srs.md](../1-requirements/srs.md). Each item's test cases are in
 | History search page | Himanshu | US-15 | TC-FR-17.1e | #168: Done (PR #210) |
 | Incident page: deploys, logs and charts, and evidence links | Bhakti | FR-09, FR-27.2 | TC-FR-27.2a | #169: Done (PR #216) |
 | Similar incidents and the duplicate warning | Himanshu | US-18 | TC-FR-18.2a | #170: Done (PR #212) |
-| SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: in review as PR #232 |
+| SLA clocks and breaches on the board and incident page | Shlok | US-12, FR-16.3 | TC-FR-16.3e, f | #171: Done (PR #232) |
 | Runbooks pages | Bhakti | US-27, FR-25.2 | TC-FR-25.2a | #172: Done (PR #205) |
 
 **Cut first if late:** log patterns and saved views in the logs explorer; then the "by meaning" mode
@@ -364,7 +364,7 @@ suite run without it.
 
 ## Backend
 
-Feature folders under `com.group2.incident` (`auth`, `audit`, `catalog`, `incident`, `alert`,
+Feature folders under `com.settle` (`auth`, `audit`, `catalog`, `incident`, `alert`,
 `notification`), each split into `controller`, `dto`, `entity`, `repository`, and `service`. See
 the [layout](../../backend/AGENTS.md#layout). Controllers return DTO records, never entities.
 

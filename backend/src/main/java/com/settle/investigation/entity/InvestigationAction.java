@@ -1,0 +1,61 @@
+package com.settle.investigation.entity;
+
+import com.settle.auth.entity.AppUser;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.TenantId;
+
+/**
+ * An action the AI suggests. A decision is recorded only through {@code InvestigationActionRepository.recordDecision},
+ * whose {@code decision is null} guard lets the first Accept or Reject win.
+ */
+@Entity
+@Table(name = "investigation_action")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class InvestigationAction {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@TenantId
+	@Column(name = "org_id", nullable = false, updatable = false)
+	private Long orgId;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "investigation_id", nullable = false, updatable = false)
+	private Investigation investigation;
+
+	@Column(nullable = false, columnDefinition = "text")
+	private String text;
+
+	@Enumerated(EnumType.STRING)
+	@Column(length = 20)
+	private ActionDecision decision;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "decided_by")
+	private AppUser decidedBy;
+
+	@Column(name = "decided_at")
+	private Instant decidedAt;
+
+	public InvestigationAction(Investigation investigation, String text) {
+		this.investigation = investigation;
+		this.text = text;
+	}
+}

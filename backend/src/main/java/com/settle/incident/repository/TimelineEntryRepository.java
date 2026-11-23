@@ -1,0 +1,15 @@
+package com.settle.incident.repository;
+
+import com.settle.incident.entity.TimelineEntry;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface TimelineEntryRepository extends JpaRepository<TimelineEntry, Long> {
+
+	@EntityGraph(attributePaths = { "actor" })
+	List<TimelineEntry> findAllByIncidentIdOrderByRecordedAtAscIdAsc(Long incidentId);
+
+	Optional<TimelineEntry> findByIdAndIncidentId(Long id, Long incidentId);
+}

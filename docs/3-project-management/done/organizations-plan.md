@@ -46,7 +46,7 @@
 
 **Docs:** `backend/AGENTS.md`, `README.md`, `.env.example`, `docs/1-requirements/user-stories.md` (US-31), `docs/1-requirements/srs.md` (FR-01.4 to FR-01.6), `docs/4-testing/traceability.csv`, `docs/4-testing/test-cases.md`, `docs/2-design/architecture.md`.
 
-Paths below are relative to `backend/src/main/java/com/group2/incident/` (main) and `backend/src/test/java/com/group2/incident/` (test) unless they start with `backend/`, `frontend/`, or `docs/`.
+Paths below are relative to `backend/src/main/java/com/settle/` (main) and `backend/src/test/java/com/settle/` (test) unless they start with `backend/`, `frontend/`, or `docs/`.
 
 ---
 
@@ -62,7 +62,7 @@ Paths below are relative to `backend/src/main/java/com/group2/incident/` (main) 
 - [ ] **Step 1: Write the failing test**
 
 ```java
-package com.group2.incident.common.tenancy;
+package com.settle.common.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -124,7 +124,7 @@ Expected: compilation failure, `OrgContext` and `OrgTenantResolver` do not exist
 - [ ] **Step 3: Write `OrgContext`**
 
 ```java
-package com.group2.incident.common.tenancy;
+package com.settle.common.tenancy;
 
 import java.util.function.Supplier;
 
@@ -178,7 +178,7 @@ public final class OrgContext {
 - [ ] **Step 4: Write `OrgTenantResolver` and `TenancyConfig`**
 
 ```java
-package com.group2.incident.common.tenancy;
+package com.settle.common.tenancy;
 
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
 import org.springframework.stereotype.Component;
@@ -207,7 +207,7 @@ public class OrgTenantResolver implements CurrentTenantIdentifierResolver<Long> 
 ```
 
 ```java
-package com.group2.incident.common.tenancy;
+package com.settle.common.tenancy;
 
 import org.hibernate.cfg.MultiTenancySettings;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
@@ -233,7 +233,7 @@ Expected: 4 tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/src/main/java/com/group2/incident/common/tenancy backend/src/test/java/com/group2/incident/common/tenancy/OrgContextTest.java
+git add backend/src/main/java/com/settle/common/tenancy backend/src/test/java/com/settle/common/tenancy/OrgContextTest.java
 git commit -m "feat(tenancy): org context and Hibernate tenant resolver (D48)"
 ```
 
@@ -257,17 +257,17 @@ The schema and the entities change together: JPA runs with `ddl-auto=validate`, 
 - [ ] **Step 1: Write the failing filter test**
 
 ```java
-package com.group2.incident.common.tenancy;
+package com.settle.common.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.catalog.entity.Criticality;
-import com.group2.incident.catalog.entity.ServiceEntity;
-import com.group2.incident.catalog.repository.ServiceRepository;
-import com.group2.incident.org.entity.Organization;
-import com.group2.incident.org.repository.OrganizationRepository;
+import com.settle.auth.entity.AppUser;
+import com.settle.auth.repository.AppUserRepository;
+import com.settle.catalog.entity.Criticality;
+import com.settle.catalog.entity.ServiceEntity;
+import com.settle.catalog.repository.ServiceRepository;
+import com.settle.org.entity.Organization;
+import com.settle.org.repository.OrganizationRepository;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -275,7 +275,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
-import com.group2.incident.support.TestcontainersConfiguration;
+import com.settle.support.TestcontainersConfiguration;
 
 /**
  * Proves @TenantId filters queries and findById against PostgreSQL. No test transaction: each
@@ -315,7 +315,7 @@ class TenantFilteringTest {
 			return null;
 		});
 		AppUser owner = tx.execute(status -> users.save(new AppUser("tenant-owner-" + suffix, "tenant-owner-" + suffix + "@test.local", "Owner", "{noop}x",
-				com.group2.incident.auth.entity.Role.ADMIN, NOW)));
+				com.settle.auth.entity.Role.ADMIN, NOW)));
 		OrgContext.runAs(orgA, () -> tx.execute(status -> services.save(new ServiceEntity("Payments", "A", owner, Criticality.HIGH, NOW))));
 		serviceOfB = OrgContext.runAs(orgB, () -> tx.execute(status ->
 				services.save(new ServiceEntity("Payments", "B", owner, Criticality.HIGH, NOW)).getId()));
@@ -493,7 +493,7 @@ In `Incident.java` also add the number and make the reference use it:
 - [ ] **Step 5: Add the org entities and repositories**
 
 ```java
-package com.group2.incident.org.entity;
+package com.settle.org.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -544,10 +544,10 @@ public class Organization {
 ```
 
 ```java
-package com.group2.incident.org.entity;
+package com.settle.org.entity;
 
-import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.entity.Role;
+import com.settle.auth.entity.AppUser;
+import com.settle.auth.entity.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -616,9 +616,9 @@ public class Membership {
 ```
 
 ```java
-package com.group2.incident.org.repository;
+package com.settle.org.repository;
 
-import com.group2.incident.org.entity.Organization;
+import com.settle.org.entity.Organization;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -641,10 +641,10 @@ public interface OrganizationRepository extends JpaRepository<Organization, Long
 ```
 
 ```java
-package com.group2.incident.org.repository;
+package com.settle.org.repository;
 
-import com.group2.incident.auth.entity.Role;
-import com.group2.incident.org.entity.Membership;
+import com.settle.auth.entity.Role;
+import com.settle.org.entity.Membership;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -689,9 +689,9 @@ Update the two production callers: `UserAdminService.createUser` passes `request
 Hibernate reads the org when a session opens, and `@IntegrationTest` opens its transaction before `@BeforeEach`. A listener ordered before Spring's transactional listener (order 4000) sets a shared test org first.
 
 ```java
-package com.group2.incident.support;
+package com.settle.support;
 
-import com.group2.incident.common.tenancy.OrgContext;
+import com.settle.common.tenancy.OrgContext;
 import org.springframework.core.Ordered;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestContext;
@@ -741,11 +741,11 @@ Then update every `new AppUser(...)` in `backend/src/test` (25 files: `grep -rln
 - [ ] **Step 7: Write the migration test**
 
 ```java
-package com.group2.incident.db;
+package com.settle.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.group2.incident.support.TestcontainersConfiguration;
+import com.settle.support.TestcontainersConfiguration;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -866,15 +866,15 @@ In `auth/controller/AuthControllerTest.java`, replace user creation with `TestAc
 `support/TestAccounts.java`:
 
 ```java
-package com.group2.incident.support;
+package com.settle.support;
 
-import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.entity.Role;
-import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.common.tenancy.OrgContext;
-import com.group2.incident.org.entity.Membership;
-import com.group2.incident.org.repository.MembershipRepository;
-import com.group2.incident.org.repository.OrganizationRepository;
+import com.settle.auth.entity.AppUser;
+import com.settle.auth.entity.Role;
+import com.settle.auth.repository.AppUserRepository;
+import com.settle.common.tenancy.OrgContext;
+import com.settle.org.entity.Membership;
+import com.settle.org.repository.MembershipRepository;
+import com.settle.org.repository.OrganizationRepository;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import org.springframework.http.MediaType;
@@ -1081,9 +1081,9 @@ public record MeResponse(UserResponse user, OrgResponse org) {
 `org/dto/OrgResponse.java`:
 
 ```java
-package com.group2.incident.org.dto;
+package com.settle.org.dto;
 
-import com.group2.incident.org.entity.Organization;
+import com.settle.org.entity.Organization;
 
 public record OrgResponse(Long id, String name, String slug) {
 
@@ -1128,9 +1128,9 @@ In `common/error/ApiExceptionHandler.java`, `failedLogin` now says `"Invalid ema
 - [ ] **Step 5: Set the org for each request**
 
 ```java
-package com.group2.incident.common.tenancy;
+package com.settle.common.tenancy;
 
-import com.group2.incident.auth.security.JwtUserConverter;
+import com.settle.auth.security.JwtUserConverter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -1261,7 +1261,7 @@ git commit -m "feat(auth): sign in by email; the token carries the org and the r
 - [ ] **Step 1: Write the failing tests**
 
 ```java
-package com.group2.incident.org.service;
+package com.settle.org.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -1293,13 +1293,13 @@ class SlugsTest {
 ```
 
 ```java
-package com.group2.incident.org;
+package com.settle.org;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.group2.incident.support.IntegrationTest;
+import com.settle.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -1371,7 +1371,7 @@ Expected: compilation failure (`Slugs`), then 401 on `/api/auth/signup`.
 - [ ] **Step 3: Implement**
 
 ```java
-package com.group2.incident.org.service;
+package com.settle.org.service;
 
 import java.text.Normalizer;
 import java.util.Locale;
@@ -1397,9 +1397,9 @@ public final class Slugs {
 ```
 
 ```java
-package com.group2.incident.org.dto;
+package com.settle.org.dto;
 
-import com.group2.incident.common.validation.MaxBytes;
+import com.settle.common.validation.MaxBytes;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -1416,23 +1416,23 @@ public record SignupRequest(
 ```
 
 ```java
-package com.group2.incident.org.service;
+package com.settle.org.service;
 
-import com.group2.incident.audit.entity.AuditAction;
-import com.group2.incident.audit.entity.AuditItemType;
-import com.group2.incident.audit.service.AuditService;
-import com.group2.incident.auth.dto.LoginResponse;
-import com.group2.incident.auth.entity.AppUser;
-import com.group2.incident.auth.entity.Role;
-import com.group2.incident.auth.repository.AppUserRepository;
-import com.group2.incident.auth.service.AuthService;
-import com.group2.incident.common.error.ConflictException;
-import com.group2.incident.common.tenancy.OrgContext;
-import com.group2.incident.org.dto.SignupRequest;
-import com.group2.incident.org.entity.Membership;
-import com.group2.incident.org.entity.Organization;
-import com.group2.incident.org.repository.MembershipRepository;
-import com.group2.incident.org.repository.OrganizationRepository;
+import com.settle.audit.entity.AuditAction;
+import com.settle.audit.entity.AuditItemType;
+import com.settle.audit.service.AuditService;
+import com.settle.auth.dto.LoginResponse;
+import com.settle.auth.entity.AppUser;
+import com.settle.auth.entity.Role;
+import com.settle.auth.repository.AppUserRepository;
+import com.settle.auth.service.AuthService;
+import com.settle.common.error.ConflictException;
+import com.settle.common.tenancy.OrgContext;
+import com.settle.org.dto.SignupRequest;
+import com.settle.org.entity.Membership;
+import com.settle.org.entity.Organization;
+import com.settle.org.repository.MembershipRepository;
+import com.settle.org.repository.OrganizationRepository;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -1494,12 +1494,12 @@ public class SignupService {
 `SignupService.create` must load nothing org-scoped: it runs while `OrgContext` is `NONE`. `auditService.record(...)` must accept an `AppUser` that is detached from the second transaction; if it calls `getReferenceById`, pass `membership.getUser()` unchanged (`AuditEntry` only stores the id).
 
 ```java
-package com.group2.incident.org.controller;
+package com.settle.org.controller;
 
-import com.group2.incident.auth.dto.LoginResponse;
-import com.group2.incident.common.ratelimit.RateLimitService;
-import com.group2.incident.org.dto.SignupRequest;
-import com.group2.incident.org.service.SignupService;
+import com.settle.auth.dto.LoginResponse;
+import com.settle.common.ratelimit.RateLimitService;
+import com.settle.org.dto.SignupRequest;
+import com.settle.org.service.SignupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -1777,7 +1777,7 @@ Expected: the webhook gets 401 (the tool lookup runs as `NONE`), the worker find
 `OverdueTask.java`:
 
 ```java
-package com.group2.incident.incident.repository;
+package com.settle.incident.repository;
 
 /** An overdue escalation task and the org it belongs to, read across all orgs by the worker. */
 public record OverdueTask(Long id, Long orgId) {
@@ -1787,12 +1787,12 @@ public record OverdueTask(Long id, Long orgId) {
 `EscalationTaskRepository`: replace `findOverdueTaskIds` with the same query returning both fields (keep its existing `WHERE` clause):
 
 ```java
-	@Query("SELECT new com.group2.incident.incident.repository.OverdueTask(t.id, t.orgId) FROM EscalationTask t "
+	@Query("SELECT new com.settle.incident.repository.OverdueTask(t.id, t.orgId) FROM EscalationTask t "
 			+ "WHERE t.state = :state AND t.nextDueAt <= :now ORDER BY t.nextDueAt ASC, t.id ASC")
 	List<OverdueTask> findOverdueTasks(@Param("state") EscalationTaskState state, @Param("now") Instant now);
 ```
 
-Copy any further condition from the current `findOverdueTaskIds` query (`backend/src/main/java/com/group2/incident/incident/repository/EscalationTaskRepository.java:22`) into this one.
+Copy any further condition from the current `findOverdueTaskIds` query (`backend/src/main/java/com/settle/incident/repository/EscalationTaskRepository.java:22`) into this one.
 
 `EscalationWorker.runOnce`:
 

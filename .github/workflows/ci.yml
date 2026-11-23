@@ -233,6 +233,17 @@ jobs:
           bash -n scripts/test_demo_warmup.sh
           bash scripts/test_demo_warmup.sh
 
+  # Backs up a database built from the real migrations, restores it, and compares every table (needs Docker).
+  db-backup:
+    name: Database backup checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Back up, restore, and compare
+        run: |
+          for f in scripts/db-common.sh scripts/db-backup.sh scripts/db-restore.sh scripts/test_db_backup.sh; do bash -n "$f"; done
+          bash scripts/test_db_backup.sh
+
   # A token, key, or password committed anywhere in the history fails the build (.gitleaks.toml lists what is allowed).
   secret-scan:
     name: Secret scan

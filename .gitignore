@@ -34,3 +34,6 @@ Thumbs.db
 
 # Archives such as design exports stay out of git; their extracted files are tracked instead
 *.zip
+
+# Database backups (scripts/db-backup.sh): they hold user data, never commit them
+backups/

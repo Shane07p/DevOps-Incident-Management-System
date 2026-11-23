@@ -802,6 +802,20 @@ These shell regression checks use synthetic HTTP responses from a curl stub, wit
 | TC-OPS-253d | Resilience | curl connection fails, or a health probe recovers on retry | Connection failure records HTTP 000 and exits 1; recovered health reaches exit 0 | `scripts/test_demo_warmup.sh` (connection-failed, retry-recovers) | Passed (2026-11-20, 55fbb07) |
 | TC-OPS-253e | Configuration | Public shop control URL, default loopback target, or a custom internal port | Payload targets the configured allowed internal origin, independently of the public control URL | `scripts/test_demo_warmup.sh` (public-shop-internal-target, custom-internal-port) | Passed (2026-11-20, 55fbb07) |
 
+## Database backup and restore
+
+`scripts/test_db_backup.sh` builds a database from the real Flyway migrations and the dev seed in a throwaway PostgreSQL + pgvector container, then backs it up with `scripts/db-backup.sh` and restores it with `scripts/db-restore.sh`. It runs in the CI **Database backup checks** job.
+
+| ID | Technique | Input or condition | Expected | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-OPS-DBa | Positive | Back up the `incident` schema | A custom-format dump that lists every table; no `.partial` file left | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBb | Negative | Restore without `--confirm`, or with `--confirm` naming another database | Refused before connecting; nothing changes | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBc | Negative | Restore to a host that is not this machine without `--production` | Refused before connecting | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBd | Positive | Restore into an empty database | Every table has the source's row count; vector values and `incident.embedding vector(768)` survive | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBe | State | Restore again over changed data and an extra table | The backup's exact state; the extra table is gone; `public` untouched | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBf | Negative | A truncated backup file | Refused; the database is unchanged | `scripts/test_db_backup.sh` | Automated |
+| TC-OPS-DBg | Resilience | The restore fails after the schema was dropped (pgvector already in another schema) | Failure reported; the drop is rolled back and the old schema and data remain | `scripts/test_db_backup.sh` | Automated |
+
 ---
 
 ## White-box testing

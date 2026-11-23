@@ -5,8 +5,9 @@
 ## 1. Sprint roadmap
 
 Each sprint delivers working features end to end: API, UI, tests, and docs. Sprints 1 to 3 were
-planned for the week of 19 to 25 October (decided 17 October). Sprint 1 finished on 26 October;
-Sprints 2 to 4 are still in progress. Later sprints are about 2 weeks. The features are described in [features.md](../2-design/features.md), and the AI work in the
+planned for the week of 19 to 25 October (decided 17 October). Sprint 1 finished on 26 October,
+Sprints 2 and 3 on 13 November, Sprint 4 on 15 November, Sprint 5 on 20 November, and Sprint 6 on
+21 November apart from the demo script and demo data (#254). Later sprints were about 2 weeks. The features are described in [features.md](../2-design/features.md), and the AI work in the
 [AI/ML roadmap](../2-design/ai-ml-roadmap.md). If a sprint runs late, the items in the last column go
 first.
 

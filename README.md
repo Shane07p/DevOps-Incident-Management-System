@@ -13,25 +13,25 @@ AI features in the [AI/ML roadmap](docs/2-design/ai-ml-roadmap.md).
 
 ## Status
 
-Sprint 1 is complete; Sprints 2 to 4 are in progress. Each work item's issue and status is in the
-[implementation plan](docs/3-project-management/implementation-plan.md#work-items).
+Sprints 1 to 6 are complete, apart from the demo script and demo data (#254). Every work item is
+an issue in its sprint's milestone on GitHub; the [implementation plan](docs/3-project-management/implementation-plan.md#work-items)
+also lists Sprints 1 to 4 with the PR that finished each item.
 
 | Part | State |
 | --- | --- |
-| Foundations: Spring Boot 4.1, Flyway (migrations V1–V16), Testcontainers, Swagger, CI, CodeQL, Dependabot, hosting | Done |
-| Login, roles, and user administration | Done |
-| Orgs: sign up, create an org, members by email (D48) | Done (#200, #202) |
-| Service catalog with SLA targets; incidents (create, list, detail) | Done |
-| On-call schedules, with assignment at creation | Done |
-| Tool tokens, the alert webhook, deduplication and grouping, and the alert inbox | Done |
-| Rate limits on login and the alert webhook | Done |
-| Escalation policies and the escalation worker; outbox events published to RabbitMQ | Done |
-| Pages: login, home, users, tools, services, incidents, on-call, escalation policies, alerts, history search | Done |
-| In-app notifications for assignments and escalations, and the bell | Done |
-| Uptime monitors (one alert per outage, recovery recorded); reassignment and incident roles; comments, evidence links, and corrections; incident search; service map and blast radius API | Done |
-| Heartbeats, acknowledgement, status and severity changes | Not started (Sprints 2 and 3) |
-| AI service: `/health`, `/ready`, `/embed` (Ollama embeddings), stub `/suggest`, log-pattern evidence | Done |
-| Demo shop v1 with five fault switches | Done |
+| Foundations: Spring Boot 4.1 (package `com.settle`), Flyway (migrations V1–V32), Testcontainers, Swagger, CI, CodeQL, Dependabot, secret scan, hosting with a deploy check | Done |
+| Orgs and sign-up, members by email, Google and GitHub sign-in (D48, D50) | Done |
+| Login, roles, user administration, disabling members, personal access tokens | Done |
+| Service catalog with SLA targets, dependencies and blast radius, runbooks, on-call schedules, escalation policies | Done |
+| Alert intake: tool tokens, the alert webhook, Grafana alerts, deduplication and grouping, the alert inbox; rate limits | Done |
+| Monitoring: uptime monitors, heartbeats, Grafana Cloud checks from several regions, each org's own Grafana for logs and metrics | Done |
+| Incident response: acknowledge, status and severity changes, reassignment and roles, comments and corrections, evidence links, SLA clocks and breaches, escalation with outbox events to RabbitMQ, notifications, live updates | Done |
+| After an incident: postmortems with the closure gate, follow-ups (per incident and across the org), history search, insights, deploy tracking | Done |
+| Customers: the public status page, public updates, and the status pages screen | Done |
+| AI: similar incidents (pgvector), the AI SRE investigation with Accept and Reject, drafting, triage hints, the MCP server, evaluation runs | Done |
+| The redesigned frontend on every page; an accessibility pass | Done |
+| Testing: a Cypress end-to-end incident flow, k6 load tests, mutation and property-based tests | Done |
+| Demo script and demo data (#254) | In progress |
 
 ## Live
 
@@ -123,10 +123,15 @@ backend, the way the stack runs in Docker (D41).
 ## Tests
 
 ```bash
-cd backend  && ./mvnw verify          # JUnit + Testcontainers (Docker must be running)
-cd backend  && ./mvnw test-compile org.pitest:pitest-maven:mutationCoverage   # not in CI: on demand
-cd frontend && npm test               # Vitest
-cd frontend && npm run cypress:run    # end-to-end, needs both servers; the first scenario is #57 (Sprint 6)
+cd backend    && ./mvnw verify          # JUnit + Testcontainers (Docker must be running), coverage floors
+cd backend    && ./mvnw test-compile org.pitest:pitest-maven:mutationCoverage   # mutation testing (also in CI)
+cd frontend   && npm test               # Vitest
+cd frontend   && npm run cypress:run    # the complete incident flow end to end (#57); needs the stack running
+cd ai-service && pytest
+cd demo-shop  && pytest
+bash scripts/test_demo_warmup.sh        # the demo warm-up script
+bash scripts/test_db_backup.sh          # database backup and restore (Docker)
+python scripts/check_docs.py            # documentation consistency
 ```
 
 ## Layout
@@ -142,7 +147,10 @@ cd frontend && npm run cypress:run    # end-to-end, needs both servers; the firs
 | `.github/workflows/` | CI |
 | `compose.yaml` | Local database and packaged application |
 | `.env.example` | Example settings, no real credentials |
-| `ai-service/` | Python and FastAPI: embeddings through Ollama, the stub `/suggest`, and evidence functions |
+| `ai-service/` | Python and FastAPI: the AI SRE agent loop (`/investigate`), drafting (`/draft`), triage hints (`/triage`), embeddings through Ollama (`/embed`), and the MCP server (`mcp_server.py`) |
+| `scripts/` | The deploy check, the demo warm-up, database backup and restore, and the docs check |
+| `perf/` | k6 load tests (NFR-01) |
+| `grafana/` | Grafana Cloud alert rules, synthetic checks, and contact points |
 | `demo-shop/` | Demo Shop v1: retail simulation with 5 fault switches and OpenTelemetry (Sprint 2) |
 
 `ai-service/` (Python, FastAPI, Ollama) and `demo-shop/` run locally or in optional Compose profiles; see the [AI/ML roadmap](docs/2-design/ai-ml-roadmap.md) and [demo-shop/README.md](demo-shop/README.md).
@@ -160,7 +168,7 @@ Merging to `main` deploys automatically once CI passes:
 | --- | --- | --- |
 | Frontend | Vercel | Every pull request also gets a preview link from the Vercel bot |
 | Backend | Render (Docker, free tier) | Settings come from environment variables on Render: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 32`), `JAVA_TOOL_OPTIONS`. No admin is created at start: the first person signs up and creates an org (D48). `RABBITMQ_URL` (the hosted RabbitMQ). Optional: the `DB_POOL_*`, `RATE_LIMIT_*`, and `OUTBOX_RELAY_DELAY_MS` settings in `.env.example`. `FLYWAY_LOCATIONS` stays unset or `classpath:db/migration`, so the dev seed never loads. Google and GitHub sign-in (D50): `APP_PUBLIC_URL` and each provider's `*_CLIENT_ID` and `*_CLIENT_SECRET`; see [organizations-design.md](docs/2-design/organizations-design.md#part-2-google-and-github-sign-in-d50) |
-| Database | Supabase (PostgreSQL) | Reached through the session pooler; tables in the `incident` schema |
+| Database | Supabase (PostgreSQL) | Reached through the session pooler; tables in the `incident` schema. Back it up with `scripts/db-backup.sh` before a migration or a demo ([demo-day checklist](docs/demo-day-checklist.md#database-backup-and-restore)) |
 | Uptime | UptimeRobot | An external uptime bot calls the backend's `/actuator/health` URL every few minutes to keep the free Render service awake; without it, the first request after 15 idle minutes waits for a cold start |
 | Deploy check | GitHub Actions (`deploy-check.yml`) | After CI passes on `main`, waits up to 20 minutes for Render to serve the commit's backend (`/actuator/info` names the running commit, from Render's `RENDER_GIT_COMMIT`) and for Vercel's Production deployment, then checks `/actuator/health` and that `/` and `/login` load the app. A failure fails the run, and the run's summary lists each step |
 | Messaging | CloudAMQP (RabbitMQ, free plan) | `RABBITMQ_URL` on Render, the instance's AMQP URL. Unset, events wait in the outbox; the health check never depends on RabbitMQ |
@@ -176,7 +184,8 @@ Secrets live only in Render's environment variables, never in the repository.
 3. **Database:** migrations only go forward. An older backend still starts after a newer migration
    (`spring.flyway.ignore-migration-patterns=*:future`), but if that migration added a `NOT NULL` column without a
    default, the older code's inserts fail. Check the migrations in between before rolling back; to undo a schema
-   change, add a new `V` migration.
+   change, add a new `V` migration. To get the data back, restore the last backup with
+   `scripts/db-restore.sh`.
 4. Check the result with the Deploy check workflow (Actions, Run workflow), or open `/actuator/health`.
 
 Releases are tagged on `main` as `vMAJOR.MINOR.PATCH` (`git tag -a v1.0.0 -m "…" && git push origin v1.0.0`), so a

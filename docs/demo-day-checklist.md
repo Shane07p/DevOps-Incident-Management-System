@@ -73,7 +73,7 @@ Follow these steps sequentially to prepare the environment for evaluation.
      ```text
      HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection
      Flyway Community Edition ... Schema "incident" is up to date. No migration necessary.
-     Started IncidentApplication in ... seconds
+     Started IncidentManagementApplication in ... seconds
      ```
 
 4. **Verify Grafana Cloud Ingestion:**
@@ -129,7 +129,7 @@ Follow these steps sequentially to prepare the environment for evaluation.
 ### T-15 Minutes: Pre-Presentation Readiness
 
 1. **Execute Final Warmup Ping:**
-   - Render free containers idle out after 15 minutes of inactivity. While the 12-hour cron keeps Supabase and Grafana awake, only a ping right before the demo eliminates the 50–90s Render cold start:
+   - Render free containers idle out after 15 minutes of inactivity. The external uptime monitor keeps the backend awake; a ping right before the demo confirms it is warm and the database answers:
      ```bash
      curl -s https://incident-backend-f340.onrender.com/actuator/health
      ```

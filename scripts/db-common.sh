@@ -70,10 +70,20 @@ resolve_connection() {
 	CONN_HOST="$host"
 	CONN_PORT="$port"
 	CONN_DB="$db"
-	# The client runs in a container: "localhost" there is the container itself, not this machine.
+	# The client runs in a container, where "localhost" is the container itself. Docker Desktop
+	# forwards host.docker.internal to this machine's loopback; a native Linux engine does not (it
+	# points at the bridge, so a port bound to 127.0.0.1 refuses), so there the container shares
+	# the host's network and keeps "localhost".
 	local container_host="$host"
+	DOCKER_NET=""
 	case "$host" in
-		localhost | 127.0.0.1 | "[::1]") container_host="host.docker.internal" ;;
+		localhost | 127.0.0.1 | "[::1]")
+			if docker info --format '{{.OperatingSystem}}' 2>/dev/null | grep -qi 'docker desktop'; then
+				container_host="host.docker.internal"
+			else
+				DOCKER_NET="host"
+			fi
+			;;
 	esac
 
 	PGURL="${scheme}://${userinfo:+${userinfo}@}${container_host}:${port}/${db}${kept:+?${kept}}"
@@ -99,8 +109,9 @@ where() {
 
 # pg_run IMAGE SCRIPT: run SCRIPT with sh in IMAGE; stdin and stdout pass through.
 pg_run() {
-	local image="$1" script="$2"
-	docker run --rm -i --add-host=host.docker.internal:host-gateway \
+	local image="$1" script="$2" net=(--add-host=host.docker.internal:host-gateway)
+	[[ "${DOCKER_NET:-}" == "host" ]] && net=(--network=host)
+	docker run --rm -i "${net[@]}" \
 		-e PGURL -e PGUSER -e PGPASSWORD -e DB_SCHEMA -e PGCONNECT_TIMEOUT=15 \
 		"$image" sh -c "$script"
 }

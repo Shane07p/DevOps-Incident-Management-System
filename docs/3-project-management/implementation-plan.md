@@ -364,7 +364,7 @@ suite run without it.
 
 ## Backend
 
-Feature folders under `com.group2.incident` (`auth`, `audit`, `catalog`, `incident`, `alert`,
+Feature folders under `com.settle` (`auth`, `audit`, `catalog`, `incident`, `alert`,
 `notification`), each split into `controller`, `dto`, `entity`, `repository`, and `service`. See
 the [layout](../../backend/AGENTS.md#layout). Controllers return DTO records, never entities.
 

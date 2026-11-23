@@ -8,7 +8,7 @@
 		<version>4.1.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.group2</groupId>
+	<groupId>com.settle</groupId>
 	<artifactId>incident-management</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>incident-management</name>
@@ -249,12 +249,12 @@
 					<!-- The lifecycle and SLA rules (test-plan.md section 7), mutated against their unit and property tests,
 					     which need no database. CI fails below mutationThreshold (a percentage of mutants killed). -->
 					<targetClasses>
-						<param>com.group2.incident.incident.service.TransitionPolicy</param>
-						<param>com.group2.incident.incident.service.SlaCalculator</param>
+						<param>com.settle.incident.service.TransitionPolicy</param>
+						<param>com.settle.incident.service.SlaCalculator</param>
 					</targetClasses>
 					<targetTests>
-						<param>com.group2.incident.incident.service.TransitionPolicy*Test</param>
-						<param>com.group2.incident.incident.service.Sla*Test</param>
+						<param>com.settle.incident.service.TransitionPolicy*Test</param>
+						<param>com.settle.incident.service.Sla*Test</param>
 					</targetTests>
 					<!-- STRONGER adds removed conditionals and switch mutations. On 17 Nov 2026 it made 28 mutants and the tests
 					     killed 27 (96%); the survivor drops the `to == null` check in TransitionPolicy, which changes nothing,

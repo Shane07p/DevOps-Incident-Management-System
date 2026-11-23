@@ -18,7 +18,7 @@ the injected `Clock`, and nothing uses Jackson 2.
 
 ## Layout
 
-- Inside `src/main/java/com/group2/incident/`, group by feature first (`auth`, `catalog`,
+- Inside `src/main/java/com/settle/`, group by feature first (`auth`, `catalog`,
   `incident`, `alert`, `audit`, `notification`), then one folder per layer: `controller/`, `dto/`,
   `entity/`, `repository/`, `service/`, and `security/` only where a feature needs it. Shared code
   lives in `common/config/` and `common/error/`. SLA and escalation stay with `incident`.

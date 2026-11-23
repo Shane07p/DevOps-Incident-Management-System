@@ -1,0 +1,40 @@
+package com.settle.catalog.repository;
+
+import com.settle.catalog.entity.ServiceEntity;
+import jakarta.persistence.LockModeType;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ServiceRepository extends JpaRepository<ServiceEntity, Long> {
+
+    List<ServiceEntity> findAllByOrderByNameAsc();
+
+    // The services on the public status page (D45), in the order customers see them.
+    List<ServiceEntity> findAllByPublicVisibleTrueOrderByPublicNameAscIdAsc();
+
+    Optional<ServiceEntity> findByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
+
+    @Query("select distinct s from ServiceEntity s left join fetch s.targets left join fetch s.owner left join fetch s.fallbackContact where s.id = :id")
+    Optional<ServiceEntity> findWithDetailsById(@Param("id") Long id);
+
+    // Alert intake locks the service by name, so alerts for one service are deduplicated and grouped one at a time.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ServiceEntity s where lower(s.name) = lower(:name)")
+    Optional<ServiceEntity> findByNameIgnoreCaseForUpdate(@Param("name") String name);
+
+    // Holds the service row until the transaction ends, so two schedule saves for one service run one
+    // after the other instead of both deleting and both inserting.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ServiceEntity s where s.id = :id")
+    Optional<ServiceEntity> findByIdForUpdate(@Param("id") Long id);
+}

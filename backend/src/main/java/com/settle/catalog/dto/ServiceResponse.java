@@ -1,0 +1,51 @@
+package com.settle.catalog.dto;
+
+import com.settle.catalog.entity.Criticality;
+import com.settle.catalog.entity.ServiceEntity;
+import com.settle.catalog.entity.Severity;
+import java.time.Instant;
+import java.util.EnumMap;
+import java.util.Map;
+
+public record ServiceResponse(
+        Long id,
+        long version,
+        String name,
+        String description,
+        OwnerDto owner,
+        Criticality criticality,
+        Map<Severity, SlaTargetDto> targets,
+        boolean publicVisible,
+        String publicName,
+        // The value of the org's service label for this service (D49), as saved; null means the default,
+        // the name in lower case with hyphens.
+        String telemetryLabel,
+        Instant createdAt,
+        Instant updatedAt
+) {
+    public static ServiceResponse from(ServiceEntity service) {
+        Map<Severity, SlaTargetDto> targetMap = new EnumMap<>(Severity.class);
+        if (service.getTargets() != null) {
+            service.getTargets().forEach((severity, target) ->
+                    targetMap.put(severity, new SlaTargetDto(target.getResponseMinutes(), target.getResolutionMinutes()))
+            );
+        }
+        OwnerDto ownerDto = service.getOwner() != null
+                ? new OwnerDto(service.getOwner().getId(), service.getOwner().getDisplayName())
+                : null;
+        return new ServiceResponse(
+                service.getId(),
+                service.getVersion(),
+                service.getName(),
+                service.getDescription(),
+                ownerDto,
+                service.getCriticality(),
+                targetMap,
+                service.isPublicVisible(),
+                service.getPublicName(),
+                service.getTelemetryLabel(),
+                service.getCreatedAt(),
+                service.getUpdatedAt()
+        );
+    }
+}
